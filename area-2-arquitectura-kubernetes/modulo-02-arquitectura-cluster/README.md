@@ -239,7 +239,7 @@ graph LR
 
 **Función**: Punto de entrada único para todas las operaciones del cluster
 
-[![API Server Request Flow](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/api-request-flow.svg)](../../assets/diagrams/02-arquitectura-cluster/api-request-flow.drawio)
+[![API Server Request Flow](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/api-request-flow.svg)](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/api-request-flow.drawio)
 
 **� Flujo completo de procesamiento de requests en el API Server de Kubernetes**
 
