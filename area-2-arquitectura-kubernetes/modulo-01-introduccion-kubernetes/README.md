@@ -196,28 +196,31 @@ graph TB
 | | 📊 Monitoreo automático | |
 
 **💡 Resultado**: Cada equipo se enfoca en su expertise, Kubernetes conecta todo automáticamente.
-```
-┌─────────────────────────────────────────┐
-│        DESARROLLADOR ENFOQUE            │
-│                                         │
-│  ✅ Crear aplicaciones                 │
-│  ✅ Definir requirements (CPU/RAM)     │
-│  ✅ Configurar health checks           │
-│  ✅ Especificar dependencias           │
-│                                         │
-│  ❌ NO preocuparse por:                │
-│     - ¿En qué servidor correr?         │
-│     - ¿Cómo gestionar la red?          │
-│     - ¿Qué pasa si falla el hardware?  │
-└─────────────────────────────────────────┘
+
+## **🚀 Beneficios Cuantificables de Kubernetes (2025):**
+
+### **📊 Eficiencia Operacional:**
+```mermaid
+pie title "Distribución de Recursos: Tradicional vs Kubernetes"
+    "VM Overhead" : 40
+    "OS Redundante" : 25
+    "Aplicación Útil" : 35
 ```
 
-**Para Administradores:**
+```mermaid  
+pie title "Distribución con Kubernetes"
+    "OS Compartido" : 15
+    "K8s Overhead" : 10
+    "Aplicación Útil" : 75
 ```
-┌─────────────────────────────────────────┐
-│       ADMINISTRADOR ENFOQUE             │
-│                                         │
-│  ✅ Mantener cluster de nodos          │
+
+### **💰 Impacto Económico:**
+- **Reducción de costos**: 40-60% menos infraestructura necesaria
+- **Tiempo de deployment**: De horas → minutos (95% reducción)
+- **Recuperación ante fallos**: De 30 min → 30 segundos (99% mejora)
+- **Utilización de recursos**: De 35% → 80% promedio
+
+### **⚡ Beneficios Técnicos:**
 │  ✅ Gestionar recursos globales        │
 │  ✅ Aplicar políticas de seguridad     │
 │  ✅ Monitorear infraestructura         │
