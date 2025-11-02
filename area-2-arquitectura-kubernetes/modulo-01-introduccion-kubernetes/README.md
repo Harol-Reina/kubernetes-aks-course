@@ -135,7 +135,67 @@ Docker (Área 1)          →    Kubernetes (Área 2)
 
 ### **👥 Separación de Responsabilidades:**
 
-**Para Desarrolladores:**
+```mermaid
+graph TB
+    subgraph "👨‍💻 DESARROLLADORES"
+        D1[📝 Crear Aplicaciones]
+        D2[⚙️ Definir Requirements<br/>CPU/RAM]
+        D3[❤️ Configurar Health Checks]
+        D4[🔗 Especificar Dependencias]
+    end
+    
+    subgraph "🎯 KUBERNETES AUTOMATION"
+        K1[🤖 Decide dónde ejecutar]
+        K2[🌐 Gestiona la red]
+        K3[🔄 Reinicia aplicaciones]
+        K4[📊 Monitorea estado]
+        K5[⚖️ Distribuye carga]
+    end
+    
+    subgraph "👨‍🔧 ADMINISTRADORES"
+        A1[🖥️ Provisionar Servidores]
+        A2[🛡️ Configurar Seguridad]
+        A3[📈 Monitorear Infraestructura]
+        A4[🔧 Mantener Cluster]
+    end
+    
+    D1 --> K1
+    D2 --> K2
+    D3 --> K3
+    D4 --> K4
+    
+    K1 --> A1
+    K2 --> A2
+    K3 --> A3
+    K4 --> A4
+    K5 --> A4
+    
+    style D1 fill:#e3f2fd
+    style D2 fill:#e3f2fd
+    style D3 fill:#e3f2fd
+    style D4 fill:#e3f2fd
+    style K1 fill:#f1f8e9
+    style K2 fill:#f1f8e9
+    style K3 fill:#f1f8e9
+    style K4 fill:#f1f8e9
+    style K5 fill:#f1f8e9
+    style A1 fill:#fff3e0
+    style A2 fill:#fff3e0
+    style A3 fill:#fff3e0
+    style A4 fill:#fff3e0
+```
+
+**🎯 División clara de responsabilidades:**
+
+| 👨‍💻 **Desarrolladores** | 🤖 **Kubernetes** | 👨‍🔧 **Administradores** |
+|:-----------------------:|:------------------:|:------------------------:|
+| ✅ Crear aplicaciones | 🎯 Decide dónde ejecutar | 🖥️ Provisionar servidores |
+| ⚙️ Definir CPU/RAM | 🌐 Gestiona networking | 🛡️ Configurar seguridad |
+| ❤️ Health checks | 🔄 Auto-restart servicios | 📈 Monitorear infraestructura |
+| 🔗 Dependencias | ⚖️ Load balancing | 🔧 Mantener cluster health |
+| | 📊 Monitoreo automático | |
+
+**💡 Resultado**: Cada equipo se enfoca en su expertise, Kubernetes conecta todo automáticamente.
 ```
 ┌─────────────────────────────────────────┐
 │        DESARROLLADOR ENFOQUE            │
