@@ -9,22 +9,54 @@ Comprender los fundamentos de la contenerización, Docker como plataforma de con
 
 ---
 
-## 🧩 1. ¿Qué es la contenerización?
+## 🧩 1. Evolución de los modelos de despliegue
 
-La **contenerización** es una forma de virtualización a nivel de sistema operativo que permite ejecutar aplicaciones y sus dependencias en procesos aislados que comparten el kernel del sistema operativo host.
+### **Deployment Tradicional - El modelo inicial**
+Anteriormente, la manera de desplegar aplicaciones era en **servidores físicos**:
 
-### Diferencias fundamentales con la virtualización tradicional:
+```
+┌─────────────────────────────────────┐
+│            Aplicación               │
+├─────────────────────────────────────┤
+│          Sistema Operativo          │
+├─────────────────────────────────────┤
+│          Hardware Físico            │
+└─────────────────────────────────────┘
+```
 
-| Aspecto | Máquina Virtual | Contenedor |
-|---------|----------------|------------|
-| **SO Guest** | Completo (GB) | Compartido (MB) |
-| **Arranque** | Minutos | Segundos |
-| **Recursos** | Alto overhead | Mínimo overhead |
-| **Aislamiento** | Hardware virtual | Namespaces/cgroups |
-| **Portabilidad** | Limitada al hipervisor | Alta entre hosts |
-| **Densidad** | Baja (2-10 VMs) | Alta (100+ contenedores) |
+**Problemas del modelo tradicional:**
+- **Muy costoso**: Cada aplicación requería hardware dedicado
+- **Escalabilidad limitada**: Más carga = más máquinas físicas
+- **Desperdicio de recursos**: Hardware infrautilizado
+- **Baja densidad**: Una aplicación por servidor
 
-### Arquitectura de contenerización:
+### **Máquinas Virtuales - Primera evolución**
+Las VMs permitieron virtualizar sistemas operativos completos dentro del mismo hardware:
+
+```
+┌──────────────┬──────────────┬──────────────┐
+│  App A       │  App B       │  App C       │
+├──────────────┼──────────────┼──────────────┤
+│  Guest OS    │  Guest OS    │  Guest OS    │
+├──────────────┴──────────────┴──────────────┤
+│            Hypervisor                      │
+├─────────────────────────────────────────────┤
+│            Hardware Físico                  │
+└─────────────────────────────────────────────┘
+```
+
+**Mejoras de las VMs:**
+- Mejor aprovechamiento del hardware
+- Múltiples aplicaciones en un servidor físico
+- Escalamiento más económico
+
+**Limitaciones persistentes:**
+- Cada VM necesita SO completo (2+ GB RAM, espacio en disco)
+- Alto overhead de recursos del sistema operativo
+- Arranque lento (minutos)
+
+### **Contenedores - La evolución actual**
+Los contenedores resuelven las limitaciones anteriores:
 
 ```
 ┌─────────────────────────────────────┐
@@ -41,37 +73,169 @@ La **contenerización** es una forma de virtualización a nivel de sistema opera
 └─────────────────────────────────────┘
 ```
 
----
-
-## ⚙️ 2. Tecnologías fundamentales de Linux
-
-Los contenedores utilizan características nativas del kernel Linux:
-
-### **Linux Namespaces** (Aislamiento):
-- **PID**: Aislamiento de procesos - cada contenedor ve solo sus procesos
-- **NET**: Aislamiento de red - interfaces, routing, puertos independientes  
-- **MNT**: Aislamiento del filesystem - cada contenedor tiene su propio árbol de directorios
-- **UTS**: Aislamiento del hostname - nombre único por contenedor
-- **IPC**: Aislamiento de IPC - comunicación entre procesos independiente
-- **USER**: Aislamiento de usuarios - mapeo de UIDs independiente
-
-### **Control Groups (cgroups)** (Limitación de recursos):
-- **CPU**: Límites y reservas de procesamiento
-- **Memory**: Límites de memoria RAM y swap
-- **I/O**: Límites de lectura/escritura de disco
-- **Network**: Límites de ancho de banda
+**Ventajas de los contenedores:**
+- **Granularidad**: Asignación precisa de recursos (100MB RAM vs 2GB)
+- **Aislamiento**: Procesos completamente separados
+- **Eficiencia**: Comparten el kernel del SO host
+- **Velocidad**: Arranque en segundos
+- **Densidad**: 100+ contenedores por servidor
 
 ---
 
-## 🐳 3. ¿Qué es Docker?
+## 🧩 2. ¿Qué es la contenerización?
 
-**Docker** es una plataforma de contenerización que simplifica la creación, distribución y ejecución de aplicaciones en contenedores.
+Un **contenedor** es básicamente un **proceso aislado** que:
+- Corre en su propio namespace
+- Contiene todas las librerías y binarios necesarios
+- Utiliza solo los recursos que necesita
+- Está completamente aislado de otros contenedores
+
+### **Concepto fundamental:**
+```
+Contenedor = Proceso Aislado + Librerías + Binarios + Recursos Controlados
+```
+
+### Diferencias fundamentales con la virtualización tradicional:
+
+| Aspecto | Máquina Virtual | Contenedor |
+|---------|----------------|------------|
+| **SO Guest** | Completo (GB) | Compartido (MB) |
+| **Arranque** | Minutos | Segundos |
+| **Recursos** | Alto overhead | Mínimo overhead |
+| **Aislamiento** | Hardware virtual | Namespaces/cgroups |
+| **Portabilidad** | Limitada al hipervisor | Alta entre hosts |
+| **Densidad** | Baja (2-10 VMs) | Alta (100+ contenedores) |
+| **Asignación RAM** | Mínimo 2GB | Desde 50MB |
+
+---
+
+## ⚙️ 3. Tecnologías fundamentales: Namespaces y Cgroups
+
+### **Linux Namespaces** - El corazón del aislamiento
+
+Cuando creamos un contenedor, este hereda **todos estos namespaces** que lo mantienen completamente aislado:
+
+#### **1. IPC (Inter-Process Communication) Namespace**
+```
+┌─────────────────┐    ┌─────────────────┐
+│   Contenedor A  │    │   Contenedor B  │
+│                 │    │                 │
+│  Proceso A  ──► │    │ ◄──  Proceso C  │
+│             ▲   │    │   ▲             │
+│             │   │    │   │             │
+│  Proceso B ──┘  │    │   └── Proceso D │
+│                 │    │                 │
+└─────────────────┘    └─────────────────┘
+     ✅ Se comunican       ❌ NO se comunican
+```
+
+- **Dentro del contenedor**: Los procesos A y B pueden comunicarse
+- **Entre contenedores**: Proceso A NO puede comunicarse con Proceso C
+- **Método de comunicación**: Memoria compartida, semáforos, colas de mensajes
+
+#### **2. PID (Process ID) Namespace**
+```
+Host OS:
+├── PID 1001: Contenedor A
+│   ├── PID 1: Proceso Principal
+│   └── PID 2: Proceso Secundario
+└── PID 1002: Contenedor B
+    ├── PID 1: Proceso Principal  
+    └── PID 2: Proceso Secundario
+```
+
+- Cada contenedor ve solo sus propios procesos
+- Los PIDs son independientes entre contenedores
+- Un contenedor NO puede ver los procesos de otro
+
+#### **3. Network Namespace**
+```
+┌─────────────────────┐  ┌─────────────────────┐
+│   Contenedor A      │  │   Contenedor B      │
+│                     │  │                     │
+│   IP: 172.17.0.2    │  │   IP: 172.17.0.3    │
+│   Red: eth0         │  │   Red: eth0         │
+│                     │  │                     │
+└─────────────────────┘  └─────────────────────┘
+```
+
+- Cada contenedor tiene su propia IP única
+- Redes completamente independientes
+- Un contenedor NO puede ver los servicios de red de otro
+
+#### **4. Mount (MNT) Namespace**
+```
+┌─────────────────────┐  ┌─────────────────────┐
+│   Contenedor A      │  │   Contenedor B      │
+│                     │  │                     │
+│   /app/folder-A     │  │   /app/folder-B     │
+│   /data/config-A    │  │   /data/config-B    │
+│                     │  │                     │
+└─────────────────────┘  └─────────────────────┘
+```
+
+- Sistemas de archivos independientes
+- Montajes específicos por contenedor
+- folder-A NO está disponible en Contenedor B
+
+#### **5. USER Namespace**
+```
+Contenedor A:        Contenedor B:
+├── user: admin      ├── user: developer
+├── user: app        ├── user: nginx
+└── user: guest      └── user: postgres
+```
+
+- Usuarios completamente independientes
+- No hay conflictos de nombres de usuario
+- Mapeo de UIDs independiente
+
+#### **6. UTS (Unix Timesharing System) Namespace**
+```
+Contenedor A: hostname = web-server-01
+Contenedor B: hostname = database-primary
+```
+
+- Cada contenedor tiene su hostname único
+- Identificación independiente del sistema
+
+### **Control Groups (cgroups)** - Control de recursos
+
+Los **cgroups** permiten controlar y limitar los recursos que cada contenedor puede usar:
+
+#### **Ejemplos prácticos de asignación:**
+```bash
+# Asignar recursos específicos a contenedores
+docker run -d --name contenedor-web \
+  --memory="200m" \           # Solo 200MB de RAM
+  --cpus="0.5" \             # Medio CPU
+  --pids-limit=100 \         # Máximo 100 procesos
+  nginx
+
+docker run -d --name contenedor-db \
+  --memory="1g" \            # 1GB de RAM
+  --cpus="1.0" \             # Un CPU completo
+  --blkio-weight=300 \       # Prioridad de I/O
+  postgres
+```
+
+#### **Ventajas del control granular:**
+- **Granularidad perfecta**: Desde 50MB hasta lo que necesites
+- **Prevención de monopolio**: Un contenedor no puede consumir todos los recursos
+- **Optimización**: Mejor aprovechamiento del hardware disponible
+- **Predictibilidad**: Comportamiento consistente bajo carga
+
+---
+
+## 🐳 4. ¿Qué es Docker?
+
+**Docker** es una plataforma de contenerización que simplifica la creación, distribución y ejecución de aplicaciones en contenedores. Docker implementa todos los namespaces y cgroups de manera transparente para el usuario.
 
 ### Componentes principales de Docker:
 
-- **Docker Engine**: Runtime que gestiona contenedores
+- **Docker Engine**: Runtime que gestiona contenedores y orquesta los namespaces
 - **Docker Images**: Plantillas inmutables para crear contenedores
-- **Docker Containers**: Instancias ejecutables de imágenes
+- **Docker Containers**: Instancias ejecutables con todos los namespaces aislados
 - **Docker Registry**: Repositorio para almacenar y distribuir imágenes
 - **Dockerfile**: Archivo de texto con instrucciones para construir imágenes
 
@@ -83,9 +247,52 @@ Código → Dockerfile → Image → Container → Running App
 (write)   (build)   (pull)   (run)     (execute)
 ```
 
+### **Docker en acción - Aislamiento completo:**
+
+Cuando ejecutas `docker run`, Docker automáticamente:
+
+1. **Crea todos los namespaces** (PID, NET, MNT, UTS, IPC, USER)
+2. **Configura cgroups** para limitar recursos
+3. **Aísla el proceso** completamente del host y otros contenedores
+4. **Asigna recursos** según las especificaciones
+
+```bash
+# Ejemplo: Cada contenedor está completamente aislado
+docker run -d --name web1 --memory="100m" nginx    # Contenedor 1
+docker run -d --name web2 --memory="150m" nginx    # Contenedor 2
+docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
+
+# Resultado:
+# - 3 procesos totalmente aislados
+# - 3 redes independientes con IPs diferentes
+# - 3 sistemas de archivos independientes
+# - Recursos controlados por cgroups
+```
+
+### **Aislamiento en la práctica:**
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Container A    │    │  Container B    │    │  Container C    │
+│                 │    │                 │    │                 │
+│ Hostname: web-a │    │ Hostname: db-b  │    │ Hostname: api-c │
+│ IP: 172.17.0.2  │    │ IP: 172.17.0.3  │    │ IP: 172.17.0.4  │
+│ RAM: 100MB      │    │ RAM: 512MB      │    │ RAM: 256MB      │
+│ CPU: 0.5        │    │ CPU: 1.0        │    │ CPU: 0.8        │
+│                 │    │                 │    │                 │
+│ Procesos:       │    │ Procesos:       │    │ Procesos:       │
+│ ├─ PID 1: nginx │    │ ├─ PID 1: mysql │    │ ├─ PID 1: node  │
+│ └─ PID 2: logs  │    │ └─ PID 2: mysql │    │ └─ PID 2: npm   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+        ▲                        ▲                        ▲
+        │                        │                        │
+        └────────── AISLAMIENTO COMPLETO ──────────────────┘
+     (No pueden verse entre ellos)
+```
+
 ---
 
-## 🔧 4. Docker vs otras tecnologías de contenedores
+## 🔧 5. Docker vs otras tecnologías de contenedores
 
 | Tecnología | Descripción | Uso principal |
 |------------|-------------|---------------|
@@ -273,7 +480,7 @@ La contenerización con Docker proporciona las bases perfectas para Kubernetes:
 
 ---
 
-## 🚀 8. Evolución hacia la orquestación
+## 🚀 8. De Docker a Kubernetes: El concepto de Pods
 
 Aunque Docker resuelve muchos problemas, surgen nuevos desafíos en producción:
 
@@ -290,7 +497,114 @@ Aunque Docker resuelve muchos problemas, surgen nuevos desafíos en producción:
 - **Docker Swarm**: Orquestación simple nativa de Docker  
 - **Apache Mesos**: Orquestación para grandes clusters
 
-**👉 Kubernetes emerge como el estándar de facto** para orquestación de contenedores, lo que nos lleva al siguiente área del curso.
+### 🎯 **¿Por qué Kubernetes usa "Pods" en lugar de contenedores directos?**
+
+En **Docker** la unidad mínima es el **contenedor**:
+```
+┌─────────────────┐
+│   Contenedor    │
+│                 │
+│  ┌───────────┐  │
+│  │ Aplicación│  │
+│  └───────────┘  │
+│                 │
+│ Todos los       │
+│ namespaces      │
+│ aislados        │
+└─────────────────┘
+```
+
+En **Kubernetes** la unidad mínima es el **Pod**:
+```
+┌──────────────────────────────────────────┐
+│                   Pod                    │
+│                                          │
+│  ┌─────────────┐    ┌─────────────┐     │
+│  │Contenedor A │    │Contenedor B │     │
+│  │             │    │             │     │
+│  │ ┌─────────┐ │    │ ┌─────────┐ │     │
+│  │ │   App   │ │    │ │ Sidecar │ │     │
+│  │ └─────────┘ │    │ └─────────┘ │     │
+│  └─────────────┘    └─────────────┘     │
+│                                          │
+│ Namespaces COMPARTIDOS:                  │
+│ ✓ Network (misma IP)                     │
+│ ✓ Storage (volúmenes compartidos)        │
+│ ✓ IPC (pueden comunicarse)               │
+│                                          │
+│ Namespaces SEPARADOS:                    │
+│ ✗ PID (procesos aislados)                │
+│ ✗ User (usuarios independientes)         │
+└──────────────────────────────────────────┘
+```
+
+### **¿Por qué esta diferencia es importante?**
+
+#### **1. Comunicación simplificada:**
+```bash
+# En Docker (contenedores separados):
+docker run -d --name app nginx
+docker run -d --name sidecar --link app monitoring-agent
+# Networking complejo, IP diferentes
+
+# En Kubernetes (Pod):
+# Contenedores en el mismo Pod comparten IP
+# curl localhost:8080 funciona directamente
+```
+
+#### **2. Almacenamiento compartido:**
+```yaml
+# Pod con volúmenes compartidos
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: shared-data
+      mountPath: /usr/share/nginx/html
+  - name: content-updater
+    image: busybox
+    volumeMounts:
+    - name: shared-data
+      mountPath: /data
+  volumes:
+  - name: shared-data
+    emptyDir: {}
+```
+
+#### **3. Patterns de diseño de microservicios:**
+```
+Pod típico = Aplicación principal + Contenedores auxiliares
+
+┌─────────────────────────────────────────┐
+│                 Pod                     │
+├─────────────────┬───────────────────────┤
+│  App Principal  │    Sidecar Pattern    │
+│                 │                       │
+│  ┌───────────┐  │  ┌─────────────────┐  │
+│  │  Nginx    │  │  │ Log Collector   │  │
+│  │  Web App  │  │  │ (Fluent-bit)    │  │
+│  └───────────┘  │  └─────────────────┘  │
+│                 │                       │
+│                 │  ┌─────────────────┐  │
+│                 │  │ Metrics Export  │  │
+│                 │  │ (Prometheus)    │  │
+│                 │  └─────────────────┘  │
+└─────────────────┴───────────────────────┘
+```
+
+### **Preparándose para Kubernetes:**
+
+Entender cómo funcionan los **namespaces en Docker** es fundamental porque en Kubernetes:
+
+1. **Los Pods heredan el modelo de namespaces de Docker**
+2. **Kubernetes gestiona los Pods automáticamente**
+3. **Los contenedores en un Pod comparten algunos namespaces**
+4. **El aislamiento sigue siendo el principio fundamental**
+
+**👉 Kubernetes emerge como el estándar de facto** para orquestación de contenedores, extendiendo el modelo de Docker con conceptos como Pods para mayor flexibilidad y poder.
 
 ---
 
@@ -332,6 +646,12 @@ Antes de continuar al Área 2, asegúrate de poder:
 ## 📂 Recursos del Módulo
 
 - **🔧 [Laboratorios](./laboratorios/)**
+  - [Lab 1: Primer Contenedor](./laboratorios/primer-contenedor-lab.md) ⏱️ 30min
+  - [Lab 2: Imágenes Personalizadas](./laboratorios/imagenes-personalizadas-lab.md) ⏱️ 45min
+  - [Lab 3: Volúmenes y Persistencia](./laboratorios/volumenes-persistencia-lab.md) ⏱️ 40min
+  - [Lab 4: Redes Docker](./laboratorios/redes-docker-lab.md) ⏱️ 35min
+  - [Lab 5: Aislamiento de Namespaces](./laboratorios/namespaces-isolation-lab.md) ⏱️ 30min
+  - [Lab 6: Docker Compose - Evolución](./laboratorios/docker-compose-evolution-lab.md) ⏱️ 45min
   - [Instalación de Docker](./laboratorios/lab-docker-install.md)
   - [Comandos básicos](./laboratorios/docker-commands-guide.md)
   - [Ejercicios prácticos](./laboratorios/docker-exercises.md)
