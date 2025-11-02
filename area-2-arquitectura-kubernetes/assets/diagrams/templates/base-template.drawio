@@ -1,0 +1,223 @@
+<mxfile host="65bd71144e">
+    <diagram name="Kubernetes Architecture Template" id="kubernetes-template">
+        <mxGraphModel dx="1807" dy="806" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="header" value="🚀 KUBERNETES CLUSTER ARCHITECTURE" style="rounded=1;whiteSpace=wrap;html=1;fontSize=18;fontStyle=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="40" width="1000" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="120" width="140" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-title" value="🏷️ COMPONENTES" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="135" width="100" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-cp" value="🎛️" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1976D2;strokeColor=#0D47A1;fontSize=14;fontColor=white;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="165" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-cp-text" value="Control Plane" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="170" width="80" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-wn" value="🖥️" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#388E3C;strokeColor=#1B5E20;fontSize=12;fontColor=white;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="200" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-wn-text" value="Worker Node" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="205" width="80" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-pod" value="📦" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F57C00;strokeColor=#E65100;fontSize=10;fontColor=white;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="235" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-pod-text" value="Pod" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="240" width="80" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-svc" value="🌐" style="ellipse;whiteSpace=wrap;html=1;fillColor=#7B1FA2;strokeColor=#4A148C;fontSize=10;fontColor=white;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="270" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-svc-text" value="Service/External" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="275" width="80" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#1976D2;strokeWidth=3;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="120" width="980" height="700" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-label" value="KUBERNETES CLUSTER" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1976D2;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="135" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="160" width="900" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp-title" value="🎛️ CONTROL PLANE (Master Node)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#0D47A1;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="170" width="250" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-server" value="📡 kube-apiserver&#xa;(API Gateway)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="230" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="etcd" value="🗄️ etcd&#xa;(Database)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="310" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="scheduler" value="🧠 kube-scheduler&#xa;(Pod Placement)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="170" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="controller-mgr" value="🎮 controller-manager&#xa;(State Management)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="240" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ccm" value="☁️ cloud-controller&#xa;(Cloud Integration)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="940" y="230" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-etcd" value="" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;" parent="1" source="api-server" target="etcd" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="api-sched" value="" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;" parent="1" source="api-server" target="scheduler" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="api-ctrl" value="" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;" parent="1" source="api-server" target="controller-mgr" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="workers-title" value="💪 WORKER NODES" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#2E7D32;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="410" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#388E3C;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="450" width="200" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-title" value="🖥️ Worker Node 1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="465" width="100" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-kubelet" value="🤖 kubelet&#xa;(Node Agent)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="495" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-kube-proxy" value="🌐 kube-proxy&#xa;(Network)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="495" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-runtime" value="🐳 containerd&#xa;(Runtime)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="555" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-cni" value="🔌 CNI&#xa;(Network)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="555" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-pods-title" value="📦 PODS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1;fontColor=#E65100;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="615" width="100" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-pod1" value="📦&#xa;Pod A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-pod2" value="📦&#xa;Pod B" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="345" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-pod3" value="📦&#xa;Pod C" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="425" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-pod4" value="📦&#xa;Pod D" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="690" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn1-pod5" value="📦&#xa;Pod E" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="345" y="690" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#388E3C;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="450" width="200" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-title" value="🖥️ Worker Node 2" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="570" y="465" width="100" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-kubelet" value="🤖 kubelet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="495" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-kube-proxy" value="🌐 kube-proxy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="495" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-runtime" value="🐳 containerd" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="555" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-cni" value="🔌 CNI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="555" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-pods-title" value="📦 PODS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1;fontColor=#E65100;" parent="1" vertex="1">
+                    <mxGeometry x="570" y="615" width="100" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-pod1" value="📦&#xa;Pod F" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-pod2" value="📦&#xa;Pod G" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="585" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn2-pod3" value="📦&#xa;Pod H" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="665" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#388E3C;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="760" y="450" width="200" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-title" value="🖥️ Worker Node 3" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="810" y="465" width="100" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-kubelet" value="🤖 kubelet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="495" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-kube-proxy" value="🌐 kube-proxy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="495" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-runtime" value="🐳 containerd" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="555" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-cni" value="🔌 CNI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="555" width="70" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-pods-title" value="📦 PODS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=1;fontColor=#E65100;" parent="1" vertex="1">
+                    <mxGeometry x="810" y="615" width="100" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-pod1" value="📦&#xa;Pod I" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="wn3-pod2" value="📦&#xa;Pod J" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="825" y="640" width="35" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="external-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="450" width="160" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="external-title" value="🌐 EXTERNAL ACCESS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#4A148C;" parent="1" vertex="1">
+                    <mxGeometry x="1010" y="465" width="140" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="loadbalancer" value="⚖️ Load Balancer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1020" y="500" width="120" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ingress" value="🚪 Ingress" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1020" y="550" width="120" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="internet" value="🌍 Internet" style="ellipse;whiteSpace=wrap;html=1;fillColor=#CE93D8;strokeColor=#7B1FA2;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="600" width="80" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="cp-to-wn1" value="kubectl" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;fontSize=8;" parent="1" source="api-server" target="wn1-kubelet" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="cp-to-wn2" value="kubectl" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;fontSize=8;" parent="1" source="api-server" target="wn2-kubelet" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="cp-to-wn3" value="kubectl" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;fontSize=8;" parent="1" source="api-server" target="wn3-kubelet" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="ext-to-cluster" value="HTTPS" style="endArrow=classic;html=1;strokeColor=#7B1FA2;strokeWidth=3;fontSize=8;" parent="1" source="internet" target="loadbalancer" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="600" y="400" as="sourcePoint"/>
+                        <mxPoint x="650" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

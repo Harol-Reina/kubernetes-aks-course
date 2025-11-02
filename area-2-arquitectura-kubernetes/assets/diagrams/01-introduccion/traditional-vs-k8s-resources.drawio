@@ -1,0 +1,184 @@
+<mxfile host="65bd71144e">
+    <diagram name="Traditional vs K8s Resources" id="traditional-vs-k8s-resources">
+        <mxGraphModel dx="1807" dy="806" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="header" value="EFICIENCIA DE RECURSOS: TRADICIONAL vs KUBERNETES" style="rounded=1;whiteSpace=wrap;html=1;fontSize=18;fontStyle=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="40" width="1000" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="traditional-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#C62828;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="120" width="600" height="650" as="geometry"/>
+                </mxCell>
+                <mxCell id="traditional-title" value="❌ ENTORNO TRADICIONAL" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#C62828;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="140" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="physical-server" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#424242;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="660" width="520" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="server-label" value="🖥️ SERVIDOR FÍSICO (64GB RAM)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="685" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm1" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="540" width="80" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm1-label" value="📱 App A&#xa;🐧 VM1&#xa;4GB RAM&#xa;❌ 60% unused" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="560" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm2" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="520" width="80" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm2-label" value="📱 App B&#xa;🐧 VM2&#xa;8GB RAM&#xa;❌ 50% unused" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="560" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm3" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="530" width="80" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm3-label" value="📱 App C&#xa;🐧 VM3&#xa;6GB RAM&#xa;❌ 65% unused" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="565" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm4" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="540" width="80" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm4-label" value="📱 App D&#xa;🐧 VM4&#xa;4GB RAM&#xa;❌ 60% unused" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="560" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm5" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="560" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm5-label" value="📱 App E&#xa;🐧 VM5&#xa;2GB RAM&#xa;❌ 70% unused" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="550" y="580" width="60" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="waste-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#E53935;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="180" width="520" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="waste-title" value="📊 ANÁLISIS DE DESPERDICIO" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#C62828;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="200" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-traditional" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="250" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-app" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;startSize=0;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="250" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-overhead" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FF9800;strokeColor=#F57C00;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="230" y="250" width="90" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-unused" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F44336;strokeColor=#C62828;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="280" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-traditional" value="🟢 Aplicación Útil (35%)&#xa;🟠 VM Overhead (25%)&#xa;🔴 Recursos Sin Usar (40%)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="280" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="problems-title" value="❌ PROBLEMAS:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#C62828;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="391" width="140" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="problems-list" value="• Una VM por aplicación = Desperdicio&#xa;• Overhead del OS en cada VM&#xa;• Recursos infrautilizados&#xa;• Escalado lento y manual&#xa;• Alto costo de infraestructura&#xa;• Complejidad de gestión" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#B71C1C;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="409" width="480" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="k8s-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#2E7D32;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="120" width="600" height="650" as="geometry"/>
+                </mxCell>
+                <mxCell id="k8s-title" value="✅ KUBERNETES CLUSTER" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#2E7D32;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="140" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster-abstraction" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="760" y="180" width="520" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="abstraction-label" value="🎯 CAPA DE ABSTRACCIÓN" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="200" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="apps-in-abstraction" value="📱 App A    📱 App B    📱 App C    📱 App D    📱 App E" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="225" width="360" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="scheduler" value="🧠 INTELLIGENT SCHEDULER" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#A5D6A7;strokeColor=#388E3C;strokeWidth=2;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="860" y="300" width="280" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="node1" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="380" width="100" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="node1-label" value="🖥️ Node 1&#xa;16GB RAM&#xa;&#xa;📦📦&#xa;Apps A+B&#xa;✅ 90% used" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="790" y="420" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="node2" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="380" width="100" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="node2-label" value="🖥️ Node 2&#xa;16GB RAM&#xa;&#xa;📦📦&#xa;Apps C+D&#xa;✅ 85% used" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="910" y="420" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="node3" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1020" y="380" width="100" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="node3-label" value="🖥️ Node 3&#xa;16GB RAM&#xa;&#xa;📦&#xa;App E&#xa;✅ 75% used" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="1030" y="420" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="node4" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1140" y="380" width="100" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="node4-label" value="🖥️ Node 4&#xa;16GB RAM&#xa;&#xa;📦📦📦&#xa;Other Apps&#xa;✅ 95% used" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="1150" y="420" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="efficiency-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#4CAF50;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="760" y="560" width="520" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="efficiency-title" value="📊 ANÁLISIS DE EFICIENCIA" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#2E7D32;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="580" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-k8s" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="620" width="120" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-k8s-app" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#4CAF50;strokeColor=#2E7D32;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="620" width="90" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-k8s-overhead" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFC107;strokeColor=#FF8F00;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="850" y="630" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="pie-k8s-shared" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#2196F3;strokeColor=#1565C0;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="670" width="30" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-k8s" value="🟢 Aplicación Útil (75%)&#xa;🟡 K8s Overhead (10%)&#xa;🔵 OS Compartido (15%)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="960" y="650" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="benefits-title" value="✅ BENEFICIOS:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;fontColor=#2E7D32;" parent="1" vertex="1">
+                    <mxGeometry x="1142" y="615" width="100" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="benefits-list" value="• Múltiples apps por nodo&#xa;• OS compartido eficiente&#xa;• 95% utilización recursos&#xa;• Auto-scaling inteligente&#xa;• Reducción 60% costos&#xa;• Gestión automatizada" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#1B5E20;" parent="1" vertex="1">
+                    <mxGeometry x="1142" y="645" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sched-to-node1" value="" style="endArrow=classic;html=1;strokeColor=#4CAF50;strokeWidth=3;" parent="1" source="scheduler" target="node1" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="920" y="400" as="sourcePoint"/>
+                        <mxPoint x="970" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="sched-to-node2" value="" style="endArrow=classic;html=1;strokeColor=#4CAF50;strokeWidth=3;" parent="1" source="scheduler" target="node2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="920" y="400" as="sourcePoint"/>
+                        <mxPoint x="970" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="sched-to-node3" value="" style="endArrow=classic;html=1;strokeColor=#4CAF50;strokeWidth=3;" parent="1" source="scheduler" target="node3" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="920" y="400" as="sourcePoint"/>
+                        <mxPoint x="970" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="sched-to-node4" value="" style="endArrow=classic;html=1;strokeColor=#4CAF50;strokeWidth=3;" parent="1" source="scheduler" target="node4" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="920" y="400" as="sourcePoint"/>
+                        <mxPoint x="970" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="comparison-bg" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="800" width="1000" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="comparison-title" value="📊 COMPARACIÓN FINAL" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#E65100;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="810" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="comparison-text" value="TRADICIONAL: 5 Apps = 5 VMs = 24GB usados de 64GB = 62% DESPERDICIO&#xa;KUBERNETES: 5 Apps = 4 Nodos = 60GB usados de 64GB = 95% EFICIENCIA" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#BF360C;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="840" width="960" height="30" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

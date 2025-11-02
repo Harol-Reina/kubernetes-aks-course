@@ -57,7 +57,7 @@ Como un capitán de barco que coordina todos los contenedores (la carga), Kubern
 │                                    │                                     │
 │                                    ▼                                     │
 │  ┌─────────────────────────────────────────────────────────────────────┐ │
-│  │              🖥️  SERVIDOR FÍSICO (64GB RAM)                      │ │
+│  │              🖥️  SERVIDOR FÍSICO (64GB RAM)                        │ │
 │  │                    ⚠️  Solo 24GB utilizados                        │ │
 │  └─────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -240,16 +240,41 @@ pie title "Distribución con Kubernetes"
 
 ### **El problema que resuelve:**
 
-#### **🔴 Limitaciones de Docker standalone:**
-```bash
-# Problemas reales en producción:
-docker run -d nginx                    # ¿En qué servidor?
-docker run -d --scale 10 app           # ¿Cómo balancear carga?
-docker stop container                  # ¿Quién lo reinicia?
-docker network create                  # ¿Cómo comunicar entre hosts?
+### **🔴 Limitaciones de Docker standalone:**
+
+```mermaid
+graph TB
+    subgraph "❌ PROBLEMAS DOCKER SOLO"
+        P1[🐳 docker run -d nginx<br/>❓ ¿En qué servidor?]
+        P2[📊 docker run --scale 10 app<br/>❓ ¿Cómo balancear carga?]
+        P3[💥 docker stop container<br/>❓ ¿Quién lo reinicia?]
+        P4[🌐 docker network create<br/>❓ ¿Entre múltiples hosts?]
+    end
+    
+    style P1 fill:#ffebee
+    style P2 fill:#ffebee
+    style P3 fill:#ffebee
+    style P4 fill:#ffebee
 ```
 
-#### **✅ Soluciones con Kubernetes:**
+### **✅ Soluciones con Kubernetes:**
+
+```mermaid
+graph TB
+    subgraph "✅ KUBERNETES RESUELVE"
+        S1[🎯 Intelligent Scheduler<br/>✅ Decide automáticamente]
+        S2[⚖️ Load Balancer<br/>✅ Distribuye tráfico]
+        S3[🔄 Self-Healing<br/>✅ Reinicio automático]
+        S4[🌍 Cluster Networking<br/>✅ Comunicación total]
+    end
+    
+    style S1 fill:#e8f5e8
+    style S2 fill:#e8f5e8
+    style S3 fill:#e8f5e8
+    style S4 fill:#e8f5e8
+```
+
+**🔥 Ejemplo práctico de automatización:**
 ```yaml
 # Mismo resultado, pero automatizado y escalable:
 apiVersion: apps/v1
@@ -950,6 +975,44 @@ Donde aprenderás:
 - Comunicación entre componentes
 - Flujo completo de requests en K8s
 - Cómo todo lo que acabas de aprender se implementa técnicamente
+
+---
+
+## 🎨 Diagramas Interactivos Draw.io
+
+### **📊 Evolución: Docker → Kubernetes**
+
+> **💡 Diagrama interactivo**: [🎨 Editar en Draw.io](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/01-introduccion/docker-vs-kubernetes.drawio)
+
+**Comparación visual completa:**
+- 🐳 **Docker (Área 1)**: Un contenedor, una máquina, gestión manual, desarrollo local
+- 🚀 **Kubernetes (Área 2)**: Miles de contenedores, múltiples servidores, automatización total, producción enterprise
+
+### **⚡ Eficiencia de Recursos: Tradicional vs Kubernetes**
+
+> **💡 Diagrama interactivo**: [🎨 Editar en Draw.io](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/01-introduccion/traditional-vs-k8s-resources.drawio)
+
+**Análisis cuantitativo:**
+- ❌ **Tradicional**: 5 Apps = 5 VMs = 24GB usados de 64GB = **62% DESPERDICIO**
+- ✅ **Kubernetes**: 5 Apps = 4 Nodos = 60GB usados de 64GB = **95% EFICIENCIA**
+
+### **🎯 Ventajas de los Diagramas Draw.io:**
+
+| Característica | Beneficio |
+|:---------------|:----------|
+| **🔄 Editables** | Modifica directamente desde GitHub |
+| **🎨 Profesionales** | Diseño consistente y visualmente atractivo |
+| **📱 Responsive** | Se adaptan a cualquier dispositivo |
+| **🔗 Interactivos** | Enlaces directos para edición |
+| **📊 Actualizables** | Versioning automático con Git |
+| **🌐 Universales** | Compatible con todos los navegadores |
+
+### **🛠️ Cómo Usar los Diagramas:**
+
+1. **👀 Para ver**: Los diagramas se muestran automáticamente en GitHub
+2. **✏️ Para editar**: Haz clic en los enlaces "🎨 Editar en Draw.io"
+3. **💾 Para guardar**: Export as SVG → Commit al repositorio
+4. **🔄 Para actualizar**: Ejecuta `./scripts/update-diagrams.sh`
 
 ---
 
