@@ -171,10 +171,10 @@ Para resolver esto nació la **contenerización**, representada por herramientas
 
 ### 📚 8. Fuentes y referencias técnicas
 
-- [Microsoft Learn – Introducción a la Virtualización](https://docs.microsoft.com/en-us/learn/modules/intro-to-azure-virtual-machines/)
+- [Microsoft Learn – Introducción a la Virtualización](https://docs.microsoft.com/es-es/learn/modules/intro-to-azure-virtual-machines/)
 - [VMware Docs – What is Virtualization](https://www.vmware.com/topics/glossary/content/virtualization.html)
-- [Red Hat – Virtualization Overview](https://www.redhat.com/en/topics/virtualization/what-is-virtualization)
-- [Azure Virtual Machines Documentation](https://docs.microsoft.com/en-us/azure/virtual-machines/)
+- [Red Hat – Virtualization Overview](https://www.redhat.com/es/topics/virtualization/what-is-virtualization)
+- [Azure Virtual Machines Documentation](https://docs.microsoft.com/es-es/azure/virtual-machines/)
 - [KVM Documentation](https://www.linux-kvm.org/page/Documents)
 
 ### 🧠 Resultado esperado
