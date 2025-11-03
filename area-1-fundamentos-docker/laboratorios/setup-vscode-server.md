@@ -98,7 +98,7 @@ code --version
 
 ```bash
 # Iniciar tunnel con nombre personalizado
-code tunnel --accept-server-license-terms --name "docker-k8s-lab-$(whoami)"
+code tunnel --accept-server-license-terms --name "k8s-lab"
 
 # El comando te mostrará:
 # 1. Un enlace para autorizar con GitHub/Microsoft
@@ -129,7 +129,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/code tunnel --accept-server-license-terms --name docker-k8s-lab-$(whoami)
+ExecStart=/usr/local/bin/code tunnel --accept-server-license-terms --name k8s-lab
 Restart=always
 RestartSec=10
 User=$USER
@@ -242,8 +242,8 @@ EOF
 
 Una vez configurado, verás algo como:
 ```
-Open in VS Code Desktop: vscode://vscode.dev/tunnel/docker-k8s-lab-azureuser
-Web UI: https://vscode.dev/tunnel/docker-k8s-lab-azureuser
+Open in VS Code Desktop: vscode://vscode.dev/tunnel/k8s-lab-azureuser
+Web UI: https://vscode.dev/tunnel/k8s-lab-azureuser
 ```
 
 ### **2. Opciones de acceso:**
@@ -254,7 +254,7 @@ Web UI: https://vscode.dev/tunnel/docker-k8s-lab-azureuser
 3. **Automáticamente abre** VS Code Desktop conectado al tunnel
 
 #### **Opción B: VS Code Web**
-1. **Abrir navegador** en `https://vscode.dev/tunnel/docker-k8s-lab-azureuser`
+1. **Abrir navegador** en `https://vscode.dev/tunnel/k8s-lab-azureuser`
 2. **Autenticarse** con la misma cuenta (GitHub/Microsoft)
 3. **¡Listo!** VS Code ejecutándose en el navegador
 
@@ -276,7 +276,7 @@ sudo systemctl status vscode-tunnel
 sudo journalctl -u vscode-tunnel -f
 
 # Reiniciar tunnel manualmente para debug
-code tunnel --accept-server-license-terms --name docker-k8s-lab-$(whoami) --verbose
+code tunnel --accept-server-license-terms --name k8s-lab --verbose
 ```
 
 ### **Error: "Authentication failed"**
@@ -286,14 +286,14 @@ code tunnel --accept-server-license-terms --name docker-k8s-lab-$(whoami) --verb
 rm -rf ~/.vscode-cli
 
 # Reiniciar proceso de autenticación
-code tunnel --accept-server-license-terms --name docker-k8s-lab-$(whoami)
+code tunnel --accept-server-license-terms --name k8s-lab
 ```
 
 ### **Error: "Tunnel name already in use"**
 
 ```bash
 # Usar nombre único con timestamp
-TUNNEL_NAME="docker-k8s-lab-$(whoami)-$(date +%s)"
+TUNNEL_NAME="k8s-lab-$(date +%s)"
 code tunnel --accept-server-license-terms --name $TUNNEL_NAME
 ```
 

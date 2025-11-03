@@ -391,10 +391,106 @@ docker run --rm -v mi-volumen-db:/data ubuntu:22.04 du -sh /data
 
 ## 🧪 Ejercicio 7: Casos de Uso Avanzados
 
-### **Paso 1: Configuración dinámica**
+### **Paso 1: Crear aplicación backend**
 
 ```bash
-# Crear configuración dinámica
+# Crear directorio para la aplicación backend
+mkdir -p ~/docker-volumes-lab/backend-app
+
+# Crear una simple aplicación Node.js
+cat << 'EOF' > ~/docker-volumes-lab/backend-app/package.json
+{
+  "name": "simple-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}
+EOF
+
+cat << 'EOF' > ~/docker-volumes-lab/backend-app/server.js
+const express = require('express');
+const app = express();
+const port = 3000;
+
+// Middleware para logs
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// Rutas de API
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    service: 'Backend API'
+  });
+});
+
+app.get('/api/users', (req, res) => {
+  res.json([
+    { id: 1, name: 'Juan Pérez', email: 'juan@ejemplo.com' },
+    { id: 2, name: 'María García', email: 'maria@ejemplo.com' },
+    { id: 3, name: 'Carlos López', email: 'carlos@ejemplo.com' }
+  ]);
+});
+
+app.get('/api/info', (req, res) => {
+  res.json({
+    message: 'API funcionando correctamente',
+    version: '1.0.0',
+    environment: 'docker',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Backend API ejecutándose en puerto ${port}`);
+});
+EOF
+
+# Crear Dockerfile para el backend
+cat << 'EOF' > ~/docker-volumes-lab/backend-app/Dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package.json .
+RUN npm install
+COPY server.js .
+EXPOSE 3000
+CMD ["node", "server.js"]
+EOF
+```
+
+### **Paso 2: Construir y ejecutar el backend**
+
+```bash
+# Construir imagen del backend
+cd ~/docker-volumes-lab/backend-app
+docker build -t mi-backend:1.0 .
+
+# Crear red personalizada para comunicación entre contenedores
+docker network create app-network
+
+# Ejecutar el backend en la red personalizada
+docker run -d --name backend \
+  --network app-network \
+  -v ~/docker-volumes-lab/logs-centralizados:/var/log/apps \
+  mi-backend:1.0
+
+# Verificar que el backend está funcionando
+sleep 5
+docker logs backend
+```
+
+### **Paso 3: Configuración de Nginx con proxy**
+
+```bash
+# Volver al directorio principal
+cd ~/docker-volumes-lab
+
+# Crear configuración dinámica para Nginx
 mkdir -p ~/docker-volumes-lab/config-dinamica
 
 cat << 'EOF' > ~/docker-volumes-lab/config-dinamica/nginx.conf
@@ -403,29 +499,189 @@ events {
 }
 
 http {
+    # Configuración básica
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    
+    # Formato de logs
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
     server {
         listen 80;
+        server_name localhost;
+        
+        # Logs
+        access_log /var/log/nginx/access.log main;
+        error_log  /var/log/nginx/error.log;
+
+        # Servir archivos estáticos
         location / {
             root /usr/share/nginx/html;
             index index.html;
+            try_files $uri $uri/ =404;
         }
         
+        # Proxy para API backend
         location /api/ {
             proxy_pass http://backend:3000/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # Timeouts
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+        
+        # Página de estado
+        location /status {
+            return 200 "Nginx funcionando correctamente\n";
+            add_header Content-Type text/plain;
         }
     }
 }
 EOF
 
-# Nginx con configuración personalizada
-docker run -d --name nginx-config \
+# Crear página web mejorada
+cat << 'EOF' > ~/docker-volumes-lab/datos/index.html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplicación Full Stack con Docker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 20px; margin-bottom: 30px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        button { background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background-color: #45a049; }
+        #resultado { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; }
+        .timestamp { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐳 Aplicación Full Stack con Docker</h1>
+            <p class="timestamp">Última actualización: <span id="timestamp"></span></p>
+        </div>
+        
+        <div class="section">
+            <h2>🌐 Frontend (Nginx)</h2>
+            <p>Esta página es servida por Nginx usando volúmenes de Docker</p>
+            <button onclick="checkStatus()">🔍 Verificar Estado del Servidor</button>
+        </div>
+        
+        <div class="section">
+            <h2>🔧 Backend API (Node.js)</h2>
+            <p>El backend está ejecutándose en un contenedor separado</p>
+            <button onclick="testAPI('/api/health')">💓 Health Check</button>
+            <button onclick="testAPI('/api/users')">👥 Obtener Usuarios</button>
+            <button onclick="testAPI('/api/info')">ℹ️ Información del Sistema</button>
+        </div>
+        
+        <div class="section">
+            <h3>📋 Resultado:</h3>
+            <div id="resultado">Haz clic en algún botón para probar la API...</div>
+        </div>
+    </div>
+
+    <script>
+        // Actualizar timestamp
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        
+        // Función para probar API
+        async function testAPI(endpoint) {
+            const resultado = document.getElementById('resultado');
+            resultado.textContent = 'Cargando...';
+            
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                resultado.textContent = 
+                    `✅ Éxito!\n\n` +
+                    `Endpoint: ${endpoint}\n` +
+                    `Status: ${response.status}\n` +
+                    `Respuesta:\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultado.textContent = 
+                    `❌ Error!\n\n` +
+                    `Endpoint: ${endpoint}\n` +
+                    `Error: ${error.message}`;
+            }
+        }
+        
+        // Función para verificar estado
+        async function checkStatus() {
+            const resultado = document.getElementById('resultado');
+            resultado.textContent = 'Verificando estado del servidor...';
+            
+            try {
+                const response = await fetch('/status');
+                const text = await response.text();
+                resultado.textContent = 
+                    `✅ Estado del Servidor!\n\n` +
+                    `Status: ${response.status}\n` +
+                    `Respuesta: ${text}`;
+            } catch (error) {
+                resultado.textContent = 
+                    `❌ Error de servidor!\n\n` +
+                    `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
+EOF
+```
+
+### **Paso 4: Ejecutar Nginx con proxy configurado**
+
+```bash
+# Ejecutar Nginx en la misma red que el backend
+docker run -d --name nginx-proxy \
+  --network app-network \
   -p 8081:80 \
   -v ~/docker-volumes-lab/config-dinamica/nginx.conf:/etc/nginx/nginx.conf:ro \
   -v ~/docker-volumes-lab/datos:/usr/share/nginx/html \
+  -v ~/docker-volumes-lab/logs-centralizados:/var/log/nginx \
   nginx
 
-# Verificar configuración
-curl http://localhost:8081
+# Esperar a que arranque
+sleep 5
+
+# Verificar que ambos contenedores están ejecutándose
+docker ps | grep -E "(nginx-proxy|backend)"
+```
+
+### **Paso 5: Probar la aplicación completa**
+
+```bash
+# Probar el frontend
+echo "🌐 Probando frontend:"
+curl -s http://localhost:8081 | grep -o '<title>.*</title>'
+
+# Probar el proxy hacia el backend
+echo -e "\n🔧 Probando backend a través del proxy:"
+curl -s http://localhost:8081/api/health | jq .
+
+echo -e "\n👥 Probando endpoint de usuarios:"
+curl -s http://localhost:8081/api/users | jq .
+
+echo -e "\n📊 Probando endpoint de información:"
+curl -s http://localhost:8081/api/info | jq .
+
+echo -e "\n🔍 Probando estado del servidor:"
+curl -s http://localhost:8081/status
+
+# Abrir en navegador (opcional)
+echo -e "\n🌍 Abre http://localhost:8081 en tu navegador para probar la interfaz completa"
 ```
 
 ### **Paso 2: Logs centralizados**
