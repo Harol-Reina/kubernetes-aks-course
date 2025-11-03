@@ -11,18 +11,18 @@ Comprender los fundamentos de la contenerización, Docker como plataforma de con
 
 ## 🧩 1. Evolución de los modelos de despliegue
 
-### **Deployment Tradicional - El modelo inicial**
-Anteriormente, la manera de desplegar aplicaciones era en **servidores físicos**:
+**Función**: Comprende la evolución desde deployment tradicional hasta contenedores modernos
 
-```
-┌─────────────────────────────────────┐
-│            Aplicación               │
-├─────────────────────────────────────┤
-│          Sistema Operativo          │
-├─────────────────────────────────────┤
-│          Hardware Físico            │
-└─────────────────────────────────────┘
-```
+[![Evolución de Deployment](../assets/diagrams/modulo-2-docker/deployment-evolution.svg)](../assets/diagrams/modulo-2-docker/deployment-evolution.drawio)
+
+**🎯 Evolución Completa de Despliegue:**
+
+> 🔗 **[Editar Diagrama en Draw.io](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-1-fundamentos-docker/assets/diagrams/modulo-2-docker/deployment-evolution.drawio)**
+
+**📋 Fases de la Evolución:**
+
+### **🏢 Deployment Tradicional - El modelo inicial**
+Anteriormente, la manera de desplegar aplicaciones era en **servidores físicos**:
 
 **Problemas del modelo tradicional:**
 - **Muy costoso**: Cada aplicación requería hardware dedicado
@@ -30,20 +30,8 @@ Anteriormente, la manera de desplegar aplicaciones era en **servidores físicos*
 - **Desperdicio de recursos**: Hardware infrautilizado
 - **Baja densidad**: Una aplicación por servidor
 
-### **Máquinas Virtuales - Primera evolución**
+### **💻 Máquinas Virtuales - Primera evolución**
 Las VMs permitieron virtualizar sistemas operativos completos dentro del mismo hardware:
-
-```
-┌──────────────┬──────────────┬──────────────┐
-│  App A       │  App B       │  App C       │
-├──────────────┼──────────────┼──────────────┤
-│  Guest OS    │  Guest OS    │  Guest OS    │
-├──────────────┴──────────────┴──────────────┤
-│            Hypervisor                      │
-├─────────────────────────────────────────────┤
-│            Hardware Físico                  │
-└─────────────────────────────────────────────┘
-```
 
 **Mejoras de las VMs:**
 - Mejor aprovechamiento del hardware
@@ -55,23 +43,8 @@ Las VMs permitieron virtualizar sistemas operativos completos dentro del mismo h
 - Alto overhead de recursos del sistema operativo
 - Arranque lento (minutos)
 
-### **Contenedores - La evolución actual**
+### **🐳 Contenedores - La evolución actual**
 Los contenedores resuelven las limitaciones anteriores:
-
-```
-┌─────────────────────────────────────┐
-│  App A  │  App B  │  App C  │ App D │
-├─────────┼─────────┼─────────┼───────┤
-│ Bins/   │ Bins/   │ Bins/   │ Bins/ │
-│ Libs    │ Libs    │ Libs    │ Libs  │
-├─────────┴─────────┴─────────┴───────┤
-│      Container Runtime (Docker)     │
-├─────────────────────────────────────┤
-│           Host OS (Linux)           │
-├─────────────────────────────────────┤
-│         Hardware Físico             │
-└─────────────────────────────────────┘
-```
 
 **Ventajas de los contenedores:**
 - **Granularidad**: Asignación precisa de recursos (100MB RAM vs 2GB)
