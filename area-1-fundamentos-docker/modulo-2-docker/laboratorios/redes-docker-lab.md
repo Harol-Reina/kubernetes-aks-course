@@ -442,6 +442,78 @@ cd ~/docker-networks-lab/multi-tier-app
 docker stop frontend-web backend-api postgres-db 2>/dev/null || true
 docker rm frontend-web backend-api postgres-db 2>/dev/null || true
 
+# Crear versión del backend que funcione con postgres-secure
+echo "⚙️ Creando backend para entorno seguro..."
+cat << 'EOF' > backend/app-secure.py
+from flask import Flask, jsonify
+import psycopg2
+import os
+
+app = Flask(__name__)
+
+def get_db_connection():
+    # Usar variable de entorno o valor por defecto
+    db_host = os.environ.get('DATABASE_HOST', 'postgres-secure')
+    return psycopg2.connect(
+        host=db_host,
+        database='mi_app',
+        user='app_user',
+        password='app_password'
+    )
+
+@app.route('/')
+def home():
+    return jsonify({'mensaje': 'API Segura funcionando', 'version': '1.0', 'ambiente': 'seguro'})
+
+@app.route('/health')
+def health():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        conn.close()
+        db_host = os.environ.get('DATABASE_HOST', 'postgres-secure')
+        return jsonify({'status': 'healthy', 'database': 'connected', 'db_host': db_host})
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+@app.route('/users')
+def users():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, nombre FROM usuarios')
+        users = [{'id': row[0], 'nombre': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(users)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+EOF
+
+# Crear Dockerfile para versión segura
+cat << 'EOF' > backend/Dockerfile-secure
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY app-secure.py app.py
+
+EXPOSE 5000
+
+CMD ["python", "app.py"]
+EOF
+
+# Construir nueva imagen para entorno seguro
+cd backend
+docker build -f Dockerfile-secure -t mi-backend-api-secure .
+cd ..
+
 # Base de datos solo en red backend
 echo "🗄️ Desplegando base de datos en red backend..."
 docker run -d --name postgres-secure \
@@ -451,11 +523,12 @@ docker run -d --name postgres-secure \
   -e POSTGRES_PASSWORD=app_password \
   postgres:15
 
-# API en ambas redes (frontend y backend)
+# API en ambas redes (frontend y backend) con variable de entorno
 echo "🔧 Desplegando API en ambas redes..."
 docker run -d --name api-secure \
   --network backend-network \
-  mi-backend-api
+  -e DATABASE_HOST=postgres-secure \
+  mi-backend-api-secure
 
 docker network connect frontend-network api-secure
 
@@ -480,8 +553,12 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Networks}}"
 ### **Paso 3: Verificar aislamiento**
 
 ```bash
+# Esperar que PostgreSQL arranque
+echo "⏳ Esperando que PostgreSQL arranque..."
+sleep 15
+
 # Inicializar base de datos nuevamente
-sleep 10
+echo "🗄️ Inicializando base de datos segura..."
 docker exec postgres-secure psql -U app_user -d mi_app -c "
 CREATE TABLE IF NOT EXISTS usuarios (
   id SERIAL PRIMARY KEY,
@@ -495,16 +572,20 @@ INSERT INTO usuarios (nombre) VALUES
 ON CONFLICT DO NOTHING;
 "
 
+# Verificar que los datos se insertaron
+echo "📋 Verificando datos en la base segura:"
+docker exec postgres-secure psql -U app_user -d mi_app -c "SELECT * FROM usuarios;"
+
 # Instalar herramientas de red en el frontend para las pruebas
 docker exec web-secure apt update
 docker exec web-secure apt install -y iputils-ping curl
 
 # El frontend NO puede acceder directamente a la base de datos
-echo "Probando acceso directo desde frontend a base de datos:"
+echo "🔒 Probando acceso directo desde frontend a base de datos:"
 docker exec web-secure ping -c 2 postgres-secure 2>/dev/null || echo "✓ Acceso bloqueado - aislamiento correcto"
 
 # El frontend SÍ puede acceder a la API
-echo "Probando acceso desde frontend a API:"
+echo "🔓 Probando acceso desde frontend a API:"
 docker exec web-secure ping -c 2 api-secure && echo "✓ Acceso permitido"
 
 # Instalar herramientas en la API también
@@ -512,12 +593,26 @@ docker exec api-secure apt update
 docker exec api-secure apt install -y iputils-ping
 
 # La API SÍ puede acceder a la base de datos
-echo "Probando acceso desde API a base de datos:"
+echo "🔓 Probando acceso desde API a base de datos:"
 docker exec api-secure ping -c 2 postgres-secure && echo "✓ Acceso permitido"
 
+# Verificar conectividad de la API con la base de datos
+echo "🔧 Verificando health check de la API:"
+curl -s http://localhost:8080/api/health | jq .
+
 # Probar funcionamiento end-to-end
-echo "Probando funcionalidad completa:"
-curl http://localhost:8080/api/users
+echo "🌐 Probando funcionalidad completa:"
+curl -s http://localhost:8080/api/users | jq .
+
+# Verificar que la API puede resolver el nombre de la base de datos
+echo "🔍 Verificando resolución DNS desde la API:"
+docker exec api-secure nslookup postgres-secure 2>/dev/null || docker exec api-secure getent hosts postgres-secure
+
+echo "✅ Verificación de aislamiento completada!"
+echo "📊 Resumen de conectividad:"
+echo "  - Frontend → API: ✅ Permitido"
+echo "  - Frontend → Database: ❌ Bloqueado"
+echo "  - API → Database: ✅ Permitido"
 ```
 
 ---
