@@ -525,7 +525,7 @@ http {
         
         # Proxy para API backend
         location /api/ {
-            proxy_pass http://backend:3000/;
+            proxy_pass http://backend:3000;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -547,6 +547,7 @@ http {
 EOF
 
 # Crear página web mejorada
+mkdir ~/docker-volumes-lab/datos
 cat << 'EOF' > ~/docker-volumes-lab/datos/index.html
 <!DOCTYPE html>
 <html lang="es">
