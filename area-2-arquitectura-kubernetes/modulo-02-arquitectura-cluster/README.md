@@ -18,66 +18,196 @@ Al completar este módulo serás capaz de:
 
 ## 🏛️ 1. Arquitectura General
 
-### **🎯 Vista de Alto Nivel:**
+### **🎯 Vista de Alto Nivel - Arquitectura Kubernetes Completa:**
 
 ```mermaid
 graph TB
-    subgraph "🚀 KUBERNETES CLUSTER"
-        subgraph "🎛️ CONTROL PLANE"
-            API[📡 kube-apiserver<br/>REST API Gateway]
-            ETCD[🗄️ etcd<br/>Distributed Database]
-            SCHED[🧠 kube-scheduler<br/>Pod Placement]
-            CM[🎮 kube-controller-manager<br/>State Management]
-            CCM[☁️ cloud-controller-manager<br/>Cloud Integration]
-        end
-        
-        subgraph "💪 WORKER NODES"
-            subgraph "🖥️ Node 1"
-                KUBELET1[🤖 kubelet]
-                PROXY1[🌐 kube-proxy]
-                RUNTIME1[🐳 containerd]
-                PODS1[📦 Pods 1-5]
-            end
-            
-            subgraph "🖥️ Node 2"
-                KUBELET2[🤖 kubelet]
-                PROXY2[🌐 kube-proxy]
-                RUNTIME2[🐳 containerd]
-                PODS2[📦 Pods 6-10]
-            end
-            
-            subgraph "🖥️ Node 3"
-                KUBELET3[🤖 kubelet]
-                PROXY3[🌐 kube-proxy]
-                RUNTIME3[🐳 containerd]
-                PODS3[📦 Pods 11-15]
-            end
-        end
-        
-        subgraph "🌐 EXTERNAL ACCESS"
-            LB[⚖️ Load Balancer]
-            ING[🚪 Ingress Controller]
-            EXT[🌍 External Traffic]
-        end
+    subgraph "🌍 EXTERNAL CLIENTS & TRAFFIC"
+        KUBECTL[�️ kubectl<br/>Admin CLI]
+        DASHBOARD[📊 K8s Dashboard<br/>Web UI]
+        APPS[📱 Applications<br/>Client Traffic]
+        DEVS[👨‍💻 Developers<br/>DevOps Tools]
+        MONITORING[📊 Monitoring<br/>Prometheus/Grafana]
     end
     
-    %% Control Plane Internal
-    API -.-> ETCD
-    API -.-> SCHED
-    API -.-> CM
-    API -.-> CCM
+    subgraph "�🚀 KUBERNETES CLUSTER"
+        subgraph "🎛️ CONTROL PLANE - Master Components"
+            API[📡 kube-apiserver<br/>• REST API Gateway<br/>• Authentication & Authorization<br/>• Admission Control<br/>• API Versioning]
+            ETCD[🗄️ etcd Cluster<br/>• Distributed Key-Value Store<br/>• Cluster State & Configuration<br/>• RAFT Consensus<br/>• Backup & Recovery]
+            SCHED[🧠 kube-scheduler<br/>• Pod Placement Engine<br/>• Resource Scheduling<br/>• Affinity & Anti-Affinity<br/>• Constraints & Policies]
+            CM[🎮 kube-controller-manager<br/>• Node Controller<br/>• Replication Controller<br/>• Endpoints Controller<br/>• Service Account Controller]
+            CCM[☁️ cloud-controller-manager<br/>• Cloud Provider Integration<br/>• LoadBalancer Services<br/>• Volume Management<br/>• Network Routes]
+        end
+        
+        subgraph "🌐 NETWORK & INGRESS LAYER"
+            LB[⚖️ Cloud Load Balancer<br/>• External Traffic Distribution<br/>• Health Checks<br/>• SSL Termination]
+            ING[� Ingress Controller<br/>• HTTP/HTTPS Routing<br/>• Path-based Routing<br/>• SSL Certificates<br/>• Rate Limiting]
+            DNS[🔗 CoreDNS<br/>• Service Discovery<br/>• Internal DNS Resolution<br/>• External DNS Integration]
+        end
+        
+        subgraph "�💪 WORKER NODES - Data Plane"
+            subgraph "🖥️ Worker Node 1 - Production"
+                KUBELET1[🤖 kubelet<br/>• Pod Lifecycle Management<br/>• Container Health Monitoring<br/>• Resource Reporting<br/>• Volume Management]
+                PROXY1[🌐 kube-proxy<br/>• Service Load Balancing<br/>• Network Policies<br/>• Traffic Routing<br/>• Connection Forwarding]
+                RUNTIME1[🐳 Container Runtime<br/>• containerd/CRI-O<br/>• Image Management<br/>• Container Execution<br/>• Resource Isolation]
+                CNI1[🔌 CNI Plugin<br/>• Pod Networking<br/>• IP Address Management<br/>• Network Policies<br/>• Multi-tenancy]
+                
+                subgraph "📦 Application Pods"
+                    POD1A[🎯 Frontend Pod<br/>React/Angular App]
+                    POD1B[⚙️ Backend API Pod<br/>Node.js/Python]
+                    POD1C[🗄️ Database Pod<br/>PostgreSQL/MySQL]
+                    POD1D[� Monitoring Pod<br/>Prometheus Agent]
+                    POD1E[🔒 Security Pod<br/>Security Scanner]
+                end
+            end
+            
+            subgraph "🖥️ Worker Node 2 - Development"
+                KUBELET2[🤖 kubelet<br/>• Pod Lifecycle Management<br/>• Container Health Monitoring<br/>• Resource Reporting<br/>• Volume Management]
+                PROXY2[🌐 kube-proxy<br/>• Service Load Balancing<br/>• Network Policies<br/>• Traffic Routing<br/>• Connection Forwarding]
+                RUNTIME2[🐳 Container Runtime<br/>• containerd/CRI-O<br/>• Image Management<br/>• Container Execution<br/>• Resource Isolation]
+                CNI2[🔌 CNI Plugin<br/>• Pod Networking<br/>• IP Address Management<br/>• Network Policies<br/>• Multi-tenancy]
+                
+                subgraph "📦 Development Pods"
+                    POD2A[🧪 Test Runner Pod<br/>Jest/Pytest]
+                    POD2B[� Build Pod<br/>CI/CD Pipeline]
+                    POD2C[📝 Documentation Pod<br/>GitBook/Docs]
+                    POD2D[🐛 Debug Pod<br/>Development Tools]
+                    POD2E[🌱 Staging Pod<br/>Preview Environment]
+                end
+            end
+            
+            subgraph "🖥️ Worker Node 3 - Infrastructure"
+                KUBELET3[🤖 kubelet<br/>• Pod Lifecycle Management<br/>• Container Health Monitoring<br/>• Resource Reporting<br/>• Volume Management]
+                PROXY3[🌐 kube-proxy<br/>• Service Load Balancing<br/>• Network Policies<br/>• Traffic Routing<br/>• Connection Forwarding]
+                RUNTIME3[🐳 Container Runtime<br/>• containerd/CRI-O<br/>• Image Management<br/>• Container Execution<br/>• Resource Isolation]
+                CNI3[🔌 CNI Plugin<br/>• Pod Networking<br/>• IP Address Management<br/>• Network Policies<br/>• Multi-tenancy]
+                
+                subgraph "📦 System Pods"
+                    POD3A[📊 Metrics Server<br/>Resource Metrics]
+                    POD3B[� Logging Agent<br/>Fluent Bit/Filebeat]
+                    POD3C[🔧 System Tools<br/>Troubleshooting]
+                    POD3D[💾 Storage CSI<br/>Volume Management]
+                    POD3E[🛡️ Network Policy<br/>Security Enforcement]
+                end
+            end
+        end
+        
+        subgraph "💾 PERSISTENT STORAGE"
+            PV[💿 Persistent Volumes<br/>• Block Storage<br/>• File Systems<br/>• Object Storage<br/>• Database Storage]
+            SC[⚙️ Storage Classes<br/>• Dynamic Provisioning<br/>• Storage Types<br/>• Performance Tiers<br/>• Backup Policies]
+        end
+    end
+
+    %% External Client Connections
+    KUBECTL ==> API
+    DASHBOARD ==> API
+    APPS ==> LB
+    DEVS ==> API
+    MONITORING ==> API
+
+    %% Load Balancer to Ingress
+    LB ==> ING
+    ING ==> POD1A
+    ING ==> POD1B
+
+    %% Control Plane Internal Communications
+    API <==> ETCD
+    API ==> SCHED
+    API ==> CM
+    API ==> CCM
+    SCHED -.-> API
+    CM -.-> API
+    CCM -.-> API
+
+    %% Control Plane to Worker Nodes
+    API ==> KUBELET1
+    API ==> KUBELET2
+    API ==> KUBELET3
     
-    %% Control Plane to Workers
-    API --> KUBELET1
-    API --> KUBELET2
-    API --> KUBELET3
-    
-    %% Worker Node Internal
-    KUBELET1 --> RUNTIME1
-    KUBELET1 --> PODS1
-    PROXY1 -.-> PODS1
-    
-    KUBELET2 --> RUNTIME2
+    %% DNS Integration
+    DNS -.-> POD1A
+    DNS -.-> POD1B
+    DNS -.-> POD2A
+
+    %% Worker Node 1 Internal
+    KUBELET1 ==> RUNTIME1
+    KUBELET1 ==> POD1A
+    KUBELET1 ==> POD1B
+    KUBELET1 ==> POD1C
+    KUBELET1 ==> POD1D
+    KUBELET1 ==> POD1E
+    PROXY1 -.-> POD1A
+    PROXY1 -.-> POD1B
+    PROXY1 -.-> POD1C
+    CNI1 -.-> POD1A
+    CNI1 -.-> POD1B
+    CNI1 -.-> POD1C
+
+    %% Worker Node 2 Internal
+    KUBELET2 ==> RUNTIME2
+    KUBELET2 ==> POD2A
+    KUBELET2 ==> POD2B
+    KUBELET2 ==> POD2C
+    KUBELET2 ==> POD2D
+    KUBELET2 ==> POD2E
+    PROXY2 -.-> POD2A
+    PROXY2 -.-> POD2B
+    PROXY2 -.-> POD2C
+    CNI2 -.-> POD2A
+    CNI2 -.-> POD2B
+    CNI2 -.-> POD2C
+
+    %% Worker Node 3 Internal
+    KUBELET3 ==> RUNTIME3
+    KUBELET3 ==> POD3A
+    KUBELET3 ==> POD3B
+    KUBELET3 ==> POD3C
+    KUBELET3 ==> POD3D
+    KUBELET3 ==> POD3E
+    PROXY3 -.-> POD3A
+    PROXY3 -.-> POD3B
+    PROXY3 -.-> POD3C
+    CNI3 -.-> POD3A
+    CNI3 -.-> POD3B
+    CNI3 -.-> POD3C
+
+    %% Storage Connections
+    POD1C -.-> PV
+    POD3D -.-> PV
+    SC -.-> PV
+
+    %% Inter-Pod Communications
+    POD1A -.-> POD1B
+    POD1B -.-> POD1C
+    POD2A -.-> POD1A
+    POD3A -.-> POD1A
+    POD3B -.-> POD1A
+
+    %% Styling
+    classDef externalStyle fill:#E1F5FE,stroke:#0277BD,stroke-width:2px
+    classDef controlPlaneStyle fill:#FFF3E0,stroke:#F57C00,stroke-width:3px
+    classDef networkStyle fill:#E8F5E8,stroke:#388E3C,stroke-width:2px
+    classDef workerStyle fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
+    classDef podStyle fill:#FFEBEE,stroke:#D32F2F,stroke-width:1px
+    classDef storageStyle fill:#E0F2F1,stroke:#00695C,stroke-width:2px
+
+    class KUBECTL,DASHBOARD,APPS,DEVS,MONITORING externalStyle
+    class API,ETCD,SCHED,CM,CCM controlPlaneStyle
+    class LB,ING,DNS networkStyle
+    class KUBELET1,PROXY1,RUNTIME1,CNI1,KUBELET2,PROXY2,RUNTIME2,CNI2,KUBELET3,PROXY3,RUNTIME3,CNI3 workerStyle
+    class POD1A,POD1B,POD1C,POD1D,POD1E,POD2A,POD2B,POD2C,POD2D,POD2E,POD3A,POD3B,POD3C,POD3D,POD3E podStyle
+    class PV,SC storageStyle
+```
+
+**🏗️ Componentes Principales:**
+
+| 🎛️ **Control Plane** | 💪 **Worker Nodes** | 🌐 **Networking** | 💾 **Storage** |
+|----------------------|---------------------|-------------------|----------------|
+| API Server | kubelet | Ingress Controller | Persistent Volumes |
+| etcd | kube-proxy | Load Balancer | Storage Classes |
+| Scheduler | Container Runtime | CoreDNS | Volume Drivers |
+| Controller Manager | CNI Plugin | Network Policies | CSI Drivers |
+| Cloud Controller | Pod Security | Service Mesh | Backup Solutions |
     KUBELET2 --> PODS2
     PROXY2 -.-> PODS2
     
@@ -106,9 +236,9 @@ graph TB
 
 **� Diagrama Interactivo Completo:**
 
-[![Kubernetes Cluster Overview](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/cluster-overview.svg)](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/cluster-overview.drawio)
+[![Mermaid Diagram](https://img.shields.io/badge/Diagram-Mermaid-blue?style=flat-square&logo=markdown)](https://mermaid.live/)
 
-> 🔗 **[Abrir diagrama interactivo en Draw.io](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/cluster-overview.drawio)**
+> 🎯 **Diagrama desarrollado con Mermaid para mejor mantenimiento y visualización**
 
 ### **🔑 Principios Fundamentales:**
 
@@ -160,9 +290,9 @@ graph TB
 
 **� Diagrama Detallado del Control Plane:**
 
-[![Control Plane Detailed](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/control-plane-detailed.svg)](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/control-plane-detailed.drawio)
+[![Mermaid Diagram](https://img.shields.io/badge/Diagram-Mermaid-blue?style=flat-square&logo=markdown)](https://mermaid.live/)
 
-> 🔗 **[Abrir diagrama interactivo en Draw.io](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/control-plane-detailed.drawio)**
+> 🎯 **Control Plane desarrollado con Mermaid para mejor visualización de componentes**
 
 ### **🎛️ Componentes del Control Plane:**
 
@@ -239,7 +369,7 @@ graph LR
 
 **Función**: Punto de entrada único para todas las operaciones del cluster
 
-[![API Server Request Flow](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/api-request-flow.svg)](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/api-request-flow.drawio)
+[![Mermaid Diagram](https://img.shields.io/badge/API_Request_Flow-Mermaid-blue?style=flat-square&logo=markdown)](https://mermaid.live/)
 
 **� Flujo completo de procesamiento de requests en el API Server de Kubernetes**
 
@@ -270,7 +400,9 @@ El API Server de Kubernetes procesa todas las requests siguiendo un pipeline est
 - **Historial de Eventos**: Auditoría y seguimiento de cambios
 - **Consistencia**: Consistencia fuerte con cumplimiento ACID
 
-[🔗 **Editar Diagrama en Draw.io**](https://app.diagrams.net/?mode=github&url=https%3A%2F%2Fraw.githubusercontent.com%2Fuser%2Frepo%2Fbranch%2Fassets%2Fdiagrams%2F02-arquitectura-cluster%2Fapi-request-flow.drawio)
+**📚 Recursos Adicionales para API Server:**
+- [📖 **Documentación Oficial**](https://kubernetes.io/docs/concepts/overview/kubernetes-api/)
+- [🔧 **API Reference**](https://kubernetes.io/docs/reference/kubernetes-api/)
 │                                                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1062,9 +1194,9 @@ graph TB
 
 **🎨 Diagrama Detallado de Worker Nodes:**
 
-[![Worker Nodes Detailed](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/worker-nodes-detailed.svg)](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/worker-nodes-detailed.drawio)
+[![Mermaid Diagram](https://img.shields.io/badge/Worker_Nodes-Mermaid-blue?style=flat-square&logo=markdown)](https://mermaid.live/)
 
-> 🔗 **[Abrir diagrama interactivo en Draw.io](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/worker-nodes-detailed.drawio)**
+> 🎯 **Worker Nodes desarrollados con Mermaid para visualización detallada de componentes**
 
 ### **⚙️ Componentes de Worker Nodes:**
 
