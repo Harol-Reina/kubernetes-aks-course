@@ -717,9 +717,11 @@ echo "- Conectividad externa: Bloqueada ✓"
 
 ```bash
 # Contenedor con herramientas de red
-docker run -it --name nettools \
-  --network app-network \
-  nicolaka/netshoot
+docker run -d -it --name nettools \
+  --network backend-network \
+  nicolaka/netshoot /bin/bash
+
+docker network connect frontend-network nettools
 
 # Dentro del contenedor:
 # nslookup postgres-db

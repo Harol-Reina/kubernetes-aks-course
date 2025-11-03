@@ -44,13 +44,15 @@ docker run -d --name contenedor-c nginx
 ```bash
 # Ver procesos en contenedor-a
 echo "=== PROCESOS EN CONTENEDOR A ==="
+docker exec contenedor-a which ps >/dev/null 2>&1 || docker exec contenedor-a apt update && docker exec contenedor-a apt install -y procps
 docker exec contenedor-a ps aux
 
 # Ver procesos en contenedor-b
 echo "=== PROCESOS EN CONTENEDOR B ==="
+docker exec contenedor-b which ps >/dev/null 2>&1 || docker exec contenedor-b apt update && docker exec contenedor-b apt install -y procps
 docker exec contenedor-b ps aux
 
-# Ver procesos en contenedor-c
+# Ver procesos en contenedor-c (nginx ya tiene ps instalado)
 echo "=== PROCESOS EN CONTENEDOR C ==="
 docker exec contenedor-c ps aux
 ```
@@ -64,7 +66,7 @@ ps aux | grep -E "(docker|sleep|nginx)" | grep -v grep
 
 # ¿Pueden verse entre contenedores?
 echo "=== INTENTAR VER PROCESOS DE OTRO CONTENEDOR ==="
-docker exec contenedor-a ps aux | grep nginx
+docker exec contenedor-a ps aux | grep nginx || echo "No se puede ver nginx desde contenedor-a (aislamiento correcto)"
 # Resultado: No debe aparecer nginx (está en contenedor-c)
 ```
 
@@ -86,10 +88,12 @@ docker inspect contenedor-c | grep IPAddress
 
 # Verificar desde dentro de cada contenedor
 echo "=== RED VISTA DESDE CONTENEDOR A ==="
-docker exec contenedor-a ip addr show
+docker exec contenedor-a which ip >/dev/null 2>&1 || docker exec contenedor-a apt update && docker exec contenedor-a apt install -y iproute2
+docker exec contenedor-a ip addr show 2>/dev/null || docker exec contenedor-a cat /proc/net/dev
 
 echo "=== RED VISTA DESDE CONTENEDOR B ==="
-docker exec contenedor-b ip addr show
+docker exec contenedor-b which ip >/dev/null 2>&1 || docker exec contenedor-b apt update && docker exec contenedor-b apt install -y iproute2
+docker exec contenedor-b ip addr show 2>/dev/null || docker exec contenedor-b cat /proc/net/dev
 ```
 
 ### Paso 2: Probar conectividad entre contenedores
@@ -99,12 +103,17 @@ docker exec contenedor-b ip addr show
 NGINX_IP=$(docker inspect contenedor-c | grep '"IPAddress"' | head -1 | cut -d '"' -f 4)
 echo "IP de nginx: $NGINX_IP"
 
-# Desde contenedor-a, intentar conectar a nginx
+# Instalar curl en los contenedores Ubuntu (nginx ya lo tiene)
+echo "Instalando herramientas de red en contenedores Ubuntu..."
 docker exec contenedor-a apt update && docker exec contenedor-a apt install -y curl
+docker exec contenedor-b apt update && docker exec contenedor-b apt install -y curl
+
+# Desde contenedor-a, intentar conectar a nginx
+echo "=== CONECTIVIDAD DESDE CONTENEDOR A ==="
 docker exec contenedor-a curl -I http://$NGINX_IP
 
 # Desde contenedor-b, intentar lo mismo
-docker exec contenedor-b apt update && docker exec contenedor-b apt install -y curl  
+echo "=== CONECTIVIDAD DESDE CONTENEDOR B ==="
 docker exec contenedor-b curl -I http://$NGINX_IP
 ```
 
@@ -118,9 +127,13 @@ docker network create mi-red-prueba
 docker run -d --name web1 --network mi-red-prueba nginx
 docker run -d --name web2 --network mi-red-prueba nginx
 
-# Probar conectividad por nombre
-docker exec web1 curl -I http://web2
-docker exec web2 curl -I http://web1
+# Esperar que arranquen
+sleep 5
+
+# Probar conectividad por nombre (nginx ya tiene curl disponible)
+echo "=== CONECTIVIDAD POR NOMBRE EN RED PERSONALIZADA ==="
+docker exec web1 curl -I http://web2 || echo "Conectividad fallida desde web1 a web2"
+docker exec web2 curl -I http://web1 || echo "Conectividad fallida desde web2 a web1"
 ```
 
 ### 🤔 **Pregunta de análisis:**
@@ -211,17 +224,33 @@ docker stats --no-stream
 ### Paso 3: Probar los límites
 
 ```bash
-# Intentar consumir más memoria de la permitida
-docker run -it --memory="50m" ubuntu:22.04 bash
+# Crear contenedor interactivo con límite de memoria
+echo "=== CREANDO CONTENEDOR CON LÍMITE DE MEMORIA ==="
+docker run -it --memory="50m" --name test-memory ubuntu:22.04 bash << 'EOF'
 
-# Dentro del contenedor, instalar stress
-apt update && apt install -y stress
+# Dentro del contenedor, instalar stress y herramientas
+echo "Instalando herramientas de stress..."
+apt update && apt install -y stress htop
 
-# Intentar usar 100MB (debería fallar con límite de 50MB)
-stress --vm 1 --vm-bytes 100M --timeout 10s
+echo "Información del sistema:"
+cat /proc/meminfo | grep MemTotal
+
+echo "Intentando usar 100MB (debería fallar con límite de 50MB)..."
+stress --vm 1 --vm-bytes 100M --timeout 10s || echo "Stress test completado o falló por límites de memoria"
+
+echo "Probando con 30MB (dentro del límite)..."
+stress --vm 1 --vm-bytes 30M --timeout 5s && echo "Test de 30MB exitoso"
 
 # Salir del contenedor
 exit
+EOF
+
+# Verificar el contenedor desde el host
+echo "=== ESTADÍSTICAS DEL CONTENEDOR CON LÍMITES ==="
+docker stats test-memory --no-stream 2>/dev/null || echo "Contenedor ya terminó"
+
+# Limpiar
+docker rm test-memory 2>/dev/null || true
 ```
 
 ### 🤔 **Pregunta de análisis:**
@@ -238,9 +267,9 @@ exit
 echo "=== TIEMPO DE ARRANQUE CONTENEDOR ==="
 time docker run --rm hello-world
 
-# 2. Uso de memoria
+# 2. Uso de memoria de contenedores existentes
 echo "=== USO DE MEMORIA CONTENEDORES ==="
-docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"
+docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}" 2>/dev/null || echo "No hay contenedores ejecutándose"
 
 # 3. Tamaño en disco
 echo "=== TAMAÑO DE IMÁGENES ==="
@@ -248,15 +277,25 @@ docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
 # 4. Cuántos contenedores podemos ejecutar
 echo "=== PRUEBA DE DENSIDAD ==="
+echo "Creando 20 contenedores nginx ligeros..."
+
+# Crear contenedores con manejo de errores
+CREATED_COUNT=0
 for i in {1..20}; do
-  docker run -d --name test$i --memory="20m" nginx:alpine > /dev/null 2>&1
+  if docker run -d --name test$i --memory="20m" nginx:alpine > /dev/null 2>&1; then
+    CREATED_COUNT=$((CREATED_COUNT + 1))
+  else
+    echo "Error creando contenedor test$i"
+  fi
 done
 
-echo "Contenedores creados:"
-docker ps --format "table {{.Names}}\t{{.Status}}"
+echo "Contenedores creados exitosamente: $CREATED_COUNT"
+echo "Lista de contenedores:"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | grep test
 
 # Ver recursos totales utilizados
-docker stats --no-stream
+echo "=== RECURSOS UTILIZADOS ==="
+docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}" | head -10
 ```
 
 ### Comparación con VM del módulo anterior:
@@ -291,17 +330,27 @@ docker stats --no-stream
 
 ```bash
 # Detener y eliminar todos los contenedores de prueba
-docker stop $(docker ps -aq)
-docker rm $(docker ps -aq)
+echo "=== LIMPIANDO CONTENEDORES ==="
+docker stop $(docker ps -aq) 2>/dev/null || echo "No hay contenedores ejecutándose"
+docker rm $(docker ps -aq) 2>/dev/null || echo "No hay contenedores para eliminar"
 
 # Eliminar volúmenes
-docker volume rm shared-volume
+echo "=== LIMPIANDO VOLÚMENES ==="
+docker volume rm shared-volume 2>/dev/null || echo "Volumen shared-volume no existe"
 
 # Eliminar red personalizada
-docker network rm mi-red-prueba
+echo "=== LIMPIANDO REDES ==="
+docker network rm mi-red-prueba 2>/dev/null || echo "Red mi-red-prueba no existe"
 
-# Limpiar sistema
+# Limpiar sistema completo
+echo "=== LIMPIEZA GENERAL ==="
 docker system prune -f
+
+# Verificar limpieza
+echo "=== ESTADO FINAL ==="
+echo "Contenedores restantes: $(docker ps -a --format '{{.Names}}' | wc -l)"
+echo "Imágenes disponibles: $(docker images --format '{{.Repository}}:{{.Tag}}' | wc -l)"
+echo "Redes personalizadas: $(docker network ls --filter type=custom --format '{{.Name}}' | wc -l)"
 ```
 
 ---
