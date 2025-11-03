@@ -132,10 +132,21 @@ docker exec client-default curl --connect-timeout 5 http://web-custom 2>/dev/nul
 
 # Ver tabla de ruteo en los contenedores
 echo "Tabla de ruteo en red default:"
+# Instalar herramientas de red en nginx (si es necesario)
+docker exec web-default which route >/dev/null 2>&1 || docker exec web-default apt update && docker exec web-default apt install -y net-tools
 docker exec web-default route -n
 
 echo "Tabla de ruteo en red personalizada:"
+# Instalar herramientas de red en nginx personalizada
+docker exec web-custom which route >/dev/null 2>&1 || docker exec web-custom apt update && docker exec web-custom apt install -y net-tools
 docker exec web-custom route -n
+
+# Alternativa usando ip route (más moderno y disponible)
+echo "Rutas usando ip route (red default):"
+docker exec web-default ip route
+
+echo "Rutas usando ip route (red personalizada):"
+docker exec web-custom ip route
 
 # Verificar configuraciones de red
 echo "IP en red default:"
@@ -564,14 +575,26 @@ docker run -it --name nettools \
 
 ```bash
 # Ver puertos expuestos
-docker port frontend-web
-docker port api-secure
+docker port frontend-web 2>/dev/null || echo "No hay puertos expuestos en frontend-web"
+docker port api-secure 2>/dev/null || echo "No hay puertos expuestos en api-secure"
+
+# Instalar herramientas de red si no están disponibles
+echo "Instalando herramientas de red en api-secure:"
+docker exec api-secure which netstat >/dev/null 2>&1 || {
+  docker exec api-secure apt update && docker exec api-secure apt install -y net-tools iproute2
+}
 
 # Ver procesos de red en contenedor
-docker exec api-secure netstat -tulpn
+echo "Procesos de red en api-secure:"
+docker exec api-secure netstat -tulpn 2>/dev/null || docker exec api-secure ss -tulpn
 
-# Ver conexiones activas
+# Ver conexiones activas (alternativa moderna)
+echo "Conexiones activas usando ss:"
 docker exec api-secure ss -tuln
+
+# Verificar puertos específicos
+echo "Verificando puerto 5000 en api-secure:"
+docker exec api-secure ss -tlnp | grep :5000 || echo "Puerto 5000 no está en escucha"
 ```
 
 ### **Paso 3: Troubleshooting común**
@@ -583,11 +606,30 @@ docker inspect api-secure | jq '.[0].NetworkSettings.Networks'
 # Ver logs de conexión
 docker logs api-secure
 
-# Probar conectividad específica
-docker exec api-secure nc -zv postgres-secure 5432
+# Instalar herramientas de diagnóstico si es necesario
+echo "Preparando herramientas para diagnóstico:"
+docker exec api-secure which nc >/dev/null 2>&1 || {
+  docker exec api-secure apt update && docker exec api-secure apt install -y netcat-openbsd dnsutils
+}
+
+# Probar conectividad específica a puerto
+echo "Probando conectividad a PostgreSQL:"
+docker exec api-secure nc -zv postgres-secure 5432 2>/dev/null && echo "✓ Puerto 5432 accesible" || echo "✗ Puerto 5432 no accesible"
 
 # Ver DNS resolution
-docker exec api-secure nslookup postgres-secure
+echo "Resolviendo nombre postgres-secure:"
+docker exec api-secure nslookup postgres-secure 2>/dev/null || {
+  echo "nslookup no disponible, usando getent:"
+  docker exec api-secure getent hosts postgres-secure
+}
+
+# Alternativa para verificar conectividad usando curl
+echo "Verificando conectividad HTTP (si aplica):"
+docker exec api-secure curl -s --connect-timeout 3 http://postgres-secure:5432 2>/dev/null && echo "✓ HTTP responde" || echo "ℹ️ No es un servicio HTTP (normal para PostgreSQL)"
+
+# Verificar interfaces de red del contenedor
+echo "Interfaces de red en api-secure:"
+docker exec api-secure ip addr show
 ```
 
 ---
