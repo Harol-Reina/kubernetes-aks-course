@@ -208,35 +208,8 @@ graph TB
 | Scheduler | Container Runtime | CoreDNS | Volume Drivers |
 | Controller Manager | CNI Plugin | Network Policies | CSI Drivers |
 | Cloud Controller | Pod Security | Service Mesh | Backup Solutions |
-    KUBELET2 --> PODS2
-    PROXY2 -.-> PODS2
-    
-    KUBELET3 --> RUNTIME3
-    KUBELET3 --> PODS3
-    PROXY3 -.-> PODS3
-    
-    %% External Access
-    EXT --> LB
-    LB --> ING
-    ING --> PROXY1
-    ING --> PROXY2
-    ING --> PROXY3
-    
-    %% Styling
-    classDef controlPlane fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    classDef workerNode fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
-    classDef external fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef pods fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    
-    class API,ETCD,SCHED,CM,CCM controlPlane
-    class KUBELET1,KUBELET2,KUBELET3,PROXY1,PROXY2,PROXY3,RUNTIME1,RUNTIME2,RUNTIME3 workerNode
-    class LB,ING,EXT external
-    class PODS1,PODS2,PODS3 pods
-```
 
-**� Diagrama Interactivo Completo:**
 
-[![Mermaid Diagram](https://img.shields.io/badge/Diagram-Mermaid-blue?style=flat-square&logo=markdown)](https://mermaid.live/)
 
 > 🎯 **Diagrama desarrollado con Mermaid para mejor mantenimiento y visualización**
 
