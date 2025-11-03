@@ -104,14 +104,14 @@ curl http://localhost:3001
 
 ```bash
 # Verificar si ya está instalado
-docker-compose --version
+docker compose version
 
 # Si no está instalado
 sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
 
 # Verificar instalación
-docker-compose --version
+docker compose version
 ```
 
 ### Paso 2: Crear directorio del proyecto
@@ -681,13 +681,13 @@ EOF
 
 ```bash
 # Construir y ejecutar todos los servicios
-docker-compose up -d --build
+docker compose up -d --build
 
 # Ver el estado de todos los servicios
-docker-compose ps
+docker compose ps
 
 # Ver logs de todos los servicios
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### Paso 6: Probar la aplicación
@@ -715,38 +715,38 @@ curl http://localhost:3000
 
 ```bash
 # Ver estado detallado
-docker-compose ps
+docker compose ps
 
 # Logs de un servicio específico
-docker-compose logs backend
+docker compose logs backend
 
 # Escalar un servicio (limitado en Docker Compose)
-docker-compose up -d --scale backend=2
+docker compose up -d --scale backend=2
 
 # Reiniciar un servicio
-docker-compose restart backend
+docker compose restart backend
 
 # Detener todos los servicios
-docker-compose stop
+docker compose stop
 
 # Iniciar servicios detenidos
-docker-compose start
+docker compose start
 
 # Eliminar todo (contenedores, redes, volúmenes)
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Actualizaciones:
 
 ```bash
 # Reconstruir solo un servicio
-docker-compose build backend
+docker compose build backend
 
 # Actualizar un servicio específico
-docker-compose up -d --no-deps backend
+docker compose up -d --no-deps backend
 
 # Actualizar toda la aplicación
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ---
@@ -816,7 +816,7 @@ docker-compose up -d --build
    - Kubernetes: ✅ Migra automáticamente a otros nodos
 
 3. **¿Cómo actualizas sin downtime?**
-   - Docker Compose: ❌ `docker-compose up` causa interrupción
+   - Docker Compose: ❌ `docker compose up` causa interrupción
    - Kubernetes: ✅ Rolling updates automáticos
 
 4. **¿Cómo gestionas secretos sensibles?**
@@ -837,7 +837,7 @@ docker-compose up -d --build
 
 ```bash
 # Detener y eliminar toda la aplicación
-docker-compose down -v
+docker compose down -v
 
 # Limpiar imágenes no utilizadas
 docker image prune -f
@@ -852,7 +852,7 @@ docker system prune -f
 
 1. **Screenshots** de:
    - Aplicación funcionando en el navegador
-   - `docker-compose ps` mostrando todos los servicios
+   - `docker compose ps` mostrando todos los servicios
    - Logs de los diferentes servicios
    - API responses del backend
 
