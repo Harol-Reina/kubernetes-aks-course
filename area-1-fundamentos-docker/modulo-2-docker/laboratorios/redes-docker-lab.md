@@ -67,12 +67,20 @@ curl http://$WEB_IP
 # Crear segundo contenedor
 docker run -d --name client-default ubuntu:22.04 sleep 3600
 
+# Instalar herramientas de red necesarias
+docker exec client-default apt update
+docker exec client-default apt install -y iputils-ping curl dnsutils
+
 # Probar conectividad por IP
 docker exec client-default ping -c 3 $WEB_IP
 
 # ¿Funciona la resolución de nombres?
 docker exec client-default ping -c 3 web-default
 # Esto fallará en la red bridge por defecto
+
+# Alternativa usando curl si ping falla
+echo "Probando conectividad HTTP:"
+docker exec client-default curl -s http://$WEB_IP | head -n 5
 ```
 
 ---
@@ -99,12 +107,15 @@ docker network inspect mi-red-app | jq '.[0].IPAM.Config'
 docker run -d --name web-custom --network mi-red-app nginx
 docker run -d --name client-custom --network mi-red-app ubuntu:22.04 sleep 3600
 
+# Instalar herramientas necesarias en el cliente
+docker exec client-custom apt update
+docker exec client-custom apt install -y iputils-ping curl dnsutils
+
 # Verificar conectividad por nombre
 docker exec client-custom ping -c 3 web-custom
 # ¡Ahora funciona la resolución DNS!
 
 # Verificar conectividad HTTP
-docker exec client-custom apt update && docker exec client-custom apt install -y curl
 docker exec client-custom curl http://web-custom
 ```
 
@@ -115,9 +126,23 @@ docker exec client-custom curl http://web-custom
 docker exec client-default ping -c 3 web-custom
 # Esto fallará - las redes están aisladas
 
+# Alternativa con curl para verificar aislamiento
+echo "Intentando conectar desde red default a red personalizada:"
+docker exec client-default curl --connect-timeout 5 http://web-custom 2>/dev/null || echo "Conexión fallida: las redes están aisladas ✓"
+
 # Ver tabla de ruteo en los contenedores
+echo "Tabla de ruteo en red default:"
 docker exec web-default route -n
+
+echo "Tabla de ruteo en red personalizada:"
 docker exec web-custom route -n
+
+# Verificar configuraciones de red
+echo "IP en red default:"
+docker exec client-default hostname -I
+
+echo "IP en red personalizada:"
+docker exec client-custom hostname -I
 ```
 
 ---
@@ -420,19 +445,28 @@ INSERT INTO usuarios (nombre) VALUES
 ON CONFLICT DO NOTHING;
 "
 
+# Instalar herramientas de red en el frontend para las pruebas
+docker exec web-secure apt update
+docker exec web-secure apt install -y iputils-ping curl
+
 # El frontend NO puede acceder directamente a la base de datos
-docker exec web-secure ping -c 2 postgres-secure
-# Esto debe fallar
+echo "Probando acceso directo desde frontend a base de datos:"
+docker exec web-secure ping -c 2 postgres-secure 2>/dev/null || echo "✓ Acceso bloqueado - aislamiento correcto"
 
 # El frontend SÍ puede acceder a la API
-docker exec web-secure ping -c 2 api-secure
-# Esto debe funcionar
+echo "Probando acceso desde frontend a API:"
+docker exec web-secure ping -c 2 api-secure && echo "✓ Acceso permitido"
+
+# Instalar herramientas en la API también
+docker exec api-secure apt update
+docker exec api-secure apt install -y iputils-ping
 
 # La API SÍ puede acceder a la base de datos
-docker exec api-secure ping -c 2 postgres-secure
-# Esto debe funcionar
+echo "Probando acceso desde API a base de datos:"
+docker exec api-secure ping -c 2 postgres-secure && echo "✓ Acceso permitido"
 
 # Probar funcionamiento end-to-end
+echo "Probando funcionalidad completa:"
 curl http://localhost:8080/api/users
 ```
 
@@ -471,9 +505,17 @@ docker run -d --name aislado \
 # Ver configuración de red (solo loopback)
 docker exec aislado ip addr show
 
-# No hay conectividad externa
-docker exec aislado ping -c 2 8.8.8.8
-# Esto fallará
+# Intentar instalar herramientas (esto también fallará por falta de conectividad)
+echo "Intentando actualizar paquetes en contenedor aislado:"
+docker exec aislado apt update 2>/dev/null || echo "✓ Sin conectividad externa - aislamiento completo"
+
+# Verificar que solo tiene interfaz loopback
+echo "Interfaces de red disponibles:"
+docker exec aislado ip addr show | grep -E "^[0-9]+:"
+
+# No hay conectividad externa (esto fallará)
+echo "Probando conectividad externa:"
+docker exec aislado ping -c 2 8.8.8.8 2>/dev/null || echo "✓ Sin acceso a internet"
 ```
 
 ### **Paso 3: Macvlan Network**

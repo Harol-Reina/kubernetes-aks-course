@@ -695,12 +695,12 @@ mkdir -p ~/docker-volumes-lab/logs-centralizados
 docker run -d --name servicio1 \
   -v ~/docker-volumes-lab/logs-centralizados:/var/log/apps \
   ubuntu:22.04 \
-  bash -c "while true; do echo \"[SERVICIO1] $(date): Evento importante\" >> /var/log/apps/servicio1.log; sleep 15; done"
+  bash -c "while true; do echo \"[SERVICIO1] $(date): Evento importante\" >> /var/log/apps/servicio1.log; sleep 5; done"
 
 docker run -d --name servicio2 \
   -v ~/docker-volumes-lab/logs-centralizados:/var/log/apps \
   ubuntu:22.04 \
-  bash -c "while true; do echo \"[SERVICIO2] $(date): Procesando datos\" >> /var/log/apps/servicio2.log; sleep 20; done"
+  bash -c "while true; do echo \"[SERVICIO2] $(date): Procesando datos\" >> /var/log/apps/servicio2.log; sleep 7; done"
 
 # Monitorear logs centralizados
 tail -f ~/docker-volumes-lab/logs-centralizados/*.log
