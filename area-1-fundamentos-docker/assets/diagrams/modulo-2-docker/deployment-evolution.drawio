@@ -1,0 +1,106 @@
+<mxfile host="65bd71144e">
+    <diagram name="deployment-evolution" id="deployment-evolution">
+        <mxGraphModel dx="2126" dy="948" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="background" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8F9FA;strokeColor=#E0E0E0;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="8" width="1300" height="792" as="geometry"/>
+                </mxCell>
+                <mxCell id="title" value="🏗️ EVOLUCIÓN DE LOS MODELOS DE DESPLIEGUE" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=22;fontStyle=1;fontColor=#1976D2;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="28" width="1300" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="traditional-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="98" width="350" height="512" as="geometry"/>
+                </mxCell>
+                <mxCell id="traditional-header" value="🏢 DEPLOYMENT TRADICIONAL" style="text;html=1;strokeColor=none;fillColor=#D32F2F;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="110" y="103" width="290" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="trad-app" value="📱 APLICACIÓN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;fontSize=14;fontStyle=1;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="158" width="270" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="trad-os" value="💻 SISTEMA OPERATIVO COMPLETO&lt;br&gt;Windows Server / Linux&lt;br&gt;2-4 GB RAM mínimo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="228" width="270" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="trad-hardware" value="🖥️ HARDWARE FÍSICO DEDICADO&lt;br&gt;Servidor completo por aplicación&lt;br&gt;Alto costo • Baja utilización" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="328" width="270" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="trad-problems" value="❌ PROBLEMAS:&lt;br&gt;• Muy costoso&lt;br&gt;• Desperdicio de recursos&lt;br&gt;• Escalabilidad limitada&lt;br&gt;• Una app por servidor" style="text;html=1;strokeColor=#D32F2F;fillColor=#FFEBEE;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="428" width="270" height="132" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="525" y="98" width="350" height="512" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-header" value="💻 MÁQUINAS VIRTUALES" style="text;html=1;strokeColor=none;fillColor=#F57C00;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="555" y="103" width="290" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-apps" value="📱 App A    📱 App B    📱 App C" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=12;fontStyle=1;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="158" width="270" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-guests" value="💻 Guest OS   💻 Guest OS   💻 Guest OS&lt;br&gt;Linux        Windows      Ubuntu&lt;br&gt;2GB RAM     2GB RAM      2GB RAM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="218" width="270" height="72" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-hypervisor" value="⚙️ HYPERVISOR&lt;br&gt;VMware • Hyper-V • KVM&lt;br&gt;Virtualización de hardware" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="315" width="270" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-hardware" value="🖥️ HARDWARE FÍSICO&lt;br&gt;Mejor aprovechamiento&lt;br&gt;Múltiples VMs por servidor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="395" width="270" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="vm-improvements" value="✅ MEJORAS:&lt;br&gt;• Mejor aprovechamiento&lt;br&gt;• Múltiples apps por servidor&lt;br&gt;❌ AÚN PESADO:&lt;br&gt;• SO completo por VM&lt;br&gt;• Arranque lento (minutos)" style="text;html=1;strokeColor=#F57C00;fillColor=#FFF3E0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="480" width="270" height="122" as="geometry"/>
+                </mxCell>
+                <mxCell id="container-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#388E3C;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="976" y="98" width="350" height="512" as="geometry"/>
+                </mxCell>
+                <mxCell id="container-header" value="🐳 CONTENEDORES DOCKER" style="text;html=1;strokeColor=none;fillColor=#388E3C;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="103" width="300" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="cont-apps" value="📱 App A  📱 App B  📱 App C  📱 App D" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=12;fontStyle=1;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1016" y="158" width="270" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="cont-bins" value="📚 Bins/Libs  📚 Bins/Libs  📚 Bins/Libs  📚 Bins/Libs&lt;br&gt;Solo dependencias necesarias por aplicación" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=10;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1016" y="198" width="270" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="cont-runtime" value="🐳 CONTAINER RUNTIME (Docker)&lt;br&gt;Gestión de contenedores&lt;br&gt;Namespaces + Cgroups" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1016" y="258" width="270" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="cont-os" value="💻 HOST OS (Linux)&lt;br&gt;Un solo SO compartido&lt;br&gt;Kernel compartido" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1016" y="328" width="270" height="62" as="geometry"/>
+                </mxCell>
+                <mxCell id="cont-hardware" value="🖥️ HARDWARE FÍSICO&lt;br&gt;Máximo aprovechamiento&lt;br&gt;100+ contenedores por servidor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=12;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="1016" y="410" width="270" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="cont-advantages" value="🚀 VENTAJAS:&lt;br&gt;• Granularidad (50MB-2GB)&lt;br&gt;• Arranque rápido (segundos)&lt;br&gt;• Alta densidad (100+/servidor)&lt;br&gt;• Aislamiento completo&lt;br&gt;• Eficiencia máxima" style="text;html=1;strokeColor=#388E3C;fillColor=#E8F5E8;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="1016" y="490" width="270" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow1" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=4;exitX=0.995;exitY=0.447;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.007;entryY=0.444;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" edge="1" target="vm-container" source="traditional-container">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="465" y="298" as="sourcePoint"/>
+                        <mxPoint x="515" y="298" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow2" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=4;entryX=0.013;entryY=0.447;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.993;exitY=0.447;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" edge="1" target="container-container" source="vm-container">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="880" y="299" as="sourcePoint"/>
+                        <mxPoint x="910" y="298" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="evo1" value="EVOLUCIÓN 1" style="text;html=1;strokeColor=none;fillColor=#1976D2;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="434" y="258" width="87" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="evo2" value="EVOLUCIÓN 2" style="text;html=1;strokeColor=none;fillColor=#1976D2;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=12;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="881" y="258" width="90" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="comparison-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="111" y="650" width="1190" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="comparison-title" value="📊 COMPARACIÓN DE RENDIMIENTO" style="text;html=1;strokeColor=none;fillColor=#424242;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="111" y="655" width="1190" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="comparison-content" value="🏢 TRADICIONAL: 1 app por servidor | 💰 Alto costo | ⏱️ Semanas para deploy | 📈 Baja densidad&lt;br&gt;💻 VMs: 3-10 apps por servidor | 💰 Costo medio | ⏱️ Minutos para boot | 📈 Densidad media&lt;br&gt;🐳 CONTENEDORES: 100+ apps por servidor | 💰 Bajo costo | ⏱️ Segundos para boot | 📈 Alta densidad" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="131" y="695" width="1150" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
