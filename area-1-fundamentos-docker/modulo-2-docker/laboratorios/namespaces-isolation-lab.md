@@ -52,8 +52,9 @@ echo "=== PROCESOS EN CONTENEDOR B ==="
 docker exec contenedor-b which ps >/dev/null 2>&1 || docker exec contenedor-b apt update && docker exec contenedor-b apt install -y procps
 docker exec contenedor-b ps aux
 
-# Ver procesos en contenedor-c (nginx ya tiene ps instalado)
+# Ver procesos en contenedor-c (nginx también necesita procps)
 echo "=== PROCESOS EN CONTENEDOR C ==="
+docker exec contenedor-c which ps >/dev/null 2>&1 || docker exec contenedor-c apt update && docker exec contenedor-c apt install -y procps
 docker exec contenedor-c ps aux
 ```
 
@@ -103,10 +104,13 @@ docker exec contenedor-b ip addr show 2>/dev/null || docker exec contenedor-b ca
 NGINX_IP=$(docker inspect contenedor-c | grep '"IPAddress"' | head -1 | cut -d '"' -f 4)
 echo "IP de nginx: $NGINX_IP"
 
-# Instalar curl en los contenedores Ubuntu (nginx ya lo tiene)
+# Instalar curl en los contenedores Ubuntu (nginx también necesita curl)
 echo "Instalando herramientas de red en contenedores Ubuntu..."
 docker exec contenedor-a apt update && docker exec contenedor-a apt install -y curl
 docker exec contenedor-b apt update && docker exec contenedor-b apt install -y curl
+
+# Instalar curl en nginx también si no está disponible
+docker exec contenedor-c which curl >/dev/null 2>&1 || docker exec contenedor-c apt update && docker exec contenedor-c apt install -y curl
 
 # Desde contenedor-a, intentar conectar a nginx
 echo "=== CONECTIVIDAD DESDE CONTENEDOR A ==="
@@ -130,8 +134,10 @@ docker run -d --name web2 --network mi-red-prueba nginx
 # Esperar que arranquen
 sleep 5
 
-# Probar conectividad por nombre (nginx ya tiene curl disponible)
+# Probar conectividad por nombre (instalar curl en nginx si es necesario)
 echo "=== CONECTIVIDAD POR NOMBRE EN RED PERSONALIZADA ==="
+docker exec web1 which curl >/dev/null 2>&1 || docker exec web1 apt update && docker exec web1 apt install -y curl
+docker exec web2 which curl >/dev/null 2>&1 || docker exec web2 apt update && docker exec web2 apt install -y curl
 docker exec web1 curl -I http://web2 || echo "Conectividad fallida desde web1 a web2"
 docker exec web2 curl -I http://web1 || echo "Conectividad fallida desde web2 a web1"
 ```
