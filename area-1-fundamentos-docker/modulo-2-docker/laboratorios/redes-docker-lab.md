@@ -615,6 +615,10 @@ echo "  - Frontend → Database: ❌ Bloqueado"
 echo "  - API → Database: ✅ Permitido"
 ```
 
+```bash
+docker network inspect frontend-network | jq -r '.[0].Containers'
+docker network inspect backend-network | jq -r '.[0].Containers'
+```
 ---
 
 ## 🌐 Ejercicio 5: Tipos de Red Avanzados
