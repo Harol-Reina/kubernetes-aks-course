@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <!-- Background -->
+  <rect x="50" y="50" width="1100" height="700" rx="10" fill="#F8F9FA" stroke="#E0E0E0" stroke-width="2"/>
+  
+  <!-- Title -->
+  <text x="600" y="90" text-anchor="middle" font-family="Helvetica" font-size="20" font-weight="bold" fill="#1976D2">
+    🧠 SCHEDULER DE KUBERNETES - FLUJO DE PROCESO
+  </text>
+  
+  <!-- Phase 1: Input -->
+  <rect x="80" y="120" width="250" height="120" rx="5" fill="#E3F2FD" stroke="#1976D2" stroke-width="2"/>
+  <rect x="80" y="125" width="250" height="25" rx="5" fill="#1976D2"/>
+  <text x="205" y="142" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">
+    📥 FASE DE ENTRADA
+  </text>
+  
+  <rect x="100" y="160" width="90" height="60" rx="5" fill="#BBDEFB" stroke="#1976D2"/>
+  <text x="145" y="178" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">👁️ Watch API</text>
+  <text x="145" y="192" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Nuevos Pods</text>
+  <text x="145" y="206" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Actualizaciones</text>
+  
+  <rect x="220" y="160" width="90" height="60" rx="5" fill="#BBDEFB" stroke="#1976D2"/>
+  <text x="265" y="178" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">📋 Cola de Pods</text>
+  <text x="265" y="192" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Cola Prioritaria</text>
+  <text x="265" y="206" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Pods Pendientes</text>
+  
+  <!-- Phase 2: Filtering -->
+  <rect x="80" y="270" width="250" height="120" rx="5" fill="#E8F5E8" stroke="#388E3C" stroke-width="2"/>
+  <rect x="80" y="275" width="250" height="25" rx="5" fill="#388E3C"/>
+  <text x="205" y="292" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">
+    🔍 FASE DE FILTRADO
+  </text>
+  
+  <rect x="100" y="310" width="90" height="60" rx="5" fill="#C8E6C9" stroke="#388E3C"/>
+  <text x="145" y="328" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">🎯 Predicados</text>
+  <text x="145" y="342" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Recursos</text>
+  <text x="145" y="356" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Restricciones</text>
+  
+  <rect x="220" y="310" width="90" height="60" rx="5" fill="#C8E6C9" stroke="#388E3C"/>
+  <text x="265" y="328" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">✅ Nodos</text>
+  <text x="265" y="342" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Factibles</text>
+  <text x="265" y="356" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Disponibles</text>
+  
+  <!-- Phase 3: Scoring -->
+  <rect x="380" y="120" width="250" height="120" rx="5" fill="#FFF3E0" stroke="#F57C00" stroke-width="2"/>
+  <rect x="380" y="125" width="250" height="25" rx="5" fill="#F57C00"/>
+  <text x="505" y="142" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">
+    📊 FASE DE PUNTUACIÓN
+  </text>
+  
+  <rect x="400" y="160" width="90" height="60" rx="5" fill="#FFE0B2" stroke="#F57C00"/>
+  <text x="445" y="178" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">🏆 Prioridades</text>
+  <text x="445" y="192" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Utilización</text>
+  <text x="445" y="206" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Afinidad</text>
+  
+  <rect x="520" y="160" width="90" height="60" rx="5" fill="#FFE0B2" stroke="#F57C00"/>
+  <text x="565" y="178" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">📈 Clasificación</text>
+  <text x="565" y="192" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Mejor Opción</text>
+  <text x="565" y="206" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Selección</text>
+  
+  <!-- Phase 4: Binding -->
+  <rect x="380" y="270" width="250" height="120" rx="5" fill="#F3E5F5" stroke="#7B1FA2" stroke-width="2"/>
+  <rect x="380" y="275" width="250" height="25" rx="5" fill="#7B1FA2"/>
+  <text x="505" y="292" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">
+    🎯 FASE DE ASIGNACIÓN
+  </text>
+  
+  <rect x="400" y="310" width="90" height="60" rx="5" fill="#E1BEE7" stroke="#7B1FA2"/>
+  <text x="445" y="328" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">🔗 Vinculación</text>
+  <text x="445" y="342" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Actualización API</text>
+  <text x="445" y="356" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Asignación</text>
+  
+  <rect x="520" y="310" width="90" height="60" rx="5" fill="#E1BEE7" stroke="#7B1FA2"/>
+  <text x="565" y="328" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">🤖 kubelet</text>
+  <text x="565" y="342" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Creación Pod</text>
+  <text x="565" y="356" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Inicio</text>
+  
+  <!-- Feedback Loop -->
+  <rect x="680" y="195" width="200" height="120" rx="5" fill="#FFEBEE" stroke="#D32F2F" stroke-width="2"/>
+  <rect x="680" y="200" width="200" height="25" rx="5" fill="#D32F2F"/>
+  <text x="780" y="217" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">
+    🔄 CICLO DE RETROALIMENTACIÓN
+  </text>
+  
+  <rect x="700" y="235" width="80" height="50" rx="5" fill="#FFCDD2" stroke="#D32F2F"/>
+  <text x="740" y="251" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">📊 Métricas</text>
+  <text x="740" y="263" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Rendimiento</text>
+  <text x="740" y="275" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Recolección</text>
+  
+  <rect x="800" y="235" width="80" height="50" rx="5" fill="#FFCDD2" stroke="#D32F2F"/>
+  <text x="840" y="251" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">⚡ Optimización</text>
+  <text x="840" y="263" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Ajuste</text>
+  <text x="840" y="275" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#000">Mejora</text>
+  
+  <!-- Flow Arrows -->
+  <path d="M 190 190 L 220 190" stroke="#1976D2" stroke-width="3" fill="none" marker-end="url(#arrowhead1)"/>
+  <path d="M 265 220 L 145 310" stroke="#388E3C" stroke-width="3" fill="none" marker-end="url(#arrowhead2)"/>
+  <path d="M 190 340 L 220 340" stroke="#388E3C" stroke-width="3" fill="none" marker-end="url(#arrowhead2)"/>
+  <path d="M 310 340 L 400 190" stroke="#F57C00" stroke-width="3" fill="none" marker-end="url(#arrowhead3)"/>
+  <path d="M 490 190 L 520 190" stroke="#F57C00" stroke-width="3" fill="none" marker-end="url(#arrowhead3)"/>
+  <path d="M 565 220 L 445 310" stroke="#7B1FA2" stroke-width="3" fill="none" marker-end="url(#arrowhead4)"/>
+  <path d="M 490 340 L 520 340" stroke="#7B1FA2" stroke-width="3" fill="none" marker-end="url(#arrowhead4)"/>
+  <path d="M 610 340 L 700 260" stroke="#D32F2F" stroke-width="2" fill="none" marker-end="url(#arrowhead5)"/>
+  <path d="M 780 260 L 800 260" stroke="#D32F2F" stroke-width="2" fill="none" marker-end="url(#arrowhead5)"/>
+  <path d="M 840 235 Q 840 100 265 100 L 265 160" stroke="#D32F2F" stroke-width="2" stroke-dasharray="5,5" fill="none" marker-end="url(#arrowhead5)"/>
+  
+  <!-- Step Numbers -->
+  <circle cx="362" cy="197" r="12" fill="#1976D2" stroke="#0D47A1"/>
+  <text x="362" y="202" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">1</text>
+  
+  <circle cx="212" cy="262" r="12" fill="#388E3C" stroke="#1B5E20"/>
+  <text x="212" y="267" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">2</text>
+  
+  <circle cx="642" cy="197" r="12" fill="#F57C00" stroke="#E65100"/>
+  <text x="642" y="202" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">3</text>
+  
+  <circle cx="642" cy="352" r="12" fill="#7B1FA2" stroke="#4A148C"/>
+  <text x="642" y="357" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">4</text>
+  
+  <!-- Summary Box -->
+  <rect x="80" y="420" width="800" height="120" rx="5" fill="#F5F5F5" stroke="#BDBDBD" stroke-width="2"/>
+  <rect x="80" y="425" width="800" height="25" rx="5" fill="#424242"/>
+  <text x="480" y="442" text-anchor="middle" font-family="Helvetica" font-size="14" font-weight="bold" fill="#FFFFFF">
+    📋 RESUMEN DEL PROCESO
+  </text>
+  
+  <text x="100" y="470" font-family="Helvetica" font-size="12" fill="#000">1️⃣ MONITOREAR: Vigilar nuevos pods y cambios en nodos</text>
+  <text x="100" y="485" font-family="Helvetica" font-size="12" fill="#000">2️⃣ FILTRAR: Aplicar predicados para encontrar nodos factibles</text>
+  <text x="100" y="500" font-family="Helvetica" font-size="12" fill="#000">3️⃣ PUNTUAR: Clasificar nodos usando funciones de prioridad</text>
+  <text x="100" y="515" font-family="Helvetica" font-size="12" fill="#000">4️⃣ ASIGNAR: Vincular pod al mejor nodo y notificar al kubelet</text>
+  
+  <!-- Performance Info -->
+  <rect x="80" y="560" width="800" height="30" rx="5" fill="#E8F5E8"/>
+  <text x="480" y="580" text-anchor="middle" font-family="Helvetica" font-size="11" fill="#2E7D32">
+    ⚡ Tiempo típico de programación: 5-10ms por pod | 🎯 Rendimiento: 1000+ pods/segundo
+  </text>
+  
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowhead1" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1976D2"/>
+    </marker>
+    <marker id="arrowhead2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#388E3C"/>
+    </marker>
+    <marker id="arrowhead3" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#F57C00"/>
+    </marker>
+    <marker id="arrowhead4" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#7B1FA2"/>
+    </marker>
+    <marker id="arrowhead5" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#D32F2F"/>
+    </marker>
+  </defs>
+</svg>

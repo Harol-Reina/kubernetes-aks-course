@@ -1,0 +1,164 @@
+<mxfile host="65bd71144e">
+    <diagram name="scheduler-process" id="scheduler-process">
+        <mxGraphModel dx="1807" dy="806" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="background" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8F9FA;strokeColor=#E0E0E0;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="50" width="880" height="580" as="geometry"/>
+                </mxCell>
+                <mxCell id="title" value="🧠 SCHEDULER DE KUBERNETES - FLUJO DE PROCESO" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1976D2;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="70" width="1100" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="input-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="120" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="input-header" value="📥 FASE DE ENTRADA" style="text;html=1;strokeColor=none;fillColor=#1976D2;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="125" width="250" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="watch-api" value="👁️ Watch API&lt;br&gt;Nuevos Pods&lt;br&gt;Actualizaciones" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="160" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="queue" value="📋 Cola de Pods&lt;br&gt;Cola Prioritaria&lt;br&gt;Pods Pendientes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1976D2;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="160" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="filtering-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E8;strokeColor=#388E3C;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="270" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="filtering-header" value="🔍 FASE DE FILTRADO" style="text;html=1;strokeColor=none;fillColor=#388E3C;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="275" width="250" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="predicates" value="🎯 Predicados&lt;br&gt;Recursos&lt;br&gt;Restricciones" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="310" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="feasible" value="✅ Nodos&lt;br&gt;Factibles&lt;br&gt;Disponibles" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="310" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="scoring-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="120" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="scoring-header" value="📊 FASE DE PUNTUACIÓN" style="text;html=1;strokeColor=none;fillColor=#F57C00;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="125" width="250" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="priorities" value="🏆 Prioridades&lt;br&gt;Utilización&lt;br&gt;Afinidad" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="160" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ranking" value="📈 Clasificación&lt;br&gt;Mejor Opción&lt;br&gt;Selección" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="160" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="binding-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="270" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="binding-header" value="🎯 FASE DE ASIGNACIÓN" style="text;html=1;strokeColor=none;fillColor=#7B1FA2;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="275" width="250" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="binding" value="🔗 Vinculación&lt;br&gt;Actualización API&lt;br&gt;Asignación" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="310" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="kubelet" value="🤖 kubelet&lt;br&gt;Creación Pod&lt;br&gt;Inicio" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="310" width="90" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="feedback-container" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#D32F2F;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="195" width="220" height="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="feedback-header" value="🔄 CICLO DE RETROALIMENTACIÓN" style="text;html=1;strokeColor=none;fillColor=#D32F2F;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="200" width="220" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="metrics" value="📊 Métricas&lt;br&gt;Rendimiento&lt;br&gt;Recolección" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="240" width="80" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="optimization" value="⚡ Optimización&lt;br&gt;Ajuste&lt;br&gt;Mejora" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#D32F2F;fontSize=11;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="240" width="80" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow1" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=3;" parent="1" source="watch-api" target="queue" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="190" y="190" as="sourcePoint"/>
+                        <mxPoint x="220" y="190" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow2" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#388E3C;strokeWidth=3;" parent="1" source="queue" target="predicates" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="265" y="220" as="sourcePoint"/>
+                        <mxPoint x="145" y="310" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow3" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#388E3C;strokeWidth=3;" parent="1" source="predicates" target="feasible" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="190" y="340" as="sourcePoint"/>
+                        <mxPoint x="220" y="340" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow4" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=3;" parent="1" source="feasible" target="priorities" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="310" y="340" as="sourcePoint"/>
+                        <mxPoint x="400" y="190" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow5" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=3;" parent="1" source="priorities" target="ranking" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="490" y="190" as="sourcePoint"/>
+                        <mxPoint x="520" y="190" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow6" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#7B1FA2;strokeWidth=3;" parent="1" source="ranking" target="binding" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="565" y="220" as="sourcePoint"/>
+                        <mxPoint x="445" y="310" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow7" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#7B1FA2;strokeWidth=3;" parent="1" source="binding" target="kubelet" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="490" y="340" as="sourcePoint"/>
+                        <mxPoint x="520" y="340" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow8" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#D32F2F;strokeWidth=2;" parent="1" source="kubelet" target="metrics" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="610" y="340" as="sourcePoint"/>
+                        <mxPoint x="700" y="260" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow9" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#D32F2F;strokeWidth=2;" parent="1" source="metrics" target="optimization" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="780" y="265" as="sourcePoint"/>
+                        <mxPoint x="800" y="265" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow10" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#D32F2F;strokeWidth=2;dashed=1;" parent="1" source="optimization" target="queue" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="840" y="235" as="sourcePoint"/>
+                        <mxPoint x="265" y="160" as="targetPoint"/>
+                        <Array as="points">
+                            <mxPoint x="840" y="100"/>
+                            <mxPoint x="265" y="100"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="step1" value="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#1976D2;strokeColor=#0D47A1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="175" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="step2" value="2" style="ellipse;whiteSpace=wrap;html=1;fillColor=#388E3C;strokeColor=#1B5E20;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="55" y="320" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="step3" value="3" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F57C00;strokeColor=#E65100;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="355" y="167.5" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="step4" value="4" style="ellipse;whiteSpace=wrap;html=1;fillColor=#7B1FA2;strokeColor:#4A148C;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="355" y="320" width="25" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="summary-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#BDBDBD;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="420" width="800" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="summary-title" value="📋 RESUMEN DEL PROCESO" style="text;html=1;strokeColor=none;fillColor=#424242;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="425" width="800" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="summary-text" value="1️⃣ MONITOREAR: Vigilar nuevos pods y cambios en nodos&lt;br&gt;2️⃣ FILTRAR: Aplicar predicados para encontrar nodos factibles&lt;br&gt;3️⃣ PUNTUAR: Clasificar nodos usando funciones de prioridad&lt;br&gt;4️⃣ ASIGNAR: Vincular pod al mejor nodo y notificar al kubelet" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="460" width="760" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="perf-info" value="⚡ Tiempo típico de programación: 5-10ms por pod | 🎯 Rendimiento: 1000+ pods/segundo" style="text;html=1;strokeColor=none;fillColor=#E8F5E8;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=11;fontColor=#2E7D32;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="560" width="800" height="30" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
