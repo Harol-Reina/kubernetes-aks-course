@@ -104,7 +104,34 @@ graph TB
     class PODS1,PODS2,PODS3 pods
 ```
 
-**� Diagrama Interactivo Completo:**
+### **📋 Explicación del Diagrama:**
+
+**🎛️ CONTROL PLANE (Plano de Control):**
+- **📡 kube-apiserver**: Punto central de comunicación - todos los componentes hablan con él
+- **🗄️ etcd**: Base de datos distribuida que almacena todo el estado del cluster
+- **🧠 kube-scheduler**: Inteligencia que decide en qué nodo colocar cada Pod
+- **🎮 kube-controller-manager**: Gestores que mantienen el estado deseado del sistema
+- **☁️ cloud-controller-manager**: Integración específica con proveedores de nube
+
+**💪 WORKER NODES (Nodos de Trabajo):**
+- **🤖 kubelet**: Agente en cada nodo que ejecuta y monitorea los Pods
+- **🌐 kube-proxy**: Gestiona la red y el balanceo de carga para los servicios
+- **🐳 containerd**: Runtime que ejecuta los contenedores dentro de los Pods
+- **📦 Pods**: Unidades mínimas de despliegue que contienen las aplicaciones
+
+**🌐 ACCESO EXTERNO:**
+- **🌍 External Traffic**: Tráfico de usuarios externos (internet, VPN, etc.)
+- **⚖️ Load Balancer**: Distribuye el tráfico entre múltiples puntos de entrada
+- **🚪 Ingress Controller**: Enruta las requests HTTP/HTTPS a los servicios internos
+
+**🔄 Flujo de Comunicación:**
+1. **Control Interno**: API Server se comunica con etcd para persistir estado
+2. **Coordinación**: Scheduler y Controller Manager consultan API Server para decisiones
+3. **Ejecución**: API Server envía instrucciones a kubelet en cada worker node
+4. **Networking**: kube-proxy gestiona la conectividad entre Pods y servicios
+5. **Acceso Externo**: External Traffic → Load Balancer → Ingress → kube-proxy → Pods
+
+**🎨 Diagrama Interactivo Completo:**
 
 [![Kubernetes Cluster Overview](https://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/svg/cluster-overview.svg)](https://app.diagrams.net/#Uhttps://raw.githubusercontent.com/Harol-Reina/kubernetes-aks-course/main/area-2-arquitectura-kubernetes/assets/diagrams/02-arquitectura-cluster/cluster-overview.drawio)
 
