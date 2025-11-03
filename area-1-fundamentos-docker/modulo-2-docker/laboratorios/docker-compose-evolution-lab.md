@@ -541,7 +541,7 @@ EOF
 
 # JavaScript
 cat > frontend/script.js << 'EOF'
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'http://COLOCAR-IP-PUBLICA/api';
 
 // Verificar estado del backend
 async function checkBackendStatus() {
