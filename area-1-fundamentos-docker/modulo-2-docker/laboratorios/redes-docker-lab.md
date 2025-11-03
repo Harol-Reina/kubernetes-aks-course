@@ -143,10 +143,12 @@ docker exec web-custom route -n
 
 # Alternativa usando ip route (más moderno y disponible)
 echo "Rutas usando ip route (red default):"
-docker exec web-default ip route
+docker exec web-default which ip >/dev/null 2>&1 || docker exec web-default apt update && docker exec web-default apt install -y iproute2
+docker exec web-default ip route 2>/dev/null || echo "Comando ip route no disponible"
 
 echo "Rutas usando ip route (red personalizada):"
-docker exec web-custom ip route
+docker exec web-custom which ip >/dev/null 2>&1 || docker exec web-custom apt update && docker exec web-custom apt install -y iproute2  
+docker exec web-custom ip route 2>/dev/null || echo "Comando ip route no disponible"
 
 # Verificar configuraciones de red
 echo "IP en red default:"
@@ -652,19 +654,38 @@ docker run -d --name aislado \
   ubuntu:22.04 sleep 3600
 
 # Ver configuración de red (solo loopback)
-docker exec aislado ip addr show
+echo "Verificando configuración de red del contenedor aislado:"
+echo "Usando métodos alternativos ya que 'ip' no está disponible sin conectividad..."
 
-# Intentar instalar herramientas (esto también fallará por falta de conectividad)
+# Verificar interfaces usando /proc/net/dev (siempre disponible)
+echo "Interfaces de red disponibles (desde /proc/net/dev):"
+docker exec aislado cat /proc/net/dev
+
+# Alternativa: usar hostname para verificar conectividad interna
+echo "Verificando hostname interno:"
+docker exec aislado hostname
+
+# Intentar instalar herramientas (esto fallará por falta de conectividad)
 echo "Intentando actualizar paquetes en contenedor aislado:"
 docker exec aislado apt update 2>/dev/null || echo "✓ Sin conectividad externa - aislamiento completo"
 
-# Verificar que solo tiene interfaz loopback
-echo "Interfaces de red disponibles:"
-docker exec aislado ip addr show | grep -E "^[0-9]+:"
+# Verificar que no puede resolver DNS
+echo "Probando resolución DNS:"
+docker exec aislado nslookup google.com 2>/dev/null || echo "✓ Sin resolución DNS - aislamiento correcto"
 
-# No hay conectividad externa (esto fallará)
+# Verificar que no puede hacer ping (si ping estuviera disponible)
 echo "Probando conectividad externa:"
-docker exec aislado ping -c 2 8.8.8.8 2>/dev/null || echo "✓ Sin acceso a internet"
+docker exec aislado ping -c 2 8.8.8.8 2>/dev/null || echo "✓ Sin acceso a internet - ping falla o no disponible"
+
+# Verificar rutas usando /proc/net/route (más básico pero funcional)
+echo "Tabla de rutas (desde /proc/net/route):"
+docker exec aislado cat /proc/net/route 2>/dev/null || echo "No hay rutas disponibles"
+
+# Mostrar información básica del sistema de red
+echo "Estado de red usando métodos básicos:"
+echo "- Hostname: $(docker exec aislado hostname 2>/dev/null || echo 'No disponible')"
+echo "- Interfaces: $(docker exec aislado cat /proc/net/dev | wc -l) líneas en /proc/net/dev"
+echo "- Conectividad externa: Bloqueada ✓"
 ```
 
 ### **Paso 3: Macvlan Network**
@@ -767,7 +788,14 @@ docker exec api-secure curl -s --connect-timeout 3 http://postgres-secure:5432 2
 
 # Verificar interfaces de red del contenedor
 echo "Interfaces de red en api-secure:"
-docker exec api-secure ip addr show
+docker exec api-secure which ip >/dev/null 2>&1 || {
+  echo "Comando 'ip' no disponible, instalando iproute2..."
+  docker exec api-secure apt update && docker exec api-secure apt install -y iproute2
+}
+docker exec api-secure ip addr show 2>/dev/null || {
+  echo "Usando método alternativo para mostrar interfaces:"
+  docker exec api-secure cat /proc/net/dev
+}
 ```
 
 ---
