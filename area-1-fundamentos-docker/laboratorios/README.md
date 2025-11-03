@@ -7,6 +7,24 @@ Este área ha sido **reestructurada en dos módulos** para mejor comprensión y 
 
 ---
 
+## 🖥️ **Configuración del Entorno**
+
+**IMPORTANTE**: Antes de comenzar los laboratorios, configura tu entorno de desarrollo:
+
+### **📚 [Guía de Configuración VS Code Tunnel en Azure](./setup-vscode-server.md)**
+
+Esta guía te permitirá:
+- ✅ **Ejecutar VS Code desde el navegador** con tunnels seguros
+- ✅ **Acceder desde cualquier dispositivo** sin configurar puertos
+- ✅ **Autenticación con GitHub/Microsoft** sin contraseñas adicionales
+- ✅ **Entorno consistente** para todos los estudiantes
+- ✅ **Docker preconfigurado** listo para los laboratorios
+- ✅ **Sincronización automática** de configuración y extensiones
+
+**⏱️ Tiempo de configuración**: 20-30 minutos una sola vez
+
+---
+
 ## 🏗️ Estructura Modular
 
 ### � **Módulo 1: Virtualización** (3 horas)
