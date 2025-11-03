@@ -160,126 +160,18 @@ docker exec client-custom hostname -I
 
 ## 🐍 Ejercicio 3: Aplicación Multi-Tier
 
-### **Paso 1: Crear aplicación completa**
+### **Paso 1: Preparar estructura del proyecto**
 
 ```bash
 # Crear red para la aplicación
 docker network create app-network
 
-# Base de datos
-docker run -d --name postgres-db \
-  --network app-network \
-  -e POSTGRES_DB=mi_app \
-  -e POSTGRES_USER=app_user \
-  -e POSTGRES_PASSWORD=app_password \
-  postgres:15
-
-# API Backend
-cat << 'EOF' > app.py
-from flask import Flask, jsonify
-import psycopg2
-import os
-
-app = Flask(__name__)
-
-def get_db_connection():
-    return psycopg2.connect(
-        host='postgres-db',  # Nombre del contenedor
-        database='mi_app',
-        user='app_user',
-        password='app_password'
-    )
-
-@app.route('/')
-def home():
-    return jsonify({'mensaje': 'API funcionando', 'version': '1.0'})
-
-@app.route('/health')
-def health():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT 1')
-        conn.close()
-        return jsonify({'status': 'healthy', 'database': 'connected'})
-    except Exception as e:
-        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
-
-@app.route('/users')
-def users():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, nombre FROM usuarios')
-        users = [{'id': row[0], 'nombre': row[1]} for row in cursor.fetchall()]
-        conn.close()
-        return jsonify(users)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-EOF
-
-cat << 'EOF' > requirements.txt
-Flask==2.3.3
-psycopg2-binary==2.9.7
-EOF
-
-cat << 'EOF' > Dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY app.py .
-
-EXPOSE 5000
-
-CMD ["python", "app.py"]
-EOF
-
-# Construir imagen del backend
-docker build -t mi-backend-api .
-```
-
-### **Paso 2: Desplegar stack completo**
-
-```bash
-# Backend API
-docker run -d --name backend-api \
-  --network app-network \
-  -p 5000:5000 \
-  mi-backend-api
-
-# Esperar que PostgreSQL arranque
-sleep 10
-
-# Inicializar base de datos
-docker exec postgres-db psql -U app_user -d mi_app -c "
-CREATE TABLE IF NOT EXISTS usuarios (
-  id SERIAL PRIMARY KEY,
-  nombre VARCHAR(100) NOT NULL
-);
-
-INSERT INTO usuarios (nombre) VALUES 
-  ('Alice Developer'),
-  ('Bob DevOps'),
-  ('Charlie Architect')
-ON CONFLICT DO NOTHING;
-"
-
-# Frontend simple
-docker run -d --name frontend-web \
-  --network app-network \
-  -p 8080:80 \
-  -v $(pwd)/html:/usr/share/nginx/html \
-  nginx
+# Crear estructura de directorios
+mkdir -p ~/docker-networks-lab/multi-tier-app
+cd ~/docker-networks-lab/multi-tier-app
+mkdir -p html backend
 
 # Crear frontend básico
-mkdir -p html
 cat << 'EOF' > html/index.html
 <!DOCTYPE html>
 <html>
@@ -359,31 +251,168 @@ http {
 }
 EOF
 
-# Actualizar nginx con nueva configuración
-docker stop frontend-web
-docker rm frontend-web
+echo "✅ Estructura del proyecto creada en ~/docker-networks-lab/multi-tier-app"
+ls -la html/
+```
 
+### **Paso 2: Crear aplicación backend**
+
+```bash
+# API Backend
+cat << 'EOF' > backend/app.py
+from flask import Flask, jsonify
+import psycopg2
+import os
+
+app = Flask(__name__)
+
+def get_db_connection():
+    return psycopg2.connect(
+        host='postgres-db',  # Nombre del contenedor
+        database='mi_app',
+        user='app_user',
+        password='app_password'
+    )
+
+@app.route('/')
+def home():
+    return jsonify({'mensaje': 'API funcionando', 'version': '1.0'})
+
+@app.route('/health')
+def health():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        conn.close()
+        return jsonify({'status': 'healthy', 'database': 'connected'})
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+@app.route('/users')
+def users():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, nombre FROM usuarios')
+        users = [{'id': row[0], 'nombre': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(users)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+EOF
+
+cat << 'EOF' > backend/requirements.txt
+Flask==2.3.3
+psycopg2-binary==2.9.7
+EOF
+
+cat << 'EOF' > backend/Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY app.py .
+
+EXPOSE 5000
+
+CMD ["python", "app.py"]
+EOF
+
+# Construir imagen del backend
+cd backend
+docker build -t mi-backend-api .
+cd ..
+
+echo "✅ Backend creado y imagen construida"
+```
+
+### **Paso 3: Desplegar stack completo**
+
+```bash
+# Base de datos
+echo "🗄️ Desplegando base de datos PostgreSQL..."
+docker run -d --name postgres-db \
+  --network app-network \
+  -e POSTGRES_DB=mi_app \
+  -e POSTGRES_USER=app_user \
+  -e POSTGRES_PASSWORD=app_password \
+  postgres:15
+
+# Backend API
+echo "🔧 Desplegando API Backend..."
+docker run -d --name backend-api \
+  --network app-network \
+  -p 5000:5000 \
+  mi-backend-api
+
+# Frontend con configuración pre-creada
+echo "🌐 Desplegando Frontend Web..."
 docker run -d --name frontend-web \
   --network app-network \
   -p 8080:80 \
   -v $(pwd)/html:/usr/share/nginx/html \
   -v $(pwd)/html/nginx.conf:/etc/nginx/nginx.conf \
   nginx
+
+# Verificar que todos los contenedores están ejecutándose
+echo "📋 Verificando estado de los contenedores:"
+docker ps --filter network=app-network --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
-### **Paso 3: Probar la aplicación**
+### **Paso 4: Inicializar base de datos y probar**
 
 ```bash
+# Esperar que PostgreSQL arranque completamente
+echo "⏳ Esperando que PostgreSQL arranque..."
+sleep 15
+
+# Verificar que PostgreSQL está listo
+docker logs postgres-db | tail -5
+
+# Inicializar base de datos
+echo "🗄️ Inicializando base de datos..."
+docker exec postgres-db psql -U app_user -d mi_app -c "
+CREATE TABLE IF NOT EXISTS usuarios (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL
+);
+
+INSERT INTO usuarios (nombre) VALUES 
+  ('Alice Developer'),
+  ('Bob DevOps'),
+  ('Charlie Architect')
+ON CONFLICT DO NOTHING;
+"
+
+# Verificar que los datos se insertaron
+echo "📋 Verificando datos en la base:"
+docker exec postgres-db psql -U app_user -d mi_app -c "SELECT * FROM usuarios;"
+
 # Probar endpoints directamente
-curl http://localhost:5000/
-curl http://localhost:5000/health
-curl http://localhost:5000/users
+echo "🔧 Probando API directamente:"
+curl -s http://localhost:5000/ | jq .
+curl -s http://localhost:5000/health | jq .
+curl -s http://localhost:5000/users | jq .
 
-# Probar a través del frontend
-curl http://localhost:8080/api/
-curl http://localhost:8080/api/users
+# Probar a través del frontend (proxy)
+echo "🌐 Probando API a través del proxy:"
+curl -s http://localhost:8080/api/ | jq .
+curl -s http://localhost:8080/api/users | jq .
 
-# Abrir en navegador: http://localhost:8080
+# Verificar que el frontend está accesible
+echo "📄 Verificando frontend:"
+curl -s http://localhost:8080 | grep -o '<title>.*</title>'
+
+echo "✅ Aplicación completa desplegada!"
+echo "🌍 Abre http://localhost:8080 en tu navegador para usar la interfaz completa"
+echo "🔧 API directa disponible en http://localhost:5000"
 ```
 
 ---
@@ -406,11 +435,15 @@ docker network create dmz-network
 ### **Paso 2: Redesplegar con aislamiento**
 
 ```bash
+# Volver al directorio del proyecto
+cd ~/docker-networks-lab/multi-tier-app
+
 # Detener aplicación actual
-docker stop frontend-web backend-api postgres-db
-docker rm frontend-web backend-api postgres-db
+docker stop frontend-web backend-api postgres-db 2>/dev/null || true
+docker rm frontend-web backend-api postgres-db 2>/dev/null || true
 
 # Base de datos solo en red backend
+echo "🗄️ Desplegando base de datos en red backend..."
 docker run -d --name postgres-secure \
   --network backend-network \
   -e POSTGRES_DB=mi_app \
@@ -419,13 +452,19 @@ docker run -d --name postgres-secure \
   postgres:15
 
 # API en ambas redes (frontend y backend)
+echo "🔧 Desplegando API en ambas redes..."
 docker run -d --name api-secure \
   --network backend-network \
   mi-backend-api
 
 docker network connect frontend-network api-secure
 
+# Actualizar configuración para nuevo nombre de backend
+echo "⚙️ Actualizando configuración de nginx..."
+sed -i 's/backend-api:5000/api-secure:5000/' html/nginx.conf
+
 # Frontend solo en red frontend
+echo "🌐 Desplegando frontend en red frontend..."
 docker run -d --name web-secure \
   --network frontend-network \
   -p 8080:80 \
@@ -433,9 +472,9 @@ docker run -d --name web-secure \
   -v $(pwd)/html/nginx.conf:/etc/nginx/nginx.conf \
   nginx
 
-# Actualizar configuración para nuevo nombre de backend
-sed -i 's/backend-api:5000/api-secure:5000/' html/nginx.conf
-docker restart web-secure
+# Verificar despliegue
+echo "📋 Verificando contenedores desplegados:"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Networks}}"
 ```
 
 ### **Paso 3: Verificar aislamiento**
