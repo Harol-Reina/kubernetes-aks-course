@@ -224,13 +224,13 @@ pie title "Distribución con Kubernetes"
 │  ✅ Gestionar recursos globales        │
 │  ✅ Aplicar políticas de seguridad     │
 │  ✅ Monitorear infraestructura         │
-│                                         │
+│                                        │
 │  ❌ NO preocuparse por:                │
 │     - ¿Cómo configurar cada app?       │
 │     - ¿Dónde colocar cada contenedor?  │
 │     - ¿Cómo escalar aplicaciones?      │
-└─────────────────────────────────────────┘
-```
+└────────────────────────────────────────┘
+
 
 **Kubernetes maneja la comunicación entre ambos mundos automáticamente**
 
