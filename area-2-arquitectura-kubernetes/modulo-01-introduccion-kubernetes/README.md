@@ -245,10 +245,9 @@ pie title "Distribución con Kubernetes"
 ### **🔴 Limitaciones de Docker standalone:**
 
 ```mermaid
-%%{init: {"theme": "default", "config": {"flowchart": {"width": 800, "height": 300}}}}%%
-
+%%{init: {"theme": "default", "config": {"flowchart": {"width": 900, "curve": "basis"}}}}%%
 graph TB
-    subgraph "❌ PROBLEMAS DOCKER SOLO"
+    subgraph "❌ PROBLEMAS DOCKER SOLO   "
         P1[🐳 docker run -d nginx<br/>❓ ¿En qué servidor?]
         P2[📊 docker run --scale 10 app<br/>❓ ¿Cómo balancear carga?]
         P3[💥 docker stop container<br/>❓ ¿Quién lo reinicia?]
