@@ -247,12 +247,15 @@ pie title "Distribución con Kubernetes"
 ```mermaid
 %%{init: {"theme": "default", "config": {"flowchart": {"width": 900, "curve": "basis"}}}}%%
 graph TB
-    subgraph "❌ PROBLEMAS DOCKER SOLO   "
+    subgraph T1[DOCKER]
+        CP([❌ PROBLEMAS USANDO DOCKER SOLO])
+
         P1[🐳 docker run -d nginx<br/>❓ ¿En qué servidor?]
         P2[📊 docker run --scale 10 app<br/>❓ ¿Cómo balancear carga?]
         P3[💥 docker stop container<br/>❓ ¿Quién lo reinicia?]
         P4[🌐 docker network create<br/>❓ ¿Entre múltiples hosts?]
     end
+    
     
     style P1 fill:#ffebee
     style P2 fill:#ffebee
@@ -264,7 +267,8 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "✅ KUBERNETES RESUELVE"
+    subgraph T1[KUBERNETES]
+        CP([✅ KUBERNETES RESUELVE])
         S1[🎯 Intelligent Scheduler<br/>✅ Decide automáticamente]
         S2[⚖️ Load Balancer<br/>✅ Distribuye tráfico]
         S3[🔄 Self-Healing<br/>✅ Reinicio automático]
