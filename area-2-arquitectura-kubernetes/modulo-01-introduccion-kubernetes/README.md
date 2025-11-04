@@ -221,7 +221,7 @@ pie title "Distribución con Kubernetes"
 - **Utilización de recursos**: De 35% → 80% promedio
 
 ### **⚡ Beneficios Técnicos:**
-
+```
 │  ✅ Gestionar recursos globales        │
 │  ✅ Aplicar políticas de seguridad     │
 │  ✅ Monitorear infraestructura         │
@@ -231,7 +231,7 @@ pie title "Distribución con Kubernetes"
 │     - ¿Dónde colocar cada contenedor?  │
 │     - ¿Cómo escalar aplicaciones?      │
 └────────────────────────────────────────┘
-
+```
 
 **Kubernetes maneja la comunicación entre ambos mundos automáticamente**
 
