@@ -222,6 +222,7 @@ pie title "Distribución con Kubernetes"
 
 ### **⚡ Beneficios Técnicos:**
 ```
+┌────────────────────────────────────────┐
 │  ✅ Gestionar recursos globales        │
 │  ✅ Aplicar políticas de seguridad     │
 │  ✅ Monitorear infraestructura         │
