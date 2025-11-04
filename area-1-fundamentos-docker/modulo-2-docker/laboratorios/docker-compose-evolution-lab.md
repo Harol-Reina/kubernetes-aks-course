@@ -162,12 +162,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # Backend API
+  # Backend API (sin container_name para permitir escalado)
   backend:
     build: ./backend
-    container_name: app-backend
+    # Nota: container_name removido para permitir escalado horizontal
     ports:
-      - "3001:3000"
+      - "3001-3002:3000"  # Rango de puertos para múltiples instancias
     environment:
       DATABASE_URL: postgresql://usuario:secreto@database:5432/miapp
       REDIS_URL: redis://cache:6379
@@ -178,6 +178,7 @@ services:
       database:
         condition: service_healthy
       cache:
+        condition: service_started
         condition: service_healthy
     restart: unless-stopped
 
@@ -720,8 +721,18 @@ docker compose ps
 # Logs de un servicio específico
 docker compose logs backend
 
-# Escalar un servicio (limitado en Docker Compose)
+# Escalar un servicio (necesita corrección en docker-compose.yml)
+echo "Escalando el backend a 2 instancias..."
+
+# IMPORTANTE: Para que funcione el escalado, el servicio backend NO debe tener container_name
+# Si aparece el error: "Remove the custom name to scale the service"
+# Editar docker-compose.yml y quitar la línea: container_name: app-backend
+
 docker compose up -d --scale backend=2
+
+# Verificar las instancias escaladas
+echo "Verificando instancias del backend:"
+docker compose ps backend
 
 # Reiniciar un servicio
 docker compose restart backend
@@ -735,6 +746,34 @@ docker compose start
 # Eliminar todo (contenedores, redes, volúmenes)
 docker compose down -v
 ```
+
+### 🔧 Problema Común: Escalado con container_name
+
+**Error típico al escalar:**
+```
+WARNING: The "backend" service is using the custom container name "app-backend". 
+Docker requires each container to have a unique name. Remove the custom name to scale the service.
+```
+
+**Solución:**
+```yaml
+# ❌ No funciona para escalado
+backend:
+  container_name: app-backend  # Impide escalado
+  ports:
+    - "3001:3000"              # Puerto fijo
+
+# ✅ Funciona para escalado  
+backend:
+  # Sin container_name (Docker asigna nombres automáticos)
+  ports:
+    - "3001-3002:3000"         # Rango de puertos
+```
+
+**¿Por qué pasa esto?**
+- `container_name` fuerza un nombre específico
+- Al escalar, Docker intenta crear múltiples contenedores con el mismo nombre
+- Docker requiere nombres únicos para cada contenedor
 
 ### Actualizaciones:
 
@@ -766,11 +805,13 @@ docker compose up -d --build
 1. **Single-host**: Solo funciona en una máquina
 2. **No alta disponibilidad**: Si falla el host, toda la aplicación se cae  
 3. **Escalado limitado**: No puede distribuir carga entre múltiples hosts
-4. **Sin auto-recovery**: No reinicia servicios automáticamente
-5. **Sin rolling updates**: Actualizaciones causan downtime
-6. **Sin health checks avanzados**: Limitado para detectar problemas
-7. **Sin load balancing inteligente**: Nginx manual vs automático
-8. **Sin secretos management**: Credenciales en texto plano
+4. **Escalado con nombres fijos**: `container_name` impide escalado horizontal
+5. **Sin auto-recovery**: No reinicia servicios automáticamente
+6. **Sin rolling updates**: Actualizaciones causan downtime
+7. **Sin health checks avanzados**: Limitado para detectar problemas
+8. **Sin load balancing inteligente**: Nginx manual vs automático
+9. **Sin secretos management**: Credenciales en texto plano
+10. **Mapeo de puertos manual**: Riesgo de conflictos en escalado
 
 ---
 
