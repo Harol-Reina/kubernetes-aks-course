@@ -1214,17 +1214,6 @@ graph TB
 │                                                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
-      requests:
-        cpu: "100m"
-        memory: "128Mi"
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: 80
-    volumeMounts:
-    - name: data
-      mountPath: /var/data
-```
 
 #### **3.2 kube-proxy - Networking**
 
