@@ -325,6 +325,165 @@ echo "💡 Para acceso externo, usa port-forwarding con: ~/port-forward-test.sh"
 
 ---
 
+## 🌩️ Paso 5.1: Configuración especial para VM de Azure
+
+```bash
+# SOLUCIÓN PARA VMs DE AZURE - Acceso a servicios desde fuera de la VM
+echo "=== CONFIGURACIÓN PARA VM DE AZURE ==="
+
+# Problema: Las VMs de Azure no permiten acceso directo a puertos via IP pública
+# Solución: Usar port-forwarding con binding a todas las interfaces
+
+# Crear script mejorado para VMs de Azure
+cat << 'EOF' > ~/azure-port-forward.sh
+#!/bin/bash
+
+echo "🌩️ CONFIGURACIÓN PARA VM DE AZURE"
+echo "=================================="
+echo ""
+echo "⚠️ IMPORTANTE: Para acceder desde fuera de la VM necesitas:"
+echo "1. Port-forwarding con bind a 0.0.0.0"
+echo "2. Configurar Network Security Group en Azure"
+echo "3. Usar túnel SSH (recomendado para seguridad)"
+echo ""
+
+# Función para mostrar opciones
+show_options() {
+    echo "Selecciona una opción:"
+    echo "1) Dashboard de Kubernetes (puerto 8001)"
+    echo "2) Servicio test-web (puerto 8080)"
+    echo "3) Configurar túnel SSH (RECOMENDADO)"
+    echo "4) Mostrar info de conectividad"
+    echo "5) Salir"
+}
+
+# Función para configurar dashboard
+setup_dashboard() {
+    echo "🎛️ Configurando acceso al Dashboard..."
+    
+    # Habilitar Dashboard con addon de Minikube
+    if ! minikube addons list | grep -q "dashboard.*enabled"; then
+        echo "📦 Habilitando Dashboard de Kubernetes con addon..."
+        minikube addons enable dashboard
+        
+        # Esperar a que esté listo
+        echo "⏳ Esperando a que el Dashboard esté listo..."
+        kubectl wait --for=condition=ready pod -l k8s-app=kubernetes-dashboard -n kubernetes-dashboard --timeout=120s
+    else
+        echo "✅ Dashboard ya está habilitado"
+    fi
+    
+    # Crear usuario admin si no existe
+    if ! kubectl get serviceaccount admin-user -n kubernetes-dashboard &>/dev/null; then
+        echo "👤 Creando usuario administrador..."
+        kubectl create serviceaccount admin-user -n kubernetes-dashboard
+        kubectl create clusterrolebinding admin-user --clusterrole=cluster-admin --serviceaccount=kubernetes-dashboard:admin-user
+    fi
+    
+    echo "🚀 Iniciando proxy del Dashboard..."
+    echo "📌 Dashboard disponible en: http://IP_PUBLICA_VM:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
+    echo "⚠️ NOTA: Debes configurar NSG en Azure para el puerto 8001"
+    echo "🔐 Para token de acceso, ejecuta: kubectl -n kubernetes-dashboard create token admin-user"
+    
+    kubectl proxy --address=0.0.0.0 --port=8001 --accept-hosts='.*'
+}
+
+# Función para configurar servicio test
+setup_test_service() {
+    echo "🌐 Configurando acceso al servicio test-web..."
+    echo "📌 Servicio disponible en: http://IP_PUBLICA_VM:8080"
+    echo "⚠️ NOTA: Debes configurar NSG en Azure para el puerto 8080"
+    
+    kubectl port-forward --address=0.0.0.0 service/test-web 8080:80
+}
+
+# Función para configurar túnel SSH (más seguro)
+setup_ssh_tunnel() {
+    VM_IP=$(curl -s ifconfig.me)
+    echo "🔐 CONFIGURACIÓN DE TÚNEL SSH (RECOMENDADO)"
+    echo "==========================================="
+    echo ""
+    echo "Esta es la opción MÁS SEGURA para acceder a los servicios."
+    echo "No requiere abrir puertos en Azure NSG."
+    echo ""
+    echo "1. En tu máquina LOCAL, ejecuta:"
+    echo "   # Para Dashboard:"
+    echo "   ssh -L 8001:localhost:8001 usuario@$VM_IP"
+    echo ""
+    echo "   # Para servicios (puerto 8080):"
+    echo "   ssh -L 8080:localhost:8080 usuario@$VM_IP"
+    echo ""
+    echo "2. Luego en la VM (esta sesión SSH), ejecuta:"
+    echo "   # Para Dashboard:"
+    echo "   kubectl proxy --port=8001"
+    echo ""
+    echo "   # Para servicios:"
+    echo "   kubectl port-forward service/test-web 8080:80"
+    echo ""
+    echo "3. En tu máquina local, accede a:"
+    echo "   - Dashboard: http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
+    echo "   - Servicios: http://localhost:8080"
+    echo ""
+    echo "✅ VENTAJAS del túnel SSH:"
+    echo "   • No necesitas abrir puertos en Azure NSG"
+    echo "   • Conexión cifrada y segura"
+    echo "   • Acceso directo desde tu navegador local"
+    echo ""
+}
+
+# Función para mostrar info de conectividad
+show_connectivity_info() {
+    VM_IP=$(curl -s ifconfig.me 2>/dev/null || echo "No se pudo obtener IP pública")
+    PRIVATE_IP=$(hostname -I | awk '{print $1}')
+    
+    echo "🌐 INFORMACIÓN DE CONECTIVIDAD"
+    echo "=============================="
+    echo "IP Pública de la VM: $VM_IP"
+    echo "IP Privada de la VM: $PRIVATE_IP"
+    echo ""
+    echo "🔧 CONFIGURACIÓN AZURE NSG REQUERIDA:"
+    echo "Para acceso directo (menos seguro), agrega estas reglas:"
+    echo "• Puerto 8001 (Dashboard) - Inbound rule"
+    echo "• Puerto 8080 (Servicios) - Inbound rule"
+    echo "• Fuente: Tu IP pública o 'Any' (menos seguro)"
+    echo ""
+    echo "🔐 OPCIÓN RECOMENDADA: Usar túnel SSH (opción 3)"
+    echo ""
+    echo "📋 SERVICIOS DISPONIBLES EN EL CLUSTER:"
+    kubectl get services --all-namespaces
+}
+
+# Menú principal
+while true; do
+    echo ""
+    show_options
+    read -p "Selecciona una opción (1-5): " choice
+    
+    case $choice in
+        1) setup_dashboard ;;
+        2) setup_test_service ;;
+        3) setup_ssh_tunnel ;;
+        4) show_connectivity_info ;;
+        5) echo "👋 ¡Hasta luego!"; exit 0 ;;
+        *) echo "❌ Opción inválida. Selecciona 1-5." ;;
+    esac
+done
+EOF
+
+chmod +x ~/azure-port-forward.sh
+
+echo ""
+echo "🎯 Script para VM de Azure creado: ~/azure-port-forward.sh"
+echo "🚀 Ejecuta: ~/azure-port-forward.sh"
+echo ""
+echo "📋 RESUMEN DE OPCIONES PARA VM DE AZURE:"
+echo "1. 🔐 Túnel SSH (MÁS SEGURO - recomendado)"
+echo "2. 🌐 Port-forwarding directo + Azure NSG"
+echo "3. 🎛️ Dashboard con acceso externo"
+```
+
+---
+
 ## 🔧 Paso 6: Gestión avanzada del cluster
 
 ```bash
@@ -538,6 +697,68 @@ newgrp docker
 
 # Verificar acceso
 docker ps
+```
+
+### **Error: No puedo acceder a servicios desde fuera de VM Azure**
+```bash
+# PROBLEMA COMÚN EN VMs DE AZURE
+echo "🌩️ SOLUCIÓN PARA VMs DE AZURE"
+
+# Opción 1: Túnel SSH (MÁS SEGURO - recomendado)
+echo "🔐 TÚNEL SSH (recomendado):"
+echo "En tu máquina local ejecuta:"
+echo "ssh -L 8080:localhost:8080 usuario@IP_PUBLICA_VM"
+echo "Luego en la VM: kubectl port-forward service/mi-servicio 8080:80"
+echo "Accede desde tu navegador local: http://localhost:8080"
+
+# Opción 2: Port-forwarding directo + Azure NSG
+echo ""
+echo "🌐 PORT-FORWARDING DIRECTO:"
+echo "1. Configurar port-forwarding con bind a todas las interfaces:"
+echo "   kubectl port-forward --address=0.0.0.0 service/mi-servicio 8080:80"
+echo ""
+echo "2. Configurar Azure Network Security Group:"
+echo "   - Ir a Azure Portal -> VM -> Networking"
+echo "   - Agregar regla inbound:"
+echo "     • Puerto: 8080"
+echo "     • Protocolo: TCP"
+echo "     • Fuente: Tu IP pública (recomendado) o Any (menos seguro)"
+echo "     • Acción: Allow"
+echo ""
+echo "3. Acceder desde navegador: http://IP_PUBLICA_VM:8080"
+
+# Opción 3: Dashboard de Kubernetes
+echo ""
+echo "🎛️ DASHBOARD DE KUBERNETES:"
+echo "1. Habilitar Dashboard con addon de Minikube:"
+echo "   minikube addons enable dashboard"
+echo ""
+echo "2. Crear usuario admin:"
+cat << 'EOF'
+kubectl create serviceaccount admin-user -n kubernetes-dashboard
+kubectl create clusterrolebinding admin-user --clusterrole=cluster-admin --serviceaccount=kubernetes-dashboard:admin-user
+EOF
+echo ""
+echo "3. Obtener token:"
+echo "   kubectl -n kubernetes-dashboard create token admin-user"
+echo ""
+echo "4. Iniciar proxy con acceso externo:"
+echo "   kubectl proxy --address=0.0.0.0 --port=8001 --accept-hosts='.*'"
+echo ""
+echo "5. Configurar Azure NSG para puerto 8001"
+echo ""
+echo "6. Acceder: http://IP_PUBLICA_VM:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/"
+
+# Script de ayuda
+echo ""
+echo "💡 Usa el script helper: ~/azure-port-forward.sh"
+echo "   Este script te guía paso a paso para configurar el acceso"
+
+# Verificar IP pública
+IP_PUBLICA=$(curl -s ifconfig.me 2>/dev/null || echo "No disponible")
+echo ""
+echo "📍 Tu IP pública de VM: $IP_PUBLICA"
+echo "📍 Usa esta IP para configurar NSG y acceder a servicios"
 ```
 
 ---
