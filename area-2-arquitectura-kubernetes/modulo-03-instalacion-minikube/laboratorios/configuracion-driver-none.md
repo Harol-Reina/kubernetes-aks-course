@@ -288,25 +288,259 @@ echo "Pod creado: $POD_NAME"
 # Configurar port-forwarding
 echo ""
 echo "🌐 Configurando port-forwarding..."
-echo "💡 Ejecuta en otra terminal para acceder al servicio:"
 echo ""
-echo "kubectl port-forward service/test-web 8080:80"
+echo "� OPCIONES PARA PORT-FORWARDING SIN BLOQUEAR TERMINAL:"
+echo ""
+echo "1️⃣ En SEGUNDA TERMINAL (recomendado):"
+echo "   kubectl port-forward service/test-web 8080:80"
+echo ""
+echo "2️⃣ En SEGUNDO PLANO con &:"
+echo "   kubectl port-forward service/test-web 8080:80 &"
+echo "   # Esto ejecuta en background y devuelve la terminal"
+echo ""
+echo "3️⃣ Con NOHUP (sobrevive al cierre de terminal):"
+echo "   nohup kubectl port-forward service/test-web 8080:80 > /tmp/port-forward.log 2>&1 &"
+echo ""
+echo "4️⃣ Con SCREEN (terminal virtual):"
+echo "   screen -dmS port-forward kubectl port-forward service/test-web 8080:80"
+echo "   # Para ver: screen -r port-forward"
+echo ""
+echo "5️⃣ Con TMUX (terminal multiplexer):"
+echo "   tmux new-session -d -s port-forward 'kubectl port-forward service/test-web 8080:80'"
+echo "   # Para ver: tmux attach -t port-forward"
 echo ""
 echo "Luego accede a: http://localhost:8080"
 
-# Crear script para port-forwarding automático
+# Crear script mejorado para port-forwarding con opciones
 cat << 'EOF' > ~/port-forward-test.sh
 #!/bin/bash
-echo "🚀 Iniciando port-forwarding para test-web..."
-echo "📌 Accede a http://localhost:8080"
-echo "⏹️ Presiona Ctrl+C para detener"
-kubectl port-forward service/test-web 8080:80
+
+SERVICE_NAME="test-web"
+LOCAL_PORT="8080"
+SERVICE_PORT="80"
+
+echo "🚀 SCRIPT DE PORT-FORWARDING AVANZADO"
+echo "====================================="
+echo ""
+echo "Servicio: $SERVICE_NAME"
+echo "Puerto local: $LOCAL_PORT"
+echo "Puerto servicio: $SERVICE_PORT"
+echo ""
+
+# Función para mostrar opciones
+show_options() {
+    echo "Selecciona cómo ejecutar port-forwarding:"
+    echo "1) Primer plano (bloquea terminal hasta Ctrl+C)"
+    echo "2) Segundo plano (&) - devuelve terminal"
+    echo "3) Con nohup - sobrevive al cierre de terminal"
+    echo "4) Con screen - terminal virtual"
+    echo "5) Con tmux - terminal multiplexer"
+    echo "6) Mostrar procesos de port-forward activos"
+    echo "7) Detener todos los port-forwards"
+    echo "8) Salir"
+}
+
+# Función para verificar si el servicio existe
+check_service() {
+    if ! kubectl get service $SERVICE_NAME &>/dev/null; then
+        echo "❌ Servicio $SERVICE_NAME no encontrado"
+        echo "📋 Servicios disponibles:"
+        kubectl get services
+        exit 1
+    fi
+}
+
+# Función para port-forward en primer plano
+foreground_portforward() {
+    echo "🔄 Iniciando port-forwarding en PRIMER PLANO..."
+    echo "📌 Accede a: http://localhost:$LOCAL_PORT"
+    echo "⏹️ Presiona Ctrl+C para detener"
+    echo ""
+    kubectl port-forward service/$SERVICE_NAME $LOCAL_PORT:$SERVICE_PORT
+}
+
+# Función para port-forward en segundo plano
+background_portforward() {
+    echo "🔄 Iniciando port-forwarding en SEGUNDO PLANO..."
+    kubectl port-forward service/$SERVICE_NAME $LOCAL_PORT:$SERVICE_PORT &
+    PID=$!
+    echo "✅ Port-forward iniciado en background (PID: $PID)"
+    echo "📌 Accede a: http://localhost:$LOCAL_PORT"
+    echo "⏹️ Para detener: kill $PID"
+    echo "💡 Terminal libre para otros comandos"
+}
+
+# Función para port-forward con nohup
+nohup_portforward() {
+    echo "🔄 Iniciando port-forwarding con NOHUP..."
+    nohup kubectl port-forward service/$SERVICE_NAME $LOCAL_PORT:$SERVICE_PORT > /tmp/port-forward-$SERVICE_NAME.log 2>&1 &
+    PID=$!
+    echo "✅ Port-forward iniciado con nohup (PID: $PID)"
+    echo "📌 Accede a: http://localhost:$LOCAL_PORT"
+    echo "📋 Logs en: /tmp/port-forward-$SERVICE_NAME.log"
+    echo "⏹️ Para detener: kill $PID"
+    echo "💡 Sobrevivirá al cierre de terminal"
+}
+
+# Función para port-forward con screen
+screen_portforward() {
+    if ! command -v screen &>/dev/null; then
+        echo "❌ Screen no está instalado"
+        echo "🔧 Instalar con: sudo apt install screen"
+        return 1
+    fi
+    
+    echo "🔄 Iniciando port-forwarding con SCREEN..."
+    screen -dmS port-forward-$SERVICE_NAME kubectl port-forward service/$SERVICE_NAME $LOCAL_PORT:$SERVICE_PORT
+    echo "✅ Port-forward iniciado en screen"
+    echo "📌 Accede a: http://localhost:$LOCAL_PORT"
+    echo "👁️ Para ver sesión: screen -r port-forward-$SERVICE_NAME"
+    echo "⏹️ Para detener: screen -X -S port-forward-$SERVICE_NAME quit"
+}
+
+# Función para port-forward con tmux
+tmux_portforward() {
+    if ! command -v tmux &>/dev/null; then
+        echo "❌ Tmux no está instalado"
+        echo "🔧 Instalar con: sudo apt install tmux"
+        return 1
+    fi
+    
+    echo "🔄 Iniciando port-forwarding con TMUX..."
+    tmux new-session -d -s port-forward-$SERVICE_NAME "kubectl port-forward service/$SERVICE_NAME $LOCAL_PORT:$SERVICE_PORT"
+    echo "✅ Port-forward iniciado en tmux"
+    echo "📌 Accede a: http://localhost:$LOCAL_PORT"
+    echo "👁️ Para ver sesión: tmux attach -t port-forward-$SERVICE_NAME"
+    echo "⏹️ Para detener: tmux kill-session -t port-forward-$SERVICE_NAME"
+}
+
+# Función para mostrar procesos activos
+show_active_portforwards() {
+    echo "📋 PROCESOS DE PORT-FORWARD ACTIVOS:"
+    echo "===================================="
+    
+    # Buscar procesos kubectl port-forward
+    PROCESSES=$(ps aux | grep "kubectl port-forward" | grep -v grep)
+    if [ -z "$PROCESSES" ]; then
+        echo "❌ No hay procesos de port-forward activos"
+    else
+        echo "$PROCESSES"
+        echo ""
+        echo "💡 Para detener un proceso: kill <PID>"
+    fi
+    
+    echo ""
+    echo "📱 SESIONES DE SCREEN:"
+    if command -v screen &>/dev/null; then
+        screen -list | grep port-forward || echo "❌ No hay sesiones de screen activas"
+    else
+        echo "❌ Screen no está instalado"
+    fi
+    
+    echo ""
+    echo "📱 SESIONES DE TMUX:"
+    if command -v tmux &>/dev/null; then
+        tmux list-sessions 2>/dev/null | grep port-forward || echo "❌ No hay sesiones de tmux activas"
+    else
+        echo "❌ Tmux no está instalado"
+    fi
+}
+
+# Función para detener todos los port-forwards
+stop_all_portforwards() {
+    echo "🛑 DETENIENDO TODOS LOS PORT-FORWARDS..."
+    echo "======================================="
+    
+    # Detener procesos kubectl port-forward
+    PIDS=$(ps aux | grep "kubectl port-forward" | grep -v grep | awk '{print $2}')
+    if [ ! -z "$PIDS" ]; then
+        echo "⏹️ Deteniendo procesos kubectl port-forward..."
+        echo "$PIDS" | xargs kill
+        echo "✅ Procesos terminados"
+    else
+        echo "❌ No hay procesos kubectl port-forward activos"
+    fi
+    
+    # Detener sesiones screen
+    if command -v screen &>/dev/null; then
+        SCREEN_SESSIONS=$(screen -list | grep port-forward | awk '{print $1}')
+        if [ ! -z "$SCREEN_SESSIONS" ]; then
+            echo "⏹️ Deteniendo sesiones de screen..."
+            echo "$SCREEN_SESSIONS" | while read session; do
+                screen -X -S "$session" quit
+            done
+            echo "✅ Sesiones de screen terminadas"
+        fi
+    fi
+    
+    # Detener sesiones tmux
+    if command -v tmux &>/dev/null; then
+        TMUX_SESSIONS=$(tmux list-sessions 2>/dev/null | grep port-forward | cut -d: -f1)
+        if [ ! -z "$TMUX_SESSIONS" ]; then
+            echo "⏹️ Deteniendo sesiones de tmux..."
+            echo "$TMUX_SESSIONS" | while read session; do
+                tmux kill-session -t "$session"
+            done
+            echo "✅ Sesiones de tmux terminadas"
+        fi
+    fi
+    
+    echo "🎉 Todos los port-forwards han sido detenidos"
+}
+
+# Verificar servicio
+check_service
+
+# Menú principal
+while true; do
+    echo ""
+    show_options
+    read -p "Selecciona una opción (1-8): " choice
+    echo ""
+    
+    case $choice in
+        1) foreground_portforward ;;
+        2) background_portforward ;;
+        3) nohup_portforward ;;
+        4) screen_portforward ;;
+        5) tmux_portforward ;;
+        6) show_active_portforwards ;;
+        7) stop_all_portforwards ;;
+        8) echo "👋 ¡Hasta luego!"; exit 0 ;;
+        *) echo "❌ Opción inválida. Selecciona 1-8." ;;
+    esac
+    
+    if [ $choice -ne 6 ] && [ $choice -ne 7 ] && [ $choice -ne 8 ]; then
+        echo ""
+        read -p "Presiona Enter para volver al menú..."
+    fi
+done
 EOF
 
 chmod +x ~/port-forward-test.sh
 
-echo "📋 Script creado: ~/port-forward-test.sh"
-echo "🔧 Para probar el servicio, ejecuta: ~/port-forward-test.sh"
+echo "📋 Script mejorado creado: ~/port-forward-test.sh"
+echo "🔧 Para probar el servicio con opciones avanzadas: ~/port-forward-test.sh"
+
+echo ""
+echo "🚀 COMANDOS RÁPIDOS DE PORT-FORWARDING:"
+echo "======================================="
+echo ""
+echo "💡 Para uso rápido sin scripts:"
+echo ""
+echo "# En segundo plano (& libera terminal):"
+echo "kubectl port-forward service/test-web 8080:80 &"
+echo ""
+echo "# Con nohup (sobrevive al cierre de terminal):"
+echo "nohup kubectl port-forward service/test-web 8080:80 > /tmp/pf.log 2>&1 &"
+echo ""
+echo "# Ver procesos activos:"
+echo "ps aux | grep 'kubectl port-forward'"
+echo ""
+echo "# Detener todos los port-forwards:"
+echo "pkill -f 'kubectl port-forward'"
+echo ""
+echo "🌐 Acceso: http://localhost:8080"
 
 # Mostrar logs del pod
 echo ""
@@ -393,8 +627,41 @@ setup_test_service() {
     echo "🌐 Configurando acceso al servicio test-web..."
     echo "📌 Servicio disponible en: http://IP_PUBLICA_VM:8080"
     echo "⚠️ NOTA: Debes configurar NSG en Azure para el puerto 8080"
+    echo ""
+    echo "Selecciona cómo ejecutar port-forwarding:"
+    echo "1) Primer plano (bloquea terminal)"
+    echo "2) Segundo plano (libera terminal)"
+    echo "3) Con nohup (sobrevive cierre de terminal)"
+    read -p "Opción (1-3): " pf_choice
     
-    kubectl port-forward --address=0.0.0.0 service/test-web 8080:80
+    case $pf_choice in
+        1)
+            echo "🔄 Port-forwarding en primer plano..."
+            echo "⏹️ Presiona Ctrl+C para detener"
+            kubectl port-forward --address=0.0.0.0 service/test-web 8080:80
+            ;;
+        2)
+            echo "🔄 Port-forwarding en segundo plano..."
+            kubectl port-forward --address=0.0.0.0 service/test-web 8080:80 &
+            PID=$!
+            echo "✅ Port-forward iniciado en background (PID: $PID)"
+            echo "⏹️ Para detener: kill $PID"
+            echo "💡 Terminal libre para otros comandos"
+            ;;
+        3)
+            echo "🔄 Port-forwarding con nohup..."
+            nohup kubectl port-forward --address=0.0.0.0 service/test-web 8080:80 > /tmp/azure-pf.log 2>&1 &
+            PID=$!
+            echo "✅ Port-forward iniciado con nohup (PID: $PID)"
+            echo "📋 Logs en: /tmp/azure-pf.log"
+            echo "⏹️ Para detener: kill $PID"
+            echo "💡 Sobrevivirá al cierre de terminal"
+            ;;
+        *)
+            echo "❌ Opción inválida, usando primer plano..."
+            kubectl port-forward --address=0.0.0.0 service/test-web 8080:80
+            ;;
+    esac
 }
 
 # Función para configurar túnel SSH (más seguro)
