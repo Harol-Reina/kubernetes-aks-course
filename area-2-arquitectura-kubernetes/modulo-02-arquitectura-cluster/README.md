@@ -812,7 +812,8 @@ web-app-abc123           1/1     Running   0          30s
 web-app-def456           1/1     Running   0          30s
 # Solo 2 pods → Controller crea el tercero
 web-app-ghi789           0/1     Pending   0          1s
-```
+
+
 ┌──────────────────────────────────────────────┐
 │  ┌─────────────────────────────────────────┐ │
 │  │Controller   │Controller   │Controller   │ │
