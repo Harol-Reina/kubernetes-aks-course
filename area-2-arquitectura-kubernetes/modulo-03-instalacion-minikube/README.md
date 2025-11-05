@@ -8,7 +8,7 @@
 - Instalar y configurar Minikube en una VM de Azure
 - Configurar kubectl con autocompletado
 - Entender los diferentes drivers de Minikube
-- Implementar Minikube con driver `none` para acceso directo
+- Implementar Minikube con driver `docker` para desarrollo seguro
 - Verificar la instalación y funcionamiento del cluster
 
 ---
@@ -28,19 +28,22 @@
 ┌─────────────────────────────────────────┐
 │              Azure VM                   │
 │  ┌─────────────────────────────────────┐│
-│  │          Minikube Cluster           ││
-│  │                                     ││
-│  │ ┌─────────────┐ ┌─────────────────┐ ││
-│  │ │   kubectl   │ │  Control Plane  │ ││
-│  │ │   (client)  │ │  - API Server   │ ││
-│  │ │             │ │  - etcd         │ ││
-│  │ └─────────────┘ │  - Scheduler    │ ││
-│  │                 │  - Controller   │ ││
-│  │ ┌─────────────┐ └─────────────────┘ ││
-│  │ │    Pods     │ ┌─────────────────┐ ││
-│  │ │ Workloads   │ │     kubelet     │ ││
-│  │ │             │ │   (Node Agent)  │ ││
-│  │ └─────────────┘ └─────────────────┘ ││
+│  │      Docker Container               ││
+│  │  ┌─────────────────────────────────┐││
+│  │  │        Minikube Cluster         │││
+│  │  │                                 │││
+│  │  │ ┌─────────────┐ ┌─────────────┐ │││
+│  │  │ │   kubectl   │ │ Control     │ │││
+│  │  │ │   (client)  │ │ Plane       │ │││
+│  │  │ │             │ │ - API Server│ │││
+│  │  │ └─────────────┘ │ - etcd      │ │││
+│  │  │                 │ - Scheduler │ │││
+│  │  │ ┌─────────────┐ │ - Controller│ │││
+│  │  │ │    Pods     │ └─────────────┘ │││
+│  │  │ │ Workloads   │ ┌─────────────┐ │││
+│  │  │ │             │ │   kubelet   │ │││
+│  │  │ └─────────────┘ └─────────────┘ │││
+│  │  └─────────────────────────────────┘││
 │  └─────────────────────────────────────┘│
 └─────────────────────────────────────────┘
 ```
@@ -74,18 +77,19 @@
 ❌ Rendimiento limitado
 ```
 
-### **Driver None (Recomendado para este curso)**
+### **Driver Docker (Recomendado para este curso)**
 ```bash
 # Ventajas:
-✅ Acceso directo a todos los servicios
-✅ Máximo rendimiento
+✅ Aislamiento completo del sistema host
+✅ Fácil gestión y limpieza
 ✅ Ideal para desarrollo y aprendizaje
-✅ Sin overhead de virtualización
+✅ No requiere permisos root para operaciones normales
+✅ Muy estable y bien mantenido
 
 # Desventajas:
-❌ Menor aislamiento
-❌ Requiere configuración manual
-❌ Solo para entornos de desarrollo
+❌ Requiere port-forwarding para acceso externo
+❌ Usa recursos de Docker
+❌ Aislamiento de red (resuelto con port-forwarding)
 ```
 
 ---
@@ -113,10 +117,10 @@
    - Configuración inicial
    - Comparación de drivers
 
-5. **[Lab 3.5: Configuración con Driver None](./laboratorios/configuracion-driver-none.md)**
-   - Configuración específica para driver none
-   - Inicio del cluster
-   - Verificación del funcionamiento
+5. **[Lab 3.5: Configuración con Driver Docker](./laboratorios/configuracion-driver-none.md)**
+   - Configuración específica para driver docker
+   - Inicio del cluster en contenedor
+   - Port-forwarding para servicios
 
 6. **[Lab 3.6: Verificación y Testing](./laboratorios/verificacion-testing.md)**
    - Pruebas de funcionalidad
@@ -139,7 +143,7 @@ Al completar este módulo, tendrás:
 - Minikube instalado y configurando
 - kubectl configurado con autocompletado
 - Cluster de Kubernetes local operativo
-- Acceso directo a todos los servicios
+- Port-forwarding configurado para acceso a servicios
 
 ### **✅ Conocimientos adquiridos:**
 - Diferentes opciones de instalación de Kubernetes local
@@ -159,7 +163,7 @@ Al completar este módulo, tendrás:
 
 ```bash
 # Gestión del cluster
-minikube start --driver=none
+minikube start --driver=docker
 minikube status
 minikube stop
 minikube delete
@@ -212,15 +216,15 @@ kubectl get pods --help
 - **OS**: Ubuntu 20.04+ o distribución compatible
 
 ### **Seguridad:**
-- El driver `none` ejecuta como root
-- Solo para entornos de desarrollo/aprendizaje
-- No usar en producción
-- Considerar firewall y acceso a puertos
+- El driver `docker` ejecuta en contenedor aislado
+- Ideal para entornos de desarrollo/aprendizaje
+- Aislamiento completo del sistema host
+- Configuración de port-forwarding para acceso seguro
 
 ### **Limitaciones:**
-- Driver `none` requiere privilegios elevados
-- Algunos addons pueden no funcionar completamente
-- Configuración manual de ciertos componentes
+- Driver `docker` requiere port-forwarding para acceso externo
+- Uso de recursos de Docker (pero eficiente)
+- Configuración automática de componentes
 
 ---
 

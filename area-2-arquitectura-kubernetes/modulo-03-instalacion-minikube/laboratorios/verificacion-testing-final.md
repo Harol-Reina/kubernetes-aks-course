@@ -15,7 +15,7 @@
 
 ## 📋 Prerequisitos
 
-- Minikube con driver "none" funcionando (Lab 3.5)
+- Minikube con driver "docker" funcionando (Lab 3.5)
 - kubectl configurado correctamente
 - Acceso directo a servicios verificado
 
@@ -132,8 +132,8 @@ if minikube version &>/dev/null; then
     show_status 0 "Minikube instalado"
     show_info "Versión: $(minikube version | head -1)"
     
-    if sudo minikube status --profile=none-cluster &>/dev/null; then
-        show_status 0 "Cluster none-cluster funcionando"
+    if minikube status --profile=docker-cluster &>/dev/null; then
+        show_status 0 "Cluster docker-cluster funcionando"
         
         # Verificar nodos
         if kubectl get nodes &>/dev/null; then
@@ -145,7 +145,7 @@ if minikube version &>/dev/null; then
             fi
         fi
     else
-        show_status 1 "Cluster none-cluster no funcionando"
+        show_status 1 "Cluster docker-cluster no funcionando"
     fi
 else
     show_status 1 "Minikube no instalado"
@@ -194,7 +194,7 @@ TOTAL_CHECKS=10
 docker --version &>/dev/null && ((CHECKS_PASSED++))
 kubectl version --client &>/dev/null && ((CHECKS_PASSED++))
 minikube version &>/dev/null && ((CHECKS_PASSED++))
-sudo minikube status --profile=none-cluster &>/dev/null && ((CHECKS_PASSED++))
+minikube status --profile=docker-cluster &>/dev/null && ((CHECKS_PASSED++))
 kubectl get nodes &>/dev/null && ((CHECKS_PASSED++))
 grep -q "kubectl completion bash" ~/.bashrc && ((CHECKS_PASSED++))
 grep -q "minikube completion bash" ~/.bashrc && ((CHECKS_PASSED++))
@@ -578,7 +578,7 @@ kubectl get storageclass
 echo ""
 echo "🔌 ADDONS HABILITADOS"
 echo "----------------------"
-sudo minikube addons list --profile=none-cluster | grep enabled
+minikube addons list --profile=docker-cluster | grep enabled
 
 echo ""
 echo "📈 RECURSOS DEL CLUSTER"
@@ -595,7 +595,7 @@ if kubectl top nodes &>/dev/null; then
     kubectl top pods --all-namespaces | head -10
 else
     echo "ℹ️ Metrics server no disponible (normal en instalación básica)"
-    echo "💡 Para habilitar métricas: sudo minikube addons enable metrics-server --profile=none-cluster"
+    echo "💡 Para habilitar métricas: minikube addons enable metrics-server --profile=docker-cluster"
 fi
 
 echo ""
@@ -1037,7 +1037,7 @@ echo ""
 echo "🚀 VERIFICACIONES DE MINIKUBE:"
 echo "--------------------------------"
 check_item "Minikube instalado" "minikube version"
-check_item "Cluster none-cluster activo" "sudo minikube status --profile=none-cluster"
+check_item "Cluster docker-cluster activo" "minikube status --profile=docker-cluster"
 check_item "API Server accesible" "kubectl cluster-info"
 check_item "Autocompletado minikube" "grep -q 'minikube completion bash' ~/.bashrc"
 
@@ -1066,7 +1066,7 @@ echo ""
 # Verificaciones de seguridad
 echo "🔒 VERIFICACIONES DE SEGURIDAD:"
 echo "---------------------------------"
-check_item "Driver 'none' funcionando" "sudo minikube status --profile=none-cluster | grep -q 'kubelet: Running'"
+check_item "Driver 'docker' funcionando" "minikube status --profile=docker-cluster | grep -q 'kubelet: Running'"
 check_item "kubectl sin permisos root" "kubectl get nodes"
 check_item "Configuración kubectl correcta" "[ -f ~/.kube/config ] && [ \$(stat -c %U ~/.kube/config) = \$USER ]"
 
@@ -1175,7 +1175,7 @@ chmod +x ~/checklist-final.sh
 🚀 VERIFICACIONES DE MINIKUBE:
 --------------------------------
 🔍 Minikube instalado... ✅ PASS
-🔍 Cluster none-cluster activo... ✅ PASS
+🔍 Cluster docker-cluster activo... ✅ PASS
 🔍 API Server accesible... ✅ PASS
 🔍 Autocompletado minikube... ✅ PASS
 
@@ -1195,7 +1195,7 @@ chmod +x ~/checklist-final.sh
 
 🔒 VERIFICACIONES DE SEGURIDAD:
 ---------------------------------
-🔍 Driver 'none' funcionando... ✅ PASS
+🔍 Driver 'docker' funcionando... ✅ PASS
 🔍 kubectl sin permisos root... ✅ PASS
 🔍 Configuración kubectl correcta... ✅ PASS
 
@@ -1246,7 +1246,7 @@ chmod +x ~/checklist-final.sh
 🎉 **INSTALACIÓN COMPLETADA EXITOSAMENTE**
 
 ### Lo que tienes ahora:
-- ✅ **Minikube** con driver "none" funcionando
+- ✅ **Minikube** con driver "docker" funcionando
 - ✅ **kubectl** con autocompletado configurado  
 - ✅ **Acceso directo** a servicios desde la VM
 - ✅ **Ambiente completo** para laboratorios de Kubernetes
@@ -1257,7 +1257,7 @@ chmod +x ~/checklist-final.sh
 ### Comandos principales disponibles:
 ```bash
 # Gestión del cluster
-sudo minikube status --profile=none-cluster
+minikube status --profile=docker-cluster
 kubectl get nodes
 kubectl cluster-info
 

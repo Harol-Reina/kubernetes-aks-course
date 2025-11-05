@@ -1,14 +1,14 @@
 # Lab 3.4: Instalación de Minikube
 
 **Duración**: 20 minutos  
-**Objetivo**: Instalar Minikube con soporte para múltiples drivers y preparar para configuración "none"
+**Objetivo**: Instalar Minikube con soporte para múltiples drivers y preparar para configuración "docker"
 
 ## 🎯 Objetivos
 
 - Instalar Minikube en VM Azure
 - Configurar drivers disponibles
 - Entender diferencias entre drivers
-- Preparar para configuración driver "none"
+- Preparar para configuración driver "docker"
 
 ---
 
@@ -102,21 +102,38 @@ if ! groups $USER | grep -q docker; then
 fi
 ```
 
-### **Verificar requisitos para driver "none"**
+### **Verificar requisitos para driver "docker"**
 
 ```bash
-# El driver "none" requiere ejecutar como root
-echo "=== VERIFICANDO REQUISITOS PARA DRIVER 'NONE' ==="
+# El driver "docker" requiere Docker funcionando
+echo "=== VERIFICANDO REQUISITOS PARA DRIVER 'DOCKER' ==="
 
-# Verificar que systemd está disponible
-systemctl --version
+# Verificar que Docker está funcionando
+if docker version &>/dev/null; then
+    echo "✅ Docker está funcionando"
+else
+    echo "❌ Docker no está funcionando"
+    echo "🔧 Iniciando Docker..."
+    sudo systemctl start docker
+    sudo systemctl enable docker
+fi
 
-# Verificar que kubelet puede instalarse
-echo "Verificando disponibilidad de kubelet..."
+# Verificar que el usuario está en el grupo docker
+if groups | grep -q docker; then
+    echo "✅ Usuario en grupo docker"
+else
+    echo "⚠️ Agregando usuario al grupo docker..."
+    sudo usermod -aG docker $USER
+    echo "💡 Necesitas cerrar sesión y volver a entrar"
+fi
 
-# Verificar puertos necesarios
-echo "Verificando puertos necesarios para Kubernetes:"
-netstat -tulnp | grep -E ':(6443|10250|10251|10252|2379|2380)' || echo "Puertos disponibles ✅"
+# Verificar conectividad de Docker
+if docker ps &>/dev/null; then
+    echo "✅ Docker accesible sin sudo"
+else
+    echo "⚠️ Aplicando permisos de grupo docker..."
+    newgrp docker
+fi
 
 # Verificar conectividad de red
 echo "Verificando conectividad de red:"
@@ -127,7 +144,7 @@ echo "Verificando espacio en disco:"
 df -h /
 
 echo ""
-echo "📌 El driver 'none' se configurará en el siguiente laboratorio"
+echo "📌 El driver 'docker' se configurará en el siguiente laboratorio"
 ```
 
 ---
@@ -252,8 +269,8 @@ minikube config set cpus 2
 # Ver configuración actual
 minikube config view
 
-# Preparar configuración para driver "none" (siguiente lab)
-echo "Preparando configuración para driver 'none'..."
+# Preparar configuración para driver "docker" (siguiente lab)
+echo "Preparando configuración para driver 'docker'..."
 
 # Crear script helper para cambio rápido de perfiles
 cat << 'EOF' > ~/minikube-profiles.sh
@@ -271,9 +288,13 @@ case "$1" in
         minikube config set cpus 2
         echo "Perfil Docker configurado"
         ;;
-    "none")
-        echo "🔧 Configurando perfil None (requiere sudo)..."
-        echo "Este perfil se configurará en el siguiente laboratorio"
+    "vbox")
+        echo "�️ Configurando perfil VirtualBox..."
+        minikube config set profile virtualbox-cluster
+        minikube config set driver virtualbox
+        minikube config set memory 4096
+        minikube config set cpus 2
+        echo "Perfil VirtualBox configurado"
         ;;
     "list")
         echo "📋 Perfiles disponibles:"
@@ -283,11 +304,11 @@ case "$1" in
         minikube config view
         ;;
     *)
-        echo "Uso: $0 {docker|none|list}"
+        echo "Uso: $0 {docker|vbox|list}"
         echo ""
         echo "Perfiles disponibles:"
-        echo "  docker  - Usar Docker como driver"
-        echo "  none    - Usar driver none (bare metal)"
+        echo "  docker  - Usar Docker como driver (recomendado)"
+        echo "  vbox    - Usar VirtualBox como driver"
         echo "  list    - Mostrar perfiles existentes"
         ;;
 esac
@@ -355,11 +376,12 @@ else
     echo "ℹ️ VirtualBox driver no instalado (opcional)"
 fi
 
-# Driver none (verificar requisitos)
-if systemctl --version &>/dev/null; then
-    echo "✅ Driver 'none' - systemd disponible"
+# Driver hypervisor adicionales (verificar requisitos)
+if which kvm-ok &>/dev/null; then
+    echo "✅ KVM driver potencialmente disponible"
+    kvm-ok 2>/dev/null || echo "ℹ️ KVM no está configurado"
 else
-    echo "❌ Driver 'none' - systemd no disponible"
+    echo "ℹ️ KVM driver no instalado (opcional)"
 fi
 
 # Verificar kubectl
@@ -404,7 +426,7 @@ if which minikube &>/dev/null && docker --version &>/dev/null; then
     echo "📌 Listo para crear clusters de Kubernetes"
     echo ""
     echo "Próximos pasos:"
-    echo "  - Lab 3.5: Configurar driver 'none'"
+    echo "  - Lab 3.5: Configurar driver 'docker'"
     echo "  - Lab 3.6: Verificar funcionamiento completo"
 else
     echo "⚠️ Minikube requiere configuración adicional"
@@ -512,7 +534,7 @@ commit: 8220a6eb95f0a4d75f7f2d7b14cef975f050512d
 ✅ Docker driver disponible
 Docker version 24.0.7, build afdd53b
 ℹ️ VirtualBox driver no instalado (opcional)
-✅ Driver 'none' - systemd disponible
+✅ KVM driver potencialmente disponible
 
 🔧 Verificando kubectl:
 ✅ kubectl está instalado
@@ -534,7 +556,7 @@ Disco libre: 25G en /
 📌 Listo para crear clusters de Kubernetes
 
 Próximos pasos:
-  - Lab 3.5: Configurar driver 'none'
+  - Lab 3.5: Configurar driver 'docker'
   - Lab 3.6: Verificar funcionamiento completo
 ```
 
@@ -595,7 +617,7 @@ minikube start --kubernetes-version=stable
 - [ ] Perfiles configurados
 - [ ] Scripts de ayuda creados
 - [ ] Verificación completa exitosa
-- [ ] Preparado para driver "none"
+- [ ] Preparado para driver "docker"
 
 ---
 
@@ -604,8 +626,8 @@ minikube start --kubernetes-version=stable
 ✅ **Minikube instalado y funcionando**  
 ✅ **Docker driver configurado y probado**  
 ✅ **kubectl conectado correctamente**  
-🔄 **Preparado para configurar driver "none"**
+🔄 **Preparado para configurar driver "docker"**
 
 ---
 
-**Siguiente paso**: [Lab 3.5: Configuración Driver "None"](./configuracion-driver-none.md)
+**Siguiente paso**: [Lab 3.5: Configuración Driver "Docker"](./configuracion-driver-none.md)
