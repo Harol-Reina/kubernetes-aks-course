@@ -175,7 +175,63 @@ docker rmi hello-world ubuntu:20.04
 
 ---
 
-## 🔍 Paso 7: Verificar configuración del sistema
+## � Paso 7: Verificar cri-dockerd (requerido para Kubernetes v1.24+)
+
+```bash
+# Verificar que cri-dockerd está instalado y funcionando
+echo "🔍 Verificando cri-dockerd..."
+
+# Verificar instalación
+if command -v cri-dockerd &>/dev/null; then
+    echo "✅ cri-dockerd está instalado"
+    cri-dockerd --version
+else
+    echo "❌ cri-dockerd no está instalado"
+    echo "⚠️ cri-dockerd es requerido para usar Docker con Kubernetes v1.24+"
+    echo "🔧 Debería haberse instalado en el Lab 3.1 (Preparación VM)"
+    exit 1
+fi
+
+# Verificar estado de los servicios
+echo ""
+echo "🔍 Verificando servicios de cri-dockerd..."
+
+# Verificar servicio cri-docker
+if systemctl is-active cri-docker.service &>/dev/null; then
+    echo "✅ Servicio cri-docker.service está activo"
+else
+    echo "⚠️ Servicio cri-docker.service no está activo, iniciando..."
+    sudo systemctl start cri-docker.service
+fi
+
+# Verificar socket cri-docker
+if systemctl is-active cri-docker.socket &>/dev/null; then
+    echo "✅ Socket cri-docker.socket está activo"
+else
+    echo "⚠️ Socket cri-docker.socket no está activo, iniciando..."
+    sudo systemctl start cri-docker.socket
+fi
+
+# Mostrar estado detallado
+echo ""
+echo "📊 Estado detallado de cri-dockerd:"
+sudo systemctl status cri-docker.service --no-pager -l
+echo ""
+sudo systemctl status cri-docker.socket --no-pager -l
+
+# Verificar que cri-dockerd puede comunicarse con Docker
+echo ""
+echo "🔗 Verificando comunicación cri-dockerd <-> Docker..."
+if sudo cri-dockerd --version &>/dev/null; then
+    echo "✅ cri-dockerd puede ejecutarse"
+else
+    echo "❌ cri-dockerd tiene problemas de ejecución"
+fi
+```
+
+---
+
+## �🔍 Paso 8: Verificar configuración del sistema
 
 ```bash
 # Crear script de verificación completa
@@ -226,6 +282,30 @@ else
     echo "❌ Archivo de configuración no existe"
 fi
 
+# Verificar cri-dockerd
+echo ""
+echo "🔧 Verificando cri-dockerd:"
+if command -v cri-dockerd &>/dev/null; then
+    echo "✅ cri-dockerd está instalado"
+    echo "Versión: $(cri-dockerd --version)"
+    
+    # Verificar servicios
+    if systemctl is-active cri-docker.service &>/dev/null; then
+        echo "✅ Servicio cri-docker.service activo"
+    else
+        echo "❌ Servicio cri-docker.service no activo"
+    fi
+    
+    if systemctl is-active cri-docker.socket &>/dev/null; then
+        echo "✅ Socket cri-docker.socket activo"
+    else
+        echo "❌ Socket cri-docker.socket no activo"
+    fi
+else
+    echo "❌ cri-dockerd no está instalado"
+    echo "⚠️ Requerido para Kubernetes v1.24+ con Docker"
+fi
+
 # Verificar cgroup driver
 echo ""
 echo "🔄 Cgroup Driver:"
@@ -248,10 +328,27 @@ fi
 
 echo ""
 echo "=== RESUMEN ==="
+DOCKER_OK=false
+CRI_DOCKERD_OK=false
+
+# Verificar Docker
 if docker run --rm hello-world &> /dev/null && [ "$CGROUP_DRIVER" = "systemd" ]; then
-    echo "🎉 Docker está correctamente instalado y configurado para Minikube!"
+    DOCKER_OK=true
+fi
+
+# Verificar cri-dockerd
+if command -v cri-dockerd &>/dev/null && systemctl is-active cri-docker.service &>/dev/null; then
+    CRI_DOCKERD_OK=true
+fi
+
+if [ "$DOCKER_OK" = true ] && [ "$CRI_DOCKERD_OK" = true ]; then
+    echo "🎉 Docker y cri-dockerd están correctamente instalados y configurados para Minikube!"
+    echo "✅ Sistema listo para Kubernetes v1.24+"
+elif [ "$DOCKER_OK" = true ] && [ "$CRI_DOCKERD_OK" = false ]; then
+    echo "⚠️ Docker OK pero cri-dockerd requiere configuración"
+    echo "🔧 cri-dockerd es requerido para Kubernetes v1.24+ con Docker"
 else
-    echo "⚠️ Docker requiere configuración adicional"
+    echo "⚠️ Docker y/o cri-dockerd requieren configuración adicional"
 fi
 
 # Limpiar

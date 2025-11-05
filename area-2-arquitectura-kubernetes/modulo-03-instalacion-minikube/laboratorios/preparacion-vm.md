@@ -86,7 +86,7 @@ sudo apt update
 # Actualizar paquetes instalados
 sudo apt upgrade -y
 
-# Instalar herramientas básicas
+# Instalar herramientas básicas y dependencias de Kubernetes
 sudo apt install -y \
     apt-transport-https \
     ca-certificates \
@@ -98,16 +98,62 @@ sudo apt install -y \
     vim \
     git \
     tree \
-    htop
+    htop \
+    conntrack \
+    socat \
+    ebtables \
+    ethtool \
+    iptables
 
-# Verificar instalación
-which curl wget git
+# Instalar crictl (Container Runtime Interface CLI)
+echo "🔧 Instalando crictl..."
+CRICTL_VERSION="v1.28.0"
+curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" | sudo tar -C /usr/local/bin -xz
+
+# Hacer crictl ejecutable
+sudo chmod +x /usr/local/bin/crictl
+
+# Instalar cri-dockerd (requerido para Docker con Kubernetes v1.24+)
+echo "🔧 Instalando cri-dockerd..."
+CRI_DOCKERD_VERSION="0.3.4"
+CRI_DOCKERD_URL="https://github.com/Mirantis/cri-dockerd/releases/download/v${CRI_DOCKERD_VERSION}/cri-dockerd-${CRI_DOCKERD_VERSION}.amd64.tgz"
+
+# Descargar e instalar cri-dockerd
+curl -L $CRI_DOCKERD_URL | sudo tar -C /usr/local/bin --strip-components=1 -xz
+
+# Hacer cri-dockerd ejecutable
+sudo chmod +x /usr/local/bin/cri-dockerd
+
+# Instalar archivos de servicio systemd para cri-dockerd
+sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.service -o /etc/systemd/system/cri-docker.service
+sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.socket -o /etc/systemd/system/cri-docker.socket
+
+# Configurar cri-dockerd para que inicie automáticamente
+sudo systemctl daemon-reload
+sudo systemctl enable cri-docker.service
+sudo systemctl enable cri-docker.socket
+
+# Verificar instalación de herramientas críticas
+which curl wget git conntrack socat crictl cri-dockerd
+
+# Verificar versión de conntrack (requerido por Kubernetes)
+conntrack --version
+
+# Verificar versión de crictl (requerido por Kubernetes)
+crictl --version
+
+# Verificar versión de cri-dockerd (requerido para Docker con Kubernetes v1.24+)
+cri-dockerd --version
+
+# Verificar iptables (requerido por Kubernetes networking)
+sudo iptables --version
 ```
 
 ---
 
 ## 👤 Paso 4: Configurar usuario
 
+```bash
 ```bash
 # Verificar usuario actual
 whoami
@@ -118,6 +164,138 @@ sudo whoami
 
 # Agregar usuario al grupo docker (para más adelante)
 sudo usermod -aG docker $USER
+
+# Verificar que el usuario se agregó al grupo
+groups $USER
+```
+
+---
+
+## 🔧 Paso 5: Verificar dependencias de Kubernetes
+
+```bash
+# Crear script de verificación de dependencias de Kubernetes
+cat << 'EOF' > ~/verificar-dependencias-k8s.sh
+#!/bin/bash
+
+echo "=== VERIFICACIÓN DE DEPENDENCIAS DE KUBERNETES ==="
+echo ""
+
+# Función para verificar comando
+check_command() {
+    if command -v $1 &> /dev/null; then
+        echo "✅ $1 está instalado"
+        $1 --version 2>/dev/null || echo "  Versión: $(dpkg -l | grep $1 | awk '{print $3}' | head -1)"
+    else
+        echo "❌ $1 NO está instalado"
+        return 1
+    fi
+}
+
+# Verificar herramientas críticas para Kubernetes
+echo "🔍 Verificando herramientas críticas:"
+check_command "conntrack"
+check_command "socat"
+check_command "ebtables"
+check_command "ethtool"
+check_command "iptables"
+check_command "crictl"
+check_command "cri-dockerd"
+
+echo ""
+echo "🔍 Verificando herramientas básicas:"
+check_command "curl"
+check_command "wget"
+check_command "git"
+
+echo ""
+echo "🔍 Verificando módulos del kernel necesarios:"
+
+# Verificar módulos del kernel
+REQUIRED_MODULES=("br_netfilter" "overlay")
+for module in "${REQUIRED_MODULES[@]}"; do
+    if lsmod | grep -q "^$module"; then
+        echo "✅ Módulo $module está cargado"
+    else
+        echo "⚠️ Módulo $module no está cargado, intentando cargar..."
+        sudo modprobe $module
+        if lsmod | grep -q "^$module"; then
+            echo "✅ Módulo $module cargado exitosamente"
+        else
+            echo "❌ No se pudo cargar el módulo $module"
+        fi
+    fi
+done
+
+echo ""
+echo "🔍 Verificando servicios systemd necesarios:"
+
+# Verificar estado de cri-dockerd
+if systemctl is-enabled cri-docker.service &>/dev/null; then
+    echo "✅ Servicio cri-docker.service está habilitado"
+    if systemctl is-active cri-docker.service &>/dev/null; then
+        echo "✅ Servicio cri-docker.service está activo"
+    else
+        echo "⚠️ Servicio cri-docker.service no está activo, iniciando..."
+        sudo systemctl start cri-docker.service
+    fi
+else
+    echo "❌ Servicio cri-docker.service no está habilitado"
+fi
+
+if systemctl is-enabled cri-docker.socket &>/dev/null; then
+    echo "✅ Socket cri-docker.socket está habilitado"
+    if systemctl is-active cri-docker.socket &>/dev/null; then
+        echo "✅ Socket cri-docker.socket está activo"
+    else
+        echo "⚠️ Socket cri-docker.socket no está activo, iniciando..."
+        sudo systemctl start cri-docker.socket
+    fi
+else
+    echo "❌ Socket cri-docker.socket no está habilitado"
+fi
+
+echo ""
+echo "🔍 Verificando configuración de red:"
+
+# Verificar IP forwarding
+if sysctl net.ipv4.ip_forward | grep -q "= 1"; then
+    echo "✅ IP forwarding está habilitado"
+else
+    echo "⚠️ IP forwarding no está habilitado, habilitando..."
+    echo 'net.ipv4.ip_forward = 1' | sudo tee -a /etc/sysctl.conf
+    sudo sysctl -p
+fi
+
+# Verificar bridge netfilter
+if sysctl net.bridge.bridge-nf-call-iptables | grep -q "= 1"; then
+    echo "✅ Bridge netfilter está configurado"
+else
+    echo "⚠️ Configurando bridge netfilter..."
+    echo 'net.bridge.bridge-nf-call-iptables = 1' | sudo tee -a /etc/sysctl.conf
+    echo 'net.bridge.bridge-nf-call-ip6tables = 1' | sudo tee -a /etc/sysctl.conf
+    sudo sysctl -p
+fi
+
+echo ""
+echo "=== RESUMEN ==="
+if command -v conntrack &> /dev/null && command -v socat &> /dev/null && command -v crictl &> /dev/null && command -v cri-dockerd &> /dev/null; then
+    echo "✅ Dependencias críticas de Kubernetes están instaladas"
+    echo "🎯 Sistema listo para instalar Minikube con Docker"
+else
+    echo "❌ Faltan dependencias críticas"
+    echo "🔧 Ejecuta: sudo apt install -y conntrack socat ebtables ethtool"
+    echo "🔧 Instala crictl y cri-dockerd manualmente si faltan"
+fi
+EOF
+
+chmod +x ~/verificar-dependencias-k8s.sh
+~/verificar-dependencias-k8s.sh
+```
+
+---
+
+## 🌐 Paso 6: Configurar red y conectividad
 
 # Verificar grupos del usuario
 groups $USER
@@ -290,6 +468,117 @@ Disco disponible: 22GB
 ---
 
 ## 🔧 Troubleshooting
+
+### **Error: GUEST_MISSING_CONNTRACK**
+```bash
+# Error: Sorry, Kubernetes X.X.X requires conntrack to be installed in root's path
+
+# Solución 1: Instalar conntrack
+sudo apt update
+sudo apt install -y conntrack
+
+# Verificar instalación
+conntrack --version
+
+# Verificar que está en el PATH
+which conntrack
+
+# Solución 2: Si el problema persiste, verificar PATH de root
+sudo which conntrack
+sudo echo $PATH
+
+# Solución 3: Reinstalar conntrack si es necesario
+sudo apt remove conntrack
+sudo apt install -y conntrack
+
+# Solución 4: Verificar otras dependencias
+sudo apt install -y conntrack socat ebtables ethtool iptables
+
+# Verificar estado después de la instalación
+~/verificar-dependencias-k8s.sh
+```
+
+### **Error: GUEST_MISSING_CRICTL**
+```bash
+# Error: Sorry, Kubernetes 1.34.0 requires crictl to be installed in root's path
+
+# Solución 1: Instalar crictl
+CRICTL_VERSION="v1.28.0"
+curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" | sudo tar -C /usr/local/bin -xz
+
+# Hacer ejecutable
+sudo chmod +x /usr/local/bin/crictl
+
+# Verificar instalación
+crictl --version
+
+# Verificar que está en el PATH
+which crictl
+sudo which crictl
+
+# Solución 2: Verificar que crictl está disponible para root
+sudo /usr/local/bin/crictl --version
+
+# Solución 3: Si el problema persiste, agregar al PATH
+echo 'export PATH=$PATH:/usr/local/bin' | sudo tee -a /etc/environment
+sudo ln -sf /usr/local/bin/crictl /usr/bin/crictl
+
+# Verificar instalación completa
+~/verificar-dependencias-k8s.sh
+```
+
+### **Error: Docker container runtime requires cri-dockerd**
+```bash
+# Error: The none driver with Kubernetes v1.24+ and the docker container-runtime requires cri-dockerd
+
+# Solución 1: Instalar cri-dockerd
+CRI_DOCKERD_VERSION="0.3.4"
+CRI_DOCKERD_URL="https://github.com/Mirantis/cri-dockerd/releases/download/v${CRI_DOCKERD_VERSION}/cri-dockerd-${CRI_DOCKERD_VERSION}.amd64.tgz"
+
+# Descargar e instalar
+curl -L $CRI_DOCKERD_URL | sudo tar -C /usr/local/bin --strip-components=1 -xz
+sudo chmod +x /usr/local/bin/cri-dockerd
+
+# Instalar archivos de servicio systemd
+sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.service -o /etc/systemd/system/cri-docker.service
+sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.socket -o /etc/systemd/system/cri-docker.socket
+
+# Habilitar e iniciar servicios
+sudo systemctl daemon-reload
+sudo systemctl enable cri-docker.service cri-docker.socket
+sudo systemctl start cri-docker.service cri-docker.socket
+
+# Verificar estado
+sudo systemctl status cri-docker.service
+sudo systemctl status cri-docker.socket
+
+# Verificar instalación
+cri-dockerd --version
+
+# Solución 2: Si hay problemas con la configuración
+# Verificar logs
+sudo journalctl -u cri-docker.service -f
+
+# Reiniciar servicios si es necesario
+sudo systemctl restart cri-docker.service cri-docker.socket
+```
+
+### **Error: Módulos del kernel no disponibles**
+```bash
+# Error con módulos br_netfilter u overlay
+
+# Cargar módulos manualmente
+sudo modprobe br_netfilter
+sudo modprobe overlay
+
+# Hacer permanente
+echo 'br_netfilter' | sudo tee -a /etc/modules-load.d/k8s.conf
+echo 'overlay' | sudo tee -a /etc/modules-load.d/k8s.conf
+
+# Verificar
+lsmod | grep br_netfilter
+lsmod | grep overlay
+```
 
 ### **Error: Espacio insuficiente**
 ```bash

@@ -65,6 +65,56 @@ fi
 
 ---
 
+## 🚀 Instalación rápida de dependencias (opcional)
+
+```bash
+# OPCIÓN A: Verificación previa de dependencias
+echo "=== VERIFICACIÓN PREVIA DE DEPENDENCIAS ==="
+echo "💡 Primero verificaremos si todas las dependencias están instaladas"
+echo ""
+
+# Ejecutar script de verificación
+chmod +x verify-driver-none-deps.sh
+./verify-driver-none-deps.sh
+
+echo ""
+echo "==============================================="
+
+# OPCIÓN B: Instalación automática con script (si la verificación falló)
+echo "=== INSTALACIÓN AUTOMÁTICA DE DEPENDENCIAS ==="
+echo "💡 Puedes usar el script automático o seguir los pasos manuales"
+echo ""
+
+read -p "¿Usar instalación automática de todas las dependencias? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "🔧 Ejecutando instalación automática..."
+    
+    # Ejecutar script de instalación
+    chmod +x fix-driver-none-dependencies.sh
+    ./fix-driver-none-dependencies.sh
+    
+    echo "✅ Instalación automática completada"
+    echo "🔍 Ejecutando verificación final..."
+    ./verify-driver-none-deps.sh
+    
+    echo ""
+    echo "🎯 Si la verificación fue exitosa, puedes saltar al Paso 3"
+    echo ""
+else
+    echo "📋 Continuando con instalación manual paso a paso..."
+fi
+
+# OPCIÓN C: Solo instalar CNI plugins (si solo falla esa parte)
+echo ""
+echo "💡 Opciones de reparación específicas:"
+echo "   • Solo CNI plugins: chmod +x install-cni-plugins.sh && ./install-cni-plugins.sh"
+echo "   • Solo cri-dockerd: chmod +x fix-cri-dockerd.sh && ./fix-cri-dockerd.sh"
+echo ""
+```
+
+---
+
 ## 🔧 Paso 2: Preparar el sistema para driver "none"
 
 ```bash
@@ -80,6 +130,54 @@ else
     echo "❌ Requiere acceso root o sudo"
     exit 1
 fi
+
+# Verificar dependencias críticas de Kubernetes
+echo "🔍 Verificando dependencias de Kubernetes..."
+
+# Verificar conntrack (crítico para Kubernetes)
+if command -v conntrack &>/dev/null; then
+    echo "✅ conntrack disponible"
+    conntrack --version
+else
+    echo "❌ conntrack no disponible - instalando..."
+    sudo apt update
+    sudo apt install -y conntrack socat ebtables ethtool
+    
+    # Verificar instalación
+    if command -v conntrack &>/dev/null; then
+        echo "✅ conntrack instalado correctamente"
+    else
+        echo "❌ Error instalando conntrack"
+        exit 1
+    fi
+fi
+
+# Verificar otras dependencias
+REQUIRED_TOOLS=("socat" "ebtables" "ethtool" "iptables" "crictl")
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    if command -v $tool &>/dev/null; then
+        echo "✅ $tool disponible"
+    else
+        echo "❌ $tool no disponible - instalando..."
+        if [ "$tool" = "crictl" ]; then
+            # Instalar crictl manualmente
+            CRICTL_VERSION="v1.28.0"
+            echo "🔧 Instalando crictl..."
+            curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" | sudo tar -C /usr/local/bin -xz
+            sudo chmod +x /usr/local/bin/crictl
+            
+            # Verificar instalación
+            if command -v crictl &>/dev/null; then
+                echo "✅ crictl instalado correctamente"
+            else
+                echo "❌ Error instalando crictl"
+                exit 1
+            fi
+        else
+            sudo apt install -y $tool
+        fi
+    fi
+done
 
 # Verificar systemd
 if systemctl --version &>/dev/null; then
@@ -119,6 +217,200 @@ else
 fi
 
 echo ""
+echo "🔧 Verificando cri-dockerd (crítico para Kubernetes v1.24+ con Docker)..."
+
+# Verificar que cri-dockerd está instalado
+if command -v cri-dockerd &>/dev/null; then
+    echo "✅ cri-dockerd está instalado"
+    cri-dockerd --version
+else
+    echo "❌ cri-dockerd no está instalado - crítico para Kubernetes v1.24+"
+    echo "🔧 Instalando cri-dockerd..."
+    
+    # Instalar cri-dockerd
+    CRI_DOCKERD_VERSION="0.3.4"
+    CRI_DOCKERD_URL="https://github.com/Mirantis/cri-dockerd/releases/download/v${CRI_DOCKERD_VERSION}/cri-dockerd-${CRI_DOCKERD_VERSION}.amd64.tgz"
+    curl -L $CRI_DOCKERD_URL | sudo tar -C /usr/local/bin --strip-components=1 -xz
+    sudo chmod +x /usr/local/bin/cri-dockerd
+    
+    # Instalar servicios systemd
+    sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.service -o /etc/systemd/system/cri-docker.service
+    sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.socket -o /etc/systemd/system/cri-docker.socket
+    
+    sudo systemctl daemon-reload
+    sudo systemctl enable cri-docker.service cri-docker.socket
+fi
+
+# Verificar que los servicios están funcionando
+if systemctl is-active cri-docker.service &>/dev/null; then
+    echo "✅ Servicio cri-docker.service está activo"
+else
+    echo "⚠️ Iniciando servicio cri-docker.service..."
+    sudo systemctl start cri-docker.service
+fi
+
+if systemctl is-active cri-docker.socket &>/dev/null; then
+    echo "✅ Socket cri-docker.socket está activo"
+else
+    echo "⚠️ Iniciando socket cri-docker.socket..."
+    sudo systemctl start cri-docker.socket
+fi
+
+# Verificar que el socket de cri-dockerd existe y es accesible
+echo ""
+echo "🔍 Verificando socket de cri-dockerd..."
+CRI_SOCKET="/var/run/cri-dockerd.sock"
+
+# Esperar un momento para que el socket se cree
+sleep 3
+
+if [ -S "$CRI_SOCKET" ]; then
+    echo "✅ Socket cri-dockerd encontrado: $CRI_SOCKET"
+    
+    # Verificar permisos del socket
+    if sudo ls -la "$CRI_SOCKET" &>/dev/null; then
+        echo "✅ Socket accesible con permisos: $(sudo ls -la "$CRI_SOCKET")"
+    else
+        echo "⚠️ Problemas de permisos con el socket"
+    fi
+else
+    echo "❌ Socket cri-dockerd no encontrado en $CRI_SOCKET"
+    echo "🔧 Intentando reiniciar servicios cri-dockerd..."
+    
+    # Reiniciar servicios
+    sudo systemctl stop cri-docker.service cri-docker.socket
+    sleep 2
+    sudo systemctl start cri-docker.socket
+    sudo systemctl start cri-docker.service
+    
+    # Esperar y verificar nuevamente
+    sleep 5
+    if [ -S "$CRI_SOCKET" ]; then
+        echo "✅ Socket cri-dockerd creado después del reinicio"
+    else
+        echo "❌ Error: Socket cri-dockerd sigue sin estar disponible"
+        echo "🔍 Verificando logs de cri-dockerd:"
+        sudo journalctl -u cri-docker.service --no-pager -n 10
+        echo ""
+        echo "🔍 Estado de servicios cri-dockerd:"
+        sudo systemctl status cri-docker.service --no-pager -l
+        sudo systemctl status cri-docker.socket --no-pager -l
+        exit 1
+    fi
+fi
+
+echo ""
+echo "🔧 Verificando containernetworking-plugins (crítico para driver 'none' con Kubernetes v1.24+)..."
+
+# Verificar si containernetworking-plugins está instalado
+CNI_BIN_DIR="/opt/cni/bin"
+if [ -d "$CNI_BIN_DIR" ] && [ -f "$CNI_BIN_DIR/bridge" ]; then
+    echo "✅ containernetworking-plugins ya está instalado"
+    ls -la $CNI_BIN_DIR/ | head -5
+else
+    echo "❌ containernetworking-plugins no está instalado - crítico para driver 'none'"
+    echo "🔧 Instalando containernetworking-plugins..."
+    
+    # Crear directorio para plugins CNI
+    sudo mkdir -p $CNI_BIN_DIR
+    
+    # Descargar e instalar containernetworking-plugins
+    CNI_PLUGINS_VERSION="v1.3.0"
+    CNI_PLUGINS_URL="https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-amd64-${CNI_PLUGINS_VERSION}.tgz"
+    
+    echo "📥 Descargando containernetworking-plugins ${CNI_PLUGINS_VERSION}..."
+    
+    # Crear archivo temporal para la descarga
+    CNI_TEMP_FILE="/tmp/cni-plugins-${CNI_PLUGINS_VERSION}.tgz"
+    
+    # Descargar el archivo primero
+    if curl -L "$CNI_PLUGINS_URL" -o "$CNI_TEMP_FILE"; then
+        echo "✅ Descarga completada"
+        
+        # Verificar que el archivo se descargó correctamente
+        if [ -f "$CNI_TEMP_FILE" ] && [ -s "$CNI_TEMP_FILE" ]; then
+            echo "🔧 Extrayendo plugins CNI..."
+            
+            # Extraer el archivo
+            if sudo tar -C "$CNI_BIN_DIR" -xzf "$CNI_TEMP_FILE"; then
+                echo "✅ Extracción completada"
+                
+                # Limpiar archivo temporal
+                rm -f "$CNI_TEMP_FILE"
+            else
+                echo "❌ Error al extraer containernetworking-plugins"
+                rm -f "$CNI_TEMP_FILE"
+                exit 1
+            fi
+        else
+            echo "❌ Error: archivo descargado está vacío o corrupto"
+            rm -f "$CNI_TEMP_FILE"
+            exit 1
+        fi
+    else
+        echo "❌ Error al descargar containernetworking-plugins"
+        echo "🔍 Verificando conectividad y URL..."
+        echo "URL: $CNI_PLUGINS_URL"
+        exit 1
+    fi
+    
+    # Verificar instalación
+    if [ -f "$CNI_BIN_DIR/bridge" ]; then
+        echo "✅ containernetworking-plugins instalado correctamente"
+        echo "📋 Plugins instalados:"
+        ls -la $CNI_BIN_DIR/ | head -10
+    else
+        echo "❌ Error: plugins CNI no se instalaron correctamente"
+        echo "🔍 Contenido del directorio CNI:"
+        ls -la $CNI_BIN_DIR/ || echo "Directorio no accesible"
+        exit 1
+    fi
+fi
+
+# Verificar permisos del directorio CNI
+sudo chmod -R 755 $CNI_BIN_DIR
+
+echo ""
+echo "🔧 Configurando directorio de configuración CNI..."
+
+# Crear directorio de configuración CNI si no existe
+CNI_CONFIG_DIR="/etc/cni/net.d"
+sudo mkdir -p "$CNI_CONFIG_DIR"
+
+# Verificar que el directorio existe
+if [ -d "$CNI_CONFIG_DIR" ]; then
+    echo "✅ Directorio CNI configurado: $CNI_CONFIG_DIR"
+    sudo chmod 755 "$CNI_CONFIG_DIR"
+else
+    echo "❌ Error creando directorio CNI"
+    exit 1
+fi
+
+# Limpiar cualquier configuración CNI previa que pueda causar conflictos
+echo "🧹 Limpiando configuraciones CNI previas..."
+if [ -d "$CNI_CONFIG_DIR" ]; then
+    # Deshabilitar configuraciones bridge existentes que puedan interferir
+    sudo find "$CNI_CONFIG_DIR" -name "*bridge*" -not -name "*.mk_disabled" -type f 2>/dev/null | while read -r file; do
+        if [ -f "$file" ]; then
+            echo "  ⚠️ Deshabilitando configuración conflictiva: $(basename "$file")"
+            sudo mv "$file" "${file}.mk_disabled" 2>/dev/null || true
+        fi
+    done
+    
+    # También deshabilitar configuraciones podman si existen
+    sudo find "$CNI_CONFIG_DIR" -name "*podman*" -not -name "*.mk_disabled" -type f 2>/dev/null | while read -r file; do
+        if [ -f "$file" ]; then
+            echo "  ⚠️ Deshabilitando configuración podman: $(basename "$file")"
+            sudo mv "$file" "${file}.mk_disabled" 2>/dev/null || true
+        fi
+    done
+    
+    echo "✅ Limpieza de configuraciones CNI completada"
+else
+    echo "ℹ️ No hay configuraciones CNI previas"
+fi
+
+echo ""
 echo "✅ Sistema preparado para driver 'none'"
 ```
 
@@ -138,23 +430,110 @@ minikube delete 2>/dev/null || true
 echo "🚀 Iniciando Minikube con driver 'none'..."
 echo "⚠️ Esto requerirá permisos sudo"
 
-# Configurar perfil para driver "none"
-minikube config set profile none-cluster
+# IMPORTANTE: El driver 'none' NO soporta múltiples perfiles
+# Usar perfil por defecto (sin --profile)
+
+# Configurar driver none como predeterminado
 minikube config set driver none
 
-# Iniciar cluster (requiere sudo)
-sudo minikube start --driver=none --profile=none-cluster
+# Iniciar cluster con cri-dockerd (requiere sudo)
+echo "🔧 Iniciando Minikube con driver 'none' y cri-dockerd..."
+
+# Verificar ubicación del socket cri-dockerd
+echo "🔍 Verificando ubicación del socket cri-dockerd..."
+CRI_SOCKET_PATH=""
+
+# Verificar ubicaciones comunes del socket y crear compatibilidad
+echo "🔍 Verificando sockets existentes:"
+sudo netstat -lx | grep cri-dockerd || echo "No hay sockets cri-dockerd activos"
+
+# Verificar archivos de socket existentes
+if [ -S "/run/cri-dockerd.sock" ]; then
+    echo "✅ Socket encontrado en: /run/cri-dockerd.sock"
+    CRI_SOCKET_REAL="/run/cri-dockerd.sock"
+elif [ -S "/var/run/cri-dockerd.sock" ]; then
+    echo "✅ Socket encontrado en: /var/run/cri-dockerd.sock"
+    CRI_SOCKET_REAL="/var/run/cri-dockerd.sock"
+else
+    echo "❌ No se encontró ningún socket cri-dockerd"
+    echo "🔧 Reiniciando servicios cri-dockerd..."
+    sudo systemctl stop cri-docker.service cri-docker.socket
+    sleep 2
+    sudo systemctl start cri-docker.socket
+    sudo systemctl start cri-docker.service
+    sleep 5
+    
+    # Verificar nuevamente
+    if [ -S "/run/cri-dockerd.sock" ]; then
+        CRI_SOCKET_REAL="/run/cri-dockerd.sock"
+    elif [ -S "/var/run/cri-dockerd.sock" ]; then
+        CRI_SOCKET_REAL="/var/run/cri-dockerd.sock"
+    else
+        echo "❌ Error: No se pudo crear el socket cri-dockerd"
+        exit 1
+    fi
+fi
+
+# Crear compatibilidad: si existe en /run/ pero no en /var/run/, crear enlace
+if [ -S "/run/cri-dockerd.sock" ] && [ ! -S "/var/run/cri-dockerd.sock" ]; then
+    echo "� Creando enlace de compatibilidad /var/run/cri-dockerd.sock -> /run/cri-dockerd.sock"
+    sudo ln -sf /run/cri-dockerd.sock /var/run/cri-dockerd.sock
+fi
+
+# Determinar cuál usar con Minikube (preferir /var/run/ por compatibilidad)
+if [ -S "/var/run/cri-dockerd.sock" ]; then
+    CRI_SOCKET_PATH="unix:///var/run/cri-dockerd.sock"
+    echo "✅ Usando socket en: /var/run/cri-dockerd.sock"
+else
+    CRI_SOCKET_PATH="unix:///run/cri-dockerd.sock"
+    echo "✅ Usando socket en: /run/cri-dockerd.sock"
+fi
+
+# Verificar conectividad al socket antes de usar con Minikube
+echo "🔍 Verificando conectividad al socket: $CRI_SOCKET_PATH"
+if sudo crictl --runtime-endpoint="$CRI_SOCKET_PATH" version &>/dev/null; then
+    echo "✅ Socket cri-dockerd respondiendo correctamente"
+else
+    echo "❌ Socket cri-dockerd no responde"
+    echo "🔍 Intentando diagnóstico:"
+    sudo ls -la /run/cri-dockerd.sock /var/run/cri-dockerd.sock 2>/dev/null
+    exit 1
+fi
+
+# Verificar permisos específicos para Minikube
+echo "🔍 Verificando permisos del socket para Minikube..."
+SOCKET_FILE=$(echo "$CRI_SOCKET_PATH" | sed 's|unix://||')
+if sudo test -r "$SOCKET_FILE" && sudo test -w "$SOCKET_FILE"; then
+    echo "✅ Permisos de socket correctos"
+else
+    echo "⚠️ Ajustando permisos del socket..."
+    sudo chmod 666 "$SOCKET_FILE" 2>/dev/null || echo "No se pudieron ajustar permisos (puede ser normal)"
+fi
+
+sudo minikube start \
+    --driver=none \
+    --container-runtime=docker \
+    --cri-socket="$CRI_SOCKET_PATH"
 
 # Verificar estado
-sudo minikube status --profile=none-cluster
+sudo minikube status
 ```
 
 **Salida esperada:**
 ```
 ✅ Using the none driver based on user configuration
-✅ Starting control plane node none-cluster in cluster none-cluster
+✅ Starting control plane node minikube in cluster minikube
 🤹 Running on localhost (CPUs=4, Memory=8192MB, Disk=25600MB)...
-ℹ️ OS release is Ubuntu 22.04.3 LTS
+ℹ️ OS release is Ubuntu 24.04.3 LTS
+
+⚠️  Nota: Es posible que veas un warning sobre CNI bridge configs:
+E1105 10:22:58.873401 29629 start.go:444] unable to disable preinstalled bridge CNI(s): 
+failed to disable all bridge cni configs in "/etc/cni/net.d"
+
+📝 Este warning es NORMAL y no afecta el funcionamiento. Indica que Minikube 
+está intentando limpiar configuraciones CNI previas que no existen en una 
+instalación limpia.
+
 🐳 Preparing Kubernetes v1.28.3 on Docker 24.0.7...
     ▪ kubelet.resolv-conf=/run/systemd/resolve/resolv.conf
     ▪ Generating certificates and keys...
@@ -164,7 +543,7 @@ sudo minikube status --profile=none-cluster
 🔎 Verifying Kubernetes components...
     ▪ Using image gcr.io/k8s-minikube/storage-provisioner:v5
 🌟 Enabled addons: default-storageclass, storage-provisioner
-💡 kubectl is now configured to use "none-cluster" cluster and "default" namespace by default
+💡 kubectl is now configured to use "minikube" cluster and "default" namespace by default
 ```
 
 ---
@@ -211,7 +590,7 @@ echo ""
 
 # Verificar estado de Minikube
 echo "📊 Estado de Minikube:"
-sudo minikube status --profile=none-cluster
+sudo minikube status
 
 # Verificar nodos
 echo ""
@@ -236,7 +615,7 @@ kubectl cluster-info
 # Verificar addons habilitados
 echo ""
 echo "🔌 Addons habilitados:"
-sudo minikube addons list --profile=none-cluster | grep enabled
+sudo minikube addons list | grep enabled
 
 # Verificar configuración de kubelet
 echo ""
@@ -380,7 +759,7 @@ chmod +x ~/configurar-firewall.sh
 echo "=== CONFIGURANDO DASHBOARD DE KUBERNETES ==="
 
 # Habilitar addon de dashboard
-sudo minikube addons enable dashboard --profile=none-cluster
+sudo minikube addons enable dashboard
 
 # Verificar que el dashboard está ejecutándose
 kubectl get pods -n kubernetes-dashboard
@@ -453,7 +832,7 @@ echo "RAM: $(free -h | awk '/^Mem:/ {print $2}') total, $(free -h | awk '/^Mem:/
 # Verificar Minikube
 echo ""
 echo "🚀 Estado de Minikube:"
-sudo minikube status --profile=none-cluster
+sudo minikube status
 
 # Verificar kubectl
 echo ""
@@ -479,7 +858,7 @@ fi
 # Verificar addons
 echo ""
 echo "🔌 Addons habilitados:"
-sudo minikube addons list --profile=none-cluster | grep enabled
+sudo minikube addons list | grep enabled
 
 # Verificar recursos disponibles
 echo ""
@@ -528,7 +907,7 @@ CPU: 4 cores
 RAM: 8.0Gi total, 2.1Gi usado
 
 🚀 Estado de Minikube:
-none-cluster
+minikube
 type: Control Plane
 host: Running
 kubelet: Running
@@ -536,7 +915,7 @@ apiserver: Running
 kubeconfig: Configured
 
 🔧 Configuración de kubectl:
-none-cluster
+minikube
 NAME       STATUS   ROLES           AGE   VERSION
 azurevm    Ready    control-plane   5m    v1.28.3
 
@@ -575,10 +954,148 @@ kube-scheduler-azurevm             1/1     Running   0          5m
 
 ## 🔧 Troubleshooting
 
+### **Error: GUEST_MISSING_CONNTRACK**
+```bash
+# Error: Sorry, Kubernetes 1.20.2 requires conntrack to be installed in root's path
+
+# Solución 1: Instalar conntrack y dependencias
+sudo apt update
+sudo apt install -y conntrack socat ebtables ethtool
+
+# Verificar que conntrack está disponible para root
+sudo which conntrack
+sudo conntrack --version
+
+# Solución 2: Si el problema persiste, verificar PATH
+echo $PATH
+sudo echo $PATH
+
+# Solución 3: Reiniciar después de instalar
+sudo minikube delete
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
+
+# Solución 4: Verificar módulos del kernel
+sudo modprobe br_netfilter
+sudo modprobe overlay
+lsmod | grep -E "(br_netfilter|overlay)"
+```
+
+### **Error: GUEST_MISSING_CRICTL**
+```bash
+# Error: Sorry, Kubernetes 1.34.0 requires crictl to be installed in root's path
+
+# Solución 1: Instalar crictl
+CRICTL_VERSION="v1.28.0"
+curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" | sudo tar -C /usr/local/bin -xz
+sudo chmod +x /usr/local/bin/crictl
+
+# Verificar que crictl está disponible para root
+sudo which crictl
+sudo crictl --version
+
+# Solución 2: Si crictl no está en el PATH de root, crear enlace
+sudo ln -sf /usr/local/bin/crictl /usr/bin/crictl
+
+# Solución 3: Verificar PATH
+echo $PATH
+sudo echo $PATH
+
+# Solución 4: Reiniciar después de instalar
+sudo minikube delete
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
+
+# Verificar que todas las dependencias están instaladas
+which conntrack socat crictl ebtables ethtool
+sudo which conntrack socat crictl ebtables ethtool
+```
+
 ### **Error: The "none" driver requires root privileges**
 ```bash
 # Asegurarse de usar sudo
-sudo minikube start --driver=none --profile=none-cluster
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
+```
+
+### **Error: RUNTIME_ENABLE - cri-dockerd socket not found**
+```bash
+# Error: Failed to start container runtime: stat unix:///var/run/cri-dockerd.sock: exit status 1
+# Causa: El socket de cri-dockerd existe pero en ubicación diferente o no está funcionando
+
+# Solución 1: Verificar ubicación real del socket activo
+echo "🔍 Verificando sockets cri-dockerd activos..."
+sudo netstat -lx | grep cri-dockerd
+
+# Las ubicaciones más comunes son:
+# - /run/cri-dockerd.sock (Ubuntu 24.04+ más común)
+# - /var/run/cri-dockerd.sock (versiones anteriores)
+
+# Solución 2: Probar conectividad a ambas ubicaciones
+echo "Probando /run/cri-dockerd.sock:"
+sudo crictl --runtime-endpoint=unix:///run/cri-dockerd.sock version
+
+echo "Probando /var/run/cri-dockerd.sock:"
+sudo crictl --runtime-endpoint=unix:///var/run/cri-dockerd.sock version
+
+# Solución 3: Usar la ubicación que funcione en Minikube
+# Si /run/cri-dockerd.sock funciona:
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///run/cri-dockerd.sock
+
+# Si /var/run/cri-dockerd.sock funciona:
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
+
+# Solución 4: Verificar estado de servicios cri-dockerd
+sudo systemctl status cri-docker.service
+sudo systemctl status cri-docker.socket
+
+# Solución 5: Reiniciar servicios cri-dockerd en orden correcto
+sudo systemctl stop cri-docker.service
+sudo systemctl stop cri-docker.socket
+sudo systemctl start cri-docker.socket
+sudo systemctl start cri-docker.service
+
+# Esperar que los servicios se inicien
+sleep 5
+
+# Solución 6: Verificar que el socket existe
+ls -la /var/run/cri-dockerd.sock
+ls -la /run/cri-dockerd.sock
+# Debería mostrar: srwxrwxrwx 1 root root 0 <fecha> /run/cri-dockerd.sock (o similar)
+
+# Solución 7: Si el socket no existe, verificar logs
+sudo journalctl -u cri-docker.service --no-pager -n 20
+sudo journalctl -u cri-docker.socket --no-pager -n 20
+
+# Solución 8: Verificar Docker está funcionando
+sudo systemctl status docker
+docker version
+
+# Solución 9: Reinstalar cri-dockerd si es necesario
+# (Solo si las soluciones anteriores fallan)
+sudo systemctl stop cri-docker.service cri-docker.socket
+sudo systemctl disable cri-docker.service cri-docker.socket
+
+# Descargar e instalar nuevamente
+CRI_DOCKERD_VERSION="0.3.4"
+CRI_DOCKERD_URL="https://github.com/Mirantis/cri-dockerd/releases/download/v${CRI_DOCKERD_VERSION}/cri-dockerd-${CRI_DOCKERD_VERSION}.amd64.tgz"
+curl -L $CRI_DOCKERD_URL | sudo tar -C /usr/local/bin --strip-components=1 -xz
+sudo chmod +x /usr/local/bin/cri-dockerd
+
+# Reinstalar servicios
+sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.service -o /etc/systemd/system/cri-docker.service
+sudo curl -L https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.socket -o /etc/systemd/system/cri-docker.socket
+
+sudo systemctl daemon-reload
+sudo systemctl enable cri-docker.service cri-docker.socket
+sudo systemctl start cri-docker.socket
+sudo systemctl start cri-docker.service
+
+# Verificar después del reinicio
+sleep 5
+sudo netstat -lx | grep cri-dockerd
+
+# Solución 10: Usar script de diagnóstico automático
+# Si las soluciones anteriores no funcionan:
+chmod +x fix-cri-dockerd.sh
+./fix-cri-dockerd.sh
 ```
 
 ### **Error: kubectl configuration incorrect**
@@ -588,14 +1105,117 @@ sudo cp /root/.kube/config ~/.kube/config
 sudo chown $USER:$USER ~/.kube/config
 ```
 
+### **Error: containernetworking-plugins missing**
+```bash
+# Error: The none driver with Kubernetes v1.24+ requires containernetworking-plugins
+
+# Solución 1: Instalar containernetworking-plugins (método robusto)
+sudo mkdir -p /opt/cni/bin
+CNI_PLUGINS_VERSION="v1.3.0"
+CNI_TEMP_FILE="/tmp/cni-plugins-${CNI_PLUGINS_VERSION}.tgz"
+
+# Descargar primero a archivo temporal
+curl -L "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-amd64-${CNI_PLUGINS_VERSION}.tgz" -o "$CNI_TEMP_FILE"
+
+# Verificar descarga
+if [ -f "$CNI_TEMP_FILE" ] && [ -s "$CNI_TEMP_FILE" ]; then
+    echo "✅ Descarga exitosa"
+    sudo tar -C /opt/cni/bin -xzf "$CNI_TEMP_FILE"
+    rm -f "$CNI_TEMP_FILE"
+else
+    echo "❌ Error en descarga"
+fi
+
+# Solución 2: Si curl falla, verificar espacio y permisos
+df -h /tmp                              # Verificar espacio en /tmp
+df -h /opt                              # Verificar espacio en /opt
+sudo ls -la /opt/cni/                   # Verificar permisos
+
+# Solución 3: Instalación alternativa usando wget
+sudo mkdir -p /opt/cni/bin
+wget -O /tmp/cni-plugins.tgz "https://github.com/containernetworking/plugins/releases/download/v1.3.0/cni-plugins-linux-amd64-v1.3.0.tgz"
+sudo tar -C /opt/cni/bin -xzf /tmp/cni-plugins.tgz
+rm -f /tmp/cni-plugins.tgz
+
+# Solución 4: Verificar instalación
+ls -la /opt/cni/bin/
+sudo chmod -R 755 /opt/cni/bin
+
+# Solución 5: Verificar plugins críticos
+for plugin in bridge host-local loopback portmap; do
+    if [ -f "/opt/cni/bin/$plugin" ]; then
+        echo "✅ $plugin instalado"
+    else
+        echo "❌ $plugin faltante"
+    fi
+done
+
+# Solución 6: Usar script especializado para problemas de descarga
+# Si los métodos anteriores fallan, usar el script dedicado:
+chmod +x install-cni-plugins.sh
+./install-cni-plugins.sh
+
+# Solución 3: Reiniciar después de instalar
+sudo minikube delete
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
+
+# Verificar que todos los plugins están disponibles
+ls -la /opt/cni/bin/ | grep -E "(bridge|host-local|loopback)"
+```
+
+### **Error: CNI configuration directory not found**
+```bash
+# Error: unable to disable preinstalled bridge CNI(s): failed to disable all bridge cni configs in "/etc/cni/net.d": find: '/etc/cni/net.d': No such file or directory
+
+# Solución 1: Crear directorio CNI de configuración
+sudo mkdir -p /etc/cni/net.d
+sudo chmod 755 /etc/cni/net.d
+
+# Solución 2: Verificar estructura completa de directorios CNI
+echo "📁 Verificando estructura CNI:"
+echo "Binarios CNI: /opt/cni/bin"
+ls -la /opt/cni/bin/ | head -5
+echo "Configuración CNI: /etc/cni/net.d"
+ls -la /etc/cni/net.d/ 2>/dev/null || echo "Directorio vacío (normal para nueva instalación)"
+
+# Solución 3: Limpiar configuraciones conflictivas si existen
+if [ -d "/etc/cni/net.d" ]; then
+    echo "🧹 Limpiando configuraciones CNI conflictivas..."
+    
+    # Deshabilitar configuraciones bridge previas
+    sudo find /etc/cni/net.d -name "*bridge*" -not -name "*.mk_disabled" -type f 2>/dev/null | while read -r file; do
+        if [ -f "$file" ]; then
+            echo "Deshabilitando: $file"
+            sudo mv "$file" "${file}.mk_disabled"
+        fi
+    done
+    
+    # Deshabilitar configuraciones podman si existen
+    sudo find /etc/cni/net.d -name "*podman*" -not -name "*.mk_disabled" -type f 2>/dev/null | while read -r file; do
+        if [ -f "$file" ]; then
+            echo "Deshabilitando: $file"
+            sudo mv "$file" "${file}.mk_disabled"
+        fi
+    done
+fi
+
+# Solución 4: Verificar que no hay conflictos de red
+echo "🔍 Verificando interfaces de red:"
+ip link show | grep -E "(bridge|docker|podman)" || echo "No hay interfaces conflictivas"
+
+# Solución 5: Reiniciar Minikube después de configurar CNI
+sudo minikube delete
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
+```
+
 ### **Error: Port already in use**
 ```bash
 # Verificar qué proceso usa el puerto
 sudo netstat -tulnp | grep :6443
 
 # Detener Minikube y reiniciar
-sudo minikube stop --profile=none-cluster
-sudo minikube start --driver=none --profile=none-cluster
+sudo minikube stop
+sudo minikube start --driver=none --container-runtime=docker --cri-socket=unix:///var/run/cri-dockerd.sock
 ```
 
 ### **Error: Cannot access services externally**
@@ -612,6 +1232,10 @@ sudo ufw allow 30000:32767/tcp
 
 ## 📝 Checklist de completado
 
+- [ ] Dependencias básicas instaladas (conntrack, socat, ebtables, ethtool)
+- [ ] crictl instalado y funcionando
+- [ ] cri-dockerd instalado y servicios activos
+- [ ] containernetworking-plugins instalados en /opt/cni/bin
 - [ ] Driver "none" configurado correctamente
 - [ ] Cluster iniciado con éxito
 - [ ] kubectl funcionando sin sudo
