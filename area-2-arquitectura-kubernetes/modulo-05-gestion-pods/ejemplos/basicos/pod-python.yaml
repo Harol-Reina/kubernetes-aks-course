@@ -1,0 +1,47 @@
+# Pod con Python HTTP Server
+# Uso: kubectl apply -f pod-python.yaml
+# Acceso: kubectl port-forward pod/python-server 8080:8080
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: python-server
+  labels:
+    app: python
+    language: python
+    example: "true"
+    category: basico
+  annotations:
+    description: "Servidor HTTP simple con Python"
+spec:
+  containers:
+  - name: server
+    image: python:alpine
+    command: ['sh', '-c']
+    args:
+    - |
+      cat > index.html <<EOF
+      <!DOCTYPE html>
+      <html>
+      <head><title>Python Server</title></head>
+      <body>
+        <h1>🐍 Servidor Python en Kubernetes</h1>
+        <p>Pod: $(hostname)</p>
+        <p>Fecha: $(date)</p>
+      </body>
+      </html>
+      EOF
+      python -m http.server 8080
+    ports:
+    - containerPort: 8080
+      name: http
+    env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"

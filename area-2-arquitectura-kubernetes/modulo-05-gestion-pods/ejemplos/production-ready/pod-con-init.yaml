@@ -1,0 +1,107 @@
+# Pod con Init Containers
+# Uso: kubectl apply -f pod-con-init.yaml
+# Observar inicialización:
+#   kubectl get pod pod-con-init --watch
+#   kubectl logs pod-con-init -c init-setup
+#   kubectl logs pod-con-init -c init-download
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-con-init
+  labels:
+    app: web-app
+    example: "true"
+    category: production-ready
+  annotations:
+    description: "Pod con init containers para preparar el entorno"
+spec:
+  # Init Containers se ejecutan antes que los contenedores principales
+  # Se ejecutan secuencialmente y deben completarse exitosamente
+  initContainers:
+  
+  # Init 1: Verificar dependencias
+  - name: init-setup
+    image: busybox:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Init Container 1: Verificando dependencias..."
+      echo "Esperando que el servicio de base de datos esté listo..."
+      sleep 5
+      echo "✓ Dependencias verificadas"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Init 2: Descargar configuración
+  - name: init-download
+    image: alpine:latest
+    volumeMounts:
+    - name: config-volume
+      mountPath: /config
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Init Container 2: Descargando configuración..."
+      apk add --no-cache curl
+      
+      # Simular descarga de configuración
+      cat > /config/app-config.json <<EOF
+      {
+        "environment": "production",
+        "database": "postgres://db:5432",
+        "cache": "redis://cache:6379",
+        "log_level": "info"
+      }
+      EOF
+      
+      echo "✓ Configuración descargada"
+      cat /config/app-config.json
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Contenedor principal
+  containers:
+  - name: app
+    image: alpine:latest
+    volumeMounts:
+    - name: config-volume
+      mountPath: /config
+      readOnly: true
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Aplicación iniciada"
+      echo "Leyendo configuración desde init containers..."
+      cat /config/app-config.json
+      echo ""
+      echo "Aplicación corriendo con configuración cargada"
+      
+      # Mantener el pod corriendo
+      while true; do
+        echo "App running at $(date)"
+        sleep 30
+      done
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: config-volume
+    emptyDir: {}
+  
+  restartPolicy: Always

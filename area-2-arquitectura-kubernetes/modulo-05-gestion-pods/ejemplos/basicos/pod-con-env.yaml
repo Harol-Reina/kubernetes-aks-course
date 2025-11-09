@@ -1,0 +1,59 @@
+# Pod con múltiples variables de entorno
+# Uso: kubectl apply -f pod-con-env.yaml
+# Verificar: kubectl exec env-demo -- env
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-demo
+  labels:
+    app: env-demo
+    example: "true"
+    category: basico
+  annotations:
+    description: "Demostración de variables de entorno"
+spec:
+  containers:
+  - name: alpine
+    image: alpine:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "=== Variables de Entorno ==="
+      echo "ENV: $ENV"
+      echo "APP_NAME: $APP_NAME"
+      echo "VERSION: $VERSION"
+      echo "LOG_LEVEL: $LOG_LEVEL"
+      echo "============================="
+      
+      # Mantener contenedor activo
+      tail -f /dev/null
+    env:
+    - name: ENV
+      value: "production"
+    - name: APP_NAME
+      value: "mi-aplicacion"
+    - name: VERSION
+      value: "1.0.0"
+    - name: LOG_LEVEL
+      value: "info"
+    # Variable desde metadatos del Pod
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"

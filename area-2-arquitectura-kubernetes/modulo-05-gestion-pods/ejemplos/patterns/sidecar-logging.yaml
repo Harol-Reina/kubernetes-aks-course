@@ -1,0 +1,86 @@
+# Patrón Sidecar: Aplicación + Procesador de Logs
+# Uso: kubectl apply -f sidecar-logging.yaml
+# Ver logs:
+#   kubectl logs app-con-sidecar -c app -f
+#   kubectl logs app-con-sidecar -c log-processor -f
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-con-sidecar
+  labels:
+    app: web-app
+    pattern: sidecar
+    example: "true"
+    category: pattern
+  annotations:
+    description: "Patrón Sidecar - App principal + Log processor"
+spec:
+  # Volumen compartido entre contenedores
+  volumes:
+  - name: shared-logs
+    emptyDir: {}
+  
+  containers:
+  # Contenedor principal: Aplicación que genera logs
+  - name: app
+    image: busybox:latest
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Aplicación iniciada en $(hostname)"
+      while true; do
+        timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        echo "$timestamp - [INFO] Request procesado" >> /var/log/app.log
+        echo "$timestamp - [DEBUG] Detalle técnico" >> /var/log/app.log
+        sleep 2
+      done
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Sidecar: Procesa y analiza logs
+  - name: log-processor
+    image: busybox:latest
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Sidecar iniciado - Procesando logs..."
+      while true; do
+        if [ -f /var/log/app.log ]; then
+          lines=$(wc -l < /var/log/app.log)
+          errors=$(grep -c ERROR /var/log/app.log || echo 0)
+          info=$(grep -c INFO /var/log/app.log || echo 0)
+          
+          echo "=== Estadísticas de Logs ==="
+          echo "Total líneas: $lines"
+          echo "INFO: $info"
+          echo "ERRORS: $errors"
+          echo "=========================="
+          
+          # Rotar logs si hay muchas líneas
+          if [ $lines -gt 100 ]; then
+            echo "Rotando logs..."
+            tail -50 /var/log/app.log > /var/log/app.log.tmp
+            mv /var/log/app.log.tmp /var/log/app.log
+          fi
+        fi
+        sleep 10
+      done
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"

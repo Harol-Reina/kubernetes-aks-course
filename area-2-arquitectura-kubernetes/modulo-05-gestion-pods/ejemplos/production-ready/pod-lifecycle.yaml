@@ -1,0 +1,107 @@
+# Pod con gestión completa del ciclo de vida
+# Uso: kubectl apply -f pod-lifecycle.yaml
+# Incluye: lifecycle hooks, graceful shutdown, preStop
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-lifecycle
+  labels:
+    app: lifecycle-demo
+    example: "true"
+    category: production-ready
+  annotations:
+    description: "Pod con hooks de ciclo de vida completos"
+spec:
+  # Tiempo de gracia para shutdown (default: 30s)
+  terminationGracePeriodSeconds: 60
+  
+  containers:
+  - name: app
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+      name: http
+    
+    # Lifecycle hooks
+    lifecycle:
+      # postStart: se ejecuta INMEDIATAMENTE después de crear el contenedor
+      # NO garantiza que se ejecute antes del ENTRYPOINT
+      postStart:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "Container iniciado en $(date)" > /tmp/startup.log
+            echo "Pod: $HOSTNAME" >> /tmp/startup.log
+            
+            # Preparar el entorno
+            mkdir -p /var/log/app
+            touch /var/log/app/access.log
+            
+            # Crear página de inicio personalizada
+            cat > /usr/share/nginx/html/index.html <<EOF
+            <html>
+            <head><title>Pod Lifecycle Demo</title></head>
+            <body>
+              <h1>Pod: $HOSTNAME</h1>
+              <p>Started: $(date)</p>
+              <p>Lifecycle hooks enabled</p>
+            </body>
+            </html>
+            EOF
+      
+      # preStop: se ejecuta ANTES de terminar el contenedor
+      # Útil para graceful shutdown, guardar estado, cerrar conexiones
+      preStop:
+        exec:
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "$(date) - PreStop hook ejecutado" >> /tmp/shutdown.log
+            echo "Cerrando conexiones activas..." >> /tmp/shutdown.log
+            
+            # Esperar que se completen las requests activas (simulado)
+            sleep 10
+            
+            # Notificar a sistemas externos
+            echo "Notificando a load balancer..." >> /tmp/shutdown.log
+            
+            # Guardar métricas finales
+            echo "Guardando estado final..." >> /tmp/shutdown.log
+            echo "Shutdown completado gracefully" >> /tmp/shutdown.log
+    
+    # Health probes
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+    
+    volumeMounts:
+    - name: logs
+      mountPath: /tmp
+  
+  volumes:
+  - name: logs
+    emptyDir: {}
+  
+  restartPolicy: Always

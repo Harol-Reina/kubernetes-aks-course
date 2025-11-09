@@ -1,0 +1,29 @@
+# Pod con imagen incorrecta: ImagePullBackOff
+# Uso: kubectl apply -f pod-imagepull-error.yaml
+# Debug:
+#   kubectl describe pod pod-imagepull-error
+#   kubectl get events --field-selector involvedObject.name=pod-imagepull-error
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-imagepull-error
+  labels:
+    example: "true"
+    category: troubleshooting
+    issue: imagepull
+  annotations:
+    description: "Ejemplo de Pod con imagen que no existe"
+spec:
+  containers:
+  - name: wrong-image
+    image: nginx:version-que-no-existe
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"

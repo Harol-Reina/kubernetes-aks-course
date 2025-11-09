@@ -1,0 +1,93 @@
+# Patrón Adapter: Normalizar salida de logs
+# Uso: kubectl apply -f adapter-logging.yaml
+# Ver logs normalizados:
+#   kubectl logs app-con-adapter -c log-adapter -f
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-con-adapter
+  labels:
+    app: legacy-app
+    pattern: adapter
+    example: "true"
+    category: pattern
+  annotations:
+    description: "Patrón Adapter - Normaliza logs de formato legacy a JSON"
+spec:
+  volumes:
+  - name: shared-logs
+    emptyDir: {}
+  
+  containers:
+  # Aplicación legacy que genera logs en formato no estándar
+  - name: legacy-app
+    image: busybox:latest
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "Legacy App Started on $(hostname)"
+      while true; do
+        # Formato legacy: timestamp|level|message
+        timestamp=$(date '+%s')
+        level=$((RANDOM % 3))
+        case $level in
+          0) lvl="INFO" ;;
+          1) lvl="WARN" ;;
+          2) lvl="ERROR" ;;
+        esac
+        echo "$timestamp|$lvl|User request processed" >> /var/log/legacy.log
+        sleep 2
+      done
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Adapter: Convierte logs legacy a formato JSON estándar
+  - name: log-adapter
+    image: alpine:latest
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log
+    command: ['sh', '-c']
+    args:
+    - |
+      apk add --no-cache jq
+      echo "Adapter iniciado - Convirtiendo logs legacy a JSON..."
+      
+      # Seguir el archivo de logs
+      touch /var/log/legacy.log
+      tail -F /var/log/legacy.log | while read line; do
+        # Parsear formato legacy: timestamp|level|message
+        timestamp=$(echo "$line" | cut -d'|' -f1)
+        level=$(echo "$line" | cut -d'|' -f2)
+        message=$(echo "$line" | cut -d'|' -f3)
+        
+        # Convertir timestamp Unix a ISO8601
+        iso_time=$(date -d @"$timestamp" -Iseconds 2>/dev/null || date -Iseconds)
+        
+        # Generar JSON estructurado
+        cat <<EOF
+      {
+        "timestamp": "$iso_time",
+        "level": "$level",
+        "message": "$message",
+        "pod": "$(hostname)",
+        "source": "legacy-app"
+      }
+      EOF
+      done
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"

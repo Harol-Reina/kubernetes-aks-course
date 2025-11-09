@@ -1,0 +1,83 @@
+# Patrón Ambassador: Proxy para conexiones externas
+# Uso: kubectl apply -f ambassador-proxy.yaml
+# Este patrón permite cambiar el backend sin modificar la aplicación
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-con-ambassador
+  labels:
+    app: backend-app
+    pattern: ambassador
+    example: "true"
+    category: pattern
+  annotations:
+    description: "Patrón Ambassador - App + Proxy para servicios externos"
+spec:
+  containers:
+  # Contenedor principal: Aplicación
+  - name: app
+    image: alpine:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      apk add --no-cache curl
+      echo "Aplicación iniciada - Usando ambassador proxy"
+      while true; do
+        echo "=== $(date) ==="
+        echo "Consultando datos vía ambassador (localhost:8080)..."
+        curl -s http://localhost:8080/api || echo "Sin conexión"
+        sleep 5
+      done
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Ambassador: Proxy que abstrae el acceso a servicios externos
+  - name: ambassador-proxy
+    image: nginx:alpine
+    ports:
+    - containerPort: 8080
+      name: proxy
+    volumeMounts:
+    - name: proxy-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  volumes:
+  - name: proxy-config
+    configMap:
+      name: ambassador-config
+      optional: true
+
+---
+# ConfigMap con la configuración del proxy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ambassador-config
+data:
+  nginx.conf: |
+    events {}
+    http {
+      server {
+        listen 8080;
+        
+        location /api {
+          # Proxy a servicio externo (simular con httpbin)
+          proxy_pass https://httpbin.org/json;
+          proxy_set_header Host httpbin.org;
+        }
+      }
+    }

@@ -1,0 +1,27 @@
+# Pod con recursos insuficientes
+# Uso: kubectl apply -f pod-recursos-insuficientes.yaml
+# Debug:
+#   kubectl describe pod pod-sin-recursos
+#   kubectl top pod pod-sin-recursos (si metrics-server está instalado)
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-sin-recursos
+  labels:
+    example: "true"
+    category: troubleshooting
+    issue: resources
+  annotations:
+    description: "Pod que queda en Pending por falta de recursos"
+spec:
+  containers:
+  - name: resource-hog
+    image: nginx:alpine
+    resources:
+      requests:
+        memory: "100Gi"  # Solicita 100GB - probablemente no disponible
+        cpu: "50"        # Solicita 50 CPUs - excesivo
+      limits:
+        memory: "100Gi"
+        cpu: "50"

@@ -1,0 +1,67 @@
+# Pod con dos contenedores que se comunican por localhost
+# Uso: kubectl apply -f pod-dos-contenedores.yaml
+# Test comunicación:
+#   kubectl exec -it dos-contenedores -c nginx -- sh
+#   apk add curl && curl localhost:8080
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dos-contenedores
+  labels:
+    app: multi-container
+    tier: web
+    example: "true"
+    category: multi-contenedor
+  annotations:
+    description: "Dos contenedores compartiendo misma IP/red"
+spec:
+  containers:
+  # Contenedor 1: NGINX en puerto 80
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+      name: http
+    command: ['sh', '-c']
+    args:
+    - |
+      cat > /usr/share/nginx/html/index.html <<EOF
+      <h1>Contenedor 1: NGINX</h1>
+      <p>Puerto: 80</p>
+      <p>Pod: $(hostname)</p>
+      EOF
+      nginx -g 'daemon off;'
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Contenedor 2: Python en puerto 8080
+  - name: python-server
+    image: python:alpine
+    ports:
+    - containerPort: 8080
+      name: http-alt
+    command: ['sh', '-c']
+    args:
+    - |
+      cat > index.html <<EOF
+      <h1>Contenedor 2: Python</h1>
+      <p>Puerto: 8080</p>
+      <p>Pod: $(hostname)</p>
+      EOF
+      python -m http.server 8080
+    env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"

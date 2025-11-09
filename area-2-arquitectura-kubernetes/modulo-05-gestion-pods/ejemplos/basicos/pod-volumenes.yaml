@@ -1,0 +1,129 @@
+# Pod con múltiples volúmenes y tipos
+# Uso: kubectl apply -f pod-volumenes.yaml
+# Verificar:
+#   kubectl exec -it pod-volumenes -- ls -la /data
+#   kubectl exec -it pod-volumenes -- cat /config/app.conf
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-volumenes
+  labels:
+    app: storage-demo
+    example: "true"
+    category: basicos
+  annotations:
+    description: "Demostración de diferentes tipos de volúmenes"
+spec:
+  containers:
+  - name: app
+    image: alpine:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "=== Información de Volúmenes ==="
+      echo ""
+      echo "1. EmptyDir (temporal):"
+      ls -lh /data/
+      echo "Escribiendo archivo temporal..."
+      echo "Datos temporales $(date)" > /data/temp.txt
+      cat /data/temp.txt
+      echo ""
+      
+      echo "2. ConfigMap (configuración):"
+      cat /config/app.conf
+      echo ""
+      
+      echo "3. Secret (credenciales):"
+      echo "Usuario: $(cat /secrets/username)"
+      echo "Password: [OCULTO]"
+      echo ""
+      
+      echo "4. Downward API (metadata):"
+      cat /podinfo/labels
+      cat /podinfo/annotations
+      echo ""
+      
+      # Mantener el pod corriendo
+      echo "Pod corriendo - Explorar con kubectl exec"
+      tail -f /dev/null
+    
+    volumeMounts:
+    # 1. EmptyDir: volumen temporal, se elimina cuando se elimina el Pod
+    - name: data
+      mountPath: /data
+    
+    # 2. ConfigMap: configuración de la aplicación
+    - name: config
+      mountPath: /config
+      readOnly: true
+    
+    # 3. Secret: credenciales sensibles
+    - name: secrets
+      mountPath: /secrets
+      readOnly: true
+    
+    # 4. Downward API: metadata del Pod
+    - name: podinfo
+      mountPath: /podinfo
+      readOnly: true
+    
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  # EmptyDir: almacenamiento temporal
+  - name: data
+    emptyDir:
+      sizeLimit: 100Mi
+  
+  # ConfigMap: configuración
+  - name: config
+    configMap:
+      name: app-config
+  
+  # Secret: datos sensibles
+  - name: secrets
+    secret:
+      secretName: app-secrets
+  
+  # Downward API: metadata del Pod
+  - name: podinfo
+    downwardAPI:
+      items:
+      - path: labels
+        fieldRef:
+          fieldPath: metadata.labels
+      - path: annotations
+        fieldRef:
+          fieldPath: metadata.annotations
+
+---
+# ConfigMap con configuración
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  app.conf: |
+    # Configuración de la aplicación
+    environment=production
+    log_level=info
+    max_connections=100
+    timeout=30s
+
+---
+# Secret con credenciales
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+stringData:
+  username: admin
+  password: super-secret-password-123
