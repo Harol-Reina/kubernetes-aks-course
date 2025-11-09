@@ -3282,19 +3282,19 @@ Antes de continuar al Área 2, asegúrate de poder:
 ## 📂 Recursos del Módulo
 
 - **🔧 [Laboratorios](./laboratorios/)**
-  - [Lab 1: Primer Contenedor](./laboratorios/primer-contenedor-lab.md) ⏱️ 30min
-  - [Lab 2: Imágenes Personalizadas](./laboratorios/imagenes-personalizadas-lab.md) ⏱️ 45min
-  - [Lab 3: Volúmenes y Persistencia](./laboratorios/volumenes-persistencia-lab.md) ⏱️ 40min
-  - [Lab 4: Redes Docker](./laboratorios/redes-docker-lab.md) ⏱️ 35min
-  - [Lab 5: Aislamiento de Namespaces](./laboratorios/namespaces-isolation-lab.md) ⏱️ 30min
-  - [Lab 6: Docker Compose - Evolución](./laboratorios/docker-compose-evolution-lab.md) ⏱️ 45min
-  - [Instalación de Docker](./laboratorios/lab-docker-install.md)
-  - [Comandos básicos](./laboratorios/docker-commands-guide.md)
-  - [Ejercicios prácticos](./laboratorios/docker-exercises.md)
+  - [Lab 1: Instalación de Docker](./laboratorios/lab-docker-install.md) ⏱️ 60min
+  - [Lab 2: Primer Contenedor](./laboratorios/primer-contenedor-lab.md) ⏱️ 30min
+  - [Lab 3: Namespaces y Aislamiento](./laboratorios/namespaces-isolation-lab.md) ⏱️ 30min
+  - [Lab 4: Imágenes Personalizadas](./laboratorios/imagenes-personalizadas-lab.md) ⏱️ 45min
+  - [Lab 5: Volúmenes y Persistencia](./laboratorios/volumenes-persistencia-lab.md) ⏱️ 40min
+  - [Lab 6: Redes Docker](./laboratorios/redes-docker-lab.md) ⏱️ 50min
+  - [Lab 7: Docker Compose - Evolución](./laboratorios/docker-compose-evolution-lab.md) ⏱️ 45min
+  - [Lab 8: Ejercicios Prácticos](./laboratorios/docker-exercises.md) ⏱️ Variable
+  - [Guía de Comandos](./laboratorios/docker-commands-guide.md) 📖 Referencia
 
-- **📝 [Ejemplos](./ejemplos/)**
-  - [Dockerfiles básicos](./ejemplos/basic-dockerfiles/)
-  - [Aplicaciones de ejemplo](./ejemplos/sample-apps/)
+- **📝 [Ejemplos de código](../ejemplos/)**
+  - [Dockerfile Node.js](../ejemplos/Dockerfile.nodejs)
+  - [Docker Compose](../ejemplos/docker-compose.yml)
 
 ---
 
