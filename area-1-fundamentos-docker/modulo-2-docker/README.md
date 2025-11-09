@@ -1303,101 +1303,101 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
        </script>
    </body>
    </html>
-EOF
+  EOF
    
    # Crear un servidor simple en Python
    cat > server.py << 'EOF'
-#!/usr/bin/env python3
-from http.server import HTTPServer, SimpleHTTPRequestHandler
-import socket
-import os
+  #!/usr/bin/env python3
+  from http.server import HTTPServer, SimpleHTTPRequestHandler
+  import socket
+  import os
 
-class MyHandler(SimpleHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/hostname':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            hostname = socket.gethostname()
-            self.wfile.write(hostname.encode())
-        else:
-            super().do_GET()
+  class MyHandler(SimpleHTTPRequestHandler):
+      def do_GET(self):
+          if self.path == '/hostname':
+              self.send_response(200)
+              self.send_header('Content-type', 'text/plain')
+              self.end_headers()
+              hostname = socket.gethostname()
+              self.wfile.write(hostname.encode())
+          else:
+              super().do_GET()
 
-if __name__ == '__main__':
-    port = int(os.getenv('PORT', 8000))
-    server = HTTPServer(('', port), MyHandler)
-    print(f'Servidor corriendo en puerto {port}...')
-    server.serve_forever()
-EOF
+  if __name__ == '__main__':
+      port = int(os.getenv('PORT', 8000))
+      server = HTTPServer(('', port), MyHandler)
+      print(f'Servidor corriendo en puerto {port}...')
+      server.serve_forever()
+  EOF
    
-   chmod +x server.py
+  chmod +x server.py
    
-   # Crear Dockerfile
+  # Crear Dockerfile
    cat > Dockerfile << 'EOF'
-# Imagen base oficial de Python
-FROM python:3.11-slim
+  # Imagen base oficial de Python
+  FROM python:3.11-slim
 
-# Metadata
-LABEL maintainer="tu-email@ejemplo.com"
-LABEL description="Mi primera imagen Docker personalizada"
+  # Metadata
+  LABEL maintainer="tu-email@ejemplo.com"
+  LABEL description="Mi primera imagen Docker personalizada"
 
-# Establecer directorio de trabajo
-WORKDIR /app
+  # Establecer directorio de trabajo
+  WORKDIR /app
 
-# Copiar archivos al contenedor
-COPY index.html .
-COPY server.py .
+  # Copiar archivos al contenedor
+  COPY index.html .
+  COPY server.py .
 
-# Hacer ejecutable el script
-RUN chmod +x server.py
+  # Hacer ejecutable el script
+  RUN chmod +x server.py
 
-# Exponer puerto
-EXPOSE 8000
+  # Exponer puerto
+  EXPOSE 8000
 
-# Variable de entorno por defecto
-ENV PORT=8000
+  # Variable de entorno por defecto
+  ENV PORT=8000
 
-# Comando que se ejecuta al iniciar el contenedor
-CMD ["python3", "server.py"]
-EOF
+  # Comando que se ejecuta al iniciar el contenedor
+  CMD ["python3", "server.py"]
+  EOF
    
-   # Construir la imagen
-   docker build -t mi-web-app:v1.0 .
-   
-   # Ver la imagen creada
-   docker images | grep mi-web-app
-   
-   # Ver las capas de la imagen
-   docker history mi-web-app:v1.0
-   
-   # Ejecutar contenedor desde tu imagen
-   docker run -d \
-     --name mi-app-1 \
-     -p 8082:8000 \
-     mi-web-app:v1.0
-   
-   # Probar la aplicación
-   curl http://localhost:8082
-   curl http://localhost:8082/hostname
-   
-   # Escalar: Ejecutar múltiples instancias
-   docker run -d --name mi-app-2 -p 8083:8000 mi-web-app:v1.0
-   docker run -d --name mi-app-3 -p 8084:8000 mi-web-app:v1.0
-   
-   # Ver todas las instancias
-   docker ps | grep mi-app
-   
-   # Probar que cada una responde con su propio hostname
-   curl http://localhost:8082/hostname
-   curl http://localhost:8083/hostname
-   curl http://localhost:8084/hostname
-   
-   # Acceder desde el navegador
-   echo "Abre en tu navegador:"
-   echo "http://<IP_PUBLICA>:8082"
-   echo "http://<IP_PUBLICA>:8083"
-   echo "http://<IP_PUBLICA>:8084"
-   ```
+  # Construir la imagen
+  docker build -t mi-web-app:v1.0 .
+  
+  # Ver la imagen creada
+  docker images | grep mi-web-app
+  
+  # Ver las capas de la imagen
+  docker history mi-web-app:v1.0
+  
+  # Ejecutar contenedor desde tu imagen
+  docker run -d \
+    --name mi-app-1 \
+    -p 8082:8000 \
+    mi-web-app:v1.0
+  
+  # Probar la aplicación
+  curl http://localhost:8082
+  curl http://localhost:8082/hostname
+  
+  # Escalar: Ejecutar múltiples instancias
+  docker run -d --name mi-app-2 -p 8083:8000 mi-web-app:v1.0
+  docker run -d --name mi-app-3 -p 8084:8000 mi-web-app:v1.0
+  
+  # Ver todas las instancias
+  docker ps | grep mi-app
+  
+  # Probar que cada una responde con su propio hostname
+  curl http://localhost:8082/hostname
+  curl http://localhost:8083/hostname
+  curl http://localhost:8084/hostname
+  
+  # Acceder desde el navegador
+  echo "Abre en tu navegador:"
+  echo "http://<IP_PUBLICA>:8082"
+  echo "http://<IP_PUBLICA>:8083"
+  echo "http://<IP_PUBLICA>:8084"
+ ```
 
 10. **Ejercicio 7: Docker Compose - Aplicación multi-contenedor**
     ```bash
