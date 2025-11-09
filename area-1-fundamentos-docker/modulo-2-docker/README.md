@@ -972,22 +972,21 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 | **rkt** | Runtime de contenedores de CoreOS | Alta seguridad (discontinuado) |
 
 ---
-
 ## 🧪 7. Laboratorio práctico: Instalación y primeros pasos con Docker
 
-**Objetivo**: Instalar Docker en la VM de Azure y ejecutar los primeros contenedores.
+**Objetivo**: Instalar Docker Engine más reciente con Docker Compose v2 integrado y ejecutar los primeros contenedores.
 
 ### 🔧 Pasos:
 
 1. **Conectarse a la VM creada en el Módulo 1**
 ```bash
-   ssh azureuser@<IP_PUBLICA>
+ssh azureuser@<IP_PUBLICA>
 ```
 
-2. **Instalar Docker**
+2. **Instalar Docker Engine (Incluye Docker Compose v2)**
 ```bash
-   # Actualizar el sistema
-   sudo apt update
+# Actualizar el sistema
+sudo apt update
    
    # Instalar paquetes necesarios
    sudo apt install -y apt-transport-https ca-certificates curl gnupg lsb-release
@@ -998,32 +997,45 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    # Agregar repositorio Docker
    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
    
-   # Instalar Docker Engine
+   # Instalar Docker Engine (incluye Docker Compose v2 como plugin)
    sudo apt update
-   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin
    
    # Agregar usuario al grupo docker
    sudo usermod -aG docker $USER
    
-   # Verificar instalación
+   # Verificar instalación de Docker
    docker --version
+   # Ejemplo: Docker version 24.0.7, build afdd53b
+   
+   # Verificar Docker Compose v2 (integrado)
+   docker compose version
+   # Ejemplo: Docker Compose version v2.23.3
+   
+   # Verificar BuildKit (motor de build moderno)
+   docker buildx version
+   # Ejemplo: github.com/docker/buildx v0.12.0
+   
+   # Habilitar BuildKit por defecto
+   echo 'export DOCKER_BUILDKIT=1' >> ~/.bashrc
+   source ~/.bashrc
 ```
 
 3. **Primeros comandos Docker**
 ```bash
-   # Reiniciar sesión SSH para aplicar cambios de grupo
-   exit
-   ssh azureuser@<IP_PUBLICA>
-   
-   # Hello World de Docker
-   docker run hello-world
-   
-   # Ver qué pasó
-   docker ps -a
-   docker images
+  # Reiniciar sesión SSH para aplicar cambios de grupo
+  exit
+  ssh azureuser@<IP_PUBLICA>
+
+  # Hello World de Docker
+  docker run hello-world
+
+  # Ver qué pasó
+  docker ps -a
+  docker images
    
    # Ejecutar contenedor interactivo
-   docker run -it ubuntu:22.04 bash
+   docker run -it ubuntu:24.04 bash
    # Dentro del contenedor:
    ls /
    cat /etc/os-release
@@ -1397,88 +1409,111 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
   echo "http://<IP_PUBLICA>:8082"
   echo "http://<IP_PUBLICA>:8083"
   echo "http://<IP_PUBLICA>:8084"
- ```
+```
 
 10. **Ejercicio 7: Docker Compose - Aplicación multi-contenedor**
 ```bash
-  # Crear directorio para el proyecto
-  mkdir ~/docker-compose-demo
-  cd ~/docker-compose-demo
-  
-  # Crear docker-compose.yml
-  cat > docker-compose.yml << 'EOF'
-  version: '3.8'
+# Crear directorio para el proyecto
+mkdir ~/docker-compose-demo
+cd ~/docker-compose-demo
 
-  services:
-    # Base de datos PostgreSQL
-    database:
-      image: postgres:15
-      container_name: app-database
-      environment:
-        POSTGRES_USER: admin
-        POSTGRES_PASSWORD: secret123
-        POSTGRES_DB: aplicacion
-      volumes:
-        - db-data:/var/lib/postgresql/data
-      networks:
-        - app-network
-      healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U admin"]
-        interval: 10s
-        timeout: 5s
-        retries: 5
+# Crear compose.yaml (nombre preferido en Docker Compose v2)
+cat > compose.yaml << 'EOF'
+# Docker Compose v2 - No requiere especificar version
+services:
+  # Base de datos PostgreSQL
+  database:
+    image: postgres:16
+    container_name: app-database
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret123
+      POSTGRES_DB: aplicacion
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d aplicacion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    restart: unless-stopped
 
-    # Cache Redis
-    cache:
-      image: redis:7.2-alpine
-      container_name: app-cache
-      networks:
-        - app-network
-      healthcheck:
-        test: ["CMD", "redis-cli", "ping"]
-        interval: 10s
-        timeout: 3s
-        retries: 5
+  # Cache Redis
+  cache:
+    image: redis:7.2-alpine
+    container_name: app-cache
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
 
-    # Interfaz web de administración
-    adminer:
-      image: adminer
-      container_name: app-adminer
-      ports:
-        - "8080:8080"
-      networks:
-        - app-network
-      depends_on:
-        database:
-          condition: service_healthy
+  # Interfaz web de administración
+  adminer:
+    image: adminer:latest
+    container_name: app-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
 
-    # Aplicación web (nginx)
-    web:
-      image: nginx:alpine
-      container_name: app-web
-      ports:
-        - "8090:80"
-      networks:
-        - app-network
-      volumes:
-        - ./html:/usr/share/nginx/html:ro
-      depends_on:
-        - database
-        - cache
+  # Aplicación web (nginx)
+  web:
+    image: nginx:alpine
+    container_name: app-web
+    ports:
+      - "8090:80"
+    networks:
+      - app-network
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
 
-  volumes:
-    db-data:
+volumes:
+  db-data:
+    name: app-database-data
 
-  networks:
-    app-network:
-      driver: bridge
-  EOF
-
-      # Crear directorio para HTML
-      mkdir html
-
-      # Crear página de inicio
-      cat > html/index.html << 'EOF'
+networks:
+  app-network:
+    name: app-network
+    driver: bridge
+EOF
+    
+    # Crear directorio para HTML
+    mkdir html
+    
+    # Crear página de inicio
+    cat > html/index.html << 'EOF'
   <!DOCTYPE html>
   <html>
   <head>
@@ -1546,71 +1581,117 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
           </pre>
       </div>
   </body>
-  </html>
-  EOF
-
-  # Levantar todos los servicios
-  docker-compose up -d
-  
-  # Ver el estado de los servicios
-  docker-compose ps
-  
-  # Ver logs de todos los servicios
-  docker-compose logs
-  
-  # Seguir logs en tiempo real
-  docker-compose logs -f
-  # (Ctrl+C para salir)
-  
-  # Ver logs de un servicio específico
-  docker-compose logs database
-  
-  # Ejecutar comandos en un servicio
-  docker-compose exec database psql -U admin -d aplicacion
-  # \l (listar bases de datos)
-  # \q (salir)
-  
-  # Escalar un servicio (crear múltiples instancias)
-  docker-compose up -d --scale cache=3
-  
-  # Ver todos los contenedores
-  docker-compose ps
-  
-  # Detener todos los servicios
-  docker-compose stop
-  
-  # Iniciar servicios detenidos
-  docker-compose start
-  
-  # Reiniciar un servicio específico
-  docker-compose restart web
-  
-  # Ver uso de recursos
-  docker-compose top
-  
-  # Eliminar todo (contenedores, redes, pero no volúmenes)
-  docker-compose down
-  
-  # Eliminar TODO incluyendo volúmenes
-  docker-compose down -v
-  
-  # Reconstruir y levantar
-  docker-compose up -d --build
+    </html>
+    EOF
+    
+    # Verificar instalación de Docker Compose v2
+    docker compose version
+    
+    # Validar configuración antes de levantar
+    docker compose config
+    
+    # Levantar todos los servicios con espera a health checks
+    docker compose up -d --wait
+    
+    # Ver el estado de los servicios (muestra health status)
+    docker compose ps
+    
+    # Listar todos los proyectos Compose activos
+    docker compose ls
+    
+    # Ver logs de todos los servicios
+    docker compose logs
+    
+    # Seguir logs en tiempo real con timestamps
+    docker compose logs -f --timestamps
+    # (Ctrl+C para salir)
+    
+    # Ver logs de un servicio específico
+    docker compose logs database
+    
+    # Ver últimas 50 líneas de logs
+    docker compose logs --tail 50
+    
+    # Ejecutar comandos en un servicio
+    docker compose exec database psql -U admin -d aplicacion
+    # \l (listar bases de datos)
+    # CREATE TABLE test (id SERIAL, nombre VARCHAR(100));
+    # INSERT INTO test (nombre) VALUES ('Docker Compose v2');
+    # SELECT * FROM test;
+    # \q (salir)
+    
+    # Verificar conectividad entre servicios
+    docker compose exec web ping -c 3 database
+    docker compose exec web ping -c 3 cache
+    
+    # Ver estadísticas de recursos en tiempo real
+    docker compose stats
+    
+    # Escalar un servicio (crear múltiples instancias)
+    # Nota: Requiere quitar container_name del servicio en compose.yaml
+    docker compose up -d --scale cache=3 --no-recreate
+    
+    # Ver todos los contenedores del proyecto
+    docker compose ps -a
+    
+    # Ver imágenes usadas por el proyecto
+    docker compose images
+    
+    # Detener todos los servicios
+    docker compose stop
+    
+    # Iniciar servicios detenidos
+    docker compose start
+    
+    # Reiniciar un servicio específico
+    docker compose restart web
+    
+    # Ver procesos en ejecución
+    docker compose top
+    
+    # Pausar servicios (congelar sin detener)
+    docker compose pause
+    
+    # Reanudar servicios pausados
+    docker compose unpause
+    
+    # Ver eventos en tiempo real
+    docker compose events &
+    # Ejecuta algunas acciones y observa los eventos
+    # Ctrl+C para detener
+    
+    # Copiar archivos desde contenedor
+    docker compose cp database:/var/lib/postgresql/data/pg_hba.conf ./
+    
+    # Eliminar todo (contenedores, redes, pero no volúmenes)
+    docker compose down
+    
+    # Eliminar TODO incluyendo volúmenes
+    docker compose down -v
+    
+    # Eliminar y limpiar contenedores huérfanos
+    docker compose down --remove-orphans
+    
+    # Reconstruir y levantar
+    docker compose up -d --build
+    
+    # Forzar recreación de todos los contenedores
+    docker compose up -d --force-recreate
 ```
 
 11. **Limpieza final del laboratorio**
 ```bash
-    # Detener todos los contenedores
-    docker stop $(docker ps -q) 2>/dev/null || echo "No hay contenedores activos"
-    
-    # Eliminar todos los contenedores
-    docker rm $(docker ps -a -q) 2>/dev/null || echo "No hay contenedores para eliminar"
-    
-    # Eliminar imágenes no utilizadas
-    docker image prune -a -f
-    
-    # Eliminar volúmenes no utilizados
-    docker volume prune -f
+  # Detener todos los contenedores
+  docker stop $(docker ps -q) 2>/dev/null || echo "No hay contenedores activos"
+  
+  # Eliminar todos los contenedores
+  docker rm $(docker ps -a -q) 2>/dev/null || echo "No hay contenedores para eliminar"
+  
+  # Eliminar imágenes no utilizadas
+  docker image prune -a -f
+  
+  # Eliminar volúmenes no utilizados
+  docker volume prune -f
     
     # Eliminar redes no utilizadas
     docker network prune -f
@@ -2050,33 +2131,296 @@ docker rmi $(docker images -f dangling=true -q)
 
 ---
 
-### **8.7. Docker Compose (Vista rápida)**
+### **8.7. Docker Compose (Integrado desde Docker v2)**
+
+**Nota importante**: Desde Docker v2, Compose está integrado como plugin. Se usa `docker compose` (sin guión) en lugar de `docker-compose`.
 
 ```bash
+# VERIFICAR VERSIÓN DE COMPOSE
+docker compose version
+# Ejemplo output: Docker Compose version v2.23.3
+
 # 1. COMANDOS BÁSICOS
-docker-compose up
-# Levanta servicios definidos en docker-compose.yml
+docker compose up
+# Levanta servicios definidos en docker-compose.yml o compose.yaml
 
-docker-compose up -d
-# Levanta en background
+docker compose up -d
+# Levanta en background (detached mode)
 
-docker-compose down
-# Detiene y elimina contenedores
+docker compose up -d --wait
+# Levanta y espera a que todos los servicios estén "healthy"
 
-docker-compose ps
-# Lista servicios
+docker compose down
+# Detiene y elimina contenedores, redes (preserva volúmenes)
 
-docker-compose logs -f
-# Sigue logs de todos los servicios
+docker compose down -v
+# Elimina también los volúmenes
 
-docker-compose exec web bash
-# Ejecuta comando en servicio
+docker compose down --remove-orphans
+# Elimina contenedores de servicios que ya no están en compose.yaml
 
-docker-compose build
-# Construye imágenes
+# 2. GESTIÓN DE SERVICIOS
+docker compose ps
+# Lista servicios del proyecto actual
 
-docker-compose restart
+docker compose ps -a
+# Lista todos los servicios (incluidos detenidos)
+
+docker compose ls
+# Lista todos los proyectos Compose en ejecución
+
+docker compose start
+# Inicia servicios detenidos
+
+docker compose stop
+# Detiene servicios sin eliminarlos
+
+docker compose restart
 # Reinicia servicios
+
+docker compose pause
+# Pausa servicios (congela procesos)
+
+docker compose unpause
+# Reanuda servicios pausados
+
+# 3. LOGS Y MONITOREO
+docker compose logs
+# Muestra logs de todos los servicios
+
+docker compose logs -f
+# Sigue logs en tiempo real
+
+docker compose logs -f --tail 100
+# Sigue logs mostrando últimas 100 líneas
+
+docker compose logs web
+# Logs de un servicio específico
+
+docker compose logs --since 1h
+# Logs de la última hora
+
+docker compose top
+# Muestra procesos de todos los servicios
+
+docker compose stats
+# Estadísticas de recursos en tiempo real (Compose v2.23+)
+
+# 4. EJECUCIÓN DE COMANDOS
+docker compose exec web bash
+# Ejecuta bash en servicio "web" (contenedor debe estar corriendo)
+
+docker compose exec -it database psql -U admin
+# Ejecuta comando interactivo en servicio
+
+docker compose run --rm web npm test
+# Ejecuta comando en NUEVO contenedor (se elimina al terminar)
+
+docker compose run -d worker
+# Ejecuta servicio en background
+
+# 5. BUILD Y PULL
+docker compose build
+# Construye/reconstruye imágenes de servicios
+
+docker compose build --no-cache
+# Construye sin usar cache
+
+docker compose build web
+# Construye solo el servicio "web"
+
+docker compose pull
+# Descarga imágenes más recientes
+
+docker compose push
+# Sube imágenes a registry
+
+# 6. ESCALADO Y RECURSOS
+docker compose up -d --scale worker=3
+# Escala servicio "worker" a 3 instancias
+
+docker compose up -d --scale web=2 --scale worker=4
+# Escala múltiples servicios
+
+# 7. VALIDACIÓN Y CONFIGURACIÓN
+docker compose config
+# Valida y muestra configuración combinada
+
+docker compose config --services
+# Lista nombres de servicios
+
+docker compose config --volumes
+# Lista volúmenes definidos
+
+docker compose convert
+# Convierte compose.yaml a formato canónico
+
+# 8. WATCH MODE (Compose v2.22+)
+docker compose watch
+# Monitorea cambios en archivos y reconstruye/reinicia automáticamente
+
+docker compose alpha watch
+# Versión experimental de watch
+
+# 9. COMANDOS AVANZADOS
+docker compose cp web:/app/logs ./logs
+# Copia archivos desde contenedor al host
+
+docker compose port web 80
+# Muestra puerto público mapeado
+
+docker compose images
+# Lista imágenes usadas por los servicios
+
+docker compose events
+# Streaming de eventos en tiempo real
+
+docker compose kill
+# Mata servicios inmediatamente (SIGKILL)
+
+docker compose rm
+# Elimina contenedores detenidos
+
+docker compose rm -f -s -v
+# Elimina forzadamente, detiene y elimina volúmenes
+
+# 10. PERFILES (Compose v2.x)
+docker compose --profile debug up
+# Levanta servicios con perfil "debug"
+
+docker compose --profile prod --profile monitoring up
+# Levanta múltiples perfiles
+```
+
+#### **Novedades en Docker Compose v2 (2024-2025)**
+
+**Cambios importantes:**
+- ✅ **Comando integrado**: `docker compose` (sin guión) vs `docker-compose` (legacy)
+- ✅ **Archivo preferido**: `compose.yaml` (también soporta `docker-compose.yml`)
+- ✅ **Watch mode**: Reconstrucción automática en desarrollo
+- ✅ **Profiles**: Activar/desactivar servicios según entorno
+- ✅ **Depends_on mejorado**: Con health checks y condiciones
+- ✅ **Stats integrados**: `docker compose stats` (v2.23+)
+- ✅ **Copy command**: `docker compose cp` para transferir archivos
+- ✅ **GPU support**: Configuración nativa de GPUs
+
+#### **Ejemplo de compose.yaml moderno (v2.23+)**
+
+```yaml
+# compose.yaml (nombre preferido en Compose v2)
+version: '3.8'  # Opcional en Compose v2, se detecta automáticamente
+
+services:
+  # Base de datos con health check
+  database:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret123}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Aplicación web con depends_on mejorado
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+      cache_from:
+        - myapp:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      database:
+        condition: service_healthy  # Espera a que DB esté healthy
+      cache:
+        condition: service_started
+    develop:  # Nuevo en Compose v2.22
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: package.json
+    profiles:
+      - production
+    restart: unless-stopped
+
+  # Cache Redis
+  cache:
+    image: redis:7.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Worker con escalado
+  worker:
+    build: .
+    command: python worker.py
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    profiles:
+      - production
+
+  # Servicio de debugging (solo con profile debug)
+  debugger:
+    image: nicolaka/netshoot
+    command: sleep infinity
+    network_mode: service:web
+    profiles:
+      - debug
+
+volumes:
+  db-data:
+
+networks:
+  default:
+    name: myapp-network
+```
+
+#### **Uso con profiles:**
+
+```bash
+# Solo servicios sin profile o con profile "production"
+docker compose --profile production up -d
+
+# Agregar debugger
+docker compose --profile production --profile debug up -d
+
+# Ver solo servicios de un profile
+docker compose --profile debug config --services
+```
+
+#### **Watch mode para desarrollo:**
+
+```bash
+# Inicia y observa cambios
+docker compose up -d
+docker compose watch
+
+# Los cambios en archivos se sincronizan automáticamente
+# package.json dispara rebuild completo
+# archivos en ./src se sincronizan en caliente
 ```
 
 ---
@@ -2403,13 +2747,391 @@ Entender cómo funcionan los **namespaces en Docker** es fundamental porque en K
 
 ---
 
+## 🆕 10.1. Novedades Importantes en Docker (2024-2025)
+
+### **Docker Compose v2 - Cambio Fundamental**
+
+**❌ Antiguo** (docker-compose standalone):
+```bash
+# Se instalaba por separado con pip
+pip install docker-compose
+
+# Se ejecutaba como comando independiente
+docker-compose up -d
+```
+
+**✅ Nuevo** (docker compose integrado):
+```bash
+# Viene integrado con Docker Engine
+sudo apt install docker-compose-plugin
+
+# Se ejecuta como subcomando de Docker
+docker compose up -d
+```
+
+**Diferencias clave:**
+- ✅ **Sin guión**: `docker compose` (no `docker-compose`)
+- ✅ **Plugin nativo**: Integrado en Docker CLI
+- ✅ **Mejor rendimiento**: Escrito en Go vs Python
+- ✅ **Nombre de archivo preferido**: `compose.yaml` (además de `docker-compose.yml`)
+- ✅ **Sin version requerida**: Detecta automáticamente la versión del formato
+- ✅ **Nuevas funcionalidades**: watch mode, profiles, depends_on mejorado
+
+---
+
+### **BuildKit - Motor de Build Moderno**
+
+**BuildKit** es el nuevo motor de construcción de imágenes, habilitado por defecto desde Docker 23+.
+
+**Ventajas de BuildKit:**
+```bash
+# Habilitar BuildKit (ya por defecto en Docker 23+)
+export DOCKER_BUILDKIT=1
+
+# Builds más rápidos con cache mejorado
+docker build -t miapp:latest .
+
+# Cache de múltiples fuentes
+docker build \
+  --cache-from=miapp:latest \
+  --cache-from=miapp:cache \
+  -t miapp:v2.0 .
+
+# Build secrets (no quedan en la imagen)
+docker build --secret id=mytoken,src=$HOME/.token -t miapp .
+# En Dockerfile:
+# RUN --mount=type=secret,id=mytoken \
+#     curl -H "Authorization: $(cat /run/secrets/mytoken)" ...
+
+# SSH forwarding para git privado
+docker build --ssh default -t miapp .
+# En Dockerfile:
+# RUN --mount=type=ssh git clone git@github.com:private/repo.git
+```
+
+**Multi-stage builds optimizados:**
+```dockerfile
+# syntax=docker/dockerfile:1.4
+FROM golang:1.21 AS builder
+WORKDIR /app
+COPY go.* ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -o app
+
+FROM alpine:3.19
+RUN apk --no-cache add ca-certificates
+COPY --from=builder /app/app /app
+ENTRYPOINT ["/app"]
+```
+
+---
+
+### **Multi-Platform Builds (buildx)**
+
+**Docker Buildx** permite construir imágenes para múltiples arquitecturas (AMD64, ARM64, etc.)
+
+```bash
+# Verificar buildx instalado
+docker buildx version
+
+# Crear builder multi-platform
+docker buildx create --name multiplatform --use
+
+# Ver builders disponibles
+docker buildx ls
+
+# Build para múltiples plataformas
+docker buildx build \
+  --platform linux/amd64,linux/arm64,linux/arm/v7 \
+  -t usuario/miapp:latest \
+  --push \
+  .
+
+# Build y cargar en Docker local
+docker buildx build \
+  --platform linux/amd64 \
+  -t miapp:latest \
+  --load \
+  .
+
+# Build con output personalizado
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -o type=image,name=usuario/miapp:multi,push=true \
+  .
+```
+
+**Ejemplo Dockerfile optimizado para multi-platform:**
+```dockerfile
+# syntax=docker/dockerfile:1.4
+FROM --platform=$BUILDPLATFORM golang:1.21 AS builder
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /app
+COPY . .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -o app
+
+FROM alpine:3.19
+COPY --from=builder /app/app /app
+ENTRYPOINT ["/app"]
+```
+
+---
+
+### **Docker Init - Generador de Dockerfiles**
+
+**Novedad en Docker 24+**: `docker init` genera automáticamente Dockerfiles optimizados.
+
+```bash
+# Inicializar proyecto con Docker
+cd mi-proyecto
+docker init
+
+# Selecciona el tipo de aplicación:
+# - Python
+# - Node.js
+# - Go
+# - Rust
+# - ASP.NET
+# - PHP
+# - Java
+# - Other
+
+# Genera automáticamente:
+# - Dockerfile
+# - compose.yaml
+# - .dockerignore
+```
+
+**Ejemplo de salida para proyecto Node.js:**
+```dockerfile
+# syntax=docker/dockerfile:1
+FROM node:20-alpine AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM base AS build
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM base AS runner
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package*.json ./
+EXPOSE 3000
+CMD ["node", "dist/index.js"]
+```
+
+---
+
+### **Docker Scout - Análisis de Vulnerabilidades**
+
+**Docker Scout** analiza imágenes en busca de vulnerabilidades (integrado desde Docker 24+).
+
+```bash
+# Analizar imagen local
+docker scout cves miapp:latest
+
+# Ver recomendaciones de actualización
+docker scout recommendations miapp:latest
+
+# Comparar dos versiones
+docker scout compare --to miapp:latest miapp:v1.0
+
+# Ver solo vulnerabilidades críticas
+docker scout cves --only-severity critical miapp:latest
+
+# Exportar reporte
+docker scout cves --format sarif -o report.json miapp:latest
+
+# Quick view de una imagen
+docker scout quickview miapp:latest
+```
+
+---
+
+### **Otras Mejoras Recientes**
+
+#### **1. Mejor soporte de GPUs**
+```yaml
+# compose.yaml
+services:
+  ml-app:
+    image: tensorflow/tensorflow:latest-gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+```
+
+#### **2. Health checks mejorados**
+```yaml
+services:
+  web:
+    image: nginx
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+      start_interval: 5s  # Nuevo: intervalo durante start_period
+```
+
+#### **3. Depends_on con condiciones**
+```yaml
+services:
+  web:
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true  # Nuevo: reinicia si database se reinicia
+      cache:
+        condition: service_started
+```
+
+#### **4. Profiles para entornos**
+```yaml
+services:
+  web:
+    image: nginx
+    # Siempre activo
+  
+  debug:
+    image: busybox
+    profiles: [debug]  # Solo con --profile debug
+  
+  monitor:
+    image: prometheus
+    profiles: [prod, staging]  # Solo en prod o staging
+```
+
+#### **5. Watch mode para desarrollo**
+```yaml
+services:
+  web:
+    build: .
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: package.json
+        - action: sync+restart
+          path: ./config
+          target: /app/config
+```
+
+Usar con:
+```bash
+docker compose watch
+```
+
+#### **6. Include para reutilizar configuración**
+```yaml
+# compose.yaml
+include:
+  - path: ./compose-base.yaml
+  - path: ./compose-prod.yaml
+    env_file: .env.prod
+
+services:
+  web:
+    extends:
+      file: common-services.yaml
+      service: webapp
+```
+
+#### **7. Mejor manejo de secrets**
+```yaml
+services:
+  app:
+    image: myapp
+    secrets:
+      - db_password
+      - api_key
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  api_key:
+    environment: API_KEY
+```
+
+---
+
+### **Migración de docker-compose a docker compose**
+
+**Guía rápida de migración:**
+
+```bash
+# 1. Verificar versión de Docker (debe ser 20.10.13+)
+docker --version
+
+# 2. Instalar plugin si no está
+sudo apt install docker-compose-plugin
+
+# 3. Verificar funcionamiento
+docker compose version
+
+# 4. Actualizar scripts (opcional: crear alias temporal)
+alias docker-compose='docker compose'
+
+# 5. Renombrar archivo (opcional pero recomendado)
+mv docker-compose.yml compose.yaml
+
+# 6. Actualizar CI/CD pipelines
+# Antes:
+# - docker-compose up -d
+# Ahora:
+# - docker compose up -d
+
+# 7. Actualizar Makefiles
+# Antes:
+# deploy: docker-compose up -d
+# Ahora:
+# deploy: docker compose up -d
+```
+
+**Compatibilidad:**
+- ✅ `docker-compose.yml` sigue siendo válido
+- ✅ `compose.yaml` es el nuevo nombre preferido
+- ✅ Todos los comandos son compatibles
+- ✅ Variables de entorno funcionan igual
+
+---
+
 ## 📚 11. Fuentes y referencias técnicas
 
 - [Docker Documentation](https://docs.docker.com/)
+- [Docker Compose Specification](https://compose-spec.io/)
+- [BuildKit Documentation](https://docs.docker.com/build/buildkit/)
+- [Docker Buildx](https://docs.docker.com/buildx/working-with-buildx/)
+- [Docker Scout](https://docs.docker.com/scout/)
 - [Container Runtime Interface (CRI)](https://kubernetes.io/docs/concepts/architecture/cri/)
 - [Open Container Initiative (OCI)](https://opencontainers.org/)
 - [Linux Containers (LXC)](https://linuxcontainers.org/)
 - [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
+- [Compose v2 Migration Guide](https://docs.docker.com/compose/migrate/)
 
 ---
 
