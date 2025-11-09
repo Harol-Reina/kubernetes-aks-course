@@ -1,0 +1,109 @@
+# Patrón Sidecar: Aplicación web + Log processor
+# Uso: 
+#   kubectl create configmap fluent-config --from-literal=fluent-bit.conf="[INPUT]\n    Name tail\n    Path /var/log/app/*.log"
+#   kubectl apply -f sidecar-pod.yaml
+# Test:
+#   kubectl logs webapp-sidecar -c log-processor -f
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-sidecar
+  labels:
+    app: webapp
+    pattern: sidecar
+    category: pattern
+  annotations:
+    description: "Patrón Sidecar con procesamiento de logs"
+spec:
+  # Volúmenes compartidos entre contenedores
+  volumes:
+  - name: log-volume
+    emptyDir: {}
+  - name: processed-logs
+    emptyDir: {}
+  - name: fluent-config
+    configMap:
+      name: fluent-config
+      optional: true
+
+  containers:
+  # Contenedor principal: Aplicación web
+  - name: webapp
+    image: python:alpine
+    ports:
+    - containerPort: 5000
+      name: http
+    volumeMounts:
+    - name: log-volume
+      mountPath: /var/log/app
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      # Crear una aplicación web simple que genera logs
+      cat > app.py <<EOF
+      from http.server import HTTPServer, BaseHTTPRequestHandler
+      import json
+      import datetime
+      
+      class Handler(BaseHTTPRequestHandler):
+          def do_GET(self):
+              # Generar log
+              with open('/var/log/app/access.log', 'a') as f:
+                  timestamp = datetime.datetime.now().isoformat()
+                  f.write(f"{timestamp} - GET {self.path}\n")
+              
+              self.send_response(200)
+              self.send_header('Content-type', 'application/json')
+              self.end_headers()
+              response = {'status': 'ok', 'path': self.path}
+              self.wfile.write(json.dumps(response).encode())
+      
+      HTTPServer(('0.0.0.0', 5000), Handler).serve_forever()
+      EOF
+      
+      python app.py
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+        
+  # Sidecar: Procesador de logs
+  - name: log-processor
+    image: busybox:latest
+    volumeMounts:
+    - name: log-volume
+      mountPath: /var/log/app
+      readOnly: true
+    - name: processed-logs
+      mountPath: /var/log/processed
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo "Log processor iniciado..."
+      while true; do
+        if [ -f /var/log/app/access.log ]; then
+          # Procesar logs: contar requests, detectar errores
+          total=$(wc -l < /var/log/app/access.log)
+          echo "=== Log Statistics ===" > /var/log/processed/stats.log
+          echo "Total requests: $total" >> /var/log/processed/stats.log
+          echo "Last 5 requests:" >> /var/log/processed/stats.log
+          tail -5 /var/log/app/access.log >> /var/log/processed/stats.log
+          
+          # Mostrar estadísticas
+          cat /var/log/processed/stats.log
+        fi
+        sleep 10
+      done
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"

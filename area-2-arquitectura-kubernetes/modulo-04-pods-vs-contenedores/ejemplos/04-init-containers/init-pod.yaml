@@ -1,0 +1,149 @@
+# Init Containers Pattern: Setup antes de la app principal
+# Prerrequisitos:
+#   kubectl apply -f postgres-pod.yaml
+#   kubectl create configmap app-code --from-literal=app.py="print('App running')"
+#   kubectl create configmap migration-scripts --from-literal=migrate.sql="SELECT 1;"
+# Uso: kubectl apply -f init-pod.yaml
+# Observar: kubectl get pods app-with-init --watch
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-init
+  labels:
+    app: myapp
+    pattern: init-containers
+    category: pattern
+  annotations:
+    description: "Init containers para setup de aplicación"
+spec:
+  # Init containers ejecutan secuencialmente ANTES de los contenedores principales
+  initContainers:
+  
+  # Init 1: Esperar a que la base de datos esté lista
+  - name: wait-for-db
+    image: postgres:alpine
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "⏳ Waiting for database to be ready..."
+      until pg_isready -h db-service -p 5432 -U user; do
+        echo "Database not ready, waiting..."
+        sleep 2
+      done
+      echo "✅ Database is ready!"
+    env:
+    - name: PGPASSWORD
+      value: "pass"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+      
+  # Init 2: Ejecutar migraciones de base de datos
+  - name: db-migration
+    image: postgres:alpine
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "🗄️ Running database migrations..."
+      # Simular migración
+      echo "CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name VARCHAR(100));" > /tmp/migrate.sql
+      psql -h db-service -U user -d myapp -f /tmp/migrate.sql || echo "Migration completed"
+      echo "✅ Migrations completed!"
+    env:
+    - name: PGPASSWORD
+      value: "pass"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+      
+  # Init 3: Descargar configuración
+  - name: config-setup
+    image: busybox:latest
+    command: ['sh', '-c']
+    args:
+    - |
+      echo "📥 Downloading configuration..."
+      cat > /app/config/app-config.json <<EOF
+      {
+        "environment": "production",
+        "database": "db-service:5432",
+        "cache_ttl": 3600,
+        "debug": false
+      }
+      EOF
+      echo "✅ Configuration downloaded successfully"
+      echo "complete" > /app/setup/complete
+    volumeMounts:
+    - name: app-config
+      mountPath: /app/config
+    - name: setup-status
+      mountPath: /app/setup
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+      
+  # Contenedor principal (inicia DESPUÉS de que todos los init containers completen)
+  containers:
+  - name: app
+    image: python:alpine
+    command: ['sh', '-c']
+    args:
+    - |
+      # Verificar que la configuración existe
+      if [ -f /app/setup/complete ]; then
+        echo "✅ Setup completed, starting application..."
+        cat /app/config/app-config.json
+      else
+        echo "❌ Setup incomplete!"
+        exit 1
+      fi
+      
+      # Simular aplicación corriendo
+      echo "🚀 Application starting..."
+      while true; do
+        echo "App running with config from init containers"
+        sleep 30
+      done
+    ports:
+    - containerPort: 5000
+      name: http
+    env:
+    - name: DB_HOST
+      value: "db-service"
+    - name: DB_NAME
+      value: "myapp"
+    - name: DB_USER
+      value: "user"
+    - name: DB_PASSWORD
+      value: "pass"
+    volumeMounts:
+    - name: app-config
+      mountPath: /app/config
+    - name: setup-status
+      mountPath: /app/setup
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+        
+  volumes:
+  - name: app-config
+    emptyDir: {}
+  - name: setup-status
+    emptyDir: {}

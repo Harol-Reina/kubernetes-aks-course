@@ -1,0 +1,47 @@
+# Pod que demuestra la evolución de LXC → Docker → Kubernetes
+# Uso: kubectl apply -f evolution-pod.yaml
+# Test: kubectl exec evolution-demo -c web -- wget -qO- http://localhost:8080
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: evolution-demo
+  labels:
+    demo: evolution
+    category: basico
+  annotations:
+    description: "Demuestra networking compartido en Pods vs Docker bridge"
+spec:
+  containers:
+  # Contenedor 1: NGINX en puerto 80
+  - name: web
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+      name: http
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+    
+  # Contenedor 2: Apache httpd en puerto 8080
+  - name: api
+    image: httpd:alpine
+    ports:
+    - containerPort: 8080
+      name: http-alt
+    # Cambiar httpd a puerto 8080 para evitar conflicto con nginx
+    command: ["/bin/sh"]
+    args: 
+    - "-c"
+    - "sed 's/Listen 80/Listen 8080/' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && httpd -f /tmp/httpd.conf -D FOREGROUND"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"

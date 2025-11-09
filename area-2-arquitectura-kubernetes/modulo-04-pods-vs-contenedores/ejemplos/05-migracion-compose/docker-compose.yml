@@ -1,0 +1,51 @@
+# Ejemplo original de Docker Compose
+# Este es el punto de partida antes de migrar a Kubernetes
+
+version: '3.8'
+
+services:
+  # Frontend web server
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    networks:
+      - app-network
+      
+  # Backend API
+  api:
+    image: node:alpine
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=myapp
+    depends_on:
+      - db
+    networks:
+      - app-network
+    command: sh -c "sleep infinity"  # Simulación
+      
+  # Database
+  db:
+    image: postgres:alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=myapp
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    networks:
+      - app-network
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db-data:

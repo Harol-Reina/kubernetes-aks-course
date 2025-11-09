@@ -1,0 +1,47 @@
+# Pod para explorar namespace sharing entre contenedores
+# Uso: kubectl apply -f namespace-pod.yaml
+# Análisis:
+#   kubectl exec namespace-demo -c container1 -- ip addr
+#   kubectl exec namespace-demo -c container1 -- ps aux
+#   kubectl exec namespace-demo -c container1 -- hostname
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: namespace-demo
+  labels:
+    demo: namespaces
+    category: educativo
+  annotations:
+    description: "Explora qué namespaces Linux comparten los contenedores"
+spec:
+  containers:
+  # Contenedor 1
+  - name: container1
+    image: busybox:latest
+    command: ["/bin/sh"]
+    args: 
+    - "-c"
+    - "while true; do echo 'Container 1 running'; sleep 30; done"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+    
+  # Contenedor 2
+  - name: container2
+    image: busybox:latest
+    command: ["/bin/sh"]
+    args: 
+    - "-c"
+    - "while true; do echo 'Container 2 running'; sleep 30; done"
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"

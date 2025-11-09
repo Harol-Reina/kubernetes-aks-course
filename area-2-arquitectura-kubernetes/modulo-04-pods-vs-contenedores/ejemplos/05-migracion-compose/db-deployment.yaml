@@ -1,0 +1,62 @@
+# Migración de Docker Compose a Kubernetes - Database
+# Opción A: Multi-Pod (Deployment para producción)
+# Uso: kubectl apply -f db-deployment.yaml
+# Nota: En producción usar StatefulSet para bases de datos
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    app: db
+    tier: database
+spec:
+  replicas: 1  # Para DB usar StatefulSet en producción
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+        tier: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: "myapp"
+        - name: POSTGRES_USER
+          value: "user"
+        - name: POSTGRES_PASSWORD
+          value: "pass"
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: db-data
+        emptyDir: {}  # En producción usar PersistentVolumeClaim
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+spec:
+  selector:
+    app: db
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP

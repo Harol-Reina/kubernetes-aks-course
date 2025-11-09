@@ -1562,51 +1562,67 @@ spec:
 
 ---
 
-## 🧪 7. Laboratorio Práctico
+## 🧪 7. Ejemplos Prácticos Disponibles
 
-### **[🔬 Lab: Pod Fundamentals](./laboratorios/pod-fundamentals-lab.md)**
+### **� [Ver Todos los Ejemplos](./ejemplos/README.md)**
 
-En este laboratorio vas a:
+Todos los ejemplos YAML están disponibles en la carpeta `ejemplos/` organizados por concepto:
 
-1. **Crear tu primer Pod** single-container
-2. **Implementar un Pod multi-container** con sidecar
-3. **Usar init containers** para setup
-4. **Migrar una app Docker Compose** a Pods
-5. **Explorar el networking** compartido
-6. **Debugging** de Pods problemáticos
+### **🚀 Ejemplos Disponibles:**
 
-**Duración**: 45 minutos  
-**Dificultad**: Intermedio
+1. **[01-evolucion/](./ejemplos/01-evolucion/)** - Evolución LXC → Docker → Kubernetes
+   - `evolution-pod.yaml` - Demo de networking compartido
 
-### **🎯 Ejemplo Rápido:**
+2. **[02-namespaces/](./ejemplos/02-namespaces/)** - Exploración de namespace sharing
+   - `namespace-pod.yaml` - Análisis de Network, PID, IPC, UTS namespaces
 
-```yaml
-# Crear este archivo: multi-container-pod.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-with-sidecar
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.20
-    ports:
-    - containerPort: 80
-    volumeMounts:
-    - name: shared-logs
-      mountPath: /var/log/nginx
-  
-  - name: log-reader
-    image: busybox:1.35
-    command: ['sh', '-c', 'tail -f /var/log/nginx/access.log']
-    volumeMounts:
-    - name: shared-logs
-      mountPath: /var/log/nginx
-  
-  volumes:
-  - name: shared-logs
-    emptyDir: {}
+3. **[03-multi-container/](./ejemplos/03-multi-container/)** - Patrones multi-contenedor
+   - `sidecar-pod.yaml` - Aplicación web + Log processor sidecar
+
+4. **[04-init-containers/](./ejemplos/04-init-containers/)** - Init containers
+   - `postgres-pod.yaml` - Database para la demo
+   - `init-pod.yaml` - App con 3 init containers (wait-db, migrations, config)
+
+5. **[05-migracion-compose/](./ejemplos/05-migracion-compose/)** - Migración Docker Compose
+   - `docker-compose.yml` - Configuración original
+   - `web-deployment.yaml` - Frontend Nginx
+   - `api-deployment.yaml` - Backend Node.js
+   - `db-deployment.yaml` - Database PostgreSQL
+
+### **🎯 Inicio Rápido:**
+
+```bash
+# 1. Explorar la evolución LXC → Docker → K8s
+kubectl apply -f ejemplos/01-evolucion/evolution-pod.yaml
+kubectl exec evolution-demo -c web -- wget -qO- http://localhost:8080
+
+# 2. Analizar namespace sharing
+kubectl apply -f ejemplos/02-namespaces/namespace-pod.yaml
+kubectl exec namespace-demo -c container1 -- ip addr
+kubectl exec namespace-demo -c container2 -- ps aux
+
+# 3. Probar patrón sidecar
+kubectl apply -f ejemplos/03-multi-container/sidecar-pod.yaml
+kubectl logs webapp-sidecar -c log-processor -f
+
+# 4. Ver init containers en acción
+kubectl apply -f ejemplos/04-init-containers/postgres-pod.yaml
+kubectl apply -f ejemplos/04-init-containers/init-pod.yaml
+kubectl get pods app-with-init --watch
+
+# 5. Migrar de Docker Compose
+kubectl apply -f ejemplos/05-migracion-compose/
+kubectl get all
 ```
+
+### **📖 Documentación de Ejemplos:**
+
+Consulta **[ejemplos/README.md](./ejemplos/README.md)** para:
+- Descripción detallada de cada ejemplo
+- Comandos de uso y testing
+- Conceptos que demuestra cada ejemplo
+- Instrucciones de limpieza
+
 
 ```bash
 # Aplicar y probar

@@ -1,0 +1,45 @@
+# PostgreSQL database para demostración de init containers
+# Uso: kubectl apply -f postgres-pod.yaml
+# Test: kubectl exec -it db -- psql -U user -d myapp
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db
+  labels:
+    app: database
+    tier: backend
+spec:
+  containers:
+  - name: postgres
+    image: postgres:alpine
+    ports:
+    - containerPort: 5432
+      name: postgres
+    env:
+    - name: POSTGRES_DB
+      value: myapp
+    - name: POSTGRES_USER
+      value: user
+    - name: POSTGRES_PASSWORD
+      value: pass
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+spec:
+  selector:
+    app: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
