@@ -611,39 +611,94 @@ de la misma clase        de la misma imagen
 #### **Ejemplo Práctico Integrado:**
 
 ```bash
-# 1. Crear Dockerfile
+# 1. Crear directorio del proyecto
+mkdir mi-python-app && cd mi-python-app
+
+# 2. Crear requirements.txt
+cat > requirements.txt << 'EOF'
+flask==3.0.0
+EOF
+
+# 3. Crear aplicación Python
+cat > app.py << 'EOF'
+from flask import Flask
+import socket
+import os
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    hostname = socket.gethostname()
+    return f"""
+    <html>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1>🐳 Aplicación Python en Docker</h1>
+            <p>Contenedor: <strong>{hostname}</strong></p>
+            <p>Versión: 1.0</p>
+        </body>
+    </html>
+    """
+
+@app.route('/health')
+def health():
+    return {'status': 'healthy', 'container': socket.gethostname()}
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
+EOF
+
+# 4. Crear Dockerfile
 cat > Dockerfile << 'EOF'
 FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
+EXPOSE 8000
 CMD ["python", "app.py"]
 EOF
 
-# 2. Construir imagen
+# 5. Construir imagen
 docker build -t mi-python-app:v1.0 .
 
-# 3. Probar localmente
-docker run -d --name test-app mi-python-app:v1.0
+# 6. Probar localmente
+docker run -d --name test-app -p 8000:8000 mi-python-app:v1.0
 
-# 4. Verificar funcionamiento
+# 7. Verificar funcionamiento
+sleep 2
+curl http://localhost:8000
+curl http://localhost:8000/health
 docker logs test-app
 docker ps
 
-# 5. Publicar en Docker Hub
-docker tag mi-python-app:v1.0 usuario/mi-python-app:v1.0
-docker login
-docker push usuario/mi-python-app:v1.0
+# 8. Publicar en Docker Hub (opcional)
+# docker tag mi-python-app:v1.0 usuario/mi-python-app:v1.0
+# docker login
+# docker push usuario/mi-python-app:v1.0
 
-# 6. Otros desarrolladores pueden usar:
-docker pull usuario/mi-python-app:v1.0
-docker run -d usuario/mi-python-app:v1.0
+# 9. Otros desarrolladores pueden usar:
+# docker pull usuario/mi-python-app:v1.0
+# docker run -d usuario/mi-python-app:v1.0
 
-# 7. Escalar (múltiples instancias)
-docker run -d --name app1 -p 8001:8000 usuario/mi-python-app:v1.0
-docker run -d --name app2 -p 8002:8000 usuario/mi-python-app:v1.0
-docker run -d --name app3 -p 8003:8000 usuario/mi-python-app:v1.0
+# 10. Escalar (múltiples instancias)
+docker run -d --name app1 -p 8001:8000 mi-python-app:v1.0
+docker run -d --name app2 -p 8002:8000 mi-python-app:v1.0
+docker run -d --name app3 -p 8003:8000 mi-python-app:v1.0
+
+# 11. Verificar que cada instancia responde
+curl http://localhost:8001
+curl http://localhost:8002
+curl http://localhost:8003
+
+# 12. Ver todas las instancias
+docker ps | grep mi-python-app
+
+# 13. Limpieza
+docker stop test-app app1 app2 app3
+docker rm test-app app1 app2 app3
+cd .. && rm -rf mi-python-app
 ```
 
 ---
