@@ -1051,7 +1051,617 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    docker rm mi-nginx
    ```
 
-### 📋 [Ver laboratorio completo de instalación Docker](./laboratorios/lab-docker-install.md)
+4. **Ejercicio 1: Trabajar con imágenes**
+   ```bash
+   # Buscar imágenes en Docker Hub
+   docker search redis
+   docker search postgres
+   
+   # Descargar diferentes versiones
+   docker pull redis:7.2
+   docker pull redis:alpine
+   docker pull postgres:15
+   
+   # Listar imágenes descargadas
+   docker images
+   
+   # Ver información detallada de una imagen
+   docker inspect redis:7.2
+   
+   # Ver las capas de una imagen
+   docker history redis:7.2
+   
+   # Comparar tamaños
+   docker images | grep redis
+   # Nota: Observa la diferencia de tamaño entre redis:7.2 y redis:alpine
+   ```
+
+5. **Ejercicio 2: Contenedores con variables de entorno**
+   ```bash
+   # Ejecutar PostgreSQL con configuración
+   docker run -d \
+     --name postgres-db \
+     -e POSTGRES_USER=admin \
+     -e POSTGRES_PASSWORD=secret123 \
+     -e POSTGRES_DB=mibasededatos \
+     -p 5432:5432 \
+     postgres:15
+   
+   # Verificar que está corriendo
+   docker ps
+   
+   # Ver logs (deberías ver "database system is ready to accept connections")
+   docker logs postgres-db
+   
+   # Conectarse al contenedor e interactuar con PostgreSQL
+   docker exec -it postgres-db psql -U admin -d mibasededatos
+   
+   # Dentro de psql:
+   # \l                    (listar bases de datos)
+   # CREATE TABLE usuarios (id SERIAL PRIMARY KEY, nombre VARCHAR(100));
+   # INSERT INTO usuarios (nombre) VALUES ('Juan'), ('María');
+   # SELECT * FROM usuarios;
+   # \q                    (salir)
+   
+   # Ver estadísticas de uso de recursos
+   docker stats postgres-db --no-stream
+   ```
+
+6. **Ejercicio 3: Volúmenes y persistencia de datos**
+   ```bash
+   # Crear un volumen nombrado
+   docker volume create datos-postgres
+   
+   # Listar volúmenes
+   docker volume ls
+   
+   # Inspeccionar el volumen
+   docker volume inspect datos-postgres
+   
+   # Detener y eliminar el contenedor anterior
+   docker stop postgres-db
+   docker rm postgres-db
+   
+   # Crear nuevo contenedor con volumen persistente
+   docker run -d \
+     --name postgres-persistente \
+     -e POSTGRES_USER=admin \
+     -e POSTGRES_PASSWORD=secret123 \
+     -e POSTGRES_DB=mibasededatos \
+     -v datos-postgres:/var/lib/postgresql/data \
+     -p 5432:5432 \
+     postgres:15
+   
+   # Esperar a que inicie
+   docker logs -f postgres-persistente
+   # (Ctrl+C cuando veas "database system is ready")
+   
+   # Crear datos de prueba
+   docker exec -it postgres-persistente psql -U admin -d mibasededatos -c \
+     "CREATE TABLE productos (id SERIAL, nombre VARCHAR(100)); \
+      INSERT INTO productos (nombre) VALUES ('Laptop'), ('Mouse'), ('Teclado');"
+   
+   # Verificar datos
+   docker exec -it postgres-persistente psql -U admin -d mibasededatos -c \
+     "SELECT * FROM productos;"
+   
+   # ELIMINAR el contenedor
+   docker stop postgres-persistente
+   docker rm postgres-persistente
+   
+   # Crear NUEVO contenedor con el MISMO volumen
+   docker run -d \
+     --name postgres-restaurado \
+     -e POSTGRES_USER=admin \
+     -e POSTGRES_PASSWORD=secret123 \
+     -v datos-postgres:/var/lib/postgresql/data \
+     -p 5432:5432 \
+     postgres:15
+   
+   # Esperar a que inicie
+   sleep 5
+   
+   # Verificar que los datos siguen ahí!
+   docker exec -it postgres-restaurado psql -U admin -d mibasededatos -c \
+     "SELECT * FROM productos;"
+   
+   # ✅ Los datos persisten aunque se eliminó el contenedor!
+   ```
+
+7. **Ejercicio 4: Redes Docker y comunicación entre contenedores**
+   ```bash
+   # Crear una red personalizada
+   docker network create mi-red-app
+   
+   # Listar redes
+   docker network ls
+   
+   # Inspeccionar la red
+   docker network inspect mi-red-app
+   
+   # Limpiar contenedores anteriores
+   docker stop postgres-restaurado 2>/dev/null || true
+   docker rm postgres-restaurado 2>/dev/null || true
+   
+   # Crear base de datos en la red personalizada
+   docker run -d \
+     --name db \
+     --network mi-red-app \
+     -e POSTGRES_USER=admin \
+     -e POSTGRES_PASSWORD=secret123 \
+     -e POSTGRES_DB=aplicacion \
+     postgres:15
+   
+   # Esperar a que PostgreSQL esté listo
+   echo "Esperando a que PostgreSQL inicie..."
+   sleep 10
+   
+   # Crear aplicación web que se conecta a la BD
+   # Usaremos adminer (herramienta de gestión de BD)
+   docker run -d \
+     --name web \
+     --network mi-red-app \
+     -p 8080:8080 \
+     adminer
+   
+   # Verificar que ambos contenedores están en la misma red
+   docker network inspect mi-red-app
+   
+   # Probar conectividad entre contenedores
+   docker exec -it web ping -c 3 db
+   
+   # Acceder a la aplicación web
+   echo "Accede a http://localhost:8080 en tu navegador"
+   echo "Sistema: PostgreSQL"
+   echo "Servidor: db"
+   echo "Usuario: admin"
+   echo "Contraseña: secret123"
+   echo "Base de datos: aplicacion"
+   
+   # Ver logs de ambos contenedores
+   docker logs web
+   docker logs db
+   ```
+
+8. **Ejercicio 5: Limitar recursos de contenedores**
+   ```bash
+   # Crear contenedor con límites de recursos
+   docker run -d \
+     --name nginx-limitado \
+     --memory="100m" \
+     --memory-swap="100m" \
+     --cpus="0.5" \
+     -p 8081:80 \
+     nginx:alpine
+   
+   # Verificar límites aplicados
+   docker inspect nginx-limitado | grep -A 10 "Memory"
+   docker inspect nginx-limitado | grep "NanoCpus"
+   
+   # Monitorear uso de recursos en tiempo real
+   docker stats nginx-limitado --no-stream
+   
+   # Generar carga (instalar herramientas primero)
+   sudo apt install -y apache2-utils
+   
+   # Test de carga (100 requests, 10 concurrentes)
+   ab -n 100 -c 10 http://localhost:8081/
+   
+   # Ver estadísticas durante la carga (en otra terminal)
+   docker stats nginx-limitado
+   
+   # Actualizar límites sin reiniciar
+   docker update --memory="200m" --cpus="1.0" nginx-limitado
+   
+   # Verificar nuevos límites
+   docker inspect nginx-limitado | grep -A 10 "Memory"
+   ```
+
+9. **Ejercicio 6: Construir tu primera imagen personalizada**
+   ```bash
+   # Crear directorio para el proyecto
+   mkdir ~/mi-primera-imagen
+   cd ~/mi-primera-imagen
+   
+   # Crear un archivo HTML simple
+   cat > index.html << 'EOF'
+   <!DOCTYPE html>
+   <html>
+   <head>
+       <title>Mi Primera Imagen Docker</title>
+       <style>
+           body { 
+               font-family: Arial; 
+               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+               color: white;
+               display: flex;
+               justify-content: center;
+               align-items: center;
+               height: 100vh;
+               margin: 0;
+           }
+           .container {
+               text-align: center;
+               background: rgba(255,255,255,0.1);
+               padding: 50px;
+               border-radius: 20px;
+           }
+       </style>
+   </head>
+   <body>
+       <div class="container">
+           <h1>� ¡Hola desde Docker!</h1>
+           <p>Esta es mi primera imagen personalizada</p>
+           <p>Hostname: <span id="hostname"></span></p>
+       </div>
+       <script>
+           fetch('/hostname').then(r => r.text()).then(h => {
+               document.getElementById('hostname').textContent = h;
+           }).catch(() => {
+               document.getElementById('hostname').textContent = 'No disponible';
+           });
+       </script>
+   </body>
+   </html>
+EOF
+   
+   # Crear un servidor simple en Python
+   cat > server.py << 'EOF'
+#!/usr/bin/env python3
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+import socket
+import os
+
+class MyHandler(SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/hostname':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            hostname = socket.gethostname()
+            self.wfile.write(hostname.encode())
+        else:
+            super().do_GET()
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 8000))
+    server = HTTPServer(('', port), MyHandler)
+    print(f'Servidor corriendo en puerto {port}...')
+    server.serve_forever()
+EOF
+   
+   chmod +x server.py
+   
+   # Crear Dockerfile
+   cat > Dockerfile << 'EOF'
+# Imagen base oficial de Python
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="tu-email@ejemplo.com"
+LABEL description="Mi primera imagen Docker personalizada"
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos al contenedor
+COPY index.html .
+COPY server.py .
+
+# Hacer ejecutable el script
+RUN chmod +x server.py
+
+# Exponer puerto
+EXPOSE 8000
+
+# Variable de entorno por defecto
+ENV PORT=8000
+
+# Comando que se ejecuta al iniciar el contenedor
+CMD ["python3", "server.py"]
+EOF
+   
+   # Construir la imagen
+   docker build -t mi-web-app:v1.0 .
+   
+   # Ver la imagen creada
+   docker images | grep mi-web-app
+   
+   # Ver las capas de la imagen
+   docker history mi-web-app:v1.0
+   
+   # Ejecutar contenedor desde tu imagen
+   docker run -d \
+     --name mi-app-1 \
+     -p 8082:8000 \
+     mi-web-app:v1.0
+   
+   # Probar la aplicación
+   curl http://localhost:8082
+   curl http://localhost:8082/hostname
+   
+   # Escalar: Ejecutar múltiples instancias
+   docker run -d --name mi-app-2 -p 8083:8000 mi-web-app:v1.0
+   docker run -d --name mi-app-3 -p 8084:8000 mi-web-app:v1.0
+   
+   # Ver todas las instancias
+   docker ps | grep mi-app
+   
+   # Probar que cada una responde con su propio hostname
+   curl http://localhost:8082/hostname
+   curl http://localhost:8083/hostname
+   curl http://localhost:8084/hostname
+   
+   # Acceder desde el navegador
+   echo "Abre en tu navegador:"
+   echo "http://<IP_PUBLICA>:8082"
+   echo "http://<IP_PUBLICA>:8083"
+   echo "http://<IP_PUBLICA>:8084"
+   ```
+
+10. **Ejercicio 7: Docker Compose - Aplicación multi-contenedor**
+    ```bash
+    # Crear directorio para el proyecto
+    mkdir ~/docker-compose-demo
+    cd ~/docker-compose-demo
+    
+    # Crear docker-compose.yml
+    cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  database:
+    image: postgres:15
+    container_name: app-database
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret123
+      POSTGRES_DB: aplicacion
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cache Redis
+  cache:
+    image: redis:7.2-alpine
+    container_name: app-cache
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Interfaz web de administración
+  adminer:
+    image: adminer
+    container_name: app-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      database:
+        condition: service_healthy
+
+  # Aplicación web (nginx)
+  web:
+    image: nginx:alpine
+    container_name: app-web
+    ports:
+      - "8090:80"
+    networks:
+      - app-network
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    depends_on:
+      - database
+      - cache
+
+volumes:
+  db-data:
+
+networks:
+  app-network:
+    driver: bridge
+EOF
+    
+    # Crear directorio para HTML
+    mkdir html
+    
+    # Crear página de inicio
+    cat > html/index.html << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aplicación Multi-Contenedor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .service {
+            background: #e3f2fd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+        .status { color: #4CAF50; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐳 Aplicación Multi-Contenedor con Docker Compose</h1>
+        
+        <div class="service">
+            <h3>📊 Base de Datos PostgreSQL</h3>
+            <p><span class="status">✅ Activa</span></p>
+            <p>Puerto: 5432 (interno)</p>
+        </div>
+        
+        <div class="service">
+            <h3>⚡ Cache Redis</h3>
+            <p><span class="status">✅ Activa</span></p>
+            <p>Puerto: 6379 (interno)</p>
+        </div>
+        
+        <div class="service">
+            <h3>🔧 Adminer (Gestión BD)</h3>
+            <p><span class="status">✅ Activa</span></p>
+            <p><a href="http://localhost:8080" target="_blank">Acceder a Adminer</a></p>
+        </div>
+        
+        <div class="service">
+            <h3>🌐 Servidor Web (Nginx)</h3>
+            <p><span class="status">✅ Activa</span></p>
+            <p>Puerto: 8090</p>
+        </div>
+        
+        <h2>📋 Información de Conexión</h2>
+        <pre>
+Sistema: PostgreSQL
+Servidor: database
+Usuario: admin
+Contraseña: secret123
+Base de datos: aplicacion
+        </pre>
+    </div>
+</body>
+</html>
+EOF
+    
+    # Levantar todos los servicios
+    docker-compose up -d
+    
+    # Ver el estado de los servicios
+    docker-compose ps
+    
+    # Ver logs de todos los servicios
+    docker-compose logs
+    
+    # Seguir logs en tiempo real
+    docker-compose logs -f
+    # (Ctrl+C para salir)
+    
+    # Ver logs de un servicio específico
+    docker-compose logs database
+    
+    # Ejecutar comandos en un servicio
+    docker-compose exec database psql -U admin -d aplicacion
+    # \l (listar bases de datos)
+    # \q (salir)
+    
+    # Escalar un servicio (crear múltiples instancias)
+    docker-compose up -d --scale cache=3
+    
+    # Ver todos los contenedores
+    docker-compose ps
+    
+    # Detener todos los servicios
+    docker-compose stop
+    
+    # Iniciar servicios detenidos
+    docker-compose start
+    
+    # Reiniciar un servicio específico
+    docker-compose restart web
+    
+    # Ver uso de recursos
+    docker-compose top
+    
+    # Eliminar todo (contenedores, redes, pero no volúmenes)
+    docker-compose down
+    
+    # Eliminar TODO incluyendo volúmenes
+    docker-compose down -v
+    
+    # Reconstruir y levantar
+    docker-compose up -d --build
+    ```
+
+11. **Limpieza final del laboratorio**
+    ```bash
+    # Detener todos los contenedores
+    docker stop $(docker ps -q) 2>/dev/null || echo "No hay contenedores activos"
+    
+    # Eliminar todos los contenedores
+    docker rm $(docker ps -a -q) 2>/dev/null || echo "No hay contenedores para eliminar"
+    
+    # Eliminar imágenes no utilizadas
+    docker image prune -a -f
+    
+    # Eliminar volúmenes no utilizados
+    docker volume prune -f
+    
+    # Eliminar redes no utilizadas
+    docker network prune -f
+    
+    # Ver espacio liberado
+    docker system df
+    
+    # Limpieza completa (cuidado en producción!)
+    # docker system prune -a --volumes -f
+    ```
+
+### 🎯 Objetivos del Laboratorio Cumplidos
+
+Al completar este laboratorio, has aprendido a:
+
+- ✅ Instalar Docker en Ubuntu/Azure VM
+- ✅ Ejecutar contenedores básicos (hello-world, ubuntu, nginx)
+- ✅ Trabajar con imágenes (search, pull, history, inspect)
+- ✅ Usar variables de entorno para configurar contenedores
+- ✅ Crear y usar volúmenes para persistencia de datos
+- ✅ Configurar redes personalizadas para comunicación entre contenedores
+- ✅ Limitar recursos (CPU, memoria) de contenedores
+- ✅ Construir imágenes personalizadas con Dockerfile
+- ✅ Escalar aplicaciones (múltiples instancias)
+- ✅ Usar Docker Compose para aplicaciones multi-contenedor
+- ✅ Monitorear logs y estadísticas de recursos
+- ✅ Realizar limpieza y mantenimiento de Docker
+
+### 📝 Notas Importantes
+
+**Seguridad en Producción:**
+- No uses contraseñas hardcodeadas (usa secrets o variables de entorno)
+- No expongas puertos de bases de datos directamente a internet
+- Usa redes personalizadas, nunca la red bridge por defecto
+- Implementa health checks en todos los servicios críticos
+- Escanea imágenes en busca de vulnerabilidades
+
+**Best Practices:**
+- Usa imágenes oficiales o verificadas
+- Prefiere imágenes Alpine para menor tamaño
+- Implementa límites de recursos en producción
+- Usa volúmenes nombrados para datos importantes
+- Implementa logging centralizado
+- Documenta tus Dockerfiles
+
+### 🚀 Próximos Pasos
+
+Ahora que dominas Docker, estás listo para:
+- Área 2: Arquitectura de Kubernetes
+- Módulo 4: Pods vs Contenedores
+- Entender cómo Kubernetes orquesta contenedores a escala
 
 ---
 
