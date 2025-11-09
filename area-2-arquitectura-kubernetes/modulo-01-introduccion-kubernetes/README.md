@@ -537,11 +537,11 @@ git push → ArgoCD → Automated deployment
 ┌─────────────────────────────────────────────────┐
 │                 APLICACIONES                    │
 ├─────────────────────────────────────────────────┤
-│  KUBERNETES (Orquestación)                     │
+│  KUBERNETES (Orquestación)                      │
 ├─────────────────────────────────────────────────┤
-│  CONTENEDORES (Docker, containerd, CRI-O)      │
+│  CONTENEDORES (Docker, containerd, CRI-O)       │
 ├─────────────────────────────────────────────────┤
-│  INFRAESTRUCTURA (AWS, Azure, GCP, Bare Metal) │
+│  INFRAESTRUCTURA (AWS, Azure, GCP, Bare Metal)  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -553,11 +553,11 @@ git push → ArgoCD → Automated deployment
 ┌─────────────────────────────────────────────────┐
 │                 APLICACIONES                    │
 ├─────────────────────────────────────────────────┤
-│  KUBERNETES (Orquestación)                     │
+│  KUBERNETES (Orquestación)                      │
 ├─────────────────────────────────────────────────┤
-│  CONTENEDORES (containerd, CRI-O, Docker)      │
+│  CONTENEDORES (containerd, CRI-O, Docker)       │
 ├─────────────────────────────────────────────────┤
-│  INFRAESTRUCTURA (AWS, Azure, GCP, Bare Metal) │
+│  INFRAESTRUCTURA (AWS, Azure, GCP, Bare Metal)  │
 └─────────────────────────────────────────────────┘
 ```
 
