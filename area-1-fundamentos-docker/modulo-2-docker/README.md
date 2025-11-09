@@ -94,8 +94,8 @@ Cuando creamos un contenedor, este hereda **todos estos namespaces** que lo mant
 │   Contenedor A  │    │   Contenedor B  │
 │                 │    │                 │
 │  Proceso A  ──► │    │ ◄──  Proceso C  │
-│             ▲   │    │   ▲             │
-│             │   │    │   │             │
+│              ▲  │    │   ▲             │
+│              │  │    │   │             │
 │  Proceso B ──┘  │    │   └── Proceso D │
 │                 │    │                 │
 └─────────────────┘    └─────────────────┘
@@ -257,8 +257,8 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 │ ├─ PID 1: nginx │    │ ├─ PID 1: mysql │    │ ├─ PID 1: node  │
 │ └─ PID 2: logs  │    │ └─ PID 2: mysql │    │ └─ PID 2: npm   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-        ▲                        ▲                        ▲
-        │                        │                        │
+        ▲                        ▲                         ▲
+        │                        │                         │
         └────────── AISLAMIENTO COMPLETO ──────────────────┘
      (No pueden verse entre ellos)
 ```
