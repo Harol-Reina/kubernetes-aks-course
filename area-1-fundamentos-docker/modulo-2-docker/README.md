@@ -884,14 +884,38 @@ docker run mi-imagen "Otro mensaje"
 
 **Caso 1: Script de utilidad (usar ENTRYPOINT)**
 ```dockerfile
-FROM python:3.11
-COPY script.py /
-ENTRYPOINT ["python", "/script.py"]
+FROM python:3.11-slim
+WORKDIR /app
+
+# Crear el script directamente en el Dockerfile
+RUN echo '#!/usr/bin/env python3\n\
+import sys\n\
+import argparse\n\
+\n\
+def main():\n\
+    parser = argparse.ArgumentParser(description="Herramienta de utilidad Docker")\n\
+    parser.add_argument("--verbose", action="store_true", help="Modo verbose")\n\
+    parser.add_argument("--name", default="Docker", help="Nombre a mostrar")\n\
+    args = parser.parse_args()\n\
+    \n\
+    if args.verbose:\n\
+        print(f"Modo verbose activado")\n\
+        print(f"Argumentos recibidos: {sys.argv[1:]}")\n\
+    \n\
+    print(f"¡Hola desde {args.name}!")\n\
+\n\
+if __name__ == "__main__":\n\
+    main()' > /app/script.py && chmod +x /app/script.py
+
+ENTRYPOINT ["python", "/app/script.py"]
 CMD ["--help"]
 
 # Uso:
-# docker run mi-script             → python /script.py --help
-# docker run mi-script --verbose   → python /script.py --verbose
+# docker build -t mi-script .
+# docker run mi-script                    → python /app/script.py --help
+# docker run mi-script --verbose          → python /app/script.py --verbose
+# docker run mi-script --name "Mundo"     → python /app/script.py --name "Mundo"
+# docker run mi-script --verbose --name "Kubernetes" → ¡Hola desde Kubernetes!
 ```
 
 **Caso 2: Web server (usar CMD)**
@@ -904,16 +928,56 @@ CMD ["nginx", "-g", "daemon off;"]
 # docker run web-server bash       → bash (para debugging)
 ```
 
-**Caso 3: Combinación ENTRYPOINT + CMD**
+**Caso 3: Combinación ENTRYPOINT + CMD (herramienta ping)**
 ```dockerfile
 FROM alpine:latest
 ENTRYPOINT ["ping"]
 CMD ["google.com"]
 
 # Uso:
-# docker run ping-tool             → ping google.com
-# docker run ping-tool 8.8.8.8     → ping 8.8.8.8
-# docker run ping-tool -c 3 example.com → ping -c 3 example.com
+# docker run ping-tool                    → ping google.com
+# docker run ping-tool 8.8.8.8            → ping 8.8.8.8
+# docker run ping-tool -c 3 example.com   → ping -c 3 example.com
+```
+
+**Caso 4: Herramienta CLI con múltiples comandos**
+```dockerfile
+FROM alpine:latest
+
+# Instalar curl y jq para procesar JSON
+RUN apk add --no-cache curl jq
+
+# Script de entrada que maneja subcomandos
+RUN echo '#!/bin/sh\n\
+case "$1" in\n\
+  weather)\n\
+    curl -s "wttr.in/${2:-Madrid}?format=3"\n\
+    ;;\n\
+  ip)\n\
+    curl -s https://api.ipify.org\n\
+    ;;\n\
+  time)\n\
+    date "+%Y-%m-%d %H:%M:%S"\n\
+    ;;\n\
+  *)\n\
+    echo "Uso: docker run cli-tool [weather|ip|time] [args]"\n\
+    echo "Ejemplos:"\n\
+    echo "  docker run cli-tool weather Barcelona"\n\
+    echo "  docker run cli-tool ip"\n\
+    echo "  docker run cli-tool time"\n\
+    ;;\n\
+esac' > /usr/local/bin/cli-tool && chmod +x /usr/local/bin/cli-tool
+
+ENTRYPOINT ["cli-tool"]
+CMD ["help"]
+
+# Uso:
+# docker build -t cli-tool .
+# docker run cli-tool                    → Muestra ayuda
+# docker run cli-tool weather            → Clima de Madrid
+# docker run cli-tool weather Barcelona  → Clima de Barcelona
+# docker run cli-tool ip                 → Tu IP pública
+# docker run cli-tool time               → Fecha y hora actual
 ```
 
 ### **5.5. Docker en acción - Aislamiento completo:**
@@ -1683,13 +1747,13 @@ EOF
 ```bash
   # Detener todos los contenedores
   docker stop $(docker ps -q) 2>/dev/null || echo "No hay contenedores activos"
-  
+
   # Eliminar todos los contenedores
   docker rm $(docker ps -a -q) 2>/dev/null || echo "No hay contenedores para eliminar"
-  
+
   # Eliminar imágenes no utilizadas
   docker image prune -a -f
-  
+
   # Eliminar volúmenes no utilizados
   docker volume prune -f
     
