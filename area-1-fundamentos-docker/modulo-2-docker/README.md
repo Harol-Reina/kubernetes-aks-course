@@ -82,7 +82,591 @@ Contenedor = Proceso Aislado + Librerías + Binarios + Recursos Controlados
 
 ---
 
-## ⚙️ 3. Tecnologías fundamentales: Namespaces y Cgroups
+## 🧩 3. Conceptos Fundamentales de Docker
+
+Antes de profundizar en las tecnologías subyacentes, es esencial entender los **4 conceptos clave** que forman el ecosistema Docker. Estos conceptos son la base para trabajar efectivamente con contenedores.
+
+### **🎯 Los 4 Pilares de Docker**
+
+```
+┌─────────────────────────────────────────────────────┐
+│           ECOSISTEMA DOCKER                         │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  1. 📦 Contenedor  ←→  Instancia en ejecución       │
+│  2. 🖼️  Imagen      ←→  Plantilla inmutable         │
+│  3. 📝 Dockerfile  ←→  Receta de construcción       │
+│  4. 🌐 Docker Hub  ←→  Repositorio de imágenes      │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+### **📦 3.1. Contenedor: La Instancia en Ejecución**
+
+**Definición**: Un contenedor es una **instancia de una imagen**, es decir, un **proceso aislado** que se ejecuta en el sistema operativo.
+
+#### **⚠️ Concepto Crucial:**
+
+> **Un contenedor NO es una máquina virtual, es un PROCESO**. Cuando el proceso principal finaliza, el contenedor también finaliza.
+
+#### **Visualización del Concepto:**
+
+```
+┌─────────────────────────────────────────┐
+│     Sistema Operativo Host (Linux)      │
+│                                         │
+│  ┌──────────┐  ┌──────────┐             │
+│  │Proceso 1 │  │Proceso 2 │  ← Procesos │
+│  │ nginx    │  │ postgres │    aislados │
+│  │ PID 1234 │  │ PID 5678 │             │
+│  └──────────┘  └──────────┘             │
+│       ▲              ▲                  │
+│       │              │                  │
+│  Contenedor A   Contenedor B            │
+│  (instancia)    (instancia)             │
+│                                         │
+│  Imagen: nginx  Imagen: postgres        │
+│  (plantilla)    (plantilla)             │
+└─────────────────────────────────────────┘
+```
+
+#### **Ciclo de Vida del Contenedor:**
+
+Un contenedor se ejecuta con un **comando principal** (definido en `CMD` o `ENTRYPOINT`). Este comando determina el ciclo de vida:
+
+**Tipo 1: Tarea que finaliza (Batch Job)**
+```bash
+# Contenedor ejecuta un comando y termina
+docker run ubuntu echo "Hola Docker"
+
+# Flujo:
+# 1. Crea contenedor desde imagen ubuntu
+# 2. Ejecuta comando: echo "Hola Docker"
+# 3. Imprime: "Hola Docker"
+# 4. Comando termina → Contenedor se detiene
+
+# Verificar estado
+docker ps        # No aparece (ya finalizó)
+docker ps -a     # Aparece con STATUS: Exited (0)
+```
+
+**Tipo 2: Servicio continuo (Daemon)**
+```bash
+# Contenedor ejecuta un servicio que no termina
+docker run -d --name webserver nginx
+
+# Flujo:
+# 1. Crea contenedor desde imagen nginx
+# 2. Ejecuta comando: nginx (modo daemon)
+# 3. Nginx sigue corriendo indefinidamente
+# 4. Contenedor permanece activo
+
+# Verificar estado
+docker ps        # Aparece con STATUS: Up 5 seconds
+```
+
+#### **Características de los Contenedores:**
+
+- ✅ **Efímeros**: Se crean y destruyen fácilmente
+- ✅ **Inmutables**: No modificas el contenedor, creas uno nuevo
+- ✅ **Aislados**: No interfieren entre sí
+- ✅ **Reproducibles**: Misma imagen = mismo comportamiento
+- ✅ **Múltiples instancias**: Puedes ejecutar N contenedores de la misma imagen
+
+#### **Ejemplo Práctico: Múltiples Instancias**
+
+```bash
+# Ejecutar 3 servidores web desde la misma imagen
+docker run -d --name web1 -p 8081:80 nginx
+docker run -d --name web2 -p 8082:80 nginx
+docker run -d --name web3 -p 8083:80 nginx
+
+# Resultado: 3 contenedores independientes
+# - Cada uno con su propio proceso
+# - Cada uno con su propia IP
+# - Cada uno con su propio filesystem
+# - Todos desde la MISMA imagen nginx
+```
+
+---
+
+### **🖼️ 3.2. Imagen: La Plantilla Inmutable**
+
+**Definición**: Una imagen es un **archivo binario de solo lectura** que contiene todos los elementos necesarios para ejecutar un contenedor.
+
+#### **Componentes de una Imagen:**
+
+```
+┌─────────────────────────────────────────┐
+│         Docker Image (Layers)           │
+├─────────────────────────────────────────┤
+│  Capa 5: ⚙️ Configuración               │
+│   └─ CMD, EXPOSE, ENV, USER             │
+├─────────────────────────────────────────┤
+│  Capa 4: 📱 Aplicación                  │
+│   └─ Tu código o binarios               │
+├─────────────────────────────────────────┤
+│  Capa 3: 📚 Librerías del lenguaje      │
+│   └─ npm install, pip install           │
+├─────────────────────────────────────────┤
+│  Capa 2: 🔧 Herramientas del sistema    │
+│   └─ curl, wget, vim, etc.              │
+├─────────────────────────────────────────┤
+│  Capa 1: 🐧 Sistema base                │
+│   └─ Ubuntu, Alpine, Debian             │
+└─────────────────────────────────────────┘
+```
+
+#### **Ejemplo Concreto: Imagen de Aplicación Java**
+
+```
+Imagen: mi-aplicacion-java:1.0
+
+Contiene:
+├─ Base OS (Ubuntu 22.04)               → 78 MB
+├─ OpenJDK 17                           → 200 MB
+├─ Librerías Java (Spring Boot, etc.)   → 50 MB
+├─ Tu aplicación compilada (app.jar)    → 25 MB
+└─ Configuración (CMD: java -jar...)    → metadata
+
+Total: ~353 MB (vs 2-4 GB de una VM)
+```
+
+#### **Sistema de Capas (Layers):**
+
+Las imágenes usan un **sistema de capas** que permite reutilización y eficiencia:
+
+```bash
+# Ejemplo: Construyendo una imagen
+
+FROM ubuntu:22.04        # ← Capa base (compartida)
+RUN apt-get update       # ← Nueva capa
+RUN apt-get install -y nginx  # ← Nueva capa
+COPY index.html /var/www/  # ← Nueva capa
+CMD ["nginx"]            # ← Metadata (no es capa)
+
+# Resultado:
+# - Capa de ubuntu se reutiliza entre todas las imágenes
+# - Solo las capas nuevas ocupan espacio adicional
+# - Las capas son INMUTABLES (solo lectura)
+```
+
+#### **Características de las Imágenes:**
+
+- ✅ **Inmutables**: Una vez creada, no cambia
+- ✅ **Versionadas**: Tags para diferentes versiones
+- ✅ **Reutilizables**: Base para múltiples contenedores
+- ✅ **Portables**: Funcionan en cualquier host con Docker
+- ✅ **Eficientes**: Sistema de capas ahorra espacio
+
+#### **Tags y Versionado:**
+
+```bash
+# Diferentes versiones de la misma imagen
+nginx:latest       # Última versión estable
+nginx:1.24         # Versión específica 1.24
+nginx:1.24-alpine  # Versión 1.24 sobre Alpine Linux
+nginx:stable       # Canal estable
+
+# Tus propias imágenes
+miapp:latest       # Última versión
+miapp:v1.0.0       # Release específico
+miapp:dev          # Versión de desarrollo
+miapp:staging      # Versión para staging
+```
+
+---
+
+### **📝 3.3. Dockerfile: El Plano de Construcción**
+
+**Definición**: Un Dockerfile es un **archivo de texto** con instrucciones secuenciales que especifican cómo construir una imagen.
+
+#### **Analogía Útil:**
+
+```
+Dockerfile  =  Receta de cocina
+   ↓
+Imagen      =  Plato preparado y empacado
+   ↓
+Contenedor  =  Plato servido en la mesa
+```
+
+#### **Estructura Básica de un Dockerfile:**
+
+```dockerfile
+# 1. Imagen base desde la que partimos
+FROM ubuntu:22.04
+
+# 2. Información del mantenedor (opcional)
+LABEL maintainer="tu@email.com"
+
+# 3. Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    apache2 \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Establecer directorio de trabajo
+WORKDIR /var/www/html
+
+# 5. Copiar archivos de nuestra aplicación
+COPY index.html .
+COPY styles.css .
+
+# 6. Definir variables de entorno
+ENV APP_ENV=production
+ENV APP_PORT=80
+
+# 7. Exponer puertos que usa la aplicación
+EXPOSE 80
+
+# 8. Crear usuario no-root (seguridad)
+RUN useradd -m appuser
+USER appuser
+
+# 9. Comando que se ejecutará al iniciar el contenedor
+CMD ["apache2ctl", "-D", "FOREGROUND"]
+```
+
+#### **Instrucciones Más Comunes:**
+
+| Instrucción | Descripción | Ejemplo |
+|-------------|-------------|---------|
+| `FROM` | Imagen base | `FROM node:18` |
+| `RUN` | Ejecutar comando durante el build | `RUN npm install` |
+| `COPY` | Copiar archivos al contenedor | `COPY app.js /app/` |
+| `WORKDIR` | Establecer directorio de trabajo | `WORKDIR /app` |
+| `ENV` | Variables de entorno | `ENV NODE_ENV=production` |
+| `EXPOSE` | Documentar puertos usados | `EXPOSE 3000` |
+| `CMD` | Comando por defecto | `CMD ["node", "app.js"]` |
+| `ENTRYPOINT` | Comando principal (no overrideable fácilmente) | `ENTRYPOINT ["python"]` |
+
+#### **Ejemplo Práctico: Aplicación Node.js**
+
+```dockerfile
+# Dockerfile para app Node.js
+
+FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+# Copiar package.json primero (optimización de capas)
+COPY package*.json ./
+
+# Instalar dependencias
+RUN npm ci --only=production
+
+# Copiar código fuente
+COPY . .
+
+# Exponer puerto
+EXPOSE 3000
+
+# Usuario no-root
+USER node
+
+# Comando de inicio
+CMD ["node", "server.js"]
+```
+
+#### **Construir la Imagen:**
+
+```bash
+# Construir imagen desde Dockerfile
+docker build -t mi-app-node:v1.0 .
+
+# Opciones comunes:
+# -t : Tag/nombre de la imagen
+# -f : Especificar archivo Dockerfile diferente
+# --no-cache : No usar cache de builds anteriores
+# --build-arg : Pasar argumentos al build
+
+# Ejemplo con más opciones:
+docker build \
+  -t mi-app-node:v1.0 \
+  -f Dockerfile.production \
+  --build-arg NODE_ENV=production \
+  .
+```
+
+---
+
+### **🌐 3.4. Docker Hub y Registries**
+
+**Definición**: Docker Hub es un **repositorio público de imágenes** de contenedores, similar a GitHub pero para imágenes Docker en lugar de código fuente.
+
+#### **Arquitectura de Distribución:**
+
+```
+┌──────────────┐     push      ┌──────────────┐
+│ Desarrollador│ ────────────► │ Docker Hub   │
+│   (local)    │               │  Registry    │
+└──────────────┘               └──────────────┘
+                                      │
+                                      │ pull
+                    ┌─────────────────┼─────────────────┐
+                    ▼                 ▼                 ▼
+              ┌──────────┐      ┌──────────┐      ┌──────────┐
+              │ Server 1 │      │ Server 2 │      │ Server 3 │
+              │Production│      │Production│      │Production│
+              └──────────┘      └──────────┘      └──────────┘
+```
+
+#### **Funcionalidades de Docker Hub:**
+
+**1. Buscar Imágenes Oficiales:**
+```bash
+# Buscar en Docker Hub
+docker search nginx
+
+# Resultado:
+NAME                DESCRIPTION                     STARS   OFFICIAL
+nginx               Official build of Nginx         18000   [OK]
+nginx/nginx-ingress NGINX Ingress Controller        500
+bitnami/nginx       Bitnami nginx container         200
+```
+
+**2. Descargar Imágenes:**
+```bash
+# Descargar última versión
+docker pull nginx
+
+# Descargar versión específica
+docker pull nginx:1.24
+
+# Descargar desde tag específico
+docker pull nginx:1.24-alpine
+```
+
+**3. Subir Tus Propias Imágenes:**
+```bash
+# 1. Login en Docker Hub
+docker login
+
+# 2. Tagear tu imagen con tu username
+docker tag mi-app:latest tu-usuario/mi-app:v1.0
+
+# 3. Push al registry
+docker push tu-usuario/mi-app:v1.0
+
+# Ahora otros pueden usar:
+docker pull tu-usuario/mi-app:v1.0
+```
+
+#### **Registries Alternativos:**
+
+Docker Hub no es el único registry disponible. Existen muchas alternativas:
+
+| Registry | URL | Caso de Uso |
+|----------|-----|-------------|
+| **Docker Hub** | `hub.docker.com` | Público, gratuito, oficial |
+| **GitHub Container Registry** | `ghcr.io` | Integración con GitHub repos |
+| **GitLab Container Registry** | `registry.gitlab.com` | Integración con GitLab CI/CD |
+| **Amazon ECR** | `*.amazonaws.com` | AWS, privado |
+| **Google GCR** | `gcr.io` | Google Cloud Platform |
+| **Azure ACR** | `*.azurecr.io` | Azure, privado |
+| **Harbor** | `self-hosted` | On-premise, enterprise |
+
+#### **Ejemplo con Diferentes Registries:**
+
+```bash
+# Docker Hub (por defecto)
+docker pull nginx:latest
+
+# GitHub Container Registry
+docker pull ghcr.io/usuario/proyecto:latest
+
+# Google Container Registry
+docker pull gcr.io/proyecto-id/imagen:tag
+
+# Azure Container Registry
+docker pull miregistry.azurecr.io/miapp:v1.0
+
+# Registry privado custom
+docker pull registry.miempresa.com/backend:latest
+```
+
+#### **Imágenes Oficiales vs Community:**
+
+**Imágenes Oficiales** (⭐ Verified):
+- ✅ Mantenidas por Docker, Inc o el proyecto oficial
+- ✅ Regularmente actualizadas
+- ✅ Escaneadas por vulnerabilidades
+- ✅ Documentación completa
+- Ejemplos: `nginx`, `postgres`, `redis`, `node`, `python`
+
+**Imágenes de la Comunidad**:
+- ⚠️ Creadas por usuarios individuales u organizaciones
+- ⚠️ Calidad variable
+- ⚠️ Verificar stars, downloads y última actualización
+- Ejemplos: `bitnami/nginx`, `linuxserver/plex`
+
+---
+
+### **🔄 3.5. Workflow Completo de Docker**
+
+Ahora que conoces los 4 conceptos fundamentales, veamos cómo se relacionan en el flujo de trabajo completo:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              WORKFLOW COMPLETO DE DOCKER                        │
+└─────────────────────────────────────────────────────────────────┘
+
+1️⃣ DESARROLLO LOCAL
+   ├─ Escribes tu código (app.py, package.json, etc.)
+   ├─ Creas Dockerfile con instrucciones de build
+   └─ Defines dependencias y configuración
+
+2️⃣ BUILD (Construcción de Imagen)
+   ├─ docker build -t miapp:v1.0 .
+   ├─ Docker lee el Dockerfile
+   ├─ Ejecuta cada instrucción creando capas
+   └─ Genera imagen binaria inmutable
+
+3️⃣ TEST LOCAL (Opcional pero recomendado)
+   ├─ docker run -d -p 8080:80 miapp:v1.0
+   ├─ Pruebas funcionales
+   └─ Verificación de comportamiento
+
+4️⃣ TAG Y PUSH (Distribución)
+   ├─ docker tag miapp:v1.0 usuario/miapp:v1.0
+   ├─ docker login
+   └─ docker push usuario/miapp:v1.0
+
+5️⃣ PULL EN OTROS ENTORNOS
+   ├─ Servidores de staging/producción
+   ├─ docker pull usuario/miapp:v1.0
+   └─ Otros desarrolladores del equipo
+
+6️⃣ RUN (Ejecución en Producción)
+   ├─ docker run -d -p 80:80 usuario/miapp:v1.0
+   ├─ Se crea contenedor desde la imagen
+   └─ Aplicación corriendo en producción
+
+7️⃣ GESTIÓN Y MONITOREO
+   ├─ docker ps (contenedores activos)
+   ├─ docker logs <id> (ver logs)
+   ├─ docker stats (uso de recursos)
+   └─ docker stop/start/restart
+```
+
+#### **Diagrama Visual del Workflow:**
+
+```
+Desarrollador Local
+├─ Código fuente (app.js, index.html...)
+├─ Dockerfile
+│
+▼ docker build
+│
+Imagen Local (miapp:v1.0)
+│
+▼ docker tag + docker push
+│
+┌────────────────────┐
+│   Docker Hub       │
+│  usuario/miapp:v1.0│
+└────────────────────┘
+         │
+         │ docker pull
+         │
+    ┌────┴────┬────────┬────────┐
+    ▼         ▼        ▼        ▼
+Server 1  Server 2  Server 3  Dev Team
+    │         │        │        │
+    ▼         ▼        ▼        ▼
+Container Container Container Container
+(instancia) (instancia) (instancia) (instancia)
+```
+
+---
+
+### **💡 3.6. Resumen de Conceptos Clave**
+
+#### **Tabla de Relaciones:**
+
+| Concepto | Analogía | Es... | No es... |
+|----------|----------|-------|----------|
+| **Contenedor** | Proceso en ejecución | Una instancia activa | Una máquina virtual |
+| **Imagen** | Plantilla/Molde | Archivo binario inmutable | Código fuente |
+| **Dockerfile** | Receta de cocina | Instrucciones de construcción | La imagen final |
+| **Docker Hub** | GitHub para imágenes | Repositorio de distribución | Gestor de código fuente |
+
+#### **Relación POO (Programación Orientada a Objetos):**
+
+Si vienes del mundo de la programación, esta analogía te ayudará:
+
+```
+Clase (en código)     =  Imagen Docker
+    ↓                        ↓
+Objeto/Instancia      =  Contenedor
+    ↓                        ↓
+Múltiples objetos     =  Múltiples contenedores
+de la misma clase        de la misma imagen
+```
+
+#### **Ejemplo Práctico Integrado:**
+
+```bash
+# 1. Crear Dockerfile
+cat > Dockerfile << 'EOF'
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY app.py .
+CMD ["python", "app.py"]
+EOF
+
+# 2. Construir imagen
+docker build -t mi-python-app:v1.0 .
+
+# 3. Probar localmente
+docker run -d --name test-app mi-python-app:v1.0
+
+# 4. Verificar funcionamiento
+docker logs test-app
+docker ps
+
+# 5. Publicar en Docker Hub
+docker tag mi-python-app:v1.0 usuario/mi-python-app:v1.0
+docker login
+docker push usuario/mi-python-app:v1.0
+
+# 6. Otros desarrolladores pueden usar:
+docker pull usuario/mi-python-app:v1.0
+docker run -d usuario/mi-python-app:v1.0
+
+# 7. Escalar (múltiples instancias)
+docker run -d --name app1 -p 8001:8000 usuario/mi-python-app:v1.0
+docker run -d --name app2 -p 8002:8000 usuario/mi-python-app:v1.0
+docker run -d --name app3 -p 8003:8000 usuario/mi-python-app:v1.0
+```
+
+---
+
+### **🎯 Checkpoint de Conceptos Fundamentales**
+
+Antes de continuar a las tecnologías subyacentes, asegúrate de poder:
+
+- [ ] Explicar la diferencia entre imagen y contenedor
+- [ ] Describir qué es un Dockerfile y para qué sirve
+- [ ] Entender que un contenedor es un proceso que puede terminar
+- [ ] Conocer la diferencia entre CMD y ENTRYPOINT
+- [ ] Saber cómo publicar una imagen en Docker Hub
+- [ ] Ejecutar múltiples contenedores de la misma imagen
+- [ ] Explicar el workflow completo: Dockerfile → Image → Container
+
+**👉 Con estos conceptos claros, ahora estás listo para entender las tecnologías Linux subyacentes que hacen posible el aislamiento de contenedores.**
+
+---
+
+## ⚙️ 4. Tecnologías fundamentales: Namespaces y Cgroups
+
+Ahora que entiendes qué son los contenedores, imágenes y Dockerfiles, es momento de profundizar en **cómo funciona el aislamiento** a nivel técnico. Docker utiliza dos tecnologías fundamentales de Linux:
 
 ### **Linux Namespaces** - El corazón del aislamiento
 
@@ -200,19 +784,45 @@ docker run -d --name contenedor-db \
 
 ---
 
-## 🐳 4. ¿Qué es Docker?
+## 🐳 5. ¿Qué es Docker?
 
 **Docker** es una plataforma de contenerización que simplifica la creación, distribución y ejecución de aplicaciones en contenedores. Docker implementa todos los namespaces y cgroups de manera transparente para el usuario.
 
-### Componentes principales de Docker:
+### **5.1. Arquitectura de Docker**
+
+Docker se compone de varios componentes que trabajan juntos:
+
+```
+┌─────────────────────────────────────────────────────┐
+│            ARQUITECTURA DOCKER                      │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Docker CLI (docker command)                        │
+│       │                                             │
+│       ▼                                             │
+│  Docker Daemon (dockerd)                            │
+│       │                                             │
+│       ├──► containerd (Container Runtime)           │
+│       │        │                                    │
+│       │        └──► runc (OCI Runtime)              │
+│       │                                             │
+│       ├──► Image Management                         │
+│       ├──► Network Management                       │
+│       └──► Volume Management                        │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+### **5.2. Componentes principales de Docker:**
 
 - **Docker Engine**: Runtime que gestiona contenedores y orquesta los namespaces
 - **Docker Images**: Plantillas inmutables para crear contenedores
 - **Docker Containers**: Instancias ejecutables con todos los namespaces aislados
-- **Docker Registry**: Repositorio para almacenar y distribuir imágenes
+- **Docker Registry**: Repositorio para almacenar y distribuir imágenes (Docker Hub)
 - **Dockerfile**: Archivo de texto con instrucciones para construir imágenes
+- **Docker Compose**: Herramienta para aplicaciones multi-contenedor
 
-### Ciclo de vida Docker:
+### **5.3. Ciclo de vida Docker:**
 
 ```
 Código → Dockerfile → Image → Container → Running App
@@ -220,7 +830,93 @@ Código → Dockerfile → Image → Container → Running App
 (write)   (build)   (pull)   (run)     (execute)
 ```
 
-### **Docker en acción - Aislamiento completo:**
+### **5.4. CMD vs ENTRYPOINT: Entendiendo el Comando Principal**
+
+Una de las confusiones más comunes en Docker es la diferencia entre `CMD` y `ENTRYPOINT`. Ambas definen qué ejecutará el contenedor, pero funcionan de manera diferente:
+
+#### **CMD: Comando por Defecto (Fácilmente Overrideable)**
+
+```dockerfile
+FROM ubuntu:22.04
+CMD ["echo", "Hola Docker"]
+```
+
+```bash
+# Si ejecutas sin argumentos, usa CMD
+docker run mi-imagen
+# Output: Hola Docker
+
+# Si pasas argumentos, REEMPLAZA completamente CMD
+docker run mi-imagen echo "Otro mensaje"
+# Output: Otro mensaje
+
+# CMD fue ignorado completamente
+```
+
+#### **ENTRYPOINT: Comando Principal (Punto de Entrada Fijo)**
+
+```dockerfile
+FROM ubuntu:22.04
+ENTRYPOINT ["echo"]
+CMD ["Hola Docker"]
+```
+
+```bash
+# ENTRYPOINT siempre se ejecuta
+docker run mi-imagen
+# Output: Hola Docker (ENTRYPOINT + CMD)
+
+# Los argumentos se AGREGAN al ENTRYPOINT
+docker run mi-imagen "Otro mensaje"
+# Output: Otro mensaje (ENTRYPOINT + nuevo argumento, CMD ignorado)
+```
+
+#### **Tabla Comparativa:**
+
+| Aspecto | CMD | ENTRYPOINT |
+|---------|-----|------------|
+| **Propósito** | Comando por defecto | Punto de entrada fijo |
+| **Override** | Completamente reemplazable | Solo reemplazable con `--entrypoint` |
+| **Uso típico** | Argumentos por defecto | Comando principal |
+| **Combinación** | Se puede combinar con ENTRYPOINT | Puede tener CMD como argumentos |
+
+#### **Ejemplos Prácticos:**
+
+**Caso 1: Script de utilidad (usar ENTRYPOINT)**
+```dockerfile
+FROM python:3.11
+COPY script.py /
+ENTRYPOINT ["python", "/script.py"]
+CMD ["--help"]
+
+# Uso:
+# docker run mi-script             → python /script.py --help
+# docker run mi-script --verbose   → python /script.py --verbose
+```
+
+**Caso 2: Web server (usar CMD)**
+```dockerfile
+FROM nginx:latest
+CMD ["nginx", "-g", "daemon off;"]
+
+# Uso:
+# docker run web-server            → nginx -g daemon off;
+# docker run web-server bash       → bash (para debugging)
+```
+
+**Caso 3: Combinación ENTRYPOINT + CMD**
+```dockerfile
+FROM alpine:latest
+ENTRYPOINT ["ping"]
+CMD ["google.com"]
+
+# Uso:
+# docker run ping-tool             → ping google.com
+# docker run ping-tool 8.8.8.8     → ping 8.8.8.8
+# docker run ping-tool -c 3 example.com → ping -c 3 example.com
+```
+
+### **5.5. Docker en acción - Aislamiento completo:**
 
 Cuando ejecutas `docker run`, Docker automáticamente:
 
@@ -228,6 +924,7 @@ Cuando ejecutas `docker run`, Docker automáticamente:
 2. **Configura cgroups** para limitar recursos
 3. **Aísla el proceso** completamente del host y otros contenedores
 4. **Asigna recursos** según las especificaciones
+5. **Ejecuta el comando** definido en CMD o ENTRYPOINT
 
 ```bash
 # Ejemplo: Cada contenedor está completamente aislado
@@ -242,7 +939,7 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 # - Recursos controlados por cgroups
 ```
 
-### **Aislamiento en la práctica:**
+### **5.6. Aislamiento en la práctica:**
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -265,7 +962,7 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 
 ---
 
-## 🔧 5. Docker vs otras tecnologías de contenedores
+## 🔧 6. Docker vs otras tecnologías de contenedores
 
 | Tecnología | Descripción | Uso principal |
 |------------|-------------|---------------|
@@ -276,7 +973,7 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 
 ---
 
-## 🧪 5. Laboratorio práctico: Instalación y primeros pasos con Docker
+## 🧪 7. Laboratorio práctico: Instalación y primeros pasos con Docker
 
 **Objetivo**: Instalar Docker en la VM de Azure y ejecutar los primeros contenedores.
 
@@ -358,76 +1055,591 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 
 ---
 
-## 📊 6. Comandos esenciales de Docker
+## 📊 8. Comandos esenciales de Docker
 
-### Gestión de imágenes:
-```bash
-# Buscar imágenes en Docker Hub
-docker search nginx
+Esta sección proporciona una referencia rápida de los comandos más utilizados en Docker.
 
-# Descargar imagen
-docker pull nginx:alpine
+### **8.1. Tabla de Referencia Rápida**
 
-# Listar imágenes locales
-docker images
-
-# Eliminar imagen
-docker rmi nginx:alpine
-
-# Ver historial de una imagen
-docker history nginx
-```
-
-### Gestión de contenedores:
-```bash
-# Ejecutar contenedor (foreground)
-docker run nginx
-
-# Ejecutar contenedor (background/detached)
-docker run -d nginx
-
-# Ejecutar con nombre personalizado
-docker run -d --name mi-servidor nginx
-
-# Ejecutar con mapeo de puertos
-docker run -d -p 8080:80 nginx
-
-# Ejecutar con variables de entorno
-docker run -d -e MYSQL_ROOT_PASSWORD=secreto mysql
-
-# Ver contenedores en ejecución
-docker ps
-
-# Ver todos los contenedores (incluidos detenidos)
-docker ps -a
-
-# Inspeccionar contenedor
-docker inspect mi-servidor
-
-# Estadísticas de recursos
-docker stats
-
-# Detener contenedor
-docker stop mi-servidor
-
-# Iniciar contenedor detenido
-docker start mi-servidor
-
-# Reiniciar contenedor
-docker restart mi-servidor
-
-# Eliminar contenedor
-docker rm mi-servidor
-
-# Eliminar contenedor en ejecución (forzado)
-docker rm -f mi-servidor
-```
-
-### 📋 [Ver guía completa de comandos Docker](./laboratorios/docker-commands-guide.md)
+| Categoría | Comando | Descripción | Ejemplo |
+|-----------|---------|-------------|---------|
+| **Imágenes** | `docker pull` | Descarga imagen del registry | `docker pull nginx:latest` |
+| | `docker build` | Construye imagen desde Dockerfile | `docker build -t miapp:v1 .` |
+| | `docker images` | Lista imágenes locales | `docker images` |
+| | `docker rmi` | Elimina imagen | `docker rmi nginx:latest` |
+| | `docker tag` | Etiqueta imagen | `docker tag miapp:v1 user/miapp:v1` |
+| | `docker push` | Sube imagen al registry | `docker push user/miapp:v1` |
+| | `docker history` | Muestra capas de imagen | `docker history nginx` |
+| **Contenedores** | `docker run` | Crea y ejecuta contenedor | `docker run -d -p 80:80 nginx` |
+| | `docker ps` | Lista contenedores activos | `docker ps` |
+| | `docker ps -a` | Lista todos los contenedores | `docker ps -a` |
+| | `docker stop` | Detiene contenedor | `docker stop mi-contenedor` |
+| | `docker start` | Inicia contenedor detenido | `docker start mi-contenedor` |
+| | `docker restart` | Reinicia contenedor | `docker restart mi-contenedor` |
+| | `docker rm` | Elimina contenedor | `docker rm mi-contenedor` |
+| | `docker logs` | Muestra logs del contenedor | `docker logs -f mi-contenedor` |
+| | `docker exec` | Ejecuta comando en contenedor | `docker exec -it web bash` |
+| | `docker inspect` | Muestra información detallada | `docker inspect mi-contenedor` |
+| | `docker stats` | Muestra uso de recursos | `docker stats` |
+| **Redes** | `docker network ls` | Lista redes | `docker network ls` |
+| | `docker network create` | Crea red | `docker network create mi-red` |
+| | `docker network connect` | Conecta contenedor a red | `docker network connect mi-red web` |
+| **Volúmenes** | `docker volume ls` | Lista volúmenes | `docker volume ls` |
+| | `docker volume create` | Crea volumen | `docker volume create datos` |
+| | `docker volume rm` | Elimina volumen | `docker volume rm datos` |
+| **Sistema** | `docker info` | Información del sistema Docker | `docker info` |
+| | `docker version` | Versión de Docker | `docker version` |
+| | `docker system prune` | Limpia recursos no usados | `docker system prune -a` |
 
 ---
 
-## 🔄 7. Ventajas de la contenerización para Kubernetes
+### **8.2. Gestión de Imágenes - Comandos Detallados**
+
+```bash
+# 1. BUSCAR IMÁGENES
+docker search nginx
+# Busca imágenes de nginx en Docker Hub
+
+docker search --filter stars=1000 postgres
+# Busca imágenes con al menos 1000 estrellas
+
+# 2. DESCARGAR IMÁGENES
+docker pull nginx:latest
+# Descarga la última versión de nginx
+
+docker pull nginx:1.24-alpine
+# Descarga versión específica (más ligera)
+
+docker pull postgres:15
+# Descarga PostgreSQL versión 15
+
+# 3. LISTAR IMÁGENES
+docker images
+# Muestra todas las imágenes locales
+
+docker images --filter dangling=true
+# Muestra imágenes sin etiqueta (<none>)
+
+docker images -q
+# Muestra solo IDs de imágenes
+
+# 4. ELIMINAR IMÁGENES
+docker rmi nginx:alpine
+# Elimina imagen específica
+
+docker rmi $(docker images -f dangling=true -q)
+# Elimina todas las imágenes sin etiqueta
+
+docker rmi -f $(docker images -q)
+# Elimina TODAS las imágenes (cuidado!)
+
+# 5. INSPECCIONAR IMÁGENES
+docker history nginx
+# Muestra todas las capas y comandos de construcción
+
+docker inspect nginx:latest
+# Muestra metadata completa de la imagen (JSON)
+
+# 6. TAGEAR Y PUBLICAR
+docker tag miapp:v1.0 usuario/miapp:v1.0
+# Etiqueta imagen para subir a Docker Hub
+
+docker login
+# Autenticarse en Docker Hub
+
+docker push usuario/miapp:v1.0
+# Sube imagen al registry
+```
+
+---
+
+### **8.3. Gestión de Contenedores - Comandos Detallados**
+
+```bash
+# 1. EJECUTAR CONTENEDORES (run)
+docker run nginx
+# Ejecuta en foreground (bloquea terminal)
+
+docker run -d nginx
+# Ejecuta en background (-d = detached)
+
+docker run -d --name webserver nginx
+# Ejecuta con nombre personalizado
+
+docker run -d -p 8080:80 nginx
+# Mapea puerto 8080 del host → 80 del contenedor
+
+docker run -d -p 8080:80 -p 443:443 nginx
+# Mapea múltiples puertos
+
+docker run -d -e MYSQL_ROOT_PASSWORD=secret mysql
+# Pasa variables de entorno
+
+docker run -d -v /host/data:/container/data nginx
+# Monta volumen (persistencia)
+
+docker run -it ubuntu bash
+# Ejecuta interactivo (-it) con shell
+
+docker run --rm alpine echo "Hola Docker"
+# Ejecuta y elimina automáticamente al terminar
+
+docker run -d --restart=always nginx
+# Reinicia automáticamente si falla
+
+docker run -d --memory="512m" --cpus="1.5" nginx
+# Limita recursos (RAM y CPU)
+
+# 2. LISTAR CONTENEDORES
+docker ps
+# Muestra contenedores en ejecución
+
+docker ps -a
+# Muestra TODOS los contenedores (activos y detenidos)
+
+docker ps -q
+# Muestra solo IDs de contenedores activos
+
+docker ps --filter status=exited
+# Muestra solo contenedores detenidos
+
+# 3. GESTIONAR CONTENEDORES
+docker stop webserver
+# Detiene contenedor (SIGTERM, espera 10s, luego SIGKILL)
+
+docker stop $(docker ps -q)
+# Detiene TODOS los contenedores activos
+
+docker start webserver
+# Inicia contenedor detenido
+
+docker restart webserver
+# Reinicia contenedor (stop + start)
+
+docker pause webserver
+# Pausa contenedor (congela procesos)
+
+docker unpause webserver
+# Reanuda contenedor pausado
+
+docker kill webserver
+# Mata contenedor inmediatamente (SIGKILL)
+
+docker rm webserver
+# Elimina contenedor detenido
+
+docker rm -f webserver
+# Fuerza eliminación de contenedor activo
+
+docker rm $(docker ps -a -q)
+# Elimina TODOS los contenedores
+
+# 4. INSPECCIONAR CONTENEDORES
+docker logs webserver
+# Muestra logs del contenedor
+
+docker logs -f webserver
+# Sigue logs en tiempo real (como tail -f)
+
+docker logs --tail 100 webserver
+# Muestra últimas 100 líneas
+
+docker logs --since 1h webserver
+# Logs de la última hora
+
+docker inspect webserver
+# Muestra configuración completa (JSON)
+
+docker inspect --format='{{.NetworkSettings.IPAddress}}' webserver
+# Extrae IP específica del JSON
+
+docker stats
+# Muestra uso de recursos en tiempo real
+
+docker stats --no-stream
+# Muestra snapshot único de recursos
+
+docker top webserver
+# Muestra procesos ejecutándose en el contenedor
+
+docker port webserver
+# Muestra mapeo de puertos
+
+# 5. EJECUTAR COMANDOS EN CONTENEDORES
+docker exec webserver ls /usr/share/nginx/html
+# Ejecuta comando en contenedor activo
+
+docker exec -it webserver bash
+# Accede a shell interactivo del contenedor
+
+docker exec -it webserver sh
+# Shell alternativo (en imágenes Alpine)
+
+docker exec -u root webserver whoami
+# Ejecuta como usuario específico
+
+# 6. COPIAR ARCHIVOS
+docker cp archivo.txt webserver:/app/
+# Copia del host al contenedor
+
+docker cp webserver:/app/log.txt ./
+# Copia del contenedor al host
+
+# 7. ACTUALIZAR CONTENEDORES
+docker update --memory="1g" webserver
+# Actualiza límites de recursos sin reiniciar
+
+docker rename webserver nginx-prod
+# Renombra contenedor
+```
+
+---
+
+### **8.4. Redes Docker**
+
+```bash
+# 1. GESTIÓN DE REDES
+docker network ls
+# Lista todas las redes
+
+docker network create mi-red
+# Crea red bridge personalizada
+
+docker network create --driver=bridge --subnet=192.168.1.0/24 mi-red-custom
+# Crea red con configuración específica
+
+docker network inspect mi-red
+# Inspecciona configuración de red
+
+docker network rm mi-red
+# Elimina red
+
+# 2. CONECTAR CONTENEDORES A REDES
+docker run -d --name web --network mi-red nginx
+# Ejecuta contenedor en red específica
+
+docker network connect mi-red webserver
+# Conecta contenedor existente a red
+
+docker network disconnect mi-red webserver
+# Desconecta contenedor de red
+
+# 3. EJEMPLO PRÁCTICO: Comunicación entre contenedores
+docker network create app-network
+
+docker run -d --name database --network app-network \
+  -e POSTGRES_PASSWORD=secret postgres
+
+docker run -d --name backend --network app-network \
+  -e DB_HOST=database \
+  -e DB_USER=postgres \
+  -e DB_PASS=secret \
+  mi-backend:latest
+
+# backend puede conectarse a "database" por nombre
+```
+
+---
+
+### **8.5. Volúmenes Docker (Persistencia)**
+
+```bash
+# 1. GESTIÓN DE VOLÚMENES
+docker volume ls
+# Lista volúmenes
+
+docker volume create datos
+# Crea volumen nombrado
+
+docker volume inspect datos
+# Inspecciona volumen
+
+docker volume rm datos
+# Elimina volumen
+
+docker volume prune
+# Elimina volúmenes no utilizados
+
+# 2. USAR VOLÚMENES
+docker run -d -v datos:/var/lib/mysql mysql
+# Usa volumen nombrado
+
+docker run -d -v /host/path:/container/path nginx
+# Bind mount (mapeo directo)
+
+docker run -d -v /container/data nginx
+# Volumen anónimo
+
+docker run -d -v datos:/data:ro nginx
+# Volumen de solo lectura
+
+# 3. EJEMPLO: Base de datos con persistencia
+docker volume create postgres-data
+
+docker run -d --name db \
+  -v postgres-data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:15
+
+# Los datos sobreviven aunque elimines el contenedor
+docker rm -f db
+docker run -d --name db-restored \
+  -v postgres-data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:15
+# Los datos siguen ahí!
+```
+
+---
+
+### **8.6. Comandos de Sistema y Limpieza**
+
+```bash
+# 1. INFORMACIÓN DEL SISTEMA
+docker info
+# Información completa del sistema Docker
+
+docker version
+# Versión de Docker Client y Server
+
+docker system df
+# Uso de disco por Docker
+
+# 2. LIMPIEZA (IMPORTANTE)
+docker system prune
+# Elimina: contenedores detenidos, redes no usadas, imágenes sin tag
+
+docker system prune -a
+# Elimina TODO lo no usado (incluye imágenes con tag)
+
+docker system prune --volumes
+# Incluye volúmenes en la limpieza
+
+docker container prune
+# Solo contenedores detenidos
+
+docker image prune
+# Solo imágenes sin tag (<none>)
+
+docker image prune -a
+# TODAS las imágenes no usadas
+
+docker network prune
+# Solo redes no usadas
+
+docker volume prune
+# Solo volúmenes no usados
+
+# 3. LIMPIEZA SELECTIVA
+docker rm $(docker ps -a -f status=exited -q)
+# Elimina contenedores con status "exited"
+
+docker rmi $(docker images -f dangling=true -q)
+# Elimina imágenes <none>
+```
+
+---
+
+### **8.7. Docker Compose (Vista rápida)**
+
+```bash
+# 1. COMANDOS BÁSICOS
+docker-compose up
+# Levanta servicios definidos en docker-compose.yml
+
+docker-compose up -d
+# Levanta en background
+
+docker-compose down
+# Detiene y elimina contenedores
+
+docker-compose ps
+# Lista servicios
+
+docker-compose logs -f
+# Sigue logs de todos los servicios
+
+docker-compose exec web bash
+# Ejecuta comando en servicio
+
+docker-compose build
+# Construye imágenes
+
+docker-compose restart
+# Reinicia servicios
+```
+
+---
+
+### **💡 8.8. Tips y Trucos**
+
+#### **Aliases útiles para .bashrc o .zshrc:**
+
+```bash
+# Agregar a ~/.bashrc o ~/.zshrc
+alias dps='docker ps'
+alias dpsa='docker ps -a'
+alias di='docker images'
+alias dex='docker exec -it'
+alias dlog='docker logs -f'
+alias dstop='docker stop $(docker ps -q)'
+alias dclean='docker system prune -af --volumes'
+
+# Función para entrar rápido a contenedor
+dsh() {
+  docker exec -it "$1" bash
+}
+
+# Uso: dsh webserver
+```
+
+#### **Atajos de productividad:**
+
+```bash
+# Ver logs de último contenedor creado
+docker logs -f $(docker ps -lq)
+
+# Detener contenedor más reciente
+docker stop $(docker ps -lq)
+
+# Eliminar contenedores de las últimas 24h
+docker container prune --filter "until=24h"
+
+# Ver IPs de todos los contenedores
+docker ps -q | xargs docker inspect --format='{{.Name}} - {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+
+# Ejecutar comando en todos los contenedores activos
+docker ps -q | xargs -I {} docker exec {} <comando>
+```
+
+---
+
+### **⚠️ 8.9. Comandos Peligrosos (Usar con cuidado)**
+
+```bash
+# ELIMINA TODOS LOS CONTENEDORES (activos y detenidos)
+docker rm -f $(docker ps -a -q)
+
+# ELIMINA TODAS LAS IMÁGENES
+docker rmi -f $(docker images -q)
+
+# ELIMINA TODO (contenedores, imágenes, volúmenes, redes)
+docker system prune -a --volumes -f
+
+# REINICIA DOCKER DAEMON (Linux)
+sudo systemctl restart docker
+```
+
+---
+
+### **📋 8.10. Cheat Sheet de Opciones Comunes**
+
+| Opción | Descripción | Ejemplo |
+|--------|-------------|---------|
+| `-d` | Detached (background) | `docker run -d nginx` |
+| `-it` | Interactive + TTY | `docker run -it ubuntu bash` |
+| `-p` | Port mapping | `docker run -p 8080:80 nginx` |
+| `-e` | Environment variable | `docker run -e VAR=value app` |
+| `-v` | Volume/mount | `docker run -v data:/app nginx` |
+| `--name` | Nombre del contenedor | `docker run --name web nginx` |
+| `--rm` | Auto-remove al terminar | `docker run --rm alpine ls` |
+| `--restart` | Política de reinicio | `docker run --restart=always nginx` |
+| `--memory` | Límite de RAM | `docker run --memory="512m" app` |
+| `--cpus` | Límite de CPUs | `docker run --cpus="1.5" app` |
+| `--network` | Red a usar | `docker run --network=mi-red app` |
+| `-f` | Force (forzar) | `docker rm -f contenedor` |
+| `-a` | All (todos) | `docker ps -a` |
+| `-q` | Quiet (solo IDs) | `docker ps -q` |
+
+---
+
+### **🎯 8.11. Escenarios Prácticos Comunes**
+
+#### **Escenario 1: Desarrollo Web Local**
+```bash
+# Levantar servidor web con código local
+docker run -d --name dev-web \
+  -p 8080:80 \
+  -v $(pwd):/usr/share/nginx/html \
+  nginx:alpine
+
+# Ver en http://localhost:8080
+# Los cambios en archivos locales se reflejan automáticamente
+```
+
+#### **Escenario 2: Base de Datos de Desarrollo**
+```bash
+# PostgreSQL con datos persistentes
+docker run -d --name dev-db \
+  -e POSTGRES_PASSWORD=dev123 \
+  -e POSTGRES_DB=miapp \
+  -v pgdata:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:15
+
+# Conectar: psql -h localhost -U postgres -d miapp
+```
+
+#### **Escenario 3: Debugging de Contenedor**
+```bash
+# 1. Ver logs
+docker logs -f --tail 100 mi-app
+
+# 2. Entrar al contenedor
+docker exec -it mi-app bash
+
+# 3. Ver procesos
+docker top mi-app
+
+# 4. Ver uso de recursos
+docker stats mi-app
+
+# 5. Inspeccionar configuración
+docker inspect mi-app | grep -i error
+```
+
+#### **Escenario 4: Limpieza Semanal**
+```bash
+#!/bin/bash
+# script: docker-cleanup.sh
+
+echo "🧹 Limpiando contenedores detenidos..."
+docker container prune -f
+
+echo "🧹 Limpiando imágenes sin usar..."
+docker image prune -a -f
+
+echo "🧹 Limpiando volúmenes huérfanos..."
+docker volume prune -f
+
+echo "🧹 Limpiando redes no usadas..."
+docker network prune -f
+
+echo "✅ Limpieza completada!"
+docker system df
+```
+
+---
+
+### 📋 **Checkpoint de la Sección 8:**
+
+✅ **Deberías poder:**
+1. Ejecutar contenedores con diferentes configuraciones (`run`, `-p`, `-v`, `-e`)
+2. Gestionar el ciclo de vida de contenedores (`start`, `stop`, `restart`, `rm`)
+3. Inspeccionar contenedores y ver logs (`logs`, `inspect`, `stats`, `exec`)
+4. Trabajar con imágenes (`pull`, `build`, `tag`, `push`)
+5. Usar redes y volúmenes para comunicación y persistencia
+6. Limpiar recursos Docker para liberar espacio
+
+🎯 **Comando más importante:**
+```bash
+docker run -d --name miapp -p 8080:80 -v datos:/app nginx
+```
+Este único comando cubre: ejecución, naming, port mapping, volúmenes e imagen.
+
+---
+
+## 🔄 9. Ventajas de la contenerización para Kubernetes
 
 La contenerización con Docker proporciona las bases perfectas para Kubernetes:
 
@@ -453,7 +1665,7 @@ La contenerización con Docker proporciona las bases perfectas para Kubernetes:
 
 ---
 
-## 🚀 8. De Docker a Kubernetes: El concepto de Pods
+## 🚀 10. De Docker a Kubernetes: El concepto de Pods
 
 Aunque Docker resuelve muchos problemas, surgen nuevos desafíos en producción:
 
@@ -581,7 +1793,7 @@ Entender cómo funcionan los **namespaces en Docker** es fundamental porque en K
 
 ---
 
-## 📚 9. Fuentes y referencias técnicas
+## 📚 11. Fuentes y referencias técnicas
 
 - [Docker Documentation](https://docs.docker.com/)
 - [Container Runtime Interface (CRI)](https://kubernetes.io/docs/concepts/architecture/cri/)
