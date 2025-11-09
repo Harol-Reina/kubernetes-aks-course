@@ -407,33 +407,33 @@ lsns -p <pid-container2>
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
 │  🌐 SHARED: Network Namespace (net)                      │
-│     ├─ Misma IP: 10.244.1.15                            │
+│     ├─ Misma IP: 10.244.1.15                             │
 │     ├─ Mismas interfaces: eth0, lo                       │
-│     └─ Comunicación: localhost:8080 ↔ localhost:9090    │
+│     └─ Comunicación: localhost:8080 ↔ localhost:9090     │
 │                                                          │
 │  💬 SHARED: IPC Namespace (ipc)                          │
-│     ├─ Shared Memory: /dev/shm                          │
-│     ├─ Semaphores compartidos                           │
-│     └─ Message Queues compartidas                       │
+│     ├─ Shared Memory: /dev/shm                           │
+│     ├─ Semaphores compartidos                            │
+│     └─ Message Queues compartidas                        │
 │                                                          │
 │  🏷️ SHARED: UTS Namespace (uts)                          │
-│     └─ Hostname: my-app-pod-xyz-12345                   │
+│     └─ Hostname: my-app-pod-xyz-12345                    │
 │                                                          │
 │  🔄 OPTIONAL: PID Namespace (pid)                        │
 │     └─ Si shareProcessNamespace: true → procesos visibles│
 │                                                          │
 ├──────────────────────────────────────────────────────────┤
 │  Container: web-app                                      │
-│  ├─ 📁 Mount NS: /app, /usr, /etc (independiente)       │
-│  ├─ 👤 User NS: uid=1000 (appuser)                      │
-│  ├─ ⚙️ Cgroup: CPU 500m, Memory 512Mi                   │
-│  └─ 📦 Volumes: /data → shared-volume                   │
+│  ├─ 📁 Mount NS: /app, /usr, /etc (independiente)        │
+│  ├─ 👤 User NS: uid=1000 (appuser)                       │
+│  ├─ ⚙️ Cgroup: CPU 500m, Memory 512Mi                    │
+│  └─ 📦 Volumes: /data → shared-volume                    │
 ├──────────────────────────────────────────────────────────┤
 │  Container: sidecar                                      │
-│  ├─ 📁 Mount NS: /app, /usr, /etc (independiente)       │
-│  ├─ 👤 User NS: uid=0 (root)                            │
-│  ├─ ⚙️ Cgroup: CPU 100m, Memory 128Mi                   │
-│  └─ 📦 Volumes: /data → shared-volume                   │
+│  ├─ 📁 Mount NS: /app, /usr, /etc (independiente)        │
+│  ├─ 👤 User NS: uid=0 (root)                             │
+│  ├─ ⚙️ Cgroup: CPU 100m, Memory 128Mi                    │
+│  └─ 📦 Volumes: /data → shared-volume                    │
 └──────────────────────────────────────────────────────────┘
 
 ✅ Compartidos por defecto: Network, IPC, UTS
@@ -621,7 +621,54 @@ spec:
     emptyDir: {}
 ```
 
+---
+
+## 🎨 4. Patrones Multi-Contenedor en Pods
+
 ### **🔄 Patrón 1: Sidecar Container**
+
+#### **📖 ¿Qué es un Sidecar?**
+
+> **Sidecar** = Contenedor auxiliar que **extiende o mejora** el contenedor principal sin modificar su código.
+
+**Concepto:**
+```
+┌─────────────────────────────────────────┐
+│              Pod                        │
+│  ┌─────────────────┐  ┌──────────────┐  │
+│  │ Main Container  │  │   Sidecar    │  │
+│  │                 │  │              │  │
+│  │  🌐 Web App     │◄─┤ 📊 Logs      │  │
+│  │  (Nginx)        │  │ (Fluent Bit) │  │
+│  │                 │  │              │  │
+│  │  Genera logs ──►│──┤ Procesa logs │  │
+│  │                 │  │              │  │
+│  └─────────────────┘  └──────────────┘  │
+│           │                    │        │
+│           └──────┬─────────────┘        │
+│                  ▼                      │
+│          Shared Volume                  │
+└─────────────────────────────────────────┘
+```
+
+**Características del Sidecar:**
+- ✅ **Corre simultáneamente** con el contenedor principal
+- ✅ **Comparte recursos** del Pod (network, volumes)
+- ✅ **Funcionalidad cross-cutting**: logging, monitoring, security
+- ✅ **No modifica** el código del app principal
+- ✅ **Mismo ciclo de vida** que el contenedor principal
+
+#### **🎯 Cuándo Usar Sidecar:**
+
+| Situación | ¿Usar Sidecar? | Razón |
+|-----------|----------------|-------|
+| Procesar logs de la app | ✅ Sí | El sidecar lee y procesa logs sin modificar la app |
+| Exportar métricas | ✅ Sí | El sidecar recolecta y expone métricas |
+| Service mesh (Istio) | ✅ Sí | El sidecar maneja networking/security transparentemente |
+| Sincronizar configs | ✅ Sí | El sidecar actualiza configs sin reiniciar la app |
+| Lógica de negocio | ❌ No | Debe estar en el contenedor principal |
+
+#### **📋 Ejemplo Completo: Logging Sidecar**
 
 ```yaml
 apiVersion: v1
@@ -630,7 +677,7 @@ metadata:
   name: web-with-logging
 spec:
   containers:
-  # Main application container
+  # 🌐 Main application container
   - name: web-app
     image: nginx:1.20
     ports:
@@ -638,32 +685,143 @@ spec:
     volumeMounts:
     - name: shared-logs
       mountPath: /var/log/nginx
+    # ↑ Nginx escribe logs aquí
   
-  # Sidecar for log processing
+  # 📊 Sidecar for log processing
   - name: log-processor
     image: fluent/fluent-bit:1.8
     volumeMounts:
     - name: shared-logs
       mountPath: /var/log/nginx
-      readOnly: true
+      readOnly: true  # Solo lectura
     - name: fluent-config
       mountPath: /fluent-bit/etc
+    # ↑ Fluent Bit lee los logs, los procesa y envía a destino
   
   volumes:
   - name: shared-logs
-    emptyDir: {}
+    emptyDir: {}  # Volumen compartido para logs
   - name: fluent-config
     configMap:
       name: fluent-config
 ```
 
-**Casos de uso Sidecar:**
-- 📊 **Logging**: Fluentd, Logstash, Filebeat
-- 📈 **Monitoring**: Prometheus exporters
-- 🔐 **Security**: Policy enforcement, cert management
-- 🌐 **Networking**: Service mesh proxies (Istio, Linkerd)
+**Flujo de trabajo:**
+```
+1. Nginx (main) → Escribe logs → /var/log/nginx/access.log
+2. Fluent Bit (sidecar) → Lee logs → /var/log/nginx/access.log
+3. Fluent Bit → Procesa logs (filtra, enriquece, formatea)
+4. Fluent Bit → Envía logs → Elasticsearch / CloudWatch / etc.
+```
+
+#### **🚀 Casos de Uso Reales del Patrón Sidecar:**
+
+##### **1. 📊 Logging Sidecar**
+```yaml
+# Main: Aplicación
+# Sidecar: Fluentd, Logstash, Filebeat
+# Propósito: Centralizar logs sin modificar la app
+```
+
+##### **2. 📈 Monitoring Sidecar**
+```yaml
+# Main: Aplicación
+# Sidecar: Prometheus exporter
+# Propósito: Exportar métricas custom de la app
+```
+
+##### **3. 🔐 Security Sidecar**
+```yaml
+# Main: Aplicación
+# Sidecar: OAuth2 Proxy, Vault Agent
+# Propósito: Autenticación/autorización transparente
+```
+
+##### **4. 🌐 Service Mesh Sidecar (Istio/Linkerd)**
+```yaml
+# Main: Aplicación
+# Sidecar: Envoy Proxy
+# Propósito: 
+#   - Mutual TLS automático
+#   - Traffic routing
+#   - Observability
+#   - Circuit breaking
+```
+
+##### **5. 🔄 Configuration Sync Sidecar**
+```yaml
+# Main: Aplicación
+# Sidecar: Config syncer
+# Propósito: Actualizar configs sin reiniciar la app
+```
+
+#### **✅ Ventajas del Patrón Sidecar:**
+
+- 🔄 **Separación de responsabilidades**: La app se enfoca en negocio
+- 🔌 **Reutilizable**: El mismo sidecar para múltiples apps
+- 🛡️ **No invasivo**: No modifica el código del app
+- 📦 **Composable**: Múltiples sidecars para diferentes funciones
+- 🔧 **Actualizable**: Update sidecar sin tocar la app
+
+#### **❌ Cuándo NO Usar Sidecar:**
+
+- ❌ Si la funcionalidad es parte del negocio → Incluir en main container
+- ❌ Si requiere comunicación frecuente → Mejor usar localhost HTTP
+- ❌ Si hay muchos sidecars → Considerar separar Pods
+- ❌ Si consume muchos recursos → Evaluar arquitectura
+
+---
 
 ### **🚀 Patrón 2: Init Container**
+
+#### **📖 ¿Qué es un Init Container?**
+
+> **Init Container** = Contenedor que **se ejecuta y completa ANTES** de que los contenedores principales inicien.
+
+**Concepto:**
+```
+Ciclo de Vida del Pod:
+
+1. Pod Created
+   ↓
+2. ┌─────────────────────┐
+   │  Init Container 1   │  (Setup database)
+   │  Runs → Completes   │
+   └─────────────────────┘
+   ↓
+3. ┌─────────────────────┐
+   │  Init Container 2   │  (Download config)
+   │  Runs → Completes   │
+   └─────────────────────┘
+   ↓
+4. ┌─────────────────────┐
+   │  Main Container     │  ← Solo inicia cuando TODOS
+   │  STARTS             │    los Init Containers terminan
+   └─────────────────────┘
+```
+
+**Diferencias clave:**
+
+| Aspecto | Init Container | Main Container | Sidecar |
+|---------|----------------|----------------|---------|
+| **Cuándo corre** | ⏰ ANTES | 🏃 Simultáneo | 🏃 Simultáneo |
+| **Ejecución** | 📝 Secuencial | 🔄 Paralelo | 🔄 Paralelo |
+| **Duración** | ⚡ Termina | ♾️ Corre indefinidamente | ♾️ Corre indefinidamente |
+| **Si falla** | 🔁 Pod restart | 🔁 Container restart | 🔁 Container restart |
+| **Propósito** | 🛠️ Setup/preparación | 💼 Lógica de negocio | 🔧 Funciones auxiliares |
+
+#### **🎯 Cuándo Usar Init Containers:**
+
+| Situación | ¿Usar Init Container? | Razón |
+|-----------|------------------------|-------|
+| Migrar DB antes de iniciar | ✅ Sí | Garantiza schema actualizado |
+| Esperar que DB esté lista | ✅ Sí | Evita fallos al conectar |
+| Descargar assets/configs | ✅ Sí | Prepara ambiente antes de app |
+| Setup de permisos | ✅ Sí | Configuración one-time |
+| Procesar logs en tiempo real | ❌ No | Usar Sidecar |
+| Lógica de negocio | ❌ No | Usar Main Container |
+
+#### **📋 Ejemplo Completo: Setup Completo con Init Containers**
 
 ```yaml
 apiVersion: v1
@@ -671,15 +829,32 @@ kind: Pod
 metadata:
   name: web-with-init
 spec:
-  # Init containers run BEFORE main containers
+  # 🛠️ Init containers run BEFORE main containers (sequentially)
   initContainers:
+  
+  # Init 1: Wait for database to be ready
+  - name: wait-for-db
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        until pg_isready -h db-service -p 5432; do
+          echo "Waiting for database..."
+          sleep 2
+        done
+        echo "✅ Database is ready!"
+    # ↑ Espera hasta que la DB esté lista
+  
+  # Init 2: Run database migrations (only runs after Init 1 completes)
   - name: database-migration
     image: migrate/migrate:v4.15.1
     command: ['migrate', '-path', '/migrations', '-database', 'postgres://...', 'up']
     volumeMounts:
     - name: migrations
       mountPath: /migrations
+    # ↑ Actualiza el schema de la DB
   
+  # Init 3: Download configuration (only runs after Init 2 completes)
   - name: config-setup
     image: busybox:1.35
     command: ['sh', '-c', 'echo "Preparing config..." && cp /tmp/config/* /app/config/']
@@ -688,8 +863,9 @@ spec:
       mountPath: /tmp/config
     - name: app-config
       mountPath: /app/config
+    # ↑ Prepara configuración necesaria
   
-  # Main application starts AFTER init containers complete
+  # 🌐 Main application starts AFTER all init containers complete successfully
   containers:
   - name: web-app
     image: my-app:v1.0
@@ -698,6 +874,7 @@ spec:
     volumeMounts:
     - name: app-config
       mountPath: /app/config
+    # ↑ La app ya tiene todo listo: DB migrada, configs descargadas
   
   volumes:
   - name: migrations
@@ -710,11 +887,330 @@ spec:
     emptyDir: {}
 ```
 
-**Casos de uso Init Containers:**
-- 🗄️ **Database migrations**: Schema updates antes del deploy
-- ⬇️ **Data downloading**: Fetch assets o dependencies
-- ⏳ **Wait for dependencies**: Esperar DB, APIs externas
-- 🔧 **Configuration setup**: Generate configs dinámicamente
+**Flujo de ejecución:**
+```
+┌────────────────────────────────────────────────┐
+│ Pod Lifecycle con Init Containers             │
+├────────────────────────────────────────────────┤
+│                                                │
+│ 1. wait-for-db                                 │
+│    ├─ Intenta conectar a database             │
+│    ├─ Espera hasta que responda               │
+│    └─ ✅ Completa                              │
+│                                                │
+│ 2. database-migration (solo si #1 exitoso)    │
+│    ├─ Ejecuta migraciones SQL                 │
+│    ├─ Actualiza schema                        │
+│    └─ ✅ Completa                              │
+│                                                │
+│ 3. config-setup (solo si #2 exitoso)          │
+│    ├─ Descarga configuración                  │
+│    ├─ Prepara archivos                        │
+│    └─ ✅ Completa                              │
+│                                                │
+│ 4. web-app (solo si TODOS los init exitosos)  │
+│    └─ 🚀 Inicia con ambiente completamente     │
+│       preparado                                │
+│                                                │
+└────────────────────────────────────────────────┘
+```
+
+#### **🚀 Casos de Uso Reales de Init Containers:**
+
+##### **1. 🗄️ Database Migrations**
+```yaml
+initContainers:
+- name: migrate
+  image: flyway:latest
+  # Ejecuta migraciones antes de que la app inicie
+  # Garantiza que el schema esté actualizado
+```
+
+##### **2. ⏳ Wait for Dependencies**
+```yaml
+initContainers:
+- name: wait-for-redis
+  image: busybox
+  command: ['sh', '-c', 'until nc -z redis 6379; do sleep 1; done']
+  # Espera a que Redis esté disponible
+```
+
+##### **3. ⬇️ Download Assets/Dependencies**
+```yaml
+initContainers:
+- name: download-data
+  image: alpine/curl
+  command: ['curl', '-o', '/data/model.pkl', 'https://cdn.com/model.pkl']
+  # Descarga modelo ML antes de que la app inicie
+```
+
+##### **4. 🔧 Configuration Generation**
+```yaml
+initContainers:
+- name: generate-config
+  image: my-config-generator
+  # Genera configuración dinámica basada en el ambiente
+```
+
+##### **5. 🔐 Certificate Setup**
+```yaml
+initContainers:
+- name: cert-setup
+  image: vault:latest
+  # Obtiene certificados de Vault antes de iniciar
+```
+
+#### **✅ Ventajas de Init Containers:**
+
+- 🔒 **Orden garantizado**: Ejecución secuencial predecible
+- ✅ **Pre-requisitos claros**: La app solo inicia si todo está listo
+- 🔁 **Retry automático**: Si falla, K8s reinicia el Pod
+- 🧹 **Limpio**: No consume recursos después de completar
+- 🛡️ **Separation of concerns**: Setup separado de runtime
+
+#### **❌ Cuándo NO Usar Init Containers:**
+
+- ❌ Para procesos que deben correr **simultáneamente** con la app → Usar Sidecar
+- ❌ Para tareas **recurrentes** durante la vida del Pod → Usar Main Container
+- ❌ Para **monitoreo continuo** → Usar Sidecar
+- ❌ Si la tarea puede **fallar ocasionalmente** sin afectar la app → Usar Job separado
+
+---
+
+### **🔗 Patrón 3: Ambassador Container**
+
+#### **📖 ¿Qué es un Ambassador Container?**
+
+> **Ambassador** = Contenedor que actúa como **proxy/intermediario** entre el contenedor principal y servicios externos.
+
+**Concepto:**
+```
+┌──────────────────────────────────────────────┐
+│                   Pod                        │
+│  ┌────────────────┐      ┌───────────────┐   │
+│  │ Main Container │      │  Ambassador   │   │
+│  │                │      │               │   │
+│  │  App conecta:  │      │  🔀 Proxy     │   │
+│  │  localhost:5432│─────►│  Maneja:      │   │
+│  │                │      │  - Routing    │   │
+│  │  (Piensa que   │      │  - Pooling    │───┼─► DB Replica 1
+│  │   es DB local) │      │  - Balancing  │   │
+│  │                │      │  - Retry      │───┼─► DB Replica 2
+│  │                │      │  - Circuit    │   │
+│  └────────────────┘      │    Breaking   │───┼─► DB Replica 3
+│                          └───────────────┘   │
+└──────────────────────────────────────────────┘
+```
+
+**Beneficios clave:**
+- 🔌 **Abstracción**: La app no sabe que hay múltiples backends
+- 🔄 **Load balancing**: Distribuye carga entre réplicas
+- 🛡️ **Resiliency**: Circuit breaking, retries automáticos
+- 🔐 **Security**: SSL/TLS termination, autenticación
+- 📊 **Observability**: Logging, métricas de conexiones
+
+#### **🎯 Cuándo Usar Ambassador:**
+
+| Situación | ¿Usar Ambassador? | Razón |
+|-----------|-------------------|-------|
+| App conecta a DB con múltiples réplicas | ✅ Sí | Load balancing automático |
+| Necesitas connection pooling | ✅ Sí | Ambassador maneja el pool |
+| SSL/TLS termination | ✅ Sí | Simplifica configuración de app |
+| Circuit breaking | ✅ Sí | Resiliencia sin modificar app |
+| Service mesh simple | ✅ Sí | Alternativa ligera a Istio |
+| Conexión directa simple | ❌ No | Overhead innecesario |
+
+#### **📋 Ejemplo Completo: Database Ambassador**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-ambassador
+spec:
+  containers:
+  # 🌐 Main application
+  - name: app
+    image: my-app:v1.0
+    ports:
+    - containerPort: 8080
+    env:
+    - name: DATABASE_URL
+      value: "localhost:5432"  # ← Apunta al ambassador (localhost!)
+    # ↑ La app piensa que se conecta a una DB local
+  
+  # 🔀 Ambassador proxy
+  - name: db-ambassador
+    image: haproxy:2.4
+    ports:
+    - containerPort: 5432  # Puerto que escucha localmente
+    volumeMounts:
+    - name: ambassador-config
+      mountPath: /usr/local/etc/haproxy
+    # ↑ Ambassador intercepta conexiones y las enruta
+    
+    # Ambassador maneja:
+    # - Connection pooling (reutiliza conexiones)
+    # - Load balancing (distribuye entre réplicas)
+    # - Health checks (verifica disponibilidad)
+    # - Circuit breaking (evita réplicas caídas)
+    # - SSL termination (maneja encryption)
+  
+  volumes:
+  - name: ambassador-config
+    configMap:
+      name: haproxy-config
+      # Configuración de HAProxy para load balancing
+```
+
+**Configuración del Ambassador (HAProxy):**
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+data:
+  haproxy.cfg: |
+    global
+      maxconn 256
+    
+    defaults
+      mode tcp
+      timeout connect 5000ms
+      timeout client 50000ms
+      timeout server 50000ms
+    
+    frontend db-frontend
+      bind *:5432
+      default_backend db-backend
+    
+    backend db-backend
+      balance roundrobin
+      option tcp-check
+      # Load balance entre 3 réplicas de DB
+      server db1 db-replica-1:5432 check
+      server db2 db-replica-2:5432 check
+      server db3 db-replica-3:5432 check
+```
+
+**Flujo de conexión:**
+```
+1. App → localhost:5432 (cree que es DB local)
+   ↓
+2. Ambassador intercepta → Recibe conexión en puerto 5432
+   ↓
+3. Ambassador → Health check a réplicas
+   ├─ db-replica-1: ✅ UP
+   ├─ db-replica-2: ✅ UP
+   └─ db-replica-3: ❌ DOWN (circuito abierto)
+   ↓
+4. Ambassador → Round-robin entre réplicas UP
+   └─ Conexión actual → db-replica-1
+   ↓
+5. Ambassador → Mantiene connection pool
+   └─ Reutiliza conexiones para mejor performance
+```
+
+#### **🚀 Casos de Uso Reales de Ambassador:**
+
+##### **1. 🗄️ Database Connection Pooling**
+```yaml
+# Ambassador: PgBouncer
+# Propósito: 
+#   - Connection pooling para PostgreSQL
+#   - Reduce overhead de conexiones
+```
+
+##### **2. 🔐 SSL/TLS Termination**
+```yaml
+# Ambassador: Nginx/Envoy
+# Propósito:
+#   - Maneja encryption/decryption
+#   - La app usa HTTP simple
+```
+
+##### **3. 🔄 Load Balancing**
+```yaml
+# Ambassador: HAProxy
+# Propósito:
+#   - Distribuye carga entre backends
+#   - Health checking automático
+```
+
+##### **4. 🛡️ Circuit Breaking & Retry**
+```yaml
+# Ambassador: Envoy
+# Propósito:
+#   - Evita cascading failures
+#   - Retry automático con backoff
+```
+
+##### **5. 📊 Observability Proxy**
+```yaml
+# Ambassador: Envoy
+# Propósito:
+#   - Métricas de latencia/throughput
+#   - Distributed tracing
+```
+
+#### **✅ Ventajas del Patrón Ambassador:**
+
+- 🔌 **Transparente**: La app no necesita cambios
+- 🎯 **Single responsibility**: La app solo hace negocio
+- 🔄 **Resiliencia**: Retry, circuit breaking automático
+- � **Performance**: Connection pooling, caching
+- 🔐 **Seguridad**: Encryption, autenticación centralizada
+
+#### **❌ Cuándo NO Usar Ambassador:**
+
+- ❌ Conexiones **simples y directas** → Overhead innecesario
+- ❌ **Service mesh completo** ya instalado (Istio) → Usar el mesh
+- ❌ Solo un **backend** disponible → No hay qué balancear
+- ❌ App ya maneja **connection pooling** → Duplicaría lógica
+
+---
+
+### **📊 Comparación de los 3 Patrones**
+
+| Aspecto | Sidecar | Init Container | Ambassador |
+|---------|---------|----------------|------------|
+| **Cuándo corre** | 🔄 Simultáneo con main | ⏰ Antes de main | 🔄 Simultáneo con main |
+| **Duración** | ♾️ Toda la vida del Pod | ⚡ Hasta completar | ♾️ Toda la vida del Pod |
+| **Propósito** | 🔧 Extender funcionalidad | 🛠️ Setup/preparación | 🔀 Proxy/intermediario |
+| **Interacción** | 📁 Shared volumes | 📁 Shared volumes | 🌐 Network localhost |
+| **Ejemplos** | Logging, Monitoring | Migrations, Downloads | Load balancing, SSL |
+| **Falla** | 🔁 Restart contenedor | 🔁 Restart Pod completo | 🔁 Restart contenedor |
+| **Recursos** | ⚖️ Comparte con main | ✨ Liberados al terminar | ⚖️ Comparte con main |
+
+---
+
+### **🎯 Decidir Qué Patrón Usar**
+
+```
+┌─────────────────────────────────────────────────────┐
+│          ¿Qué Patrón Multi-Container Usar?          │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ❓ ¿Necesitas preparar el ambiente ANTES de        │
+│     que la app inicie?                              │
+│     └─► ✅ INIT CONTAINER                           │
+│         (migrations, downloads, wait-for-deps)      │
+│                                                     │
+│  ❓ ¿Necesitas procesar/exportar datos de la app    │
+│     mientras corre?                                 │
+│     └─► ✅ SIDECAR                                  │
+│         (logging, monitoring, security)             │
+│                                                     │
+│  ❓ ¿Necesitas intermediario entre app y servicios  │
+│     externos?                                       │
+│     └─► ✅ AMBASSADOR                               │
+│         (load balancing, SSL, pooling)              │
+│                                                     │
+│  ❓ ¿La funcionalidad es parte del negocio?         │
+│     └─► ❌ NO usar patterns, incluir en MAIN        │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
 
 ### **🔗 Patrón 3: Ambassador Container**
 
