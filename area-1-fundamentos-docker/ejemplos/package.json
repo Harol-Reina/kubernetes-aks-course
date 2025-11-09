@@ -1,0 +1,19 @@
+{
+  "name": "ejemplo-nodejs-docker",
+  "version": "1.0.0",
+  "description": "Aplicación Node.js de ejemplo para curso Kubernetes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["docker", "nodejs", "kubernetes", "ejemplo"],
+  "author": "Curso Kubernetes AKS",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
