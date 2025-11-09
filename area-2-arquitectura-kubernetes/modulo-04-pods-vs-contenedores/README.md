@@ -112,61 +112,350 @@ Paso 2: Otros contenedores "heredan" estos namespaces
 Resultado: Pod con comunicación optimizada
 ```
 
-### **🎯 Los 3 Namespaces Compartidos:**
+### **🧬 Los Linux Namespaces en Kubernetes**
 
-#### **1. 🌐 Network Namespace**
+#### **📚 ¿Qué son los Namespaces en Linux?**
+
+Un **namespace** en Linux es un mecanismo del kernel que **aísla recursos** entre procesos. Permite que diferentes procesos tengan vistas independientes de recursos del sistema.
+
+| Namespace | Abreviación | Recursos que aísla |
+|-----------|-------------|-------------------|
+| **Network** | `net` | Stack de red (IP, interfaces, puertos, routing) |
+| **PID** | `pid` | IDs de procesos (árbol de procesos) |
+| **IPC** | `ipc` | Comunicación entre procesos (shared memory, semaphores, message queues) |
+| **UTS** | `uts` | Hostname y nombre de dominio |
+| **Mount** | `mnt` | Puntos de montaje del filesystem |
+| **User** | `user` | UIDs y GIDs de usuarios |
+| **Cgroup** | `cgroup` | Jerarquía de control groups |
+
+Cada contenedor normalmente tiene su **propio conjunto de namespaces**, lo que lo aísla de otros contenedores y del host.
+
+---
+
+### **🎯 Namespaces Compartidos en un Pod (Por Defecto)**
+
+En Kubernetes, **todos los contenedores dentro del mismo Pod comparten automáticamente**:
+
+#### **1. 🌐 Network Namespace (net) - COMPARTIDO**
 ```bash
-# Todos los contenedores del Pod comparten la misma IP
+# Todos los contenedores del Pod comparten:
+# - Misma IP del Pod
+# - Mismas interfaces de red (eth0, lo)
+# - Mismo stack TCP/IP
+# - Mismos puertos (no pueden usar el mismo puerto dos veces)
+
 IP_DEL_POD="10.244.1.15"
 
 # Comunicación interna vía localhost
 Container1 → localhost:8080 → Container2
 Container2 → localhost:9090 → Container1
+
+# Verificar IP compartida:
+kubectl exec my-pod -c container1 -- ip addr show eth0
+kubectl exec my-pod -c container2 -- ip addr show eth0
+# ↑ Ambos muestran la MISMA IP: 10.244.1.15
 ```
 
-#### **2. 🔄 PID Namespace (Inter-Process Communication)**
+**Implicaciones:**
+- ✅ Comunicación ultra-rápida vía `localhost`
+- ❌ No pueden usar el mismo puerto (conflicto)
+- ✅ Comparten la misma IP pública del Pod
+
+---
+
+#### **2. 💬 IPC Namespace (ipc) - COMPARTIDO**
 ```bash
-# Los contenedores pueden ver procesos de otros contenedores
-kubectl exec -it my-pod -c container1 -- ps aux
-# ↑ Verá procesos de container1 Y container2
+# Inter-Process Communication: Los contenedores pueden comunicarse mediante:
+# - POSIX Shared Memory (/dev/shm)
+# - Semaphores (sincronización)
+# - Message Queues (colas de mensajes)
+
+# Ver recursos IPC compartidos:
+kubectl exec my-pod -c container1 -- ipcs -m  # Shared memory segments
+kubectl exec my-pod -c container2 -- ipcs -m
+# ↑ Ambos ven los MISMOS recursos IPC
+
+# Ver semáforos:
+kubectl exec my-pod -c container1 -- ipcs -s
+
+# Ver message queues:
+kubectl exec my-pod -c container1 -- ipcs -q
 ```
 
-#### **3. 🏷️ UTS Namespace (Hostname)**
+**Casos de uso:**
+- 🚀 **High-performance computing**: Transferencia de datos sin copiar (zero-copy)
+- 📊 **Machine Learning**: Producer-consumer con shared memory
+- 🔄 **Sincronización**: Semáforos para coordinar acceso a recursos
+
+**Ejemplo práctico - Shared Memory:**
 ```bash
-# Todos los contenedores comparten el mismo hostname
-kubectl exec -it my-pod -c container1 -- hostname
-# → pod-xyz-12345
+# Container 1: Escribir en shared memory
+kubectl exec my-pod -c writer -- sh -c 'echo "Hello from writer" > /dev/shm/data.txt'
 
-kubectl exec -it my-pod -c container2 -- hostname  
-# → pod-xyz-12345 (mismo hostname)
+# Container 2: Leer desde shared memory
+kubectl exec my-pod -c reader -- cat /dev/shm/data.txt
+# ↑ Output: Hello from writer
 ```
 
-### **❌ Los Namespaces NO Compartidos:**
+---
 
-#### **📁 Mount Namespace (Volumes independientes)**
-```yaml
-# Cada contenedor puede tener sus propios volumes
-volumes:
-- name: shared-data
-- name: container1-only
-- name: container2-only
+#### **3. 🏷️ UTS Namespace (uts) - COMPARTIDO**
+```bash
+# Unix Timesharing System: Comparten hostname y dominio
+
+# Verificar hostname compartido:
+kubectl exec my-pod -c container1 -- hostname
+# → my-pod-xyz-12345
+
+kubectl exec my-pod -c container2 -- hostname  
+# → my-pod-xyz-12345 (MISMO hostname)
+
+# Ver información completa:
+kubectl exec my-pod -c container1 -- uname -n
 ```
 
-#### **⚙️ Cgroups (Recursos independientes)**
+**Implicación:**
+- Útil para aplicaciones que dependen del hostname
+- Logs y métricas muestran el mismo hostname
+
+---
+
+### **⚙️ Namespaces Opcionales o Parcialmente Compartidos**
+
+#### **4. 🔄 PID Namespace (pid) - OPCIONAL**
+```bash
+# Por defecto: NO compartido
+# Se puede habilitar con: shareProcessNamespace: true
+
+# SIN shareProcessNamespace (default):
+kubectl exec my-pod -c container1 -- ps aux
+# ↑ Solo ve sus propios procesos
+
+# CON shareProcessNamespace: true
+kubectl exec my-pod -c container1 -- ps aux
+# ↑ Ve TODOS los procesos del Pod (container1 Y container2)
+```
+
+**Ejemplo con PID Namespace compartido:**
 ```yaml
-# Control independiente de CPU/Memory por contenedor
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shared-pid-demo
+spec:
+  shareProcessNamespace: true  # ← Habilitar PID compartido
+  containers:
+  - name: nginx
+    image: nginx:alpine
+  - name: debug
+    image: busybox
+    command: ["sh", "-c", "sleep 3600"]
+```
+
+```bash
+# Ahora el contenedor debug puede ver procesos de nginx:
+kubectl exec shared-pid-demo -c debug -- ps aux
+# PID  USER     COMMAND
+# 1    root     /pause           # Contenedor pause
+# 7    root     nginx: master    # Proceso de nginx
+# 15   root     sleep 3600       # Proceso de debug
+```
+
+**Casos de uso:**
+- � **Debugging**: Inspeccionar procesos de otros contenedores
+- 📊 **Monitoring**: Sidecars que monitorizan procesos del app
+- 🔧 **Process management**: Enviar señales entre contenedores
+
+**Diferencia clave con IPC:**
+- **PID Namespace**: Ver/gestionar **procesos** (ps, kill, signals)
+- **IPC Namespace**: **Comunicación** entre procesos (shared memory, semaphores)
+
+---
+
+#### **5. 📁 Mount Namespace (mnt) - NO COMPARTIDO (pero pueden compartir volúmenes)**
+```yaml
+# Cada contenedor tiene su PROPIO filesystem raíz
+# PERO pueden montar los MISMOS volúmenes
+
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: writer
+    image: busybox
+    volumeMounts:
+    - name: shared-data
+      mountPath: /data  # ← Mismo volumen, diferente namespace
+    command: ["sh", "-c", "echo 'Hello' > /data/file.txt && sleep 3600"]
+    
+  - name: reader
+    image: busybox
+    volumeMounts:
+    - name: shared-data
+      mountPath: /data  # ← Mismo volumen, diferente namespace
+    command: ["sh", "-c", "sleep 5 && cat /data/file.txt && sleep 3600"]
+    
+  volumes:
+  - name: shared-data
+    emptyDir: {}  # Volumen compartido
+```
+
+**Diferencia:**
+- ❌ No comparten el **Mount Namespace** (cada uno tiene su vista del filesystem)
+- ✅ Sí comparten **volúmenes** si se montan explícitamente
+
+---
+
+### **🚫 Namespaces NO Compartidos**
+
+#### **6. 👤 User Namespace (user) - NO COMPARTIDO**
+```bash
+# Cada contenedor puede tener diferentes UIDs/GIDs
+# Útil para seguridad (root en container != root en host)
+
+kubectl exec my-pod -c container1 -- id
+# uid=0(root) gid=0(root)
+
+kubectl exec my-pod -c container2 -- id
+# uid=1000(appuser) gid=1000(appuser)
+```
+
+**Seguridad:**
+- Permite ejecutar como `root` dentro del contenedor
+- Pero mapeado a usuario sin privilegios en el host
+
+---
+
+#### **7. ⚙️ Cgroup Namespace - NO COMPARTIDO (Control de Recursos)**
+```yaml
+# Cada contenedor tiene control INDEPENDIENTE de recursos
 containers:
 - name: web
   resources:
-    limits:
+    requests:
       cpu: "500m"
       memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+      
 - name: sidecar
   resources:
-    limits:
-      cpu: "100m" 
+    requests:
+      cpu: "100m"
       memory: "128Mi"
+    limits:
+      cpu: "200m" 
+      memory: "256Mi"
 ```
+
+---
+
+### **📊 Tabla Resumen: Namespaces en Pods**
+
+| Namespace | Compartido | Propósito | Implicación |
+|-----------|------------|-----------|-------------|
+| **Network** (net) | ✅ Sí | Misma IP, puertos, interfaces | Comunicación localhost |
+| **IPC** (ipc) | ✅ Sí | Shared memory, semaphores, queues | Comunicación ultra-rápida |
+| **UTS** (uts) | ✅ Sí | Mismo hostname | Identidad compartida |
+| **PID** (pid) | ⚙️ Opcional | Ver procesos entre contenedores | Debugging/monitoring |
+| **Mount** (mnt) | ⚙️ Parcial | Filesystem independiente | Pueden compartir volúmenes |
+| **User** (user) | 🚫 No | UIDs/GIDs independientes | Seguridad |
+| **Cgroup** | 🚫 No | Recursos independientes | Aislamiento de recursos |
+
+---
+
+### **🧪 Verificar Namespaces Directamente**
+
+#### **Ver namespaces de un proceso:**
+```bash
+# Desde el nodo (requiere acceso SSH al nodo):
+# 1. Obtener PID de un contenedor
+crictl ps | grep my-pod
+crictl inspect <container-id> | grep pid
+
+# 2. Listar namespaces del proceso
+lsns -p <pid>
+
+# Ejemplo de output:
+#        NS TYPE   NPROCS   PID USER  COMMAND
+# 4026532198 mnt       2     1 root  /pause
+# 4026532199 uts       3     1 root  /pause  ← Compartido
+# 4026532200 ipc       3     1 root  /pause  ← Compartido
+# 4026532201 pid       2     1 root  /pause
+# 4026532202 net       3     1 root  /pause  ← Compartido
+```
+
+#### **Comparar namespaces entre contenedores del mismo Pod:**
+```bash
+# Ver que comparten net, ipc, uts pero NO mnt
+lsns -p <pid-container1>
+lsns -p <pid-container2>
+
+# Los namespaces net, ipc, uts tendrán el MISMO número
+# Los namespaces mnt, pid, user tendrán números DIFERENTES
+```
+
+---
+
+### **🧠 Resumen Visual Completo**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Pod: my-app-pod                       │
+│                  IP: 10.244.1.15                         │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  🌐 SHARED: Network Namespace (net)                      │
+│     ├─ Misma IP: 10.244.1.15                            │
+│     ├─ Mismas interfaces: eth0, lo                       │
+│     └─ Comunicación: localhost:8080 ↔ localhost:9090    │
+│                                                          │
+│  💬 SHARED: IPC Namespace (ipc)                          │
+│     ├─ Shared Memory: /dev/shm                          │
+│     ├─ Semaphores compartidos                           │
+│     └─ Message Queues compartidas                       │
+│                                                          │
+│  🏷️ SHARED: UTS Namespace (uts)                          │
+│     └─ Hostname: my-app-pod-xyz-12345                   │
+│                                                          │
+│  🔄 OPTIONAL: PID Namespace (pid)                        │
+│     └─ Si shareProcessNamespace: true → procesos visibles│
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│  Container: web-app                                      │
+│  ├─ 📁 Mount NS: /app, /usr, /etc (independiente)       │
+│  ├─ 👤 User NS: uid=1000 (appuser)                      │
+│  ├─ ⚙️ Cgroup: CPU 500m, Memory 512Mi                   │
+│  └─ 📦 Volumes: /data → shared-volume                   │
+├──────────────────────────────────────────────────────────┤
+│  Container: sidecar                                      │
+│  ├─ 📁 Mount NS: /app, /usr, /etc (independiente)       │
+│  ├─ 👤 User NS: uid=0 (root)                            │
+│  ├─ ⚙️ Cgroup: CPU 100m, Memory 128Mi                   │
+│  └─ 📦 Volumes: /data → shared-volume                   │
+└──────────────────────────────────────────────────────────┘
+
+✅ Compartidos por defecto: Network, IPC, UTS
+⚙️ Opcionales: PID (con shareProcessNamespace)
+🚫 No compartidos: Mount, User, Cgroup
+📦 Volúmenes: Pueden compartirse explícitamente
+```
+
+---
+
+### **💡 Key Takeaways: PID vs IPC**
+
+| Aspecto | PID Namespace | IPC Namespace |
+|---------|---------------|---------------|
+| **Función** | 👀 **Ver** procesos | 💬 **Comunicarse** entre procesos |
+| **Compartido por defecto** | ❌ No (opcional) | ✅ Sí (automático) |
+| **Activación** | `shareProcessNamespace: true` | Siempre activo en Pods |
+| **Comandos útiles** | `ps aux`, `kill`, `top` | `ipcs -m`, `ipcs -s`, `ipcs -q` |
+| **Velocidad** | N/A (visibilidad) | 🚀 Ultra-rápido (microsegundos) |
+| **Caso de uso** | Debugging, monitoring | High-performance data sharing |
+| **Mecanismos** | Ver árbol de procesos | Shared memory, semaphores, queues |
+| **Ejemplo** | Ver procesos de nginx desde debug | Transferir datos vía /dev/shm |
 
 ---
 
