@@ -1400,203 +1400,203 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
  ```
 
 10. **Ejercicio 7: Docker Compose - Aplicación multi-contenedor**
-    ```bash
-    # Crear directorio para el proyecto
-    mkdir ~/docker-compose-demo
-    cd ~/docker-compose-demo
-    
-    # Crear docker-compose.yml
-    cat > docker-compose.yml << 'EOF'
-version: '3.8'
+  ```bash
+  # Crear directorio para el proyecto
+  mkdir ~/docker-compose-demo
+  cd ~/docker-compose-demo
+  
+  # Crear docker-compose.yml
+  cat > docker-compose.yml << 'EOF'
+  version: '3.8'
 
-services:
-  # Base de datos PostgreSQL
-  database:
-    image: postgres:15
-    container_name: app-database
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secret123
-      POSTGRES_DB: aplicacion
-    volumes:
-      - db-data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  services:
+    # Base de datos PostgreSQL
+    database:
+      image: postgres:15
+      container_name: app-database
+      environment:
+        POSTGRES_USER: admin
+        POSTGRES_PASSWORD: secret123
+        POSTGRES_DB: aplicacion
+      volumes:
+        - db-data:/var/lib/postgresql/data
+      networks:
+        - app-network
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U admin"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
 
-  # Cache Redis
-  cache:
-    image: redis:7.2-alpine
-    container_name: app-cache
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    # Cache Redis
+    cache:
+      image: redis:7.2-alpine
+      container_name: app-cache
+      networks:
+        - app-network
+      healthcheck:
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 10s
+        timeout: 3s
+        retries: 5
 
-  # Interfaz web de administración
-  adminer:
-    image: adminer
-    container_name: app-adminer
-    ports:
-      - "8080:8080"
-    networks:
-      - app-network
-    depends_on:
-      database:
-        condition: service_healthy
+    # Interfaz web de administración
+    adminer:
+      image: adminer
+      container_name: app-adminer
+      ports:
+        - "8080:8080"
+      networks:
+        - app-network
+      depends_on:
+        database:
+          condition: service_healthy
 
-  # Aplicación web (nginx)
-  web:
-    image: nginx:alpine
-    container_name: app-web
-    ports:
-      - "8090:80"
-    networks:
-      - app-network
-    volumes:
-      - ./html:/usr/share/nginx/html:ro
-    depends_on:
-      - database
-      - cache
+    # Aplicación web (nginx)
+    web:
+      image: nginx:alpine
+      container_name: app-web
+      ports:
+        - "8090:80"
+      networks:
+        - app-network
+      volumes:
+        - ./html:/usr/share/nginx/html:ro
+      depends_on:
+        - database
+        - cache
 
-volumes:
-  db-data:
+  volumes:
+    db-data:
 
-networks:
-  app-network:
-    driver: bridge
-EOF
-    
-    # Crear directorio para HTML
-    mkdir html
-    
-    # Crear página de inicio
-    cat > html/index.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Aplicación Multi-Contenedor</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 { color: #333; }
-        .service {
-            background: #e3f2fd;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 5px;
-            border-left: 4px solid #2196F3;
-        }
-        .status { color: #4CAF50; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🐳 Aplicación Multi-Contenedor con Docker Compose</h1>
-        
-        <div class="service">
-            <h3>📊 Base de Datos PostgreSQL</h3>
-            <p><span class="status">✅ Activa</span></p>
-            <p>Puerto: 5432 (interno)</p>
-        </div>
-        
-        <div class="service">
-            <h3>⚡ Cache Redis</h3>
-            <p><span class="status">✅ Activa</span></p>
-            <p>Puerto: 6379 (interno)</p>
-        </div>
-        
-        <div class="service">
-            <h3>🔧 Adminer (Gestión BD)</h3>
-            <p><span class="status">✅ Activa</span></p>
-            <p><a href="http://localhost:8080" target="_blank">Acceder a Adminer</a></p>
-        </div>
-        
-        <div class="service">
-            <h3>🌐 Servidor Web (Nginx)</h3>
-            <p><span class="status">✅ Activa</span></p>
-            <p>Puerto: 8090</p>
-        </div>
-        
-        <h2>📋 Información de Conexión</h2>
-        <pre>
-Sistema: PostgreSQL
-Servidor: database
-Usuario: admin
-Contraseña: secret123
-Base de datos: aplicacion
-        </pre>
-    </div>
-</body>
-</html>
-EOF
-    
-    # Levantar todos los servicios
-    docker-compose up -d
-    
-    # Ver el estado de los servicios
-    docker-compose ps
-    
-    # Ver logs de todos los servicios
-    docker-compose logs
-    
-    # Seguir logs en tiempo real
-    docker-compose logs -f
-    # (Ctrl+C para salir)
-    
-    # Ver logs de un servicio específico
-    docker-compose logs database
-    
-    # Ejecutar comandos en un servicio
-    docker-compose exec database psql -U admin -d aplicacion
-    # \l (listar bases de datos)
-    # \q (salir)
-    
-    # Escalar un servicio (crear múltiples instancias)
-    docker-compose up -d --scale cache=3
-    
-    # Ver todos los contenedores
-    docker-compose ps
-    
-    # Detener todos los servicios
-    docker-compose stop
-    
-    # Iniciar servicios detenidos
-    docker-compose start
-    
-    # Reiniciar un servicio específico
-    docker-compose restart web
-    
-    # Ver uso de recursos
-    docker-compose top
-    
-    # Eliminar todo (contenedores, redes, pero no volúmenes)
-    docker-compose down
-    
-    # Eliminar TODO incluyendo volúmenes
-    docker-compose down -v
-    
-    # Reconstruir y levantar
-    docker-compose up -d --build
-    ```
+  networks:
+    app-network:
+      driver: bridge
+  EOF
+
+      # Crear directorio para HTML
+      mkdir html
+
+      # Crear página de inicio
+      cat > html/index.html << 'EOF'
+  <!DOCTYPE html>
+  <html>
+  <head>
+      <title>Aplicación Multi-Contenedor</title>
+      <style>
+          body {
+              font-family: Arial, sans-serif;
+              max-width: 800px;
+              margin: 50px auto;
+              padding: 20px;
+              background: #f5f5f5;
+          }
+          .container {
+              background: white;
+              padding: 30px;
+              border-radius: 10px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          }
+          h1 { color: #333; }
+          .service {
+              background: #e3f2fd;
+              padding: 15px;
+              margin: 10px 0;
+              border-radius: 5px;
+              border-left: 4px solid #2196F3;
+          }
+          .status { color: #4CAF50; font-weight: bold; }
+      </style>
+  </head>
+  <body>
+      <div class="container">
+          <h1>🐳 Aplicación Multi-Contenedor con Docker Compose</h1>
+
+          <div class="service">
+              <h3>📊 Base de Datos PostgreSQL</h3>
+              <p><span class="status">✅ Activa</span></p>
+              <p>Puerto: 5432 (interno)</p>
+          </div>
+
+          <div class="service">
+              <h3>⚡ Cache Redis</h3>
+              <p><span class="status">✅ Activa</span></p>
+              <p>Puerto: 6379 (interno)</p>
+          </div>
+
+          <div class="service">
+              <h3>🔧 Adminer (Gestión BD)</h3>
+              <p><span class="status">✅ Activa</span></p>
+              <p><a href="http://localhost:8080" target="_blank">Acceder a Adminer</a></p>
+          </div>
+
+          <div class="service">
+              <h3>🌐 Servidor Web (Nginx)</h3>
+              <p><span class="status">✅ Activa</span></p>
+              <p>Puerto: 8090</p>
+          </div>
+
+          <h2>📋 Información de Conexión</h2>
+          <pre>
+  Sistema: PostgreSQL
+  Servidor: database
+  Usuario: admin
+  Contraseña: secret123
+  Base de datos: aplicacion
+          </pre>
+      </div>
+  </body>
+  </html>
+  EOF
+
+  # Levantar todos los servicios
+  docker-compose up -d
+  
+  # Ver el estado de los servicios
+  docker-compose ps
+  
+  # Ver logs de todos los servicios
+  docker-compose logs
+  
+  # Seguir logs en tiempo real
+  docker-compose logs -f
+  # (Ctrl+C para salir)
+  
+  # Ver logs de un servicio específico
+  docker-compose logs database
+  
+  # Ejecutar comandos en un servicio
+  docker-compose exec database psql -U admin -d aplicacion
+  # \l (listar bases de datos)
+  # \q (salir)
+  
+  # Escalar un servicio (crear múltiples instancias)
+  docker-compose up -d --scale cache=3
+  
+  # Ver todos los contenedores
+  docker-compose ps
+  
+  # Detener todos los servicios
+  docker-compose stop
+  
+  # Iniciar servicios detenidos
+  docker-compose start
+  
+  # Reiniciar un servicio específico
+  docker-compose restart web
+  
+  # Ver uso de recursos
+  docker-compose top
+  
+  # Eliminar todo (contenedores, redes, pero no volúmenes)
+  docker-compose down
+  
+  # Eliminar TODO incluyendo volúmenes
+  docker-compose down -v
+  
+  # Reconstruir y levantar
+  docker-compose up -d --build
+```
 
 11. **Limpieza final del laboratorio**
     ```bash
