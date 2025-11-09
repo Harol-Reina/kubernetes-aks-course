@@ -1,0 +1,112 @@
+# 🔄 PID Namespace - OPCIONAL (NO compartido por defecto)
+# Demuestra la diferencia con y sin shareProcessNamespace
+
+---
+# Pod SIN PID namespace compartido (default)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pid-namespace-isolated
+  labels:
+    demo: pid-namespace
+    type: isolated
+spec:
+  # shareProcessNamespace: false  # Por defecto
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    resources:
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    
+  - name: debug
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+    - |
+      echo ""
+      echo "🚫 PID NAMESPACE NO COMPARTIDO (default)"
+      echo "========================================"
+      echo ""
+      echo "Procesos visibles desde debug container:"
+      ps aux
+      echo ""
+      echo "❌ Solo vemos nuestros propios procesos"
+      echo "❌ NO vemos los procesos de nginx"
+      sleep 3600
+    resources:
+      limits:
+        memory: "64Mi"
+        cpu: "50m"
+
+---
+# Pod CON PID namespace compartido
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pid-namespace-shared
+  labels:
+    demo: pid-namespace
+    type: shared
+spec:
+  shareProcessNamespace: true  # ← HABILITAR PID compartido
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    resources:
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    
+  - name: debug
+    image: busybox:latest
+    command: ["sh", "-c"]
+    args:
+    - |
+      echo ""
+      echo "✅ PID NAMESPACE COMPARTIDO"
+      echo "============================"
+      echo ""
+      echo "Esperando a que nginx esté listo..."
+      sleep 3
+      
+      echo ""
+      echo "Todos los procesos visibles desde debug container:"
+      ps aux
+      echo ""
+      echo "✅ Podemos ver:"
+      echo "   - PID 1: /pause (contenedor pausa de K8s)"
+      echo "   - Procesos de nginx"
+      echo "   - Nuestro propio proceso (sh)"
+      echo ""
+      echo "📊 Esto permite debugging y monitoring entre contenedores"
+      sleep 3600
+    resources:
+      limits:
+        memory: "64Mi"
+        cpu: "50m"
+
+---
+# Comandos para probar:
+#
+# 1. Crear ambos Pods:
+# kubectl apply -f 02-pid-namespace.yaml
+#
+# 2. Comparar procesos visibles:
+# echo "=== SIN shareProcessNamespace ==="
+# kubectl exec pid-namespace-isolated -c debug -- ps aux
+#
+# echo ""
+# echo "=== CON shareProcessNamespace ==="
+# kubectl exec pid-namespace-shared -c debug -- ps aux
+#
+# 3. Ver logs:
+# kubectl logs pid-namespace-isolated -c debug
+# kubectl logs pid-namespace-shared -c debug
+#
+# 4. Enviar señal entre contenedores (solo funciona con shared):
+# kubectl exec pid-namespace-shared -c debug -- sh -c "kill -0 \$(pidof nginx)"
+#
+# Cleanup:
+# kubectl delete pod pid-namespace-isolated pid-namespace-shared

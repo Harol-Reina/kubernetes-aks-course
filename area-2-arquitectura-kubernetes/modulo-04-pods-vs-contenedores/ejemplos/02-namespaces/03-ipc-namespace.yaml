@@ -1,0 +1,139 @@
+# 💬 IPC Namespace - COMPARTIDO
+# Demuestra comunicación vía shared memory entre contenedores
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ipc-namespace-demo
+  labels:
+    demo: ipc-namespace
+    category: namespaces
+spec:
+  containers:
+  # Producer: Escribe en shared memory
+  - name: producer
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo "💬 IPC NAMESPACE - PRODUCER"
+      echo "==========================="
+      echo ""
+      
+      # Crear archivo en shared memory
+      echo "Hello from Producer at $(date)" > /dev/shm/data.txt
+      echo "✅ Datos escritos en /dev/shm/data.txt"
+      
+      # Mostrar contenido
+      echo ""
+      echo "Contenido escrito:"
+      cat /dev/shm/data.txt
+      
+      # Ver recursos IPC
+      echo ""
+      echo "Recursos IPC disponibles:"
+      ls -lh /dev/shm/
+      
+      # Mantener vivo
+      echo ""
+      echo "Escribiendo datos cada 10 segundos..."
+      while true; do
+        echo "Data update at $(date)" >> /dev/shm/data.txt
+        sleep 10
+      done
+    volumeMounts:
+    - name: shared-memory
+      mountPath: /dev/shm
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    
+  # Consumer: Lee desde shared memory
+  - name: consumer
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo "Esperando a que producer escriba datos..."
+      sleep 3
+      
+      echo ""
+      echo "💬 IPC NAMESPACE - CONSUMER"
+      echo "==========================="
+      echo ""
+      
+      # Leer archivo desde shared memory
+      if [ -f /dev/shm/data.txt ]; then
+        echo "✅ Datos leídos desde /dev/shm/data.txt:"
+        cat /dev/shm/data.txt
+      else
+        echo "❌ Archivo no encontrado"
+      fi
+      
+      echo ""
+      echo "Recursos IPC compartidos:"
+      ls -lh /dev/shm/
+      
+      echo ""
+      echo "✅ Ambos contenedores comparten IPC Namespace"
+      echo "   - Pueden leer/escribir en /dev/shm/"
+      echo "   - Comunicación ultra-rápida (sin network overhead)"
+      
+      # Monitorear cambios
+      echo ""
+      echo "Monitoreando actualizaciones cada 5 segundos..."
+      while true; do
+        echo ""
+        echo "--- Actualización $(date) ---"
+        tail -3 /dev/shm/data.txt 2>/dev/null || echo "Archivo no disponible"
+        sleep 5
+      done
+    volumeMounts:
+    - name: shared-memory
+      mountPath: /dev/shm
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+  
+  volumes:
+  - name: shared-memory
+    emptyDir:
+      medium: Memory  # Usar RAM para shared memory
+
+---
+# Comandos para probar:
+#
+# 1. Crear el Pod:
+# kubectl apply -f 03-ipc-namespace.yaml
+# kubectl wait --for=condition=Ready pod/ipc-namespace-demo --timeout=60s
+#
+# 2. Ver logs del producer:
+# kubectl logs ipc-namespace-demo -c producer
+#
+# 3. Ver logs del consumer:
+# kubectl logs ipc-namespace-demo -c consumer -f
+#
+# 4. Verificar shared memory desde ambos contenedores:
+# kubectl exec ipc-namespace-demo -c producer -- cat /dev/shm/data.txt
+# kubectl exec ipc-namespace-demo -c consumer -- cat /dev/shm/data.txt
+#
+# 5. Ver recursos IPC:
+# kubectl exec ipc-namespace-demo -c producer -- ls -lh /dev/shm/
+# kubectl exec ipc-namespace-demo -c consumer -- ls -lh /dev/shm/
+#
+# 6. Escribir desde consumer, leer desde producer:
+# kubectl exec ipc-namespace-demo -c consumer -- sh -c "echo 'From consumer' > /dev/shm/test.txt"
+# kubectl exec ipc-namespace-demo -c producer -- cat /dev/shm/test.txt
+#
+# Cleanup:
+# kubectl delete pod ipc-namespace-demo

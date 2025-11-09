@@ -1,0 +1,181 @@
+# ⚙️ Cgroup Namespace - NO COMPARTIDO
+# Demuestra control independiente de recursos (CPU/Memory) por contenedor
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cgroup-namespace-demo
+  labels:
+    demo: cgroup-namespace
+    category: namespaces
+spec:
+  containers:
+  # Contenedor 1: CPU-intensive con límites altos
+  - name: cpu-intensive
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo ""
+      echo "⚙️ CGROUP - CPU INTENSIVE CONTAINER"
+      echo "==================================="
+      echo ""
+      
+      echo "1️⃣ Recursos asignados:"
+      echo "   CPU Request: 500m (0.5 cores)"
+      echo "   CPU Limit: 1000m (1 core)"
+      echo "   Memory Request: 256Mi"
+      echo "   Memory Limit: 512Mi"
+      
+      echo ""
+      echo "2️⃣ Información de cgroups:"
+      cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo "   (cgroup v2 en uso)"
+      
+      echo ""
+      echo "3️⃣ Simulando carga CPU..."
+      # Consumir CPU (pero respetando el límite del cgroup)
+      dd if=/dev/zero of=/dev/null bs=1M count=1000 &
+      DD_PID=$!
+      
+      sleep 5
+      
+      echo ""
+      echo "4️⃣ Proceso consumiendo CPU: PID=$DD_PID"
+      ps aux | grep dd | grep -v grep || echo "Proceso terminado"
+      
+      # Matar proceso de carga
+      kill $DD_PID 2>/dev/null
+      
+      echo ""
+      echo "✅ Este contenedor puede usar hasta 1 CPU"
+      echo "   El cgroup limita su uso independientemente"
+      
+      sleep 3600
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "500m"
+      limits:
+        memory: "512Mi"
+        cpu: "1000m"  # 1 core máximo
+    
+  # Contenedor 2: Memory-intensive con límites bajos
+  - name: memory-intensive
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      sleep 2
+      echo ""
+      echo "⚙️ CGROUP - MEMORY INTENSIVE CONTAINER"
+      echo "======================================"
+      echo ""
+      
+      echo "1️⃣ Recursos asignados:"
+      echo "   CPU Request: 100m (0.1 cores)"
+      echo "   CPU Limit: 200m (0.2 cores)"
+      echo "   Memory Request: 64Mi"
+      echo "   Memory Limit: 128Mi"
+      
+      echo ""
+      echo "2️⃣ Información de cgroups de memoria:"
+      cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "   (cgroup v2 en uso)"
+      
+      echo ""
+      echo "3️⃣ Uso actual de memoria:"
+      free -m
+      
+      echo ""
+      echo "4️⃣ Este contenedor tiene MUCHO MENOS recursos que cpu-intensive"
+      echo "   - CPU: 200m vs 1000m (5x menos)"
+      echo "   - Memory: 128Mi vs 512Mi (4x menos)"
+      
+      echo ""
+      echo "✅ Los cgroups están completamente aislados"
+      echo "   Cada contenedor tiene su propio límite"
+      
+      sleep 3600
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"  # Mucho menos CPU
+    
+  # Contenedor 3: Sin límites (usa defaults del namespace)
+  - name: unlimited
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      sleep 3
+      echo ""
+      echo "⚙️ CGROUP - UNLIMITED CONTAINER"
+      echo "==============================="
+      echo ""
+      
+      echo "1️⃣ Sin límites explícitos configurados"
+      echo "   (usa defaults del cluster)"
+      
+      echo ""
+      echo "2️⃣ Recursos disponibles:"
+      echo "   CPU cores disponibles:"
+      nproc
+      echo "   Memoria total del nodo:"
+      free -m | grep Mem | awk '{print "   "$2" MB"}'
+      
+      echo ""
+      echo "3️⃣ Este contenedor compite con otros Pods del nodo"
+      echo "   No está limitado por su propio cgroup"
+      
+      echo ""
+      echo "⚠️ RIESGO: Puede afectar a otros contenedores"
+      echo "   Mejor práctica: SIEMPRE definir limits"
+      
+      sleep 3600
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      # Sin limits definidos (no recomendado en producción)
+
+---
+# Comandos para probar:
+#
+# 1. Crear el Pod:
+# kubectl apply -f 07-cgroup-namespace.yaml
+# kubectl wait --for=condition=Ready pod/cgroup-namespace-demo --timeout=60s
+#
+# 2. Ver logs de cada contenedor:
+# kubectl logs cgroup-namespace-demo -c cpu-intensive
+# kubectl logs cgroup-namespace-demo -c memory-intensive
+# kubectl logs cgroup-namespace-demo -c unlimited
+#
+# 3. Ver uso de recursos en tiempo real:
+# kubectl top pod cgroup-namespace-demo --containers
+#
+# 4. Ver información del Pod:
+# kubectl describe pod cgroup-namespace-demo
+#
+# 5. Verificar límites de CPU desde cada contenedor:
+# kubectl exec cgroup-namespace-demo -c cpu-intensive -- nproc
+# kubectl exec cgroup-namespace-demo -c memory-intensive -- nproc
+#
+# 6. Verificar memoria disponible:
+# kubectl exec cgroup-namespace-demo -c cpu-intensive -- free -m
+# kubectl exec cgroup-namespace-demo -c memory-intensive -- free -m
+#
+# 7. Generar carga CPU y observar throttling:
+# kubectl exec cgroup-namespace-demo -c cpu-intensive -- sh -c "dd if=/dev/zero of=/dev/null &"
+# kubectl exec cgroup-namespace-demo -c memory-intensive -- sh -c "dd if=/dev/zero of=/dev/null &"
+# kubectl top pod cgroup-namespace-demo --containers
+#
+# 8. Ver eventos del Pod (OOMKilled si excede memoria):
+# kubectl get events --field-selector involvedObject.name=cgroup-namespace-demo
+#
+# Cleanup:
+# kubectl delete pod cgroup-namespace-demo

@@ -35,26 +35,264 @@ Demuestra la evolución de la tecnología de contenedores.
 
 ## 🔬 02-namespaces/
 
-Explora qué namespaces Linux comparten los contenedores en un Pod.
+**Explora en detalle los 7 tipos de Linux Namespaces en Kubernetes.**
 
-### `namespace-pod.yaml`
-- **Propósito**: Análisis de namespace sharing (Network, PID, IPC, UTS)
+Esta carpeta contiene ejemplos prácticos para CADA tipo de namespace, demostrando cuáles se comparten y cuáles no.
+
+### **📋 Contenido:**
+
+| Archivo | Namespace | Compartido | Demo |
+|---------|-----------|------------|------|
+| `01-network-namespace.yaml` | 🌐 Network (net) | ✅ Sí | Misma IP, comunicación localhost |
+| `02-pid-namespace.yaml` | 🔄 PID (pid) | ⚙️ Opcional | Con/sin `shareProcessNamespace` |
+| `03-ipc-namespace.yaml` | 💬 IPC (ipc) | ✅ Sí | Shared memory, semaphores |
+| `04-uts-namespace.yaml` | 🏷️ UTS (uts) | ✅ Sí | Mismo hostname |
+| `05-mount-namespace.yaml` | 📁 Mount (mnt) | 🚫 No | Filesystem independiente + volúmenes |
+| `06-user-namespace.yaml` | 👤 User (user) | 🚫 No | Diferentes UIDs/GIDs |
+| `07-cgroup-namespace.yaml` | ⚙️ Cgroup | 🚫 No | Control de recursos independiente |
+| `namespace-pod.yaml` | General | - | Demo básica (legacy) |
+
+---
+
+### **🌐 01-network-namespace.yaml**
+- **Propósito**: Demostrar Network Namespace compartido
+- **Demuestra**:
+  - Contenedores con la misma IP
+  - Comunicación vía `localhost`
+  - Mismo stack de red
 - **Uso**:
   ```bash
-  kubectl apply -f 02-namespaces/namespace-pod.yaml
+  kubectl apply -f 02-namespaces/01-network-namespace.yaml
   
-  # Verificar Network namespace (misma IP)
-  kubectl exec namespace-demo -c container1 -- ip addr
-  kubectl exec namespace-demo -c container2 -- ip addr
+  # Verificar misma IP
+  kubectl exec network-namespace-demo -c web-server -- ip addr show eth0
+  kubectl exec network-namespace-demo -c web-client -- ip addr show eth0
   
-  # Verificar PID namespace (procesos compartidos)
-  kubectl exec namespace-demo -c container1 -- ps aux
-  kubectl exec namespace-demo -c container2 -- ps aux
+  # Probar comunicación localhost
+  kubectl exec network-namespace-demo -c web-client -- curl localhost:8080
   
-  # Verificar hostname (UTS namespace compartido)
-  kubectl exec namespace-demo -c container1 -- hostname
-  kubectl exec namespace-demo -c container2 -- hostname
+  # Ver logs
+  kubectl logs network-namespace-demo -c web-client
   ```
+
+---
+
+### **🔄 02-pid-namespace.yaml**
+- **Propósito**: Comparar PID Namespace con y sin `shareProcessNamespace`
+- **Demuestra**:
+  - 2 Pods: uno con PID aislado, otro con PID compartido
+  - Visibilidad de procesos entre contenedores
+- **Uso**:
+  ```bash
+  kubectl apply -f 02-namespaces/02-pid-namespace.yaml
+  
+  # Comparar procesos visibles
+  echo "=== SIN shareProcessNamespace ==="
+  kubectl exec pid-namespace-isolated -c debug -- ps aux
+  
+  echo "=== CON shareProcessNamespace ==="
+  kubectl exec pid-namespace-shared -c debug -- ps aux
+  
+  # Ver logs
+  kubectl logs pid-namespace-isolated -c debug
+  kubectl logs pid-namespace-shared -c debug
+  ```
+
+---
+
+### **💬 03-ipc-namespace.yaml**
+- **Propósito**: Demostrar IPC Namespace compartido
+- **Demuestra**:
+  - Shared memory (`/dev/shm`)
+  - Producer-Consumer pattern
+  - Comunicación ultra-rápida
+- **Uso**:
+  ```bash
+  kubectl apply -f 02-namespaces/03-ipc-namespace.yaml
+  
+  # Ver logs del producer escribiendo datos
+  kubectl logs ipc-namespace-demo -c producer
+  
+  # Ver logs del consumer leyendo datos
+  kubectl logs ipc-namespace-demo -c consumer -f
+  
+  # Verificar shared memory desde ambos
+  kubectl exec ipc-namespace-demo -c producer -- cat /dev/shm/data.txt
+  kubectl exec ipc-namespace-demo -c consumer -- cat /dev/shm/data.txt
+  
+  # Escribir desde un contenedor, leer desde otro
+  kubectl exec ipc-namespace-demo -c consumer -- sh -c "echo 'Test' > /dev/shm/test.txt"
+  kubectl exec ipc-namespace-demo -c producer -- cat /dev/shm/test.txt
+  ```
+
+---
+
+### **🏷️ 04-uts-namespace.yaml**
+- **Propósito**: Demostrar UTS Namespace compartido
+- **Demuestra**:
+  - Mismo hostname entre contenedores
+  - Mismo domainname
+- **Uso**:
+  ```bash
+  kubectl apply -f 02-namespaces/04-uts-namespace.yaml
+  
+  # Verificar hostname desde ambos contenedores
+  kubectl exec uts-namespace-demo -c container1 -- hostname
+  kubectl exec uts-namespace-demo -c container2 -- hostname
+  
+  # Ver FQDN
+  kubectl exec uts-namespace-demo -c container1 -- hostname -f
+  
+  # Ver logs
+  kubectl logs uts-namespace-demo -c container1
+  kubectl logs uts-namespace-demo -c container2
+  ```
+
+---
+
+### **📁 05-mount-namespace.yaml**
+- **Propósito**: Demostrar Mount Namespace NO compartido
+- **Demuestra**:
+  - Cada contenedor tiene su propio filesystem
+  - Archivos privados NO visibles entre contenedores
+  - Volúmenes SÍ compartidos cuando se montan explícitamente
+  - Un tercer contenedor sin acceso al volumen
+- **Uso**:
+  ```bash
+  kubectl apply -f 02-namespaces/05-mount-namespace.yaml
+  
+  # Ver logs explicativos
+  kubectl logs mount-namespace-demo -c writer
+  kubectl logs mount-namespace-demo -c reader
+  kubectl logs mount-namespace-demo -c isolated
+  
+  # Verificar archivos privados NO visibles
+  kubectl exec mount-namespace-demo -c writer -- ls /tmp/
+  kubectl exec mount-namespace-demo -c reader -- ls /tmp/private-writer.txt
+  # ↑ Error esperado: No such file
+  
+  # Verificar volumen compartido SÍ accesible
+  kubectl exec mount-namespace-demo -c writer -- cat /shared/data.txt
+  kubectl exec mount-namespace-demo -c reader -- cat /shared/data.txt
+  
+  # Verificar contenedor aislado sin acceso
+  kubectl exec mount-namespace-demo -c isolated -- ls /shared/
+  # ↑ Error esperado: No such file or directory
+  ```
+
+---
+
+### **👤 06-user-namespace.yaml**
+- **Propósito**: Demostrar User Namespace NO compartido
+- **Demuestra**:
+  - Contenedores con diferentes UIDs/GIDs
+  - Root vs usuario sin privilegios
+  - Usuario personalizado
+  - Seguridad y permisos
+- **Uso**:
+  ```bash
+  kubectl apply -f 02-namespaces/06-user-namespace.yaml
+  
+  # Comparar UIDs de cada contenedor
+  kubectl exec user-namespace-demo -c root-container -- id
+  # UID=0 (root)
+  
+  kubectl exec user-namespace-demo -c user-container -- id
+  # UID=1000
+  
+  kubectl exec user-namespace-demo -c custom-user-container -- id
+  # UID=2000, GID=3000
+  
+  # Ver logs con análisis de permisos
+  kubectl logs user-namespace-demo -c root-container
+  kubectl logs user-namespace-demo -c user-container
+  kubectl logs user-namespace-demo -c custom-user-container
+  
+  # Intentar operación privilegiada desde user-container
+  kubectl exec user-namespace-demo -c user-container -- apk add curl
+  # ↑ Fallará por falta de permisos
+  ```
+
+---
+
+### **⚙️ 07-cgroup-namespace.yaml**
+- **Propósito**: Demostrar Cgroup Namespace NO compartido
+- **Demuestra**:
+  - Control independiente de CPU/Memory
+  - Contenedores con diferentes límites de recursos
+  - Aislamiento de recursos
+- **Uso**:
+  ```bash
+  kubectl apply -f 02-namespaces/07-cgroup-namespace.yaml
+  
+  # Ver uso de recursos en tiempo real
+  kubectl top pod cgroup-namespace-demo --containers
+  
+  # Ver logs con información de cgroups
+  kubectl logs cgroup-namespace-demo -c cpu-intensive
+  kubectl logs cgroup-namespace-demo -c memory-intensive
+  kubectl logs cgroup-namespace-demo -c unlimited
+  
+  # Generar carga y observar throttling
+  kubectl exec cgroup-namespace-demo -c cpu-intensive -- sh -c "dd if=/dev/zero of=/dev/null &"
+  kubectl top pod cgroup-namespace-demo --containers
+  
+  # Ver eventos (OOMKilled si excede memoria)
+  kubectl get events --field-selector involvedObject.name=cgroup-namespace-demo
+  ```
+
+---
+
+### **📊 Tabla Resumen de Namespaces**
+
+| Namespace | Archivo | Compartido | Qué demuestra |
+|-----------|---------|------------|---------------|
+| Network | 01-network-namespace.yaml | ✅ Sí | Misma IP, localhost |
+| PID | 02-pid-namespace.yaml | ⚙️ Opcional | Procesos visibles |
+| IPC | 03-ipc-namespace.yaml | ✅ Sí | Shared memory |
+| UTS | 04-uts-namespace.yaml | ✅ Sí | Mismo hostname |
+| Mount | 05-mount-namespace.yaml | 🚫 No | Filesystem independiente |
+| User | 06-user-namespace.yaml | 🚫 No | Diferentes UIDs |
+| Cgroup | 07-cgroup-namespace.yaml | 🚫 No | Recursos independientes |
+
+---
+
+### **🧪 Probar todos los ejemplos**
+
+```bash
+# Aplicar todos los ejemplos de namespaces
+cd 02-namespaces/
+
+# Network namespace
+kubectl apply -f 01-network-namespace.yaml
+
+# PID namespace (2 Pods)
+kubectl apply -f 02-pid-namespace.yaml
+
+# IPC namespace
+kubectl apply -f 03-ipc-namespace.yaml
+
+# UTS namespace
+kubectl apply -f 04-uts-namespace.yaml
+
+# Mount namespace
+kubectl apply -f 05-mount-namespace.yaml
+
+# User namespace
+kubectl apply -f 06-user-namespace.yaml
+
+# Cgroup namespace
+kubectl apply -f 07-cgroup-namespace.yaml
+
+# Esperar a que todos estén listos
+kubectl wait --for=condition=Ready pod --all --timeout=120s
+
+# Ver todos los Pods
+kubectl get pods -l category=namespaces
+
+# Cleanup todos
+kubectl delete -f .
+```
 
 ---
 

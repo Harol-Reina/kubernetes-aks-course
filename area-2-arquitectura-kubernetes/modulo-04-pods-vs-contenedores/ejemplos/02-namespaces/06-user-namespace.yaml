@@ -1,0 +1,210 @@
+# 👤 User Namespace - NO COMPARTIDO
+# Demuestra que cada contenedor puede tener diferentes UIDs/GIDs
+# Importante para seguridad y aislamiento
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: user-namespace-demo
+  labels:
+    demo: user-namespace
+    category: namespaces
+spec:
+  containers:
+  # Contenedor 1: Corre como root (UID 0)
+  - name: root-container
+    image: alpine:latest
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo ""
+      echo "👤 USER NAMESPACE - ROOT CONTAINER"
+      echo "=================================="
+      echo ""
+      
+      echo "1️⃣ Usuario actual:"
+      id
+      whoami
+      
+      echo ""
+      echo "2️⃣ UID y GID:"
+      echo "   UID: $(id -u)"
+      echo "   GID: $(id -g)"
+      
+      echo ""
+      echo "3️⃣ Grupos:"
+      groups
+      
+      echo ""
+      echo "4️⃣ Crear archivo como root:"
+      touch /tmp/root-file.txt
+      echo "Root file content" > /tmp/root-file.txt
+      ls -lh /tmp/root-file.txt
+      
+      echo ""
+      echo "✅ Este contenedor corre como root (UID=0)"
+      echo "   Pero está aislado en su User Namespace"
+      
+      sleep 3600
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+    
+  # Contenedor 2: Corre como usuario no privilegiado (UID 1000)
+  - name: user-container
+    image: alpine:latest
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      sleep 2
+      echo ""
+      echo "👤 USER NAMESPACE - USER CONTAINER"
+      echo "=================================="
+      echo ""
+      
+      echo "1️⃣ Usuario actual:"
+      id
+      whoami 2>/dev/null || echo "Usuario: $(id -u)"
+      
+      echo ""
+      echo "2️⃣ UID y GID:"
+      echo "   UID: $(id -u)"
+      echo "   GID: $(id -g)"
+      
+      echo ""
+      echo "3️⃣ Grupos:"
+      groups
+      
+      echo ""
+      echo "4️⃣ Intentar crear archivo en /tmp:"
+      touch /tmp/user-file.txt && echo "✅ Archivo creado" || echo "❌ Sin permisos"
+      if [ -f /tmp/user-file.txt ]; then
+        echo "User file content" > /tmp/user-file.txt
+        ls -lh /tmp/user-file.txt
+      fi
+      
+      echo ""
+      echo "5️⃣ Intentar acceder al archivo del root-container:"
+      # Esto fallará porque cada contenedor tiene su Mount Namespace separado
+      if [ -f /tmp/root-file.txt ]; then
+        echo "   - Archivo encontrado"
+        cat /tmp/root-file.txt 2>/dev/null && echo "   ✅ Lectura exitosa" || echo "   ❌ Sin permisos de lectura"
+      else
+        echo "   ❌ Archivo NO visible (Mount NS diferente)"
+      fi
+      
+      echo ""
+      echo "✅ Este contenedor corre como usuario 1000"
+      echo "   Tiene permisos limitados vs root"
+      
+      sleep 3600
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # Contenedor 3: Usuario personalizado (UID 2000)
+  - name: custom-user-container
+    image: alpine:latest
+    securityContext:
+      runAsUser: 2000
+      runAsGroup: 3000
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      sleep 3
+      echo ""
+      echo "👤 USER NAMESPACE - CUSTOM USER"
+      echo "==============================="
+      echo ""
+      
+      echo "1️⃣ Identidad:"
+      id
+      
+      echo ""
+      echo "2️⃣ UID y GID personalizados:"
+      echo "   UID: $(id -u) (custom)"
+      echo "   GID: $(id -g) (custom)"
+      
+      echo ""
+      echo "3️⃣ Permisos de seguridad:"
+      echo "   - runAsNonRoot: true"
+      echo "   - allowPrivilegeEscalation: false"
+      
+      echo ""
+      echo "4️⃣ Intentar operaciones privilegiadas:"
+      echo "   - Cambiar hostname:"
+      hostname custom-hostname 2>/dev/null && echo "     ✅ Éxito" || echo "     ❌ Operación no permitida (CORRECTO)"
+      
+      echo ""
+      echo "✅ Usuario completamente personalizado y restringido"
+      
+      sleep 3600
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+
+---
+# Comandos para probar:
+#
+# 1. Crear el Pod:
+# kubectl apply -f 06-user-namespace.yaml
+# kubectl wait --for=condition=Ready pod/user-namespace-demo --timeout=60s
+#
+# 2. Ver logs de cada contenedor:
+# kubectl logs user-namespace-demo -c root-container
+# kubectl logs user-namespace-demo -c user-container
+# kubectl logs user-namespace-demo -c custom-user-container
+#
+# 3. Verificar UID desde cada contenedor:
+# kubectl exec user-namespace-demo -c root-container -- id
+# kubectl exec user-namespace-demo -c user-container -- id
+# kubectl exec user-namespace-demo -c custom-user-container -- id
+#
+# 4. Comparar usuarios:
+# echo "Root container:"
+# kubectl exec user-namespace-demo -c root-container -- whoami
+#
+# echo "User container:"
+# kubectl exec user-namespace-demo -c user-container -- sh -c "echo UID: \$(id -u)"
+#
+# echo "Custom user container:"
+# kubectl exec user-namespace-demo -c custom-user-container -- sh -c "echo UID: \$(id -u), GID: \$(id -g)"
+#
+# 5. Intentar operación privilegiada desde user-container:
+# kubectl exec user-namespace-demo -c user-container -- sh -c "apk add --no-cache curl"
+# # Probablemente falle por falta de permisos
+#
+# 6. Verificar que pueden hacer lo mismo desde root-container:
+# kubectl exec user-namespace-demo -c root-container -- sh -c "apk add --no-cache curl"
+# # Debería funcionar
+#
+# 7. Ver diferencias de permisos en filesystem:
+# kubectl exec user-namespace-demo -c root-container -- ls -lh /tmp/
+# kubectl exec user-namespace-demo -c user-container -- ls -lh /tmp/
+#
+# Cleanup:
+# kubectl delete pod user-namespace-demo

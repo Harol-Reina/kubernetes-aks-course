@@ -1,0 +1,89 @@
+# 🌐 Network Namespace - COMPARTIDO
+# Demuestra que todos los contenedores del Pod comparten:
+# - Misma IP
+# - Mismas interfaces de red
+# - Comunicación vía localhost
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: network-namespace-demo
+  labels:
+    demo: network-namespace
+    category: namespaces
+spec:
+  containers:
+  # Servidor web en puerto 8080
+  - name: web-server
+    image: python:alpine
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo "Starting web server on port 8080..."
+      python -m http.server 8080 --bind 0.0.0.0
+    ports:
+    - containerPort: 8080
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+    
+  # Cliente que se conecta vía localhost
+  - name: web-client
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      apk add --no-cache curl
+      echo "Esperando a que el servidor esté listo..."
+      sleep 5
+      
+      echo ""
+      echo "🌐 NETWORK NAMESPACE COMPARTIDO"
+      echo "================================"
+      
+      echo ""
+      echo "1️⃣ IP del web-client:"
+      ip addr show eth0 | grep inet
+      
+      echo ""
+      echo "2️⃣ Conexión a localhost:8080 (mismo Pod):"
+      curl -s http://localhost:8080/ | head -5
+      
+      echo ""
+      echo "✅ Los contenedores comparten el Network Namespace"
+      echo "   - Misma IP"
+      echo "   - Comunicación vía localhost"
+      
+      # Mantener el contenedor vivo
+      sleep 3600
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+---
+# Comandos para probar:
+# kubectl apply -f 01-network-namespace.yaml
+# kubectl wait --for=condition=Ready pod/network-namespace-demo --timeout=60s
+#
+# Verificar que ambos tienen la misma IP:
+# kubectl exec network-namespace-demo -c web-server -- ip addr show eth0
+# kubectl exec network-namespace-demo -c web-client -- ip addr show eth0
+#
+# Probar comunicación localhost:
+# kubectl exec network-namespace-demo -c web-client -- curl localhost:8080
+#
+# Ver logs del cliente:
+# kubectl logs network-namespace-demo -c web-client
+#
+# Cleanup:
+# kubectl delete pod network-namespace-demo

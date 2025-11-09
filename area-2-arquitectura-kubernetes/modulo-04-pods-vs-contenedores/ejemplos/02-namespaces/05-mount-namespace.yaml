@@ -1,0 +1,216 @@
+# 📁 Mount Namespace - NO COMPARTIDO (pero pueden compartir volúmenes)
+# Demuestra que cada contenedor tiene su propio filesystem
+# PERO pueden montar los mismos volúmenes explícitamente
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mount-namespace-demo
+  labels:
+    demo: mount-namespace
+    category: namespaces
+spec:
+  containers:
+  # Contenedor 1: Tiene su propio filesystem + volumen compartido
+  - name: writer
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      echo ""
+      echo "📁 MOUNT NAMESPACE - WRITER"
+      echo "==========================="
+      echo ""
+      
+      echo "1️⃣ Filesystem propio del contenedor:"
+      df -h | grep -v tmpfs | head -5
+      
+      echo ""
+      echo "2️⃣ Crear archivo en el filesystem del contenedor:"
+      echo "Archivo privado del writer" > /tmp/private-writer.txt
+      ls -lh /tmp/private-writer.txt
+      
+      echo ""
+      echo "3️⃣ Escribir en volumen COMPARTIDO:"
+      echo "Datos compartidos desde writer at $(date)" > /shared/data.txt
+      ls -lh /shared/
+      
+      echo ""
+      echo "4️⃣ Puntos de montaje:"
+      mount | grep -E "(shared|tmp)" || echo "No custom mounts"
+      
+      echo ""
+      echo "✅ Este contenedor tiene:"
+      echo "   - Su PROPIO filesystem (/tmp/private-writer.txt)"
+      echo "   - Acceso al volumen COMPARTIDO (/shared/)"
+      
+      # Actualizar datos compartidos cada 10 segundos
+      echo ""
+      echo "Actualizando datos compartidos..."
+      while true; do
+        echo "Update from writer: $(date)" >> /shared/data.txt
+        sleep 10
+      done
+    volumeMounts:
+    - name: shared-volume
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+    
+  # Contenedor 2: Tiene su PROPIO filesystem diferente + mismo volumen
+  - name: reader
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      sleep 3
+      echo ""
+      echo "📁 MOUNT NAMESPACE - READER"
+      echo "==========================="
+      echo ""
+      
+      echo "1️⃣ Filesystem propio del contenedor:"
+      df -h | grep -v tmpfs | head -5
+      
+      echo ""
+      echo "2️⃣ Crear archivo en SU propio filesystem:"
+      echo "Archivo privado del reader" > /tmp/private-reader.txt
+      ls -lh /tmp/private-reader.txt
+      
+      echo ""
+      echo "3️⃣ Intentar acceder al archivo privado del writer:"
+      if [ -f /tmp/private-writer.txt ]; then
+        echo "✅ Archivo encontrado (esto NO debería pasar)"
+        cat /tmp/private-writer.txt
+      else
+        echo "❌ Archivo NO encontrado (CORRECTO - Mount NS separado)"
+      fi
+      
+      echo ""
+      echo "4️⃣ Leer desde volumen COMPARTIDO:"
+      if [ -f /shared/data.txt ]; then
+        echo "✅ Archivo compartido encontrado:"
+        cat /shared/data.txt
+      else
+        echo "❌ Archivo compartido no disponible"
+      fi
+      
+      echo ""
+      echo "5️⃣ Puntos de montaje:"
+      mount | grep -E "(shared|tmp)" || echo "No custom mounts"
+      
+      echo ""
+      echo "📊 RESUMEN:"
+      echo "   ❌ Mount Namespace: NO compartido"
+      echo "      - /tmp/private-writer.txt NO visible desde reader"
+      echo "      - Cada contenedor tiene su propio filesystem"
+      echo ""
+      echo "   ✅ Volúmenes: SÍ compartidos (explícitamente)"
+      echo "      - /shared/data.txt visible desde ambos"
+      echo "      - Montados en la misma ruta"
+      
+      # Monitorear actualizaciones
+      echo ""
+      echo "Monitoreando actualizaciones del volumen compartido..."
+      while true; do
+        echo ""
+        echo "--- $(date) ---"
+        tail -3 /shared/data.txt 2>/dev/null || echo "Datos no disponibles"
+        sleep 10
+      done
+    volumeMounts:
+    - name: shared-volume
+      mountPath: /shared
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+  
+  # Contenedor 3: Sin acceso al volumen compartido
+  - name: isolated
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args:
+    - "-c"
+    - |
+      sleep 5
+      echo ""
+      echo "📁 MOUNT NAMESPACE - ISOLATED"
+      echo "============================="
+      echo ""
+      
+      echo "1️⃣ Intentar acceder al volumen compartido:"
+      if [ -d /shared ]; then
+        echo "✅ Directorio /shared existe"
+        ls -lh /shared/ || echo "Sin acceso"
+      else
+        echo "❌ Directorio /shared NO existe"
+        echo "   Este contenedor NO tiene el volumen montado"
+      fi
+      
+      echo ""
+      echo "2️⃣ Intentar acceder a archivos privados:"
+      echo "   - /tmp/private-writer.txt: $([ -f /tmp/private-writer.txt ] && echo 'encontrado' || echo 'NO encontrado')"
+      echo "   - /tmp/private-reader.txt: $([ -f /tmp/private-reader.txt ] && echo 'encontrado' || echo 'NO encontrado')"
+      
+      echo ""
+      echo "✅ Este contenedor está completamente aislado"
+      
+      sleep 3600
+    # NO monta el volumen compartido
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  volumes:
+  - name: shared-volume
+    emptyDir: {}
+
+---
+# Comandos para probar:
+#
+# 1. Crear el Pod:
+# kubectl apply -f 05-mount-namespace.yaml
+# kubectl wait --for=condition=Ready pod/mount-namespace-demo --timeout=60s
+#
+# 2. Ver logs de cada contenedor:
+# kubectl logs mount-namespace-demo -c writer
+# kubectl logs mount-namespace-demo -c reader
+# kubectl logs mount-namespace-demo -c isolated
+#
+# 3. Verificar filesystems independientes:
+# kubectl exec mount-namespace-demo -c writer -- ls -lh /tmp/
+# kubectl exec mount-namespace-demo -c reader -- ls -lh /tmp/
+#
+# 4. Verificar que private-writer.txt NO es visible desde reader:
+# kubectl exec mount-namespace-demo -c reader -- ls /tmp/private-writer.txt
+# # Resultado esperado: "No such file or directory"
+#
+# 5. Verificar volumen compartido desde writer y reader:
+# kubectl exec mount-namespace-demo -c writer -- cat /shared/data.txt
+# kubectl exec mount-namespace-demo -c reader -- cat /shared/data.txt
+#
+# 6. Verificar que isolated NO tiene acceso al volumen:
+# kubectl exec mount-namespace-demo -c isolated -- ls /shared/
+# # Resultado esperado: "No such file or directory"
+#
+# 7. Escribir desde reader, leer desde writer:
+# kubectl exec mount-namespace-demo -c reader -- sh -c "echo 'From reader' >> /shared/data.txt"
+# kubectl exec mount-namespace-demo -c writer -- tail /shared/data.txt
+#
+# Cleanup:
+# kubectl delete pod mount-namespace-demo
