@@ -298,9 +298,8 @@ El API Server de Kubernetes procesa todas las requests siguiendo un pipeline est
 - **Consistencia**: Consistencia fuerte con cumplimiento ACID
 
 [🔗 **Editar Diagrama en Draw.io**](https://app.diagrams.net/?mode=github&url=https%3A%2F%2Fraw.githubusercontent.com%2Fuser%2Frepo%2Fbranch%2Fassets%2Fdiagrams%2F02-arquitectura-cluster%2Fapi-request-flow.drawio)
-│                                                                                         │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-```
+                                                                                         │
+
 
 **Responsabilidades:**
 - ✅ **Autenticación y autorización** de requests
@@ -1499,19 +1498,358 @@ ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
 
 ---
 
-## 🧪 Laboratorio: Explorando la Arquitectura
+## 🧪 Ejercicios Prácticos: Explorando la Arquitectura
 
-### **[🔬 Lab: Cluster Architecture Deep Dive](./laboratorios/cluster-architecture-lab.md)**
+### **🔬 Ejercicio 1: Verificar Componentes del Cluster**
 
-En este laboratorio vas a:
-- Instalar y configurar Minikube
-- Explorar todos los componentes del control plane
-- Analizar la comunicación entre componentes
-- Diagnosticar problemas comunes
-- Entender el flujo de requests
+**Objetivo**: Identificar todos los componentes del Control Plane y Worker Nodes
 
-**Duración**: 45 minutos  
-**Dificultad**: Intermedio
+```bash
+# 1. Ver todos los componentes del sistema
+kubectl get pods -n kube-system
+
+# Deberías ver:
+# - kube-apiserver
+# - etcd
+# - kube-scheduler
+# - kube-controller-manager
+# - coredns
+# - kube-proxy
+
+# 2. Ver detalles de un componente específico
+kubectl describe pod kube-apiserver-minikube -n kube-system
+
+# 3. Ver logs del API Server
+kubectl logs kube-apiserver-minikube -n kube-system
+
+# 4. Verificar los nodos del cluster
+kubectl get nodes -o wide
+
+# 5. Ver información detallada del nodo
+kubectl describe node minikube
+```
+
+**✅ Validación**: Debes poder identificar cada componente y entender su función.
+
+---
+
+### **🔍 Ejercicio 2: Explorar el API Server**
+
+**Objetivo**: Entender cómo funciona el API Server
+
+```bash
+# 1. Ver la versión del API Server
+kubectl version
+
+# 2. Ver todos los recursos disponibles (API Resources)
+kubectl api-resources
+
+# 3. Ver todas las API versions
+kubectl api-versions
+
+# 4. Hacer una petición directa al API Server
+kubectl proxy &
+curl http://localhost:8001/api/v1/namespaces/default/pods
+
+# 5. Ver configuración de acceso al cluster
+kubectl config view
+
+# 6. Ver el contexto actual
+kubectl config current-context
+```
+
+**✅ Validación**: Entiendes que todas las operaciones pasan por el API Server.
+
+---
+
+### **🗄️ Ejercicio 3: Inspeccionar etcd (Conceptual)**
+
+**Objetivo**: Entender qué datos almacena etcd
+
+```bash
+# 1. Crear un deployment para ver qué se guarda en etcd
+kubectl create deployment test-etcd --image=nginx --replicas=2
+
+# 2. Ver el deployment
+kubectl get deployment test-etcd -o yaml
+
+# 3. Ver los pods creados
+kubectl get pods -l app=test-etcd
+
+# 4. Ver el ReplicaSet creado automáticamente
+kubectl get replicaset
+
+# 5. Eliminar el deployment y observar la cascada
+kubectl delete deployment test-etcd
+
+# 6. Verificar que todo se eliminó
+kubectl get all
+```
+
+**💡 Conceptual**: Cada comando `kubectl` hace que:
+- API Server reciba la petición
+- API Server guarde el estado en etcd
+- Controllers lean de etcd y actúen en consecuencia
+
+**✅ Validación**: Entiendes que etcd es la única fuente de verdad del cluster.
+
+---
+
+### **🧠 Ejercicio 4: Observar el Scheduler en Acción**
+
+**Objetivo**: Ver cómo el Scheduler asigna Pods a Nodos
+
+```bash
+# 1. Crear un deployment sin especificar nodo
+kubectl create deployment scheduler-test --image=nginx --replicas=3
+
+# 2. Ver en qué nodos se asignaron los pods
+kubectl get pods -o wide
+
+# 3. Ver eventos del scheduler
+kubectl get events --sort-by='.lastTimestamp' | grep -i scheduled
+
+# 4. Crear un pod con nodeSelector (forzar scheduler)
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-manual-schedule
+spec:
+  nodeName: minikube  # Asignación manual (bypassing scheduler)
+  containers:
+  - name: nginx
+    image: nginx
+EOF
+
+# 5. Ver que se asignó directamente sin scheduler
+kubectl get pod nginx-manual-schedule -o wide
+
+# 6. Cleanup
+kubectl delete deployment scheduler-test
+kubectl delete pod nginx-manual-schedule
+```
+
+**✅ Validación**: Entiendes cómo el Scheduler decide dónde colocar los Pods.
+
+---
+
+### **🎮 Ejercicio 5: Ver Controllers en Acción**
+
+**Objetivo**: Observar el comportamiento de auto-healing de los Controllers
+
+```bash
+# 1. Crear un deployment con 3 réplicas
+kubectl create deployment controller-demo --image=nginx --replicas=3
+
+# 2. Ver los pods
+kubectl get pods -l app=controller-demo
+
+# 3. Eliminar manualmente un pod
+POD_NAME=$(kubectl get pods -l app=controller-demo -o jsonpath='{.items[0].metadata.name}')
+kubectl delete pod $POD_NAME
+
+# 4. Ver inmediatamente cómo se crea un nuevo pod (self-healing)
+kubectl get pods -l app=controller-demo --watch
+
+# (Presiona Ctrl+C para salir del watch)
+
+# 5. Escalar el deployment (ReplicaSet Controller)
+kubectl scale deployment controller-demo --replicas=5
+
+# 6. Ver cómo se crean 2 pods adicionales
+kubectl get pods -l app=controller-demo
+
+# 7. Ver el ReplicaSet que gestiona estos pods
+kubectl get replicaset
+
+# 8. Cleanup
+kubectl delete deployment controller-demo
+```
+
+**✅ Validación**: Observaste el ReplicaSet Controller manteniendo el estado deseado.
+
+---
+
+### **🌐 Ejercicio 6: Analizar kube-proxy y Networking**
+
+**Objetivo**: Entender cómo funciona el Service networking
+
+```bash
+# 1. Crear un deployment y exponer como Service
+kubectl create deployment web --image=nginx --replicas=3
+kubectl expose deployment web --port=80 --target-port=80
+
+# 2. Ver el Service creado
+kubectl get service web
+
+# 3. Describir el Service (ver Endpoints)
+kubectl describe service web
+
+# 4. Ver los Endpoints (IPs de los pods)
+kubectl get endpoints web
+
+# 5. Ver las reglas de iptables creadas por kube-proxy (en el nodo)
+# Si usas Minikube:
+minikube ssh
+sudo iptables-save | grep web
+exit
+
+# 6. Probar conectividad desde otro pod
+kubectl run test-pod --image=busybox --rm -it --restart=Never -- wget -qO- http://web
+
+# 7. Ver logs de kube-proxy
+kubectl logs -n kube-system -l k8s-app=kube-proxy
+
+# 8. Cleanup
+kubectl delete deployment web
+kubectl delete service web
+```
+
+**✅ Validación**: Entiendes cómo kube-proxy implementa el Service networking.
+
+---
+
+### **🤖 Ejercicio 7: Inspeccionar kubelet (Worker Node)**
+
+**Objetivo**: Ver el agente que ejecuta en cada nodo
+
+```bash
+# 1. Ver información del nodo
+kubectl get nodes -o wide
+
+# 2. Describir el nodo para ver capacidad y recursos
+kubectl describe node minikube
+
+# 3. Ver los pods ejecutando en el nodo
+kubectl get pods --all-namespaces -o wide --field-selector spec.nodeName=minikube
+
+# 4. Si usas Minikube, ver el proceso kubelet
+minikube ssh
+ps aux | grep kubelet
+exit
+
+# 5. Ver métricas del nodo (si metrics-server está instalado)
+kubectl top node
+
+# 6. Ver métricas de pods
+kubectl top pods --all-namespaces
+```
+
+**✅ Validación**: Entiendes que kubelet es el responsable de ejecutar los pods en cada nodo.
+
+---
+
+### **📊 Ejercicio 8: Request Flow Completo**
+
+**Objetivo**: Seguir el flujo completo de una petición
+
+```bash
+# 1. Crear un deployment y seguir cada paso
+echo "=== PASO 1: Usuario ejecuta kubectl ==="
+kubectl create deployment flow-demo --image=nginx --replicas=2 --dry-run=client -o yaml
+
+echo "=== PASO 2: kubectl construye JSON y lo envía al API Server ==="
+kubectl create deployment flow-demo --image=nginx --replicas=2 -v=8
+
+# El flag -v=8 muestra todos los detalles de comunicación con API Server
+
+echo "=== PASO 3: Ver que se guardó en etcd (verificar deployment existe) ==="
+kubectl get deployment flow-demo -o yaml
+
+echo "=== PASO 4: Deployment Controller crea ReplicaSet ==="
+kubectl get replicaset
+
+echo "=== PASO 5: ReplicaSet Controller solicita creación de Pods ==="
+kubectl get pods -l app=flow-demo
+
+echo "=== PASO 6: Scheduler asigna Pods a Nodos ==="
+kubectl get pods -l app=flow-demo -o wide
+
+echo "=== PASO 7: Kubelet ejecuta los contenedores ==="
+kubectl describe pod -l app=flow-demo
+
+echo "=== PASO 8: Ver eventos de todo el proceso ==="
+kubectl get events --sort-by='.lastTimestamp' | head -20
+
+# Cleanup
+kubectl delete deployment flow-demo
+```
+
+**✅ Validación**: Puedes explicar cada paso del flujo de un deployment.
+
+---
+
+### **🔧 Ejercicio 9: Troubleshooting de Componentes**
+
+**Objetivo**: Diagnosticar problemas comunes
+
+```bash
+# 1. Ver salud general del cluster
+kubectl get componentstatuses
+# Nota: Este comando está deprecated pero útil para clusters auto-gestionados
+
+# 2. Ver eventos del cluster
+kubectl get events --all-namespaces --sort-by='.lastTimestamp'
+
+# 3. Verificar que todos los pods del sistema están corriendo
+kubectl get pods -n kube-system
+
+# 4. Crear un pod problemático intencionalmente
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod
+spec:
+  containers:
+  - name: app
+    image: imagen-que-no-existe:v1.0
+EOF
+
+# 5. Ver por qué falla
+kubectl describe pod bad-pod
+kubectl get events --field-selector involvedObject.name=bad-pod
+
+# 6. Ver logs de API Server para diagnóstico
+kubectl logs -n kube-system -l component=kube-apiserver --tail=50
+
+# 7. Cleanup
+kubectl delete pod bad-pod
+```
+
+**✅ Validación**: Sabes usar comandos de diagnóstico cuando algo falla.
+
+---
+
+### **📝 Ejercicio 10: Resumen de Arquitectura**
+
+**Objetivo**: Consolidar todo el conocimiento
+
+**Completa este checklist ejecutando comandos:**
+
+```bash
+# ✅ Control Plane Components
+kubectl get pods -n kube-system | grep -E "(apiserver|etcd|scheduler|controller)"
+
+# ✅ Worker Node Components
+kubectl get pods -n kube-system | grep -E "(proxy|coredns)"
+
+# ✅ Ver todos los recursos del cluster
+kubectl api-resources | wc -l
+
+# ✅ Crear un deployment completo
+kubectl create deployment final-test --image=nginx --replicas=3
+kubectl expose deployment final-test --port=80
+kubectl get all -l app=final-test
+
+# ✅ Verificar que todo funciona
+kubectl run test --image=busybox --rm -it --restart=Never -- wget -qO- http://final-test
+
+# ✅ Cleanup final
+kubectl delete deployment final-test
+kubectl delete service final-test
+```
 
 ---
 
