@@ -15,6 +15,7 @@
 
 ## 📋 Prerequisitos
 
+- [Lab M2.2: Primer contenedor completado](./primer-contenedor-lab.md)
 - Docker instalado y funcionando
 - VM de Azure del laboratorio anterior
 - Acceso SSH a la VM

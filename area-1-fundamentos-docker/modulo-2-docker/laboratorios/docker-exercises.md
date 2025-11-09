@@ -6,7 +6,16 @@
 
 ---
 
-## 📚 Estructura de Ejercicios
+## � Prerequisitos
+
+- [Lab M2.7: Docker Compose completado](./docker-compose-evolution-lab.md)
+- Todos los labs previos (M2.1 → M2.6) completados
+- Conocimiento de Docker CLI
+- Entorno de práctica disponible (VM o local)
+
+---
+
+## �📚 Estructura de Ejercicios
 
 ### **🟢 Nivel Principiante** (15-20 min c/u)
 - [Ejercicio 1: Primeros Pasos](#ejercicio-1-primeros-pasos)

@@ -307,7 +307,7 @@ docker run -d \
   --name database \
   --network myapp-network \
   -e POSTGRES_PASSWORD=secret \
-  postgres:13
+  postgres:16
 
 # API Backend (Node.js)
 docker run -d \

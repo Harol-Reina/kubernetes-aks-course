@@ -14,8 +14,9 @@
 
 ## 📋 Prerequisitos
 
-- VM de Azure configurada del laboratorio anterior
-- Docker funcionando
+- [Lab M2.6: Redes Docker completado](./redes-docker-lab.md)
+- [Lab M2.5: Volúmenes completado](./volumenes-persistencia-lab.md)
+- Docker Compose v2 instalado (incluido con Docker 24.0+)
 - Git instalado
 
 ---
@@ -53,7 +54,7 @@ docker run -d \
   -e POSTGRES_USER=usuario \
   -e POSTGRES_PASSWORD=secreto \
   -v db-data:/var/lib/postgresql/data \
-  postgres:13
+  postgres:16
 
 # 3. Cache Redis
 docker run -d \
@@ -100,17 +101,20 @@ curl http://localhost:3001
 
 ## 🧪 Ejercicio 2: Docker Compose - La Solución
 
-### Paso 1: Instalar Docker Compose
+### Paso 1: Verificar Docker Compose v2
 
 ```bash
-# Verificar si ya está instalado
+# Verificar que Docker Compose v2 está instalado (viene con Docker 24.0+)
 docker compose version
 
-# Si no está instalado
-sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+# Debería mostrar algo como:
+# Docker Compose version v2.x.x
 
-# Verificar instalación
+# Si no está instalado, instalar el plugin:
+sudo apt update
+sudo apt install docker-compose-plugin
+
+# Verificar nuevamente
 docker compose version
 ```
 
@@ -124,16 +128,17 @@ cd ~/docker-compose-lab
 mkdir -p frontend backend database
 ```
 
-### Paso 3: Crear docker-compose.yml
+### Paso 3: Crear compose.yaml
 
 ```bash
-cat > docker-compose.yml << 'EOF'
-version: '3.8'
+cat > compose.yaml << 'EOF'
+# Docker Compose v2 ya no requiere la versión
+# El formato se detecta automáticamente
 
 services:
   # Base de datos PostgreSQL
   database:
-    image: postgres:13
+    image: postgres:16
     container_name: app-database
     environment:
       POSTGRES_DB: miapp
@@ -721,12 +726,12 @@ docker compose ps
 # Logs de un servicio específico
 docker compose logs backend
 
-# Escalar un servicio (necesita corrección en docker-compose.yml)
+# Escalar un servicio (necesita corrección en compose.yaml)
 echo "Escalando el backend a 2 instancias..."
 
 # IMPORTANTE: Para que funcione el escalado, el servicio backend NO debe tener container_name
 # Si aparece el error: "Remove the custom name to scale the service"
-# Editar docker-compose.yml y quitar la línea: container_name: app-backend
+# Editar compose.yaml y quitar la línea: container_name: app-backend
 
 docker compose up -d --scale backend=2
 
