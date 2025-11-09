@@ -980,12 +980,12 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 ### 🔧 Pasos:
 
 1. **Conectarse a la VM creada en el Módulo 1**
-   ```bash
+```bash
    ssh azureuser@<IP_PUBLICA>
-   ```
+```
 
 2. **Instalar Docker**
-   ```bash
+```bash
    # Actualizar el sistema
    sudo apt update
    
@@ -1007,10 +1007,10 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    
    # Verificar instalación
    docker --version
-   ```
+```
 
 3. **Primeros comandos Docker**
-   ```bash
+```bash
    # Reiniciar sesión SSH para aplicar cambios de grupo
    exit
    ssh azureuser@<IP_PUBLICA>
@@ -1049,10 +1049,10 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    # Detener y eliminar contenedor
    docker stop mi-nginx
    docker rm mi-nginx
-   ```
+```
 
 4. **Ejercicio 1: Trabajar con imágenes**
-   ```bash
+```bash
    # Buscar imágenes en Docker Hub
    docker search redis
    docker search postgres
@@ -1074,10 +1074,10 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    # Comparar tamaños
    docker images | grep redis
    # Nota: Observa la diferencia de tamaño entre redis:7.2 y redis:alpine
-   ```
+```
 
 5. **Ejercicio 2: Contenedores con variables de entorno**
-   ```bash
+```bash
    # Ejecutar PostgreSQL con configuración
    docker run -d \
      --name postgres-db \
@@ -1105,10 +1105,10 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    
    # Ver estadísticas de uso de recursos
    docker stats postgres-db --no-stream
-   ```
+```
 
 6. **Ejercicio 3: Volúmenes y persistencia de datos**
-   ```bash
+```bash
    # Crear un volumen nombrado
    docker volume create datos-postgres
    
@@ -1166,10 +1166,10 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
      "SELECT * FROM productos;"
    
    # ✅ Los datos persisten aunque se eliminó el contenedor!
-   ```
+```
 
 7. **Ejercicio 4: Redes Docker y comunicación entre contenedores**
-   ```bash
+```bash
    # Crear una red personalizada
    docker network create mi-red-app
    
@@ -1221,10 +1221,10 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    # Ver logs de ambos contenedores
    docker logs web
    docker logs db
-   ```
+```
 
 8. **Ejercicio 5: Limitar recursos de contenedores**
-   ```bash
+```bash
    # Crear contenedor con límites de recursos
    docker run -d \
      --name nginx-limitado \
@@ -1255,58 +1255,58 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
    
    # Verificar nuevos límites
    docker inspect nginx-limitado | grep -A 10 "Memory"
-   ```
+```
 
 9. **Ejercicio 6: Construir tu primera imagen personalizada**
-   ```bash
-   # Crear directorio para el proyecto
-   mkdir ~/mi-primera-imagen
-   cd ~/mi-primera-imagen
-   
-   # Crear un archivo HTML simple
-   cat > index.html << 'EOF'
-   <!DOCTYPE html>
-   <html>
-   <head>
-       <title>Mi Primera Imagen Docker</title>
-       <style>
-           body { 
-               font-family: Arial; 
-               background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-               color: white;
-               display: flex;
-               justify-content: center;
-               align-items: center;
-               height: 100vh;
-               margin: 0;
-           }
-           .container {
-               text-align: center;
-               background: rgba(255,255,255,0.1);
-               padding: 50px;
-               border-radius: 20px;
-           }
-       </style>
-   </head>
-   <body>
-       <div class="container">
-           <h1>� ¡Hola desde Docker!</h1>
-           <p>Esta es mi primera imagen personalizada</p>
-           <p>Hostname: <span id="hostname"></span></p>
-       </div>
-       <script>
-           fetch('/hostname').then(r => r.text()).then(h => {
-               document.getElementById('hostname').textContent = h;
-           }).catch(() => {
-               document.getElementById('hostname').textContent = 'No disponible';
-           });
-       </script>
-   </body>
-   </html>
+```bash
+  # Crear directorio para el proyecto
+  mkdir ~/mi-primera-imagen
+  cd ~/mi-primera-imagen
+  
+  # Crear un archivo HTML simple
+  cat > index.html << 'EOF'
+  <!DOCTYPE html>
+  <html>
+  <head>
+      <title>Mi Primera Imagen Docker</title>
+      <style>
+          body { 
+              font-family: Arial; 
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              margin: 0;
+          }
+          .container {
+              text-align: center;
+              background: rgba(255,255,255,0.1);
+              padding: 50px;
+              border-radius: 20px;
+          }
+      </style>
+  </head>
+  <body>
+      <div class="container">
+          <h1>� ¡Hola desde Docker!</h1>
+          <p>Esta es mi primera imagen personalizada</p>
+          <p>Hostname: <span id="hostname"></span></p>
+      </div>
+      <script>
+          fetch('/hostname').then(r => r.text()).then(h => {
+              document.getElementById('hostname').textContent = h;
+          }).catch(() => {
+              document.getElementById('hostname').textContent = 'No disponible';
+          });
+      </script>
+  </body>
+  </html>
   EOF
    
-   # Crear un servidor simple en Python
-   cat > server.py << 'EOF'
+  # Crear un servidor simple en Python
+  cat > server.py << 'EOF'
   #!/usr/bin/env python3
   from http.server import HTTPServer, SimpleHTTPRequestHandler
   import socket
@@ -1400,7 +1400,7 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
  ```
 
 10. **Ejercicio 7: Docker Compose - Aplicación multi-contenedor**
-  ```bash
+```bash
   # Crear directorio para el proyecto
   mkdir ~/docker-compose-demo
   cd ~/docker-compose-demo
@@ -1599,7 +1599,7 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
 ```
 
 11. **Limpieza final del laboratorio**
-    ```bash
+```bash
     # Detener todos los contenedores
     docker stop $(docker ps -q) 2>/dev/null || echo "No hay contenedores activos"
     
@@ -1620,7 +1620,7 @@ docker run -d --name web3 --memory="200m" nginx    # Contenedor 3
     
     # Limpieza completa (cuidado en producción!)
     # docker system prune -a --volumes -f
-    ```
+```
 
 ### 🎯 Objetivos del Laboratorio Cumplidos
 
