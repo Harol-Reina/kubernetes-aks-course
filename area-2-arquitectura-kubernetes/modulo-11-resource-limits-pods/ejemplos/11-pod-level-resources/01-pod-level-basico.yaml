@@ -1,0 +1,230 @@
+# =============================================================================
+# Pod-level Resources - Básico
+# =============================================================================
+#
+# Feature: PodLevelResources (Beta en K8s 1.34+)
+# Feature gate: Enabled por default en K8s 1.34+
+#
+# Qué es:
+# - Especifica recursos a nivel de Pod (no por contenedor individual)
+# - Todos los contenedores comparten el presupuesto total del Pod
+# - Útil para Pods con muchos sidecars
+#
+# ⚠️ Limitaciones:
+# - Solo soporta CPU y Memory
+# - NO soporta ephemeral-storage ni extended resources
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-level-basic
+  labels:
+    example: pod-level-resources
+    type: basic
+  annotations:
+    description: "Pod con resources a nivel de Pod, no por contenedor"
+    kubernetes.io/version: "1.34+"
+spec:
+  resources:  # ← A nivel de Pod (no en containers[])
+    requests:
+      cpu: "1"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+  
+  containers:
+  # ==========================================
+  # Ningún contenedor define resources
+  # Todos comparten el presupuesto del Pod
+  # ==========================================
+  
+  - name: web
+    image: nginx:1.25-alpine
+    ports:
+    - containerPort: 80
+    # Sin resources individuales
+  
+  - name: sidecar1
+    image: busybox:1.36
+    command: ["sleep", "infinity"]
+  
+  - name: sidecar2
+    image: busybox:1.36
+    command: ["sleep", "infinity"]
+
+# Los 3 contenedores comparten:
+# - 2 CPU (límite)
+# - 2 Gi memory (límite)
+
+# =============================================================================
+# VENTAJAS DE POD-LEVEL RESOURCES
+# =============================================================================
+#
+# ✅ Simplifica configuración:
+# - No necesitas calcular recursos por contenedor individual
+# - Especialmente útil con muchos sidecars (Istio, Fluentd, etc.)
+#
+# ✅ Flexibilidad en runtime:
+# - Los contenedores pueden usar más o menos según necesiten
+# - No hay límites artificiales por contenedor
+#
+# ✅ Menos overhead de configuración:
+# - Un solo lugar para definir recursos
+# - Menos YAMLs complejos
+#
+# =============================================================================
+# COMPARACIÓN: Container-level vs Pod-level
+# =============================================================================
+#
+# Container-level (tradicional):
+# ┌─────────────────────────────────────────────────┐
+# │ containers:                                     │
+# │ - name: web                                     │
+# │   resources:                                    │
+# │     limits:                                     │
+# │       cpu: "1"                                  │
+# │       memory: "1Gi"                             │
+# │ - name: sidecar1                                │
+# │   resources:                                    │
+# │     limits:                                     │
+# │       cpu: "500m"                               │
+# │       memory: "512Mi"                           │
+# │ - name: sidecar2                                │
+# │   resources:                                    │
+# │     limits:                                     │
+# │       cpu: "500m"                               │
+# │       memory: "512Mi"                           │
+# ├─────────────────────────────────────────────────┤
+# │ Total: 2 CPU, 2Gi memory                        │
+# │ ❌ Rígido: cada contenedor limitado a su cuota  │
+# └─────────────────────────────────────────────────┘
+#
+# Pod-level (nuevo):
+# ┌─────────────────────────────────────────────────┐
+# │ spec:                                           │
+# │   resources:                                    │
+# │     limits:                                     │
+# │       cpu: "2"                                  │
+# │       memory: "2Gi"                             │
+# │   containers:                                   │
+# │   - name: web                                   │
+# │   - name: sidecar1                              │
+# │   - name: sidecar2                              │
+# ├─────────────────────────────────────────────────┤
+# │ Total: 2 CPU, 2Gi memory                        │
+# │ ✅ Flexible: contenedores comparten el total    │
+# └─────────────────────────────────────────────────┘
+#
+# =============================================================================
+# CÓMO FUNCIONA EL SHARING
+# =============================================================================
+#
+# Ejemplo de este Pod:
+#
+# Límite total: 2 CPU, 2Gi memory
+#
+# Escenario 1: Uso balanceado
+# ┌────────────┬──────┬────────┐
+# │ Container  │ CPU  │ Memory │
+# ├────────────┼──────┼────────┤
+# │ web        │ 1.0  │ 1Gi    │
+# │ sidecar1   │ 0.5  │ 500Mi  │
+# │ sidecar2   │ 0.5  │ 500Mi  │
+# ├────────────┼──────┼────────┤
+# │ TOTAL      │ 2.0  │ 2Gi    │ ✅ OK
+# └────────────┴──────┴────────┘
+#
+# Escenario 2: Web usa más (pico de tráfico)
+# ┌────────────┬──────┬────────┐
+# │ Container  │ CPU  │ Memory │
+# ├────────────┼──────┼────────┤
+# │ web        │ 1.8  │ 1.5Gi  │ ← Más CPU/Memory
+# │ sidecar1   │ 0.1  │ 250Mi  │ ← Menos
+# │ sidecar2   │ 0.1  │ 250Mi  │ ← Menos
+# ├────────────┼──────┼────────┤
+# │ TOTAL      │ 2.0  │ 2Gi    │ ✅ OK
+# └────────────┴──────┴────────┘
+#
+# Escenario 3: Excede límite → OOMKilled
+# ┌────────────┬──────┬────────┐
+# │ Container  │ CPU  │ Memory │
+# ├────────────┼──────┼────────┤
+# │ web        │ 1.5  │ 1.8Gi  │
+# │ sidecar1   │ 0.3  │ 300Mi  │
+# │ sidecar2   │ 0.2  │ 200Mi  │
+# ├────────────┼──────┼────────┤
+# │ TOTAL      │ 2.0  │ 2.3Gi  │ ❌ Excede 2Gi
+# └────────────┴──────┴────────┘
+# → Pod OOMKilled
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# ⚠️ Requiere Kubernetes 1.34+ con feature gate PodLevelResources
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado:
+# kubectl get pod pod-level-basic
+#
+# Describir Pod (ver recursos a nivel de Pod):
+# kubectl describe pod pod-level-basic
+#
+# Buscar:
+# Resources:
+#   Limits:
+#     cpu:     2
+#     memory:  2Gi
+#   Requests:
+#     cpu:     1
+#     memory:  1Gi
+#
+# Ver uso de cada contenedor:
+# kubectl top pod pod-level-basic --containers
+#
+# Output:
+# POD                 CONTAINER   CPU(cores)   MEMORY(bytes)
+# pod-level-basic     web         10m          50Mi
+# pod-level-basic     sidecar1    1m           5Mi
+# pod-level-basic     sidecar2    1m           5Mi
+#
+# Ver que NO hay resources en los contenedores:
+# kubectl get pod pod-level-basic -o jsonpath='{.spec.containers[*].resources}'
+# Output: {} {} {}
+#
+# Ver resources a nivel de Pod:
+# kubectl get pod pod-level-basic -o jsonpath='{.spec.resources}'
+# Output: {"limits":{"cpu":"2","memory":"2Gi"},"requests":{"cpu":"1","memory":"1Gi"}}
+#
+# Limpiar:
+# kubectl delete -f pod.yaml
+#
+# =============================================================================
+# CUÁNDO USAR POD-LEVEL RESOURCES
+# =============================================================================
+#
+# ✅ Usar cuando:
+# - Tienes muchos sidecars (Istio, logging, monitoring)
+# - Es difícil predecir uso exacto de cada contenedor
+# - Quieres flexibilidad en runtime
+# - Simplificar configuración
+#
+# ❌ NO usar cuando:
+# - Necesitas límites estrictos por contenedor
+# - Un contenedor puede monopolizar recursos
+# - Necesitas ephemeral-storage o extended resources
+# - Versión de K8s < 1.34
+#
+# =============================================================================
+# VERIFICAR FEATURE GATE
+# =============================================================================
+#
+# Ver si PodLevelResources está habilitado:
+# kubectl get --raw /metrics | grep pod_level_resources
+#
+# Si no está disponible, habilitar en kubelet:
+# --feature-gates=PodLevelResources=true

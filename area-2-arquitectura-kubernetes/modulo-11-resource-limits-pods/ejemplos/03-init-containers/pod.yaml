@@ -1,0 +1,99 @@
+# =============================================================================
+# Ejemplo 03: Init Containers con Resources
+# =============================================================================
+#
+# Los init containers NO se suman a los recursos del Pod.
+# Se usa el MÁXIMO entre:
+# - El máximo de los init containers
+# - La suma de los containers normales
+#
+# En este ejemplo:
+# - Init container: cpu=1, memory=512Mi
+# - App container:  cpu=250m, memory=128Mi
+# 
+# Recursos efectivos del Pod:
+# - Requests: cpu=1 (max), memory=512Mi (max)
+# - Limits:   cpu=1, memory=512Mi
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-container-resources
+  labels:
+    app: demo
+    example: init-containers
+spec:
+  
+  # Init containers: Se ejecutan ANTES de los containers normales
+  initContainers:
+  - name: init-setup
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Initializing application..."
+        echo "Downloading configuration..."
+        sleep 5
+        echo "Setup complete!"
+    resources:
+      requests:
+        cpu: "1"         # ← Init container necesita 1 CPU
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"
+  
+  # Containers normales
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"      # ← Menor que el init container
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# REGLA DEL MÁXIMO PARA INIT CONTAINERS
+# =============================================================================
+#
+# Pod Request CPU = MAX(
+#   SUM(app containers),      ← 250m
+#   MAX(init containers)      ← 1000m  ◄── GANA
+# )
+# Pod Request CPU = 1000m (1 CPU)
+#
+# Pod Request Memory = MAX(
+#   SUM(app containers),      ← 128Mi
+#   MAX(init containers)      ← 512Mi  ◄── GANA
+# )
+# Pod Request Memory = 512Mi
+#
+# ¿Por qué?
+# - Init containers se ejecutan SECUENCIALMENTE (uno después del otro)
+# - App containers se ejecutan EN PARALELO
+# - Solo necesitas reservar el máximo de los init, no la suma
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver init containers:
+# kubectl describe pod init-container-resources | grep -A 20 "Init Containers:"
+#
+# Ver logs del init container:
+# kubectl logs init-container-resources -c init-setup
+#
+# Ver recursos efectivos:
+# kubectl describe pod init-container-resources | grep -A 10 "Requests:"
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

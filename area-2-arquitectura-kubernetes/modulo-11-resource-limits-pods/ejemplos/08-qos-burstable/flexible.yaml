@@ -1,0 +1,55 @@
+# =============================================================================
+# QoS Class: BURSTABLE - Flexible (request < limit)
+# =============================================================================
+#
+# Condiciones para Burstable:
+# 1. No califica para Guaranteed
+# 2. Al menos UN contenedor tiene request o limit para CPU o Memory
+#
+# Características:
+# - ⚖️ Prioridad media de eviction
+# - 📈 Puede usar más recursos si están disponibles
+# - ⚠️ Puede sufrir throttling o OOMKill
+# - 🎯 Uso: Aplicaciones web, servicios stateless
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable-flexible
+  labels:
+    qos-class: burstable
+    example: qos-demo
+  annotations:
+    description: "QoS: Burstable - request < limit"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+      limits:
+        cpu: "1"        # ← Mayor que request (permite bursts)
+        memory: "512Mi" # ← Mayor que request
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f flexible.yaml
+#
+# Verificar QoS Class:
+# kubectl get pod qos-burstable-flexible -o jsonpath='{.status.qosClass}'
+# Output: Burstable
+#
+# Ver que puede burst:
+# kubectl top pod qos-burstable-flexible
+# (Puede usar hasta 1 CPU si está disponible)
+#
+# Limpiar:
+# kubectl delete -f flexible.yaml

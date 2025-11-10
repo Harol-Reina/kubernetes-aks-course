@@ -1,0 +1,85 @@
+# =============================================================================
+# QoS Class: BESTEFFORT
+# =============================================================================
+#
+# Condiciones para BestEffort:
+# - NINGÚN contenedor tiene requests o limits para CPU o Memory
+#
+# Características:
+# - ⚠️ Primera en ser evicted (menor prioridad)
+# - 🎲 Sin garantías de recursos
+# - 💸 Bajo costo (no reserva recursos)
+# - 🎯 Uso: Batch jobs no críticos, testing
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-besteffort
+  labels:
+    qos-class: besteffort
+    example: qos-demo
+  annotations:
+    description: "QoS: BestEffort - sin resources"
+    warning: "Primera en ser evicted bajo presión de recursos"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    # ❌ Sin resources definidos
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# ORDEN DE EVICTION
+# =============================================================================
+#
+# Cuando un nodo tiene presión de recursos, Kubernetes evicted Pods en este orden:
+#
+# 1. BestEffort  ◄── Se eliminan PRIMERO (este Pod)
+#    └─ Sin requests/limits
+#    └─ Menor prioridad
+#
+# 2. Burstable
+#    └─ Con requests < limits
+#    └─ Prioridad media
+#
+# 3. Guaranteed  ◄── Se eliminan ÚLTIMO
+#    └─ request == limit
+#    └─ Máxima protección
+#
+# =============================================================================
+# CASOS DE USO VÁLIDOS PARA BESTEFFORT
+# =============================================================================
+#
+# ✅ Batch jobs no críticos
+# ✅ Procesamiento que puede reiniciar sin problema
+# ✅ Development/testing environments
+# ✅ Jobs que solo se ejecutan cuando hay recursos idle
+#
+# ❌ NO usar en:
+# ❌ Aplicaciones de producción críticas
+# ❌ Bases de datos
+# ❌ APIs que necesitan baja latencia
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Verificar QoS Class:
+# kubectl get pod qos-besteffort -o jsonpath='{.status.qosClass}'
+# Output: BestEffort
+#
+# Ver que no tiene resources:
+# kubectl describe pod qos-besteffort | grep -A 10 "Requests:"
+# Output: (vacío)
+#
+# Simular presión de recursos y ver eviction:
+# (crear muchos Pods con requests altos hasta llenar el nodo)
+# kubectl get events | grep -i evict
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

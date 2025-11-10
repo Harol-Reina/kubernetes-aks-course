@@ -1,0 +1,297 @@
+# =============================================================================
+# Deployment con Pod-level Resources
+# =============================================================================
+#
+# Deployment real con múltiples sidecars usando Pod-level resources.
+#
+# Caso de uso típico:
+# - Service mesh (Istio)
+# - Monitoring (Prometheus exporter)
+# - Logging (Fluentd/Fluent Bit)
+# - App principal
+#
+# Sin Pod-level: Necesitas calcular resources para 4 contenedores
+# Con Pod-level: Un solo presupuesto total, Pods comparten
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-sidecar-app
+  labels:
+    app: web
+    example: pod-level-resources
+spec:
+  replicas: 2
+  
+  selector:
+    matchLabels:
+      app: multi-sidecar
+  
+  template:
+    metadata:
+      labels:
+        app: multi-sidecar
+    
+    spec:
+      resources:  # Presupuesto del Pod (no por contenedor)
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+        limits:
+          cpu: "3"
+          memory: "3Gi"
+      
+      containers:
+      # ==========================================
+      # 1. Aplicación principal
+      # ==========================================
+      - name: app
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+      
+      # ==========================================
+      # 2. Prometheus exporter (monitoring)
+      # ==========================================
+      - name: prometheus-exporter
+        image: nginx/nginx-prometheus-exporter:1.1
+        args:
+        - '-nginx.scrape-uri=http://localhost/nginx_status'
+        ports:
+        - containerPort: 9113
+          name: metrics
+      
+      # ==========================================
+      # 3. Fluentd (logging)
+      # ==========================================
+      - name: fluentd
+        image: fluent/fluentd:v1.16-1
+        env:
+        - name: FLUENTD_CONF
+          value: fluent.conf
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+      
+      # ==========================================
+      # 4. Istio proxy (service mesh)
+      # ==========================================
+      - name: istio-proxy
+        image: istio/proxyv2:1.20.0
+        args:
+        - proxy
+        - sidecar
+        ports:
+        - containerPort: 15090
+          name: http-envoy-prom
+      
+      volumes:
+      - name: varlog
+        emptyDir: {}
+
+---
+# =============================================================================
+# Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: multi-sidecar-app
+  labels:
+    app: multi-sidecar
+spec:
+  type: ClusterIP
+  selector:
+    app: multi-sidecar
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+  - name: metrics
+    port: 9113
+    targetPort: 9113
+
+# =============================================================================
+# BENEFICIOS DE POD-LEVEL EN ESTE ESCENARIO
+# =============================================================================
+#
+# SIN Pod-level resources (tradicional):
+# ┌─────────────────────────────────────────────────────┐
+# │ containers:                                         │
+# │ - name: app                                         │
+# │   resources:                                        │
+# │     limits: {cpu: "1.5", memory: "1.5Gi"}          │
+# │ - name: prometheus-exporter                         │
+# │   resources:                                        │
+# │     limits: {cpu: "200m", memory: "200Mi"}         │
+# │ - name: fluentd                                     │
+# │   resources:                                        │
+# │     limits: {cpu: "500m", memory: "500Mi"}         │
+# │ - name: istio-proxy                                 │
+# │   resources:                                        │
+# │     limits: {cpu: "800m", memory: "800Mi"}         │
+# ├─────────────────────────────────────────────────────┤
+# │ Total: 3 CPU, 3Gi                                   │
+# │ ❌ 4 bloques de config para mantener                │
+# │ ❌ Difícil ajustar cuando cambia carga              │
+# │ ❌ Recursos mal distribuidos en picos de carga      │
+# └─────────────────────────────────────────────────────┘
+#
+# CON Pod-level resources:
+# ┌─────────────────────────────────────────────────────┐
+# │ spec:                                               │
+# │   resources:                                        │
+# │     limits: {cpu: "3", memory: "3Gi"}              │
+# │   containers:                                       │
+# │   - name: app                                       │
+# │   - name: prometheus-exporter                       │
+# │   - name: fluentd                                   │
+# │   - name: istio-proxy                               │
+# ├─────────────────────────────────────────────────────┤
+# │ Total: 3 CPU, 3Gi                                   │
+# │ ✅ Un solo bloque de config                         │
+# │ ✅ Auto-ajuste según carga de cada contenedor       │
+# │ ✅ Recursos compartidos dinámicamente               │
+# └─────────────────────────────────────────────────────┘
+#
+# =============================================================================
+# ESCENARIOS DE DISTRIBUCIÓN DINÁMICA
+# =============================================================================
+#
+# Escenario 1: Tráfico bajo
+# ┌───────────────────────┬──────┬────────┐
+# │ Container             │ CPU  │ Memory │
+# ├───────────────────────┼──────┼────────┤
+# │ app                   │ 0.5  │ 500Mi  │
+# │ prometheus-exporter   │ 0.1  │ 100Mi  │
+# │ fluentd               │ 0.2  │ 200Mi  │
+# │ istio-proxy           │ 0.2  │ 200Mi  │
+# ├───────────────────────┼──────┼────────┤
+# │ TOTAL                 │ 1.0  │ 1Gi    │ ✅ Bajo uso
+# └───────────────────────┴──────┴────────┘
+#
+# Escenario 2: Pico de tráfico HTTP
+# ┌───────────────────────┬──────┬────────┐
+# │ Container             │ CPU  │ Memory │
+# ├───────────────────────┼──────┼────────┤
+# │ app                   │ 2.0  │ 2Gi    │ ← App usa más
+# │ prometheus-exporter   │ 0.3  │ 300Mi  │
+# │ fluentd               │ 0.4  │ 400Mi  │
+# │ istio-proxy           │ 0.3  │ 300Mi  │
+# ├───────────────────────┼──────┼────────┤
+# │ TOTAL                 │ 3.0  │ 3Gi    │ ✅ OK
+# └───────────────────────┴──────┴────────┘
+#
+# Escenario 3: Muchos logs (fluentd trabaja más)
+# ┌───────────────────────┬──────┬────────┐
+# │ Container             │ CPU  │ Memory │
+# ├───────────────────────┼──────┼────────┤
+# │ app                   │ 1.0  │ 1Gi    │
+# │ prometheus-exporter   │ 0.2  │ 200Mi  │
+# │ fluentd               │ 1.5  │ 1.5Gi  │ ← Fluentd usa más
+# │ istio-proxy           │ 0.3  │ 300Mi  │
+# ├───────────────────────┼──────┼────────┤
+# │ TOTAL                 │ 3.0  │ 3Gi    │ ✅ OK
+# └───────────────────────┴──────┴────────┘
+#
+# Con recursos fijos por contenedor, fluentd estaría limitado.
+# Con Pod-level, puede usar más cuando lo necesita.
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f deployment.yaml
+#
+# Ver Pods:
+# kubectl get pods -l app=multi-sidecar
+#
+# Ver uso de recursos por contenedor:
+# kubectl top pods -l app=multi-sidecar --containers
+#
+# Output esperado:
+# POD                           CONTAINER              CPU    MEMORY
+# multi-sidecar-app-xxx         app                    100m   200Mi
+# multi-sidecar-app-xxx         prometheus-exporter    10m    50Mi
+# multi-sidecar-app-xxx         fluentd                50m    100Mi
+# multi-sidecar-app-xxx         istio-proxy            30m    80Mi
+#
+# Ver recursos del Deployment:
+# kubectl describe deployment multi-sidecar-app | grep -A 10 "Pod Template"
+#
+# Ver eventos:
+# kubectl get events --field-selector involvedObject.name=multi-sidecar-app
+#
+# Logs de cada contenedor:
+# POD=$(kubectl get pod -l app=multi-sidecar -o jsonpath='{.items[0].metadata.name}')
+# kubectl logs $POD -c app
+# kubectl logs $POD -c prometheus-exporter
+# kubectl logs $POD -c fluentd
+# kubectl logs $POD -c istio-proxy
+#
+# Exec en app:
+# kubectl exec -it $POD -c app -- sh
+#
+# Ver métricas de Prometheus:
+# kubectl port-forward svc/multi-sidecar-app 9113:9113
+# # En otra terminal:
+# curl http://localhost:9113/metrics
+#
+# Escalar:
+# kubectl scale deployment multi-sidecar-app --replicas=5
+#
+# Limpiar:
+# kubectl delete -f deployment.yaml
+#
+# =============================================================================
+# CONSIDERACIONES PARA PRODUCCIÓN
+# =============================================================================
+#
+# 1. Dimensionamiento del presupuesto
+# -----------------------------------
+# Mide uso real en desarrollo:
+# kubectl top pods -l app=multi-sidecar --containers
+#
+# Calcula presupuesto:
+# - Suma de uso promedio + 50% de margen
+# - Considera picos de carga
+#
+# Ejemplo:
+# Uso promedio total: 1.5 CPU, 1.5Gi
+# + 50% margen: 2.25 CPU, 2.25Gi
+# → Configurar: 3 CPU, 3Gi (redondeo)
+#
+#
+# 2. Monitoring y alertas
+# ------------------------
+# Alerta cuando un Pod se acerca al límite:
+#
+# - alert: PodResourcesNearLimit
+#   expr: |
+#     sum by (pod) (container_memory_usage_bytes{pod=~"multi-sidecar.*"}) /
+#     on (pod) group_left()
+#     kube_pod_resource_limit{resource="memory", pod=~"multi-sidecar.*"} > 0.85
+#   for: 5m
+#   annotations:
+#     summary: "Pod {{ $labels.pod }} using >85% of memory limit"
+#
+#
+# 3. Ajustes iterativos
+# ----------------------
+# - Comienza con presupuesto conservador
+# - Monitorea uso real
+# - Ajusta hacia arriba/abajo según métricas
+# - Reevalúa cada release de la app
+#
+#
+# 4. Compatibilidad
+# ------------------
+# ⚠️ Verifica que tu cluster soporta PodLevelResources:
+# kubectl version --short
+# # Requiere 1.34+
+#
+# kubectl get --raw /metrics | grep pod_level_resources
+# # Si no aparece, no está habilitado

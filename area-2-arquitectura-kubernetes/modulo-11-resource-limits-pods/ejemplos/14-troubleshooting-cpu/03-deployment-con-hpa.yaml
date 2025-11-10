@@ -1,0 +1,384 @@
+# =============================================================================
+# CPU Throttling - Deployment con HPA (Solución Recomendada)
+# =============================================================================
+#
+# En lugar de aumentar CPU limits (vertical scaling), usa Horizontal Pod
+# Autoscaler (HPA) para escalar réplicas basado en CPU usage.
+#
+# Ventajas:
+# - Cost-effective: Solo escala cuando es necesario
+# - Alta disponibilidad: Múltiples réplicas
+# - Previene throttling: Cada Pod tiene suficiente CPU
+# - Resiliente: Si un Pod falla, hay otros
+# =============================================================================
+
+---
+# =============================================================================
+# Deployment
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-app
+  labels:
+    app: web
+    example: troubleshooting
+spec:
+  replicas: 2  # ← HPA ajustará esto dinámicamente
+  
+  selector:
+    matchLabels:
+      app: cpu-app
+  
+  template:
+    metadata:
+      labels:
+        app: cpu-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.25-alpine
+        
+        ports:
+        - containerPort: 80
+          name: http
+        
+        resources:
+          requests:
+            cpu: "250m"      # ← Importante para HPA
+            memory: "128Mi"
+          limits:
+            cpu: "500m"      # ← Límite conservador
+            memory: "256Mi"
+        
+        # Health checks para HPA
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+
+---
+# =============================================================================
+# Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: cpu-app
+  labels:
+    app: cpu-app
+spec:
+  type: ClusterIP
+  selector:
+    app: cpu-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+
+---
+# =============================================================================
+# Horizontal Pod Autoscaler
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-app-hpa
+  labels:
+    app: cpu-app
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-app
+  
+  # Rango de réplicas
+  minReplicas: 2   # Mínimo 2 para HA
+  maxReplicas: 10  # Máximo 10 para limitar costo
+  
+  # Métricas para scaling
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # ← Scale cuando CPU promedio > 70%
+  
+  # Comportamiento de scaling
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Espera 5min antes de scale down
+      policies:
+      - type: Percent
+        value: 50            # Scale down máximo 50% de réplicas
+        periodSeconds: 60    # En períodos de 1min
+    
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up inmediatamente
+      policies:
+      - type: Percent
+        value: 100           # Scale up máximo 100% (duplicar)
+        periodSeconds: 15    # En períodos de 15s
+      - type: Pods
+        value: 4             # O agregar máximo 4 Pods
+        periodSeconds: 15
+
+# =============================================================================
+# CÓMO FUNCIONA HPA
+# =============================================================================
+#
+# 1. Monitoreo continuo
+# ----------------------
+# HPA consulta Metrics Server cada 15 segundos:
+#
+# kubectl top pods -l app=cpu-app
+# NAME                      CPU    MEMORY
+# cpu-app-abc123           400m   150Mi   ← 80% de 500m límite
+# cpu-app-def456           350m   140Mi   ← 70%
+#
+# Promedio: (400 + 350) / 2 / 500 = 75% utilization
+#
+#
+# 2. Cálculo de réplicas necesarias
+# ----------------------------------
+# desiredReplicas = ceil(currentReplicas * (currentUtilization / targetUtilization))
+#
+# Ejemplo:
+# currentReplicas = 2
+# currentUtilization = 75%
+# targetUtilization = 70%
+#
+# desiredReplicas = ceil(2 * (75 / 70)) = ceil(2.14) = 3
+#
+# → HPA escala a 3 réplicas
+#
+#
+# 3. Distribución de carga
+# -------------------------
+# Antes (2 Pods, 75% CPU each):
+# ┌──────────┬──────┐
+# │ Pod 1    │ 400m │ ← 80% (throttling)
+# │ Pod 2    │ 350m │ ← 70%
+# └──────────┴──────┘
+# Total: 750m CPU
+#
+# Después (3 Pods, carga distribuida):
+# ┌──────────┬──────┐
+# │ Pod 1    │ 250m │ ← 50% (sin throttling)
+# │ Pod 2    │ 250m │ ← 50%
+# │ Pod 3    │ 250m │ ← 50%
+# └──────────┴──────┘
+# Total: 750m CPU (igual), pero sin throttling ✅
+#
+# =============================================================================
+# TESTING HPA
+# =============================================================================
+#
+# Requisito: metrics-server instalado
+# kubectl get deployment metrics-server -n kube-system
+#
+# Si no está instalado:
+# kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+#
+# Aplicar:
+# kubectl apply -f deployment.yaml
+#
+# Ver HPA inicial:
+# kubectl get hpa cpu-app-hpa
+#
+# Output:
+# NAME           REFERENCE           TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+# cpu-app-hpa    Deployment/cpu-app  10%/70%   2         10        2          1m
+#                                    ↑ Current/Target
+#
+# Ver Pods iniciales:
+# kubectl get pods -l app=cpu-app
+# NAME                       READY   STATUS    RESTARTS   AGE
+# cpu-app-abc123            1/1     Running   0          1m
+# cpu-app-def456            1/1     Running   0          1m
+#
+#
+# Generar carga (en otro Pod en el cluster):
+# kubectl run load-generator --image=busybox:1.36 --restart=Never -- /bin/sh -c "
+#   while true; do
+#     wget -q -O- http://cpu-app;
+#   done
+# "
+#
+# Monitorear HPA:
+# watch kubectl get hpa cpu-app-hpa
+#
+# Verás:
+# NAME           TARGETS    REPLICAS
+# cpu-app-hpa    35%/70%    2        ← Carga inicial
+# cpu-app-hpa    80%/70%    2        ← Excede target
+# cpu-app-hpa    80%/70%    3        ← Escala a 3
+# cpu-app-hpa    60%/70%    3        ← Utilization baja
+# cpu-app-hpa    55%/70%    3        ← Estabiliza
+#
+# Ver Pods después del scaling:
+# kubectl get pods -l app=cpu-app
+# NAME                       READY   STATUS    RESTARTS   AGE
+# cpu-app-abc123            1/1     Running   0          5m
+# cpu-app-def456            1/1     Running   0          5m
+# cpu-app-ghi789            1/1     Running   0          1m  ← Nuevo Pod
+#
+# =============================================================================
+# DETALLES DEL HPA
+# =============================================================================
+#
+# Ver detalles del HPA:
+# kubectl describe hpa cpu-app-hpa
+#
+# Output:
+# Metrics:
+#   resource cpu on pods:
+#     current average:        60%
+#     target average:         70%
+# Min replicas:               2
+# Max replicas:               10
+# Deployment pods:            3 current / 3 desired
+# Conditions:
+#   AbleToScale               True
+#   ScalingActive             True
+#   ScalingLimited            False
+# Events:
+#   Type    Reason             Message
+#   Normal  SuccessfulRescale  New size: 3; reason: cpu resource utilization above target
+#
+#
+# Ver historial de scaling:
+# kubectl get events --field-selector involvedObject.name=cpu-app-hpa
+#
+# =============================================================================
+# COMPORTAMIENTO DE SCALING
+# =============================================================================
+#
+# Scale Up (rápido):
+# ┌────────────────────────────────────────┐
+# │ Trigger: CPU > 70%                     │
+# │ Delay: 0s (immediatamente)             │
+# │ Rate: Max 100% (duplicar) cada 15s     │
+# │ O Max 4 Pods cada 15s                  │
+# │                                        │
+# │ Ejemplo:                               │
+# │ 0s:  2 Pods, 80% CPU → Trigger         │
+# │ 15s: 3 Pods (50% increase)             │
+# │ Si aún >70%:                           │
+# │ 30s: 4 Pods                            │
+# │ 45s: 6 Pods                            │
+# └────────────────────────────────────────┘
+#
+# Scale Down (lento):
+# ┌────────────────────────────────────────┐
+# │ Trigger: CPU < 70%                     │
+# │ Delay: 300s (5 minutos)                │
+# │ Rate: Max 50% cada 60s                 │
+# │                                        │
+# │ Ejemplo:                               │
+# │ 0s:   6 Pods, 40% CPU                  │
+# │ 300s: 5 Pods (16% decrease)            │
+# │ 360s: 4 Pods                           │
+# │ 420s: 3 Pods                           │
+# └────────────────────────────────────────┘
+#
+# ¿Por qué scale up rápido y scale down lento?
+# - Scale up: Responder rápido a picos de carga
+# - Scale down: Evitar flapping (escalar arriba/abajo repetidamente)
+#
+# =============================================================================
+# COMPARACIÓN: CPU LIMIT vs HPA
+# =============================================================================
+#
+# Opción 1: Aumentar CPU limit (Vertical Scaling)
+# ┌────────────────────────────────────────┐
+# │ resources:                             │
+# │   limits:                              │
+# │     cpu: "2"  # Era 500m               │
+# │                                        │
+# │ ✅ Simple                               │
+# │ ❌ Caro (siempre usa 2 CPU)            │
+# │ ❌ Single point of failure             │
+# │ ❌ No escala con carga variable        │
+# └────────────────────────────────────────┘
+#
+# Opción 2: HPA (Horizontal Scaling)
+# ┌────────────────────────────────────────┐
+# │ resources:                             │
+# │   limits:                              │
+# │     cpu: "500m"                        │
+# │ + HPA (2-10 réplicas)                  │
+# │                                        │
+# │ ✅ Cost-effective (escala según carga) │
+# │ ✅ Alta disponibilidad (múltiples Pods)│
+# │ ✅ Auto-healing                        │
+# │ ⚠️ Requiere Metrics Server             │
+# │ ⚠️ Más complejo                        │
+# └────────────────────────────────────────┘
+#
+# Recomendación: Usa HPA para cargas variables
+#
+# =============================================================================
+# MÉTRICAS ADICIONALES PARA HPA
+# =============================================================================
+#
+# HPA también puede escalar basado en:
+#
+# 1. Memory:
+# metrics:
+# - type: Resource
+#   resource:
+#     name: memory
+#     target:
+#       type: Utilization
+#       averageUtilization: 80
+#
+# 2. Custom metrics (Prometheus):
+# - type: Pods
+#   pods:
+#     metric:
+#       name: http_requests_per_second
+#     target:
+#       type: AverageValue
+#       averageValue: "1000"
+#
+# 3. External metrics:
+# - type: External
+#   external:
+#     metric:
+#       name: queue_depth
+#       selector:
+#         matchLabels:
+#           queue_name: jobs
+#     target:
+#       type: AverageValue
+#       averageValue: "100"
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# Detener generador de carga:
+# kubectl delete pod load-generator
+#
+# Esperar scale down (5+ minutos):
+# watch kubectl get hpa cpu-app-hpa
+#
+# Eliminar todo:
+# kubectl delete -f deployment.yaml
+#
+# Verificar:
+# kubectl get pods -l app=cpu-app
+# kubectl get hpa cpu-app-hpa
+# kubectl get svc cpu-app

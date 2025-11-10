@@ -1,0 +1,131 @@
+# =============================================================================
+# emptyDir SIN sizeLimit - ⚠️ PELIGROSO
+# =============================================================================
+#
+# Sin sizeLimit, el emptyDir puede crecer sin control y:
+# - Llenar el filesystem del nodo
+# - Causar eviction de otros Pods
+# - Provocar Denial of Service en el nodo
+# - Dificultar troubleshooting (no sabes el límite esperado)
+#
+# ⚠️ Solo para demostración - NUNCA en producción
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-no-sizelimit
+  labels:
+    example: ephemeral-storage
+    type: emptydir-unsafe
+  annotations:
+    warning: "Sin sizeLimit - puede consumir almacenamiento ilimitado"
+spec:
+  containers:
+  - name: writer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "WARNING: Writing without size limit..."
+        echo "This can fill up the node's disk!"
+        echo "Only for educational purposes!"
+        sleep infinity
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      limits:
+        memory: "256Mi"
+  
+  volumes:
+  - name: cache
+    emptyDir: {}  # ⚠️ Sin sizeLimit - PELIGROSO
+
+# =============================================================================
+# ¿QUÉ PUEDE SALIR MAL?
+# =============================================================================
+#
+# Escenario 1: Llenado accidental del nodo
+# -----------------------------------------
+# Si este Pod escribe mucho en /cache:
+# - Puede llenar el filesystem del nodo
+# - Kubelet detecta presión de disco (DiskPressure)
+# - Kubelet evicted Pods BestEffort primero
+# - Luego evicted Pods Burstable
+# - Finalmente evicted Pods Guaranteed
+#
+# Verificar DiskPressure en nodo:
+# kubectl describe node <node> | grep -i diskpressure
+#
+#
+# Escenario 2: Scheduler no puede planificar correctamente
+# ---------------------------------------------------------
+# Sin sizeLimit, el scheduler no sabe cuánto storage necesita el Pod:
+# - Puede programar Pods en nodos sin suficiente espacio
+# - Puede causar scheduling subóptimo
+#
+#
+# Escenario 3: Troubleshooting complicado
+# ----------------------------------------
+# Cuando hay problemas de storage:
+# - No hay un límite claro para comparar contra uso actual
+# - Difícil saber si el Pod está usando "demasiado"
+# - Alertas y monitoring menos efectivos
+#
+# =============================================================================
+# COMPARACIÓN
+# =============================================================================
+#
+# CON sizeLimit:
+# ✅ Límite claro y predecible
+# ✅ Scheduler puede optimizar placement
+# ✅ Protege otros Pods en el nodo
+# ✅ Fácil troubleshooting
+# ✅ Alertas y monitoring efectivos
+#
+# SIN sizeLimit:
+# ❌ Sin límite explícito
+# ❌ Puede llenar el nodo
+# ❌ Scheduling subóptimo
+# ❌ Troubleshooting complicado
+# ❌ Riesgo para otros Pods
+#
+# =============================================================================
+# SOLUCIÓN
+# =============================================================================
+#
+# Siempre define sizeLimit:
+#
+# volumes:
+# - name: cache
+#   emptyDir:
+#     sizeLimit: "1Gi"  # ✅ Límite explícito
+#
+# Y también define ephemeral-storage en resources:
+#
+# resources:
+#   limits:
+#     ephemeral-storage: "2Gi"  # ✅ Límite total del contenedor
+#
+# =============================================================================
+# COMANDOS
+# =============================================================================
+#
+# Aplicar (solo para demostración):
+# kubectl apply -f pod.yaml
+#
+# Verificar que NO tiene sizeLimit:
+# kubectl get pod emptydir-no-sizelimit -o jsonpath='{.spec.volumes[0].emptyDir}'
+# Output: {}
+#
+# Simular llenado de disco (NO hacer en prod):
+# kubectl exec -it emptydir-no-sizelimit -- sh -c 'dd if=/dev/zero of=/cache/bigfile bs=1M count=5000'
+#
+# Ver eventos de DiskPressure:
+# kubectl get events --all-namespaces | grep -i disk
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

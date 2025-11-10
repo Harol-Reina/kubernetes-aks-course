@@ -1,0 +1,290 @@
+# =============================================================================
+# CPU Throttling - Comparación Lado a Lado
+# =============================================================================
+#
+# Pod con dos contenedores:
+# 1. Throttled: Con límite bajo → throttling severo
+# 2. Not-throttled: Con límite alto → sin throttling
+#
+# Ambos ejecutan la MISMA carga, permite comparar performance directamente.
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-comparison
+  labels:
+    app: cpu-comparison
+    example: troubleshooting
+    type: comparison
+spec:
+  containers:
+  
+  # ============================================
+  # Contenedor 1: THROTTLED
+  # ============================================
+  - name: throttled
+    image: polinux/stress:1.0.4
+    
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"       # Intenta usar 2 CPUs
+    - "--timeout"
+    - "300s"
+    
+    resources:
+      limits:
+        cpu: "500m"   # ← Límite bajo → THROTTLED
+        memory: "128Mi"
+      requests:
+        cpu: "250m"
+        memory: "64Mi"
+    
+    env:
+    - name: CONTAINER_TYPE
+      value: "throttled"
+  
+  # ============================================
+  # Contenedor 2: NOT THROTTLED
+  # ============================================
+  - name: not-throttled
+    image: polinux/stress:1.0.4
+    
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"       # Misma carga que throttled
+    - "--timeout"
+    - "300s"
+    
+    resources:
+      limits:
+        cpu: "2"      # ← Límite alto → SIN throttling
+        memory: "128Mi"
+      requests:
+        cpu: "1"
+        memory: "64Mi"
+    
+    env:
+    - name: CONTAINER_TYPE
+      value: "not-throttled"
+
+# =============================================================================
+# COMPARACIÓN ESPERADA
+# =============================================================================
+#
+# ┌────────────────┬──────────────┬──────────────────┐
+# │ Métrica        │ Throttled    │ Not-Throttled    │
+# ├────────────────┼──────────────┼──────────────────┤
+# │ CPU solicitado │ 2.0          │ 2.0              │
+# │ CPU limit      │ 0.5          │ 2.0              │
+# │ CPU real usado │ ~0.5         │ ~2.0             │
+# │ % Throttling   │ ~75%         │ ~0%              │
+# │ Performance    │ 25%          │ 100%             │
+# │ Estado         │ Running      │ Running          │
+# └────────────────┴──────────────┴──────────────────┘
+#
+# =============================================================================
+# OBSERVAR LA COMPARACIÓN
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver CPU usage de ambos contenedores:
+# kubectl top pod cpu-comparison --containers
+#
+# Output:
+# POD               CONTAINER       CPU(cores)   MEMORY(bytes)
+# cpu-comparison    throttled       500m         10Mi    ← Stuck en límite
+# cpu-comparison    not-throttled   2000m        10Mi    ← Puede usar 2 CPUs
+#
+# Diferencia: 4x más CPU en not-throttled ✅
+#
+#
+# Monitorear en tiempo real:
+# watch -n 1 'kubectl top pod cpu-comparison --containers'
+#
+# Verás:
+# - throttled: Siempre ~500m
+# - not-throttled: Siempre ~2000m (o lo que permita el nodo)
+#
+# =============================================================================
+# VER THROTTLING STATS DE CADA CONTENEDOR
+# =============================================================================
+#
+# Stats del contenedor THROTTLED:
+# kubectl exec -it cpu-comparison -c throttled -- cat /sys/fs/cgroup/cpu/cpu.stat
+#
+# Output:
+# nr_periods 3000
+# nr_throttled 2250        # ← 75% throttled
+# throttled_time 11250000000000
+#
+#
+# Stats del contenedor NOT-THROTTLED:
+# kubectl exec -it cpu-comparison -c not-throttled -- cat /sys/fs/cgroup/cpu/cpu.stat
+#
+# Output:
+# nr_periods 3000
+# nr_throttled 0           # ← 0% throttled ✅
+# throttled_time 0
+#
+#
+# Comparar cuotas:
+# echo "=== Throttled container ==="
+# kubectl exec -it cpu-comparison -c throttled -- sh -c 'cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us'
+# # Output: 50000 (50ms de 100ms período = 0.5 CPU)
+#
+# echo "=== Not-throttled container ==="
+# kubectl exec -it cpu-comparison -c not-throttled -- sh -c 'cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us'
+# # Output: 200000 (200ms de 100ms período = 2 CPUs)
+#
+# =============================================================================
+# PROMETHEUS QUERIES PARA COMPARACIÓN
+# =============================================================================
+#
+# CPU usage de ambos:
+# container_cpu_usage_seconds_total{pod="cpu-comparison"}
+#
+# Throttling time de cada uno:
+# rate(container_cpu_cfs_throttled_seconds_total{
+#   pod="cpu-comparison",
+#   container=~"throttled|not-throttled"
+# }[5m])
+#
+# % Throttled:
+# (
+#   rate(container_cpu_cfs_throttled_periods_total{pod="cpu-comparison"}[5m])
+#   /
+#   rate(container_cpu_cfs_periods_total{pod="cpu-comparison"}[5m])
+# ) * 100
+#
+# Resultado esperado:
+# {container="throttled"}     ~75%
+# {container="not-throttled"} ~0%
+#
+# =============================================================================
+# EXPERIMENTOS
+# =============================================================================
+#
+# Experimento 1: Cambiar carga de trabajo
+# ----------------------------------------
+# Edita args para usar solo 1 CPU:
+# args: ["--cpu", "1", "--timeout", "300s"]
+#
+# Resultado:
+# - throttled: Ahora solo ~50% throttled (1 CPU vs 0.5 límite)
+# - not-throttled: Sigue sin throttling
+#
+#
+# Experimento 2: Aumentar límite del throttled
+# ---------------------------------------------
+# Cambia límite a 1 CPU:
+# resources:
+#   limits:
+#     cpu: "1"
+#
+# Resultado:
+# - throttled: Ahora ~50% throttled (2 CPUs vs 1 límite)
+# - Mejor que antes (75%), pero aún throttled
+#
+#
+# Experimento 3: Reducir límite del not-throttled
+# ------------------------------------------------
+# Cambia límite a 1.5 CPUs:
+# resources:
+#   limits:
+#     cpu: "1.5"
+#
+# Resultado:
+# - not-throttled: Ahora ~25% throttled (2 CPUs vs 1.5 límite)
+# - Ya no es "not-throttled"!
+#
+# =============================================================================
+# CÁLCULO DE % THROTTLING
+# =============================================================================
+#
+# Fórmula:
+# % throttling = (CPU solicitado - CPU límite) / CPU solicitado * 100
+#
+# Ejemplos:
+#
+# 1. throttled container:
+#    (2.0 - 0.5) / 2.0 * 100 = 75% ✅
+#
+# 2. not-throttled container:
+#    (2.0 - 2.0) / 2.0 * 100 = 0% ✅
+#
+# 3. Si límite fuera 1.0:
+#    (2.0 - 1.0) / 2.0 * 100 = 50%
+#
+# 4. Si límite fuera 1.5:
+#    (2.0 - 1.5) / 2.0 * 100 = 25%
+#
+# =============================================================================
+# IMPACTO EN PERFORMANCE REAL
+# =============================================================================
+#
+# Si este fuera un web server procesando requests:
+#
+# Escenario: 1000 requests por segundo
+#
+# Not-throttled (2 CPUs):
+# ┌────────────────────────────────┐
+# │ Throughput:  1000 req/s        │
+# │ Latency P50: 10ms              │
+# │ Latency P99: 50ms              │
+# │ Errors:      0%                │
+# └────────────────────────────────┘
+#
+# Throttled (0.5 CPU):
+# ┌────────────────────────────────┐
+# │ Throughput:  250 req/s  (25%)  │ ← 4x slower
+# │ Latency P50: 40ms       (4x)   │
+# │ Latency P99: 200ms      (4x)   │
+# │ Errors:      0% (timeouts?)    │
+# └────────────────────────────────┘
+#
+# O peor, si no puede procesar fast enough:
+# - Backlog crece
+# - Requests timeout
+# - Errors aumentan
+# - Users frustrados
+#
+# =============================================================================
+# DECISIÓN: ¿CUÁNTO THROTTLING ES ACEPTABLE?
+# =============================================================================
+#
+# Guía general:
+#
+# ┌─────────────┬────────────────┬────────────────┐
+# │ % Throttling│ Estado         │ Acción         │
+# ├─────────────┼────────────────┼────────────────┤
+# │ 0-10%       │ ✅ Excelente    │ OK             │
+# │ 10-25%      │ ⚠️ Aceptable    │ Monitorear     │
+# │ 25-50%      │ ⚠️ Preocupante  │ Investigar     │
+# │ 50-75%      │ ❌ Malo         │ Aumentar limit │
+# │ >75%        │ ❌ Crítico      │ Acción urgente │
+# └─────────────┴────────────────┴────────────────┘
+#
+# Pero depende del workload:
+#
+# Batch jobs (no time-sensitive):
+# ✅ 50% throttling puede ser OK
+# ✅ Prioriza costo sobre speed
+#
+# API de producción (latency-sensitive):
+# ⚠️ Incluso 10% throttling puede ser problema
+# ⚠️ Prioriza speed sobre costo
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# kubectl delete -f pod.yaml
+#
+# Verificar:
+# kubectl get pod cpu-comparison
+# Error from server (NotFound): pods "cpu-comparison" not found

@@ -1,0 +1,297 @@
+# =============================================================================
+# Deployment con Ephemeral Storage Best Practices
+# =============================================================================
+#
+# Deployment de producción-ready que demuestra:
+# 1. ✅ Todos los emptyDir con sizeLimit
+# 2. ✅ Recursos ephemeral-storage bien dimensionados
+# 3. ✅ Múltiples volúmenes para diferentes propósitos
+# 4. ✅ Resource requests y limits balanceados
+# 5. ✅ Configuración que previene evictions
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-with-storage
+  labels:
+    app: web-app
+    example: ephemeral-storage
+spec:
+  replicas: 2
+  
+  selector:
+    matchLabels:
+      app: web-app
+  
+  template:
+    metadata:
+      labels:
+        app: web-app
+    
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        volumeMounts:
+        # Cache para contenido estático
+        - name: cache
+          mountPath: /var/cache/nginx
+        
+        # Runtime files (PID, sockets)
+        - name: run
+          mountPath: /var/run
+        
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "128Mi"
+            # Request = suma de sizeLimits esperados
+            ephemeral-storage: "1Gi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+            # Limit = suma de sizeLimits + 20% overhead
+            # (1Gi + 100Mi) * 1.2 = ~1.3Gi → 2Gi
+            ephemeral-storage: "2Gi"
+      
+      volumes:
+      # ===========================================
+      # Cache Directory
+      # ===========================================
+      - name: cache
+        emptyDir:
+          sizeLimit: "1Gi"  # ✅ Límite explícito
+      
+      # ===========================================
+      # Runtime Directory
+      # ===========================================
+      - name: run
+        emptyDir:
+          sizeLimit: "100Mi"  # ✅ Pequeño para runtime files
+
+---
+# =============================================================================
+# Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app
+  labels:
+    app: web-app
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+
+# =============================================================================
+# DIMENSIONAMIENTO DE EPHEMERAL STORAGE
+# =============================================================================
+#
+# Cálculo de requests:
+# ┌─────────────────────────────────────────┐
+# │ Volumen  │ sizeLimit │ Uso Esperado     │
+# ├──────────┼───────────┼──────────────────┤
+# │ cache    │ 1Gi       │ ~800Mi (80%)     │
+# │ run      │ 100Mi     │ ~10Mi (10%)      │
+# ├──────────┴───────────┴──────────────────┤
+# │ Logs del contenedor    │ ~50Mi          │
+# │ Container layers       │ ~100Mi         │
+# ├────────────────────────┴────────────────┤
+# │ TOTAL:                   ~960Mi         │
+# └─────────────────────────────────────────┘
+# → Request: 1Gi (redondeo hacia arriba)
+#
+# Cálculo de limits:
+# ┌─────────────────────────────────────────┐
+# │ Volumen  │ sizeLimit │ Uso Máximo       │
+# ├──────────┼───────────┼──────────────────┤
+# │ cache    │ 1Gi       │ 1Gi (100%)       │
+# │ run      │ 100Mi     │ 100Mi (100%)     │
+# ├──────────┴───────────┴──────────────────┤
+# │ Logs                   │ ~100Mi         │
+# │ Container layers       │ ~150Mi         │
+# │ Overhead (20%)         │ ~270Mi         │
+# ├────────────────────────┴────────────────┤
+# │ TOTAL:                   ~1.6Gi         │
+# └─────────────────────────────────────────┘
+# → Limit: 2Gi (con margen de seguridad)
+#
+# =============================================================================
+# POR QUÉ ESTE DISEÑO ES CORRECTO
+# =============================================================================
+#
+# ✅ Previene evictions:
+# - Límites bien dimensionados
+# - Incluye overhead para logs y layers
+# - sizeLimits previenen crecimiento descontrolado
+#
+# ✅ Facilita scheduling:
+# - Requests claros permiten al scheduler
+#   encontrar nodos con suficiente espacio
+#
+# ✅ Permite monitoring:
+# - Límites explícitos facilitan alertas
+# - Fácil comparar uso vs límite
+#
+# ✅ Separa concerns:
+# - cache/ → Solo para cache (puede limpiarse)
+# - run/ → Solo para runtime files
+#
+# =============================================================================
+# COMANDOS DE TESTING
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f deployment.yaml
+#
+# Ver Pods:
+# kubectl get pods -l app=web-app
+#
+# Ver recursos de un Pod:
+# POD=$(kubectl get pod -l app=web-app -o jsonpath='{.items[0].metadata.name}')
+# kubectl describe pod $POD | grep -A 10 "Limits:"
+#
+# Output esperado:
+# Limits:
+#   cpu:                500m
+#   ephemeral-storage:  2Gi
+#   memory:             256Mi
+# Requests:
+#   cpu:                250m
+#   ephemeral-storage:  1Gi
+#   memory:             128Mi
+#
+# Ver volúmenes:
+# kubectl get pod $POD -o json | jq '.spec.volumes[] | {name: .name, sizeLimit: .emptyDir.sizeLimit}'
+#
+# Output:
+# {
+#   "name": "cache",
+#   "sizeLimit": "1Gi"
+# }
+# {
+#   "name": "run",
+#   "sizeLimit": "100Mi"
+# }
+#
+# Exec en un Pod y verificar montajes:
+# kubectl exec -it $POD -- df -h | grep -E '(/var/cache/nginx|/var/run)'
+#
+# Escribir en cache para testing:
+# kubectl exec -it $POD -- sh -c '
+#   for i in $(seq 1 100); do
+#     dd if=/dev/zero of=/var/cache/nginx/testfile-$i bs=1M count=1 2>/dev/null
+#     echo "Written $i MB"
+#   done
+# '
+#
+# Verificar uso después de escribir:
+# kubectl exec -it $POD -- df -h /var/cache/nginx
+#
+# Ver logs del nginx:
+# kubectl logs -f $POD
+#
+# Ver servicio:
+# kubectl get svc web-app
+#
+# Test desde otro Pod en el cluster:
+# kubectl run curl --image=curlimages/curl -it --rm -- curl http://web-app
+#
+# =============================================================================
+# SCALING Y HIGH AVAILABILITY
+# =============================================================================
+#
+# Escalar réplicas:
+# kubectl scale deployment web-app-with-storage --replicas=5
+#
+# Cada réplica tiene:
+# - Sus propios volúmenes emptyDir independientes
+# - Mismo consumo de ephemeral-storage (1-2Gi por Pod)
+# - Scheduler distribuye en nodos con suficiente espacio
+#
+# Ver distribución en nodos:
+# kubectl get pods -l app=web-app -o wide
+#
+# Ver uso de storage por nodo:
+# kubectl describe nodes | grep -A 5 "Allocated resources"
+#
+# =============================================================================
+# MONITORING CON PROMETHEUS
+# =============================================================================
+#
+# Métricas clave:
+#
+# # Uso de volúmenes emptyDir
+# kubelet_volume_stats_used_bytes{namespace="default", pod=~"web-app-.*"}
+#
+# # Capacidad de volúmenes
+# kubelet_volume_stats_capacity_bytes{namespace="default", pod=~"web-app-.*"}
+#
+# # Porcentaje de uso
+# (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100
+#
+# # Uso de ephemeral-storage del contenedor
+# container_fs_usage_bytes{container="nginx", pod=~"web-app-.*"}
+#
+# # Límite de ephemeral-storage
+# container_fs_limit_bytes{container="nginx", pod=~"web-app-.*"}
+#
+# Alertas recomendadas:
+#
+# - alert: VolumeHighUsage
+#   expr: |
+#     (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.85
+#   for: 10m
+#   labels:
+#     severity: warning
+#   annotations:
+#     summary: "emptyDir volume >85% full in {{ $labels.pod }}"
+#
+# - alert: EphemeralStorageHighUsage
+#   expr: |
+#     (container_fs_usage_bytes{container!=""} / container_fs_limit_bytes{container!=""}) > 0.85
+#   for: 10m
+#   labels:
+#     severity: warning
+#   annotations:
+#     summary: "Ephemeral storage >85% in {{ $labels.pod }}/{{ $labels.container }}"
+#
+# =============================================================================
+# CLEANUP STRATEGY
+# =============================================================================
+#
+# Para producción, agrega un sidecar que limpia cache periódicamente:
+#
+# - name: cache-cleaner
+#   image: busybox:1.36
+#   command: ["/bin/sh", "-c"]
+#   args:
+#     - |
+#       while true; do
+#         sleep 3600  # Cada hora
+#         echo "Cleaning old cache files..."
+#         find /var/cache/nginx -type f -mtime +1 -delete
+#       done
+#   volumeMounts:
+#   - name: cache
+#     mountPath: /var/cache/nginx
+#
+# =============================================================================
+# LIMPIAR RECURSOS
+# =============================================================================
+#
+# kubectl delete -f deployment.yaml
+#
+# Verificar limpieza:
+# kubectl get pods -l app=web-app
+# kubectl get svc web-app

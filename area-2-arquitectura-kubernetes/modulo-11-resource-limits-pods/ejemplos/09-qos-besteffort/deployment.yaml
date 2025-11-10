@@ -1,0 +1,210 @@
+# =============================================================================
+# QoS Class: BESTEFFORT - Deployment Comparison
+# =============================================================================
+#
+# Este Deployment muestra cómo múltiples réplicas BestEffort se comportan
+# bajo diferentes condiciones de carga del cluster.
+#
+# Escenarios demostrados:
+# 1. 🟢 Cluster con recursos disponibles → Todas las réplicas se ejecutan
+# 2. 🟡 Cluster bajo presión → Pods compiten sin garantías
+# 3. 🔴 Cluster sobrecargado → Pods son evicted agresivamente
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: besteffort-workers
+  labels:
+    app: worker
+    qos-class: besteffort
+  annotations:
+    description: "Múltiples workers BestEffort para demostrar comportamiento bajo presión"
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: worker
+      qos-class: besteffort
+  template:
+    metadata:
+      labels:
+        app: worker
+        qos-class: besteffort
+    spec:
+      containers:
+      - name: stress-worker
+        image: polinux/stress
+        # ❌ Sin resources → QoS: BestEffort
+        command:
+        - stress
+        args:
+        # Generar carga moderada:
+        - --cpu
+        - "1"          # 1 CPU worker
+        - --vm
+        - "1"          # 1 memory worker
+        - --vm-bytes
+        - "128M"       # 128MB de memoria
+        - --timeout
+        - "3600s"      # Correr por 1 hora
+      
+      restartPolicy: Always
+
+---
+# =============================================================================
+# Service para monitorear el Deployment
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: besteffort-workers
+  labels:
+    app: worker
+spec:
+  clusterIP: None  # Headless service
+  selector:
+    app: worker
+    qos-class: besteffort
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+
+# =============================================================================
+# EXPERIMENTOS PARA REALIZAR
+# =============================================================================
+#
+# 1️⃣ EXPERIMENTO: Estado Normal
+# -------------------------------
+# Aplicar:
+# kubectl apply -f deployment.yaml
+#
+# Verificar que todos los Pods están Running:
+# kubectl get pods -l app=worker
+# Output: 5/5 Pods en Running
+#
+# Ver QoS Class de todos:
+# kubectl get pods -l app=worker -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass
+#
+#
+# 2️⃣ EXPERIMENTO: Simular Presión de Recursos
+# ---------------------------------------------
+# Crear Pods Guaranteed con requests altos para saturar el nodo:
+# 
+# cat <<EOF | kubectl apply -f -
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: resource-hog
+# spec:
+#   containers:
+#   - name: hog
+#     image: polinux/stress
+#     resources:
+#       requests:
+#         memory: "4Gi"
+#         cpu: "2"
+#       limits:
+#         memory: "4Gi"
+#         cpu: "2"
+#     command: ["stress"]
+#     args: ["--vm", "1", "--vm-bytes", "3G", "--timeout", "300s"]
+# EOF
+#
+# Observar evictions de BestEffort Pods:
+# kubectl get events --sort-by='.lastTimestamp' | grep -i evict
+#
+# Ver Pods sobrevivientes:
+# kubectl get pods -l app=worker
+# Output: Algunos Pods en Evicted/Pending
+#
+#
+# 3️⃣ EXPERIMENTO: Comparar con Guaranteed
+# -----------------------------------------
+# Crear un Deployment Guaranteed similar:
+#
+# cat <<EOF | kubectl apply -f -
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: guaranteed-workers
+# spec:
+#   replicas: 5
+#   selector:
+#     matchLabels:
+#       app: worker-guaranteed
+#   template:
+#     metadata:
+#       labels:
+#         app: worker-guaranteed
+#     spec:
+#       containers:
+#       - name: stress-worker
+#         image: polinux/stress
+#         resources:
+#           requests:
+#             memory: "128Mi"
+#             cpu: "100m"
+#           limits:
+#             memory: "128Mi"
+#             cpu: "100m"
+#         command: ["stress"]
+#         args: ["--cpu", "1", "--vm", "1", "--vm-bytes", "100M", "--timeout", "3600s"]
+# EOF
+#
+# Bajo presión, observar que:
+# - BestEffort Pods se evicted primero
+# - Guaranteed Pods permanecen Running
+#
+# kubectl get pods -l 'app in (worker, worker-guaranteed)' -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass,STATUS:.status.phase
+#
+#
+# 4️⃣ EXPERIMENTO: Metrics y Uso Real
+# ------------------------------------
+# Ver uso real vs QoS Class:
+# kubectl top pods -l app=worker
+#
+# Comparar con límites (ninguno en BestEffort):
+# kubectl describe pods -l app=worker | grep -A 5 "Limits:"
+#
+#
+# =============================================================================
+# PATRONES OBSERVADOS
+# =============================================================================
+#
+# 📊 Comportamiento BestEffort:
+# 
+# Estado Cluster          | BestEffort Behavior
+# ----------------------- | -----------------------------------
+# 🟢 Recursos abundantes  | ✅ Todos los Pods Running
+# 🟡 Recursos limitados   | ⚠️ Pods compiten, throttling posible
+# 🔴 Recursos saturados   | ❌ Evicted agresivamente
+#
+#
+# 🎯 Casos de Uso Válidos:
+#
+# ✅ USAR BestEffort para:
+# - Batch processing no crítico (ETL, data processing)
+# - Jobs que pueden reiniciar sin pérdida (idempotent)
+# - Development/staging environments
+# - Tareas que solo corren cuando hay recursos idle
+#
+# ❌ NO usar BestEffort para:
+# - Bases de datos
+# - APIs de producción
+# - Servicios stateful
+# - Aplicaciones con SLAs estrictos
+#
+#
+# =============================================================================
+# LIMPIAR RECURSOS
+# =============================================================================
+#
+# Limpiar todo:
+# kubectl delete -f deployment.yaml
+# kubectl delete pod resource-hog
+# kubectl delete deployment guaranteed-workers
+#
+# Verificar limpieza:
+# kubectl get pods -l 'app in (worker, worker-guaranteed)'

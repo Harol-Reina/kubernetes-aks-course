@@ -1,0 +1,105 @@
+# =============================================================================
+# emptyDir con sizeLimit
+# =============================================================================
+#
+# ✅ BEST PRACTICE: Siempre define sizeLimit en emptyDir
+#
+# Beneficios:
+# - Previene que un Pod consuma todo el almacenamiento del nodo
+# - Permite que Kubernetes calcule capacity correctamente
+# - Facilita scheduling (sabe cuánto storage necesita)
+# - Protege contra DoS accidental por llenar disco
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-with-sizelimit
+  labels:
+    example: ephemeral-storage
+    type: emptydir-safe
+spec:
+  containers:
+  - name: writer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Writing to cache directory..."
+        for i in $(seq 1 100); do
+          echo "Data chunk $i" >> /cache/data-$i.txt
+          sleep 1
+        done
+        echo "Listing cache contents:"
+        ls -lh /cache/
+        echo "Cache size:"
+        du -sh /cache/
+        sleep infinity
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+        ephemeral-storage: "500Mi"  # Request de storage
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+        ephemeral-storage: "1Gi"    # Limit de storage
+  
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: "500Mi"  # ✅ Límite explícito del volumen
+
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado:
+# kubectl get pod emptydir-with-sizelimit
+#
+# Verificar uso de storage dentro del Pod:
+# kubectl exec -it emptydir-with-sizelimit -- df -h /cache
+#
+# Ver uso de storage desde describe:
+# kubectl describe pod emptydir-with-sizelimit | grep -A 5 "ephemeral-storage"
+#
+# Monitorear logs:
+# kubectl logs -f emptydir-with-sizelimit
+#
+# Verificar que sizeLimit está configurado:
+# kubectl get pod emptydir-with-sizelimit -o jsonpath='{.spec.volumes[0].emptyDir.sizeLimit}'
+# Output: 500Mi
+#
+# Limpiar:
+# kubectl delete -f pod.yaml
+#
+# =============================================================================
+# EXPLICACIÓN: ephemeral-storage
+# =============================================================================
+#
+# Almacenamiento efímero en K8s incluye:
+# 1. emptyDir volumes (excepto tmpfs)
+# 2. Container logs (/var/log/containers)
+# 3. Writable container layers (imágenes)
+#
+# Diferencia entre sizeLimit vs resources.limits.ephemeral-storage:
+#
+# sizeLimit:
+# - Límite del VOLUMEN específico
+# - Solo afecta ese emptyDir
+# - Se valida a nivel de volumen
+#
+# resources.limits.ephemeral-storage:
+# - Límite TOTAL del contenedor
+# - Incluye TODOS los volúmenes + logs + layers
+# - Se valida a nivel de contenedor
+#
+# ⚠️ Si cualquiera se excede → Pod EVICTION (no restart automático)

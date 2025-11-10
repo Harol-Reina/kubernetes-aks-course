@@ -1,0 +1,282 @@
+# =============================================================================
+# OOMKilled - Memory Leak Intencional
+# =============================================================================
+#
+# Simula memory leak para demostrar comportamiento de OOMKilled.
+#
+# ⚠️ SOLO PARA TESTING/EDUCACIÓN - NO usar en producción
+#
+# Qué demuestra:
+# 1. Container intenta usar más memoria que su límite
+# 2. Kernel OOM Killer termina el proceso
+# 3. Exit Code 137 (128 + SIGKILL)
+# 4. Pod se reinicia según restartPolicy
+# 5. CrashLoopBackOff si falla repetidamente
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oomkilled-demo
+  labels:
+    app: memory-test
+    example: troubleshooting
+    type: oomkilled
+  annotations:
+    warning: "Este Pod será OOMKilled intencionalmente"
+spec:
+  restartPolicy: Always  # ← Se reiniciará tras OOMKill
+  
+  containers:
+  - name: memory-hog
+    image: polinux/stress:1.0.4
+    
+    command: ["stress"]
+    args:
+    - "--vm"
+    - "1"           # 1 memory worker
+    - "--vm-bytes"
+    - "512M"        # ← Intenta usar 512MB
+    - "--timeout"
+    - "120s"        # Corre por 120 segundos
+    
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "256Mi"  # ← Límite MENOR que los 512MB que intenta usar
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+
+# =============================================================================
+# TIMELINE ESPERADO
+# =============================================================================
+#
+# 0-5s:     Pod inicia, stress command ejecuta
+#           ✅ Estado: Running
+#
+# 5-10s:    Intenta alocar 512MB de memoria
+#           ⚠️ Excede límite de 256Mi
+#           ⚠️ Kernel detecta exceso de memoria
+#
+# ~10s:     Kernel OOM Killer termina el proceso
+#           ❌ Exit Code: 137 (128 + 9 SIGKILL)
+#           ❌ Last State: Terminated (Reason: OOMKilled)
+#
+# 10-20s:   Kubernetes reinicia el contenedor (restartPolicy: Always)
+#           🔄 Restart Count: 1
+#           ✅ Estado: Running
+#
+# 20-30s:   Segunda ejecución, mismo problema
+#           ❌ OOMKilled otra vez
+#           🔄 Restart Count: 2
+#
+# 30-60s:   Múltiples reinicios fallan
+#           ⚠️ Estado: CrashLoopBackOff
+#           🔄 Restart Count: 3, 4, 5...
+#           ⏸️ Delays crecientes entre reintentos
+#
+# =============================================================================
+# EXIT CODE 137 EXPLICADO
+# =============================================================================
+#
+# Exit Code 137 = 128 + 9
+#
+# Donde:
+# - 128: Base para signals
+# - 9: SIGKILL (signal number)
+#
+# Otros exit codes relacionados:
+# - 137: OOMKilled (SIGKILL por OOM)
+# - 143: Terminado por SIGTERM (shutdown graceful)
+# - 1-127: Exit codes de aplicación
+# - 130: Terminado por SIGINT (Ctrl+C)
+#
+# =============================================================================
+# OBSERVAR OOMKILLED
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado inicial:
+# kubectl get pod oomkilled-demo
+# NAME             READY   STATUS    RESTARTS   AGE
+# oomkilled-demo   1/1     Running   0          5s
+#
+# Esperar ~15 segundos, ver estado después del primer OOMKill:
+# kubectl get pod oomkilled-demo
+# NAME             READY   STATUS    RESTARTS   AGE
+# oomkilled-demo   1/1     Running   1          20s
+#                                    ↑ Restart count aumentó
+#
+# Esperar ~60 segundos, ver CrashLoopBackOff:
+# kubectl get pod oomkilled-demo
+# NAME             READY   STATUS             RESTARTS   AGE
+# oomkilled-demo   0/1     CrashLoopBackOff   5          2m
+#
+# Ver último estado del contenedor:
+# kubectl describe pod oomkilled-demo | grep -A 15 "Last State"
+#
+# Output:
+# Last State:     Terminated
+#   Reason:       OOMKilled
+#   Exit Code:    137
+#   Started:      Fri, 10 Jan 2025 10:05:30 +0000
+#   Finished:     Fri, 10 Jan 2025 10:05:40 +0000
+#
+# Ver restart count detallado:
+# kubectl get pod oomkilled-demo -o jsonpath='{.status.containerStatuses[0].restartCount}'
+# Output: 5
+#
+# Ver eventos:
+# kubectl get events --field-selector involvedObject.name=oomkilled-demo --sort-by='.lastTimestamp'
+#
+# Buscar:
+# LAST SEEN   TYPE      REASON      OBJECT               MESSAGE
+# 2m          Normal    Scheduled   pod/oomkilled-demo   Successfully assigned...
+# 2m          Normal    Pulled      pod/oomkilled-demo   Container image pulled
+# 2m          Normal    Created     pod/oomkilled-demo   Created container
+# 2m          Normal    Started     pod/oomkilled-demo   Started container
+# 1m          Warning   BackOff     pod/oomkilled-demo   Back-off restarting failed container
+#
+# Ver logs del último intento (antes del crash):
+# kubectl logs oomkilled-demo --previous
+#
+# Output (de stress command):
+# stress: info: [1] dispatching hogs: 0 cpu, 0 io, 1 vm, 0 hdd
+# stress: FAIL: [1] (415) <-- worker 7 got signal 9
+#                                                        ↑ SIGKILL
+#
+# =============================================================================
+# DIFERENCIA: OOMKilled vs Evicted
+# =============================================================================
+#
+# OOMKilled (Memory):
+# ┌────────────────────────────────────────┐
+# │ Trigger:     Excede memory limit       │
+# │ Acción:      Kernel mata el proceso    │
+# │ Exit Code:   137 (SIGKILL)             │
+# │ Restart:     Según restartPolicy       │
+# │ Estado Pod:  Running → OOMKilled →     │
+# │              CrashLoopBackOff          │
+# │ Velocidad:   Inmediato (milisegundos)  │
+# └────────────────────────────────────────┘
+#
+# Evicted (Ephemeral Storage):
+# ┌────────────────────────────────────────┐
+# │ Trigger:     Excede storage limit      │
+# │ Acción:      Kubelet evicted el Pod    │
+# │ Exit Code:   N/A                       │
+# │ Restart:     NO (Pod eliminado)        │
+# │ Estado Pod:  Running → Evicted (Failed)│
+# │ Velocidad:   Delay (kubelet polling)   │
+# └────────────────────────────────────────┘
+#
+# =============================================================================
+# CRASHLOOPBACKOFF EXPLICADO
+# =============================================================================
+#
+# CrashLoopBackOff = Estrategia de exponential backoff
+#
+# Delays entre reintentos:
+# ┌──────────┬────────────┐
+# │ Restart  │ Delay      │
+# ├──────────┼────────────┤
+# │ 1        │ 0s         │
+# │ 2        │ 10s        │
+# │ 3        │ 20s        │
+# │ 4        │ 40s        │
+# │ 5        │ 80s        │
+# │ 6        │ 160s (2m)  │
+# │ 7+       │ 300s (5m)  │ ← Max delay
+# └──────────┴────────────┘
+#
+# Ver tiempo hasta próximo reinicio:
+# kubectl describe pod oomkilled-demo | grep -i "back-off"
+# Output: Back-off 2m40s restarting failed container
+#
+# =============================================================================
+# TROUBLESHOOTING OOMKILLED EN PRODUCCIÓN
+# =============================================================================
+#
+# 1. Confirmar que es OOMKilled
+# ------------------------------
+# kubectl describe pod <pod-name> | grep -i oom
+#
+# Buscar:
+# Last State:     Terminated
+#   Reason:       OOMKilled
+#
+#
+# 2. Ver uso de memoria antes del crash
+# --------------------------------------
+# # Si tienes metrics-server:
+# kubectl top pod <pod-name>
+#
+# # O revisar Prometheus/Grafana:
+# container_memory_usage_bytes{pod="<pod-name>"}
+#
+#
+# 3. Comparar con límite
+# ----------------------
+# kubectl get pod <pod-name> -o jsonpath='{.spec.containers[*].resources.limits.memory}'
+#
+# Si uso >= límite → OOMKilled esperado
+#
+#
+# 4. Ver logs para identificar leak
+# ----------------------------------
+# kubectl logs <pod-name> --previous | grep -i "memory\|allocation\|heap"
+#
+# Buscar patrones:
+# - Crecimiento ilimitado de caches
+# - Leaks en conexiones/threads
+# - Buffers sin límite
+#
+#
+# 5. Soluciones
+# -------------
+# Opción A: Aumentar memory limit
+# resources:
+#   limits:
+#     memory: "512Mi"  # Era 256Mi
+#
+# Opción B: Optimizar aplicación
+# - Fix memory leaks
+# - Liberar recursos no usados
+# - Usar memory pooling
+#
+# Opción C: Ajustar JVM/runtime
+# # Para Java:
+# env:
+# - name: JAVA_OPTS
+#   value: "-Xmx200m -Xms100m"
+#
+# =============================================================================
+# MONITOREO Y ALERTAS
+# =============================================================================
+#
+# Prometheus query para OOMKilled:
+# rate(kube_pod_container_status_terminated_reason{reason="OOMKilled"}[5m]) > 0
+#
+# Alerta ejemplo:
+# - alert: PodOOMKilled
+#   expr: |
+#     kube_pod_container_status_terminated_reason{reason="OOMKilled"} == 1
+#   for: 1m
+#   labels:
+#     severity: warning
+#   annotations:
+#     summary: "Pod {{ $labels.pod }} was OOMKilled"
+#     description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was terminated due to OOMKilled"
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# kubectl delete -f pod.yaml
+#
+# Verificar eliminación:
+# kubectl get pod oomkilled-demo
+# Error from server (NotFound): pods "oomkilled-demo" not found

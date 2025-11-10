@@ -1,0 +1,272 @@
+# =============================================================================
+# Eviction por Exceso de Ephemeral Storage
+# =============================================================================
+#
+# Este Pod INTENCIONALMENTE excede su límite de storage para demostrar eviction
+#
+# ⚠️ NO usar en producción - solo para testing/educación
+#
+# Qué demuestra:
+# 1. Cómo Kubernetes evicted Pods cuando exceden ephemeral-storage limits
+# 2. Diferencia entre OOMKill (memoria) y Eviction (storage)
+# 3. Comportamiento de restartPolicy: Never con eviction
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-eviction-demo
+  labels:
+    example: ephemeral-storage
+    type: eviction-demo
+  annotations:
+    warning: "Este Pod será evicted intencionalmente"
+spec:
+  restartPolicy: Never  # ❗ No reiniciar tras eviction
+  
+  containers:
+  - name: filler
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Ephemeral Storage Eviction Demo ==="
+        echo ""
+        echo "Storage limit: 1GB"
+        echo "Volume sizeLimit: 1GB"
+        echo "Will attempt to write: 2GB"
+        echo ""
+        
+        echo "Current storage status:"
+        df -h /data
+        echo ""
+        
+        echo "Writing 2GB of data (exceeds 1GB limit)..."
+        echo "Expected result: Pod will be EVICTED"
+        echo ""
+        
+        # Intenta escribir 2GB (excede límite de 1GB)
+        dd if=/dev/zero of=/data/bigfile.dat bs=1M count=2048 2>&1
+        
+        echo ""
+        echo "If you see this, eviction didn't happen yet"
+        df -h /data
+        
+        sleep infinity
+    
+    volumeMounts:
+    - name: data
+      mountPath: /data
+    
+    resources:
+      limits:
+        ephemeral-storage: "1Gi"  # ← Límite de 1GB
+  
+  volumes:
+  - name: data
+    emptyDir:
+      sizeLimit: "1Gi"  # ← También 1GB
+
+# =============================================================================
+# TIMELINE ESPERADO
+# =============================================================================
+#
+# 0-30s:    Pod en estado Running
+#           ✅ Comienza a escribir archivo
+#           ✅ Logs muestran progreso
+#
+# 30-60s:   Alcanza ~1GB escrito
+#           ⚠️ Excede sizeLimit del volumen
+#           ⚠️ O excede ephemeral-storage limit del contenedor
+#
+# 60s+:     Kubelet detecta exceso de storage
+#           ❌ Pod cambia a estado: Evicted
+#           ❌ Razón: Pod ephemeral local storage usage exceeds...
+#           ❌ Container se detiene
+#           ❌ NO reinicia (restartPolicy: Never)
+#
+# =============================================================================
+# DIFERENCIA: EVICTION vs OOMKill
+# =============================================================================
+#
+# OOMKill (Out of Memory):
+# ┌────────────────────────────────────────┐
+# │ Recurso:   Memory                      │
+# │ Trigger:   Excede memory limit         │
+# │ Acción:    Kernel mata el proceso      │
+# │ Restart:   Según restartPolicy         │
+# │ Estado:    OOMKilled → Restarting      │
+# │ Velocidad: Inmediato (segundos)        │
+# └────────────────────────────────────────┘
+#
+# Eviction (Storage):
+# ┌────────────────────────────────────────┐
+# │ Recurso:   Ephemeral Storage           │
+# │ Trigger:   Excede storage limit        │
+# │ Acción:    Kubelet evicted el Pod      │
+# │ Restart:   NO (Pod eliminado)          │
+# │ Estado:    Evicted (Failed)            │
+# │ Velocidad: Delay (kubelet polling)     │
+# └────────────────────────────────────────┘
+#
+# =============================================================================
+# OBSERVAR LA EVICTION
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado inicial:
+# kubectl get pod ephemeral-eviction-demo
+# NAME                        READY   STATUS    RESTARTS   AGE
+# ephemeral-eviction-demo     1/1     Running   0          10s
+#
+# Monitorear logs:
+# kubectl logs -f ephemeral-eviction-demo
+#
+# Output:
+# === Ephemeral Storage Eviction Demo ===
+# Storage limit: 1GB
+# Will attempt to write: 2GB
+# ...
+# Writing 2GB of data...
+# dd: error writing '/data/bigfile.dat': No space left on device
+# 1024+0 records in
+# 1023+0 records out
+#
+# Watch estado del Pod:
+# watch kubectl get pod ephemeral-eviction-demo
+#
+# Cambiará a:
+# NAME                        READY   STATUS    RESTARTS   AGE
+# ephemeral-eviction-demo     0/1     Evicted   0          2m
+#
+# Ver eventos:
+# kubectl get events --sort-by='.lastTimestamp' | grep ephemeral-eviction-demo
+#
+# Buscar:
+# LAST SEEN   TYPE      REASON    OBJECT                          MESSAGE
+# 1m          Warning   Evicted   pod/ephemeral-eviction-demo     Pod ephemeral local storage usage exceeds the total limit of containers 1Gi
+#
+# Describir Pod evicted:
+# kubectl describe pod ephemeral-eviction-demo
+#
+# Ver sección:
+# Status:  Failed
+# Reason:  Evicted
+# Message: Pod ephemeral local storage usage exceeds the total limit of containers 1Gi
+#
+# =============================================================================
+# CONDICIONES PARA EVICTION
+# =============================================================================
+#
+# Pod será evicted si:
+#
+# 1. Volumen excede su sizeLimit
+#    emptyDir.sizeLimit: 1Gi
+#    Uso real: > 1Gi
+#    → EVICTION
+#
+# 2. Contenedor excede ephemeral-storage limit
+#    resources.limits.ephemeral-storage: 1Gi
+#    Uso total (volúmenes + logs + layers): > 1Gi
+#    → EVICTION
+#
+# 3. Nodo tiene DiskPressure
+#    Nodo con < 10% de espacio disponible (default threshold)
+#    → Kubelet evicted Pods según QoS Class
+#      1. BestEffort primero
+#      2. Burstable después
+#      3. Guaranteed último
+#
+# =============================================================================
+# EXPERIMENTOS
+# =============================================================================
+#
+# Experimento 1: Cambiar restartPolicy
+# -------------------------------------
+# restartPolicy: Always  # En lugar de Never
+#
+# Resultado esperado:
+# - Pod es evicted
+# - Kubernetes NO lo reinicia (eviction es permanente)
+# - Para que corra de nuevo, debe ser recreado
+#
+#
+# Experimento 2: Aumentar límites
+# --------------------------------
+# resources:
+#   limits:
+#     ephemeral-storage: "3Gi"
+# volumes:
+# - name: data
+#   emptyDir:
+#     sizeLimit: "3Gi"
+#
+# Resultado: Puede escribir los 2GB sin eviction
+#
+#
+# Experimento 3: Escribir menos datos
+# ------------------------------------
+# count=500  # En lugar de 2048
+#
+# Resultado: Escribe 500MB, no excede límite, no eviction
+#
+# =============================================================================
+# RECOVERY DESPUÉS DE EVICTION
+# =============================================================================
+#
+# Un Pod Evicted NO se recupera automáticamente
+#
+# Opciones:
+#
+# 1. Recrear manualmente:
+#    kubectl delete pod ephemeral-eviction-demo
+#    kubectl apply -f pod.yaml
+#
+# 2. Si es parte de un Deployment/StatefulSet:
+#    El controller creará un nuevo Pod automáticamente
+#
+# 3. Ajustar límites y recrear:
+#    Editar YAML con límites más altos
+#    kubectl delete pod ephemeral-eviction-demo
+#    kubectl apply -f pod.yaml
+#
+# =============================================================================
+# PREVENCIÓN DE EVICTIONS
+# =============================================================================
+#
+# ✅ Best Practices:
+#
+# 1. Siempre define sizeLimit en emptyDir
+#    volumes:
+#    - name: data
+#      emptyDir:
+#        sizeLimit: "1Gi"
+#
+# 2. Define ephemeral-storage requests y limits
+#    resources:
+#      requests:
+#        ephemeral-storage: "500Mi"
+#      limits:
+#        ephemeral-storage: "2Gi"
+#
+# 3. Limpia datos temporales periódicamente
+#    Usa CronJobs o scripts de cleanup
+#
+# 4. Monitorea uso de storage
+#    Alertas cuando uso > 80%
+#
+# 5. Rota logs frecuentemente
+#    Configura log rotation en la aplicación
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# Limpiar Pod evicted:
+# kubectl delete -f pod.yaml
+#
+# Verificar limpieza:
+# kubectl get pod ephemeral-eviction-demo
+# Error from server (NotFound): pods "ephemeral-eviction-demo" not found

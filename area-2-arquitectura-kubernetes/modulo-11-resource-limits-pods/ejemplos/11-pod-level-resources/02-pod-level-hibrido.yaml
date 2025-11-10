@@ -1,0 +1,242 @@
+# =============================================================================
+# Pod-level + Container-level Resources (Híbrido)
+# =============================================================================
+#
+# Combina recursos a nivel de Pod CON límites individuales en contenedores.
+#
+# Caso de uso:
+# - Pod tiene un presupuesto total
+# - Contenedor principal necesita límite garantizado
+# - Sidecars comparten el presupuesto restante
+#
+# Validación:
+# SUM(container.limits) <= pod.limits
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-level-hybrid
+  labels:
+    example: pod-level-resources
+    type: hybrid
+  annotations:
+    description: "Combina Pod-level resources con Container-level limits"
+spec:
+  resources:  # Presupuesto total del Pod
+    requests:
+      cpu: "2"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "4Gi"
+  
+  containers:
+  # ==========================================
+  # App principal con límite individual
+  # ==========================================
+  - name: app
+    image: nginx:1.25-alpine
+    
+    resources:  # Límite individual
+      limits:
+        cpu: "2"       # ← Usa hasta 2 CPU (de 4 total)
+        memory: "2Gi"  # ← Usa hasta 2Gi (de 4Gi total)
+    
+    ports:
+    - containerPort: 80
+  
+  # ==========================================
+  # Sidecars SIN limits individuales
+  # Comparten el presupuesto restante
+  # ==========================================
+  - name: metrics-collector
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        while true; do
+          echo "Collecting metrics..."
+          sleep 30
+        done
+    # Sin resources → puede usar hasta (4-2)=2 CPU y (4-2)=2Gi restantes
+  
+  - name: log-forwarder
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        while true; do
+          echo "Forwarding logs..."
+          sleep 30
+        done
+    # Comparte recursos restantes con metrics-collector
+
+# =============================================================================
+# DISTRIBUCIÓN DE RECURSOS
+# =============================================================================
+#
+# Presupuesto total:
+# ┌─────────────────────────────────┐
+# │ Pod limits:                     │
+# │ - CPU: 4                        │
+# │ - Memory: 4Gi                   │
+# └─────────────────────────────────┘
+#
+# Asignación:
+# ┌──────────────────┬──────┬────────┬──────────────────┐
+# │ Container        │ CPU  │ Memory │ Límite           │
+# ├──────────────────┼──────┼────────┼──────────────────┤
+# │ app              │ 2    │ 2Gi    │ ✅ Garantizado    │
+# ├──────────────────┼──────┼────────┼──────────────────┤
+# │ metrics-coll.    │ ↓    │ ↓      │ ⚠️ Compartido     │
+# │ log-forwarder    │ ↓    │ ↓      │ ⚠️ Compartido     │
+# │ (Restante)       │ 2    │ 2Gi    │ Entre ambos      │
+# └──────────────────┴──────┴────────┴──────────────────┘
+#
+# =============================================================================
+# ESCENARIOS DE USO
+# =============================================================================
+#
+# Escenario 1: Uso normal
+# ┌──────────────────┬──────┬────────┐
+# │ Container        │ CPU  │ Memory │
+# ├──────────────────┼──────┼────────┤
+# │ app              │ 1.5  │ 1.5Gi  │
+# │ metrics-coll.    │ 0.3  │ 200Mi  │
+# │ log-forwarder    │ 0.2  │ 150Mi  │
+# ├──────────────────┼──────┼────────┤
+# │ TOTAL            │ 2.0  │ ~1.9Gi │ ✅ OK
+# └──────────────────┴──────┴────────┘
+#
+# Escenario 2: App usa su máximo
+# ┌──────────────────┬──────┬────────┐
+# │ Container        │ CPU  │ Memory │
+# ├──────────────────┼──────┼────────┤
+# │ app              │ 2.0  │ 2Gi    │ ← Límite individual
+# │ metrics-coll.    │ 1.0  │ 1Gi    │
+# │ log-forwarder    │ 1.0  │ 1Gi    │
+# ├──────────────────┼──────┼────────┤
+# │ TOTAL            │ 4.0  │ 4Gi    │ ✅ OK
+# └──────────────────┴──────┴────────┘
+#
+# Escenario 3: App intenta exceder su límite individual
+# ┌──────────────────┬──────┬────────┐
+# │ Container        │ CPU  │ Memory │
+# ├──────────────────┼──────┼────────┤
+# │ app              │ 2.5  │ 2.5Gi  │ ← ❌ Intenta exceder
+# │ metrics-coll.    │ 0.5  │ 500Mi  │
+# │ log-forwarder    │ 0.5  │ 500Mi  │
+# └──────────────────┴──────┴────────┘
+# → App throttled a 2 CPU
+# → Si excede 2Gi memory → OOMKilled
+#
+# Escenario 4: Sidecars exceden presupuesto restante
+# ┌──────────────────┬──────┬────────┐
+# │ Container        │ CPU  │ Memory │
+# ├──────────────────┼──────┼────────┤
+# │ app              │ 2.0  │ 2Gi    │
+# │ metrics-coll.    │ 1.5  │ 1.5Gi  │
+# │ log-forwarder    │ 1.0  │ 1Gi    │
+# ├──────────────────┼──────┼────────┤
+# │ TOTAL            │ 4.5  │ 4.5Gi  │ ❌ Excede Pod limit
+# └──────────────────┴──────┴────────┘
+# → Pod OOMKilled (memory)
+# → CPU throttled
+#
+# =============================================================================
+# VALIDACIÓN
+# =============================================================================
+#
+# Kubernetes valida:
+# SUM(container.limits) <= pod.limits
+#
+# En este ejemplo:
+# app.limits.cpu (2) + metrics.limits.cpu (undefined) + log.limits.cpu (undefined) <= pod.limits.cpu (4)
+# ✅ VALID (solo app tiene límite individual)
+#
+# Si intentas:
+# app.limits.cpu: 3
+# metrics-coll.limits.cpu: 2
+# log-forwarder.limits.cpu: 1
+# Total: 3 + 2 + 1 = 6 > 4 (pod limit)
+# ❌ INVALID → Pod rechazado por admission
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver recursos del Pod:
+# kubectl describe pod pod-level-hybrid | grep -A 20 "Resources:"
+#
+# Output esperado:
+# Resources:
+#   Pod resources:
+#     Limits:
+#       cpu:     4
+#       memory:  4Gi
+#     Requests:
+#       cpu:     2
+#       memory:  2Gi
+#   Container app:
+#     Limits:
+#       cpu:     2
+#       memory:  2Gi
+#   Container metrics-collector: (sin resources)
+#   Container log-forwarder: (sin resources)
+#
+# Ver uso de cada contenedor:
+# kubectl top pod pod-level-hybrid --containers
+#
+# Ver logs de sidecars:
+# kubectl logs pod-level-hybrid -c metrics-collector
+# kubectl logs pod-level-hybrid -c log-forwarder
+#
+# Exec en app:
+# kubectl exec -it pod-level-hybrid -c app -- sh
+#
+# Ver recursos desde dentro del contenedor (cgroup limits):
+# kubectl exec -it pod-level-hybrid -c app -- cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
+# kubectl exec -it pod-level-hybrid -c app -- cat /sys/fs/cgroup/memory/memory.limit_in_bytes
+#
+# Limpiar:
+# kubectl delete -f pod.yaml
+#
+# =============================================================================
+# CUÁNDO USAR ESTE PATRÓN
+# =============================================================================
+#
+# ✅ Usar cuando:
+# - Necesitas garantizar recursos para app principal
+# - Sidecars pueden compartir recursos restantes
+# - Quieres flexibilidad en sidecars pero control en app
+# - Tienes un presupuesto total claro
+#
+# Ejemplo real:
+# - App principal (web server): needs guaranteed 2 CPU
+# - Prometheus exporter: puede usar lo que quede
+# - Fluentd log forwarder: puede usar lo que quede
+# - Istio proxy: puede usar lo que quede
+#
+# =============================================================================
+# COMPARACIÓN CON OTROS PATRONES
+# =============================================================================
+#
+# 1. Solo Container-level:
+# ✅ Control granular por contenedor
+# ❌ Rígido, no permite sharing
+# ❌ Configuración compleja
+#
+# 2. Solo Pod-level:
+# ✅ Máxima flexibilidad
+# ❌ Sin garantías para contenedores individuales
+# ❌ Un contenedor puede monopolizar
+#
+# 3. Híbrido (este patrón):
+# ✅ Garantías para app principal
+# ✅ Flexibilidad para sidecars
+# ✅ Balance entre control y simplicidad
+# ❌ Requiere K8s 1.34+

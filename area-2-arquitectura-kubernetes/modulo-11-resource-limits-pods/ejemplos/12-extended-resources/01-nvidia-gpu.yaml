@@ -1,0 +1,264 @@
+# =============================================================================
+# Extended Resources: NVIDIA GPU
+# =============================================================================
+#
+# Extended Resources son recursos personalizados NO nativos de Kubernetes.
+#
+# Ejemplos:
+# - nvidia.com/gpu (GPUs NVIDIA)
+# - amd.com/gpu (GPUs AMD)
+# - intel.com/qat (QuickAssist Technology)
+# - custom.com/fpga (FPGAs personalizados)
+#
+# Características:
+# - Solo se especifican en limits (no en requests)
+# - Deben ser números enteros (no fracciones)
+# - El nodo debe anunciarlos en su capacity
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-pod-nvidia
+  labels:
+    app: ml-training
+    example: extended-resources
+    type: gpu
+spec:
+  containers:
+  - name: cuda-app
+    image: nvidia/cuda:12.3.0-base-ubuntu22.04
+    
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "=== NVIDIA GPU Information ==="
+        nvidia-smi
+        echo ""
+        echo "=== CUDA Version ==="
+        nvcc --version || echo "NVCC not available in base image"
+        echo ""
+        echo "=== GPU Devices ==="
+        ls -l /dev/nvidia*
+        echo ""
+        echo "Running for 1 hour..."
+        sleep 3600
+    
+    resources:
+      limits:
+        nvidia.com/gpu: 2  # ← Solicita 2 GPUs NVIDIA
+        # Extended resources SIEMPRE son enteros
+        # nvidia.com/gpu: 1.5  ← ❌ INVÁLIDO
+        cpu: "4"
+        memory: "8Gi"
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+        # ⚠️ NO se puede poner nvidia.com/gpu en requests
+        # Extended resources solo van en limits
+
+# =============================================================================
+# CÓMO FUNCIONA
+# =============================================================================
+#
+# 1. Device Plugin en el Nodo
+# ----------------------------
+# El nodo debe ejecutar NVIDIA Device Plugin:
+#
+# kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.0/nvidia-device-plugin.yml
+#
+# Este plugin:
+# - Detecta GPUs en el nodo
+# - Anuncia nvidia.com/gpu en node.status.capacity
+# - Asigna GPUs a Pods
+#
+#
+# 2. Node Capacity
+# ----------------
+# El nodo anuncia cuántas GPUs tiene:
+#
+# kubectl describe node <gpu-node>
+#
+# Output:
+# Capacity:
+#   cpu:               16
+#   ephemeral-storage: 500Gi
+#   memory:            64Gi
+#   nvidia.com/gpu:    4      ← 4 GPUs disponibles
+#   pods:              110
+#
+# Allocatable:
+#   nvidia.com/gpu:    4
+#
+#
+# 3. Scheduling
+# -------------
+# Cuando aplicas este Pod:
+# - Scheduler busca nodo con nvidia.com/gpu >= 2
+# - Encuentra nodo con 4 GPUs disponibles
+# - Asigna 2 GPUs al Pod
+# - Quedan 2 GPUs disponibles en el nodo
+#
+#
+# 4. Runtime
+# ----------
+# Kubelet configura el contenedor para acceder a las GPUs:
+# - Monta devices /dev/nvidia0, /dev/nvidia1
+# - Configura variables de entorno (CUDA_VISIBLE_DEVICES)
+# - Permite acceso a las GPUs asignadas
+#
+# =============================================================================
+# VERIFICACIÓN
+# =============================================================================
+#
+# Verificar que el nodo tiene GPUs:
+# kubectl get nodes -o json | jq '.items[] | {name: .metadata.name, gpus: .status.capacity["nvidia.com/gpu"]}'
+#
+# Output esperado:
+# {
+#   "name": "gpu-node-1",
+#   "gpus": "4"
+# }
+#
+# Si no aparece nvidia.com/gpu:
+# ❌ Device Plugin no está instalado
+# ❌ O el nodo no tiene GPUs
+#
+# =============================================================================
+# APLICAR Y TESTING
+# =============================================================================
+#
+# ⚠️ Requiere nodo con GPUs y NVIDIA Device Plugin instalado
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado:
+# kubectl get pod gpu-pod-nvidia
+#
+# Si está Pending:
+# kubectl describe pod gpu-pod-nvidia
+#
+# Buscar:
+# Events:
+#   Warning  FailedScheduling  ... 0/3 nodes are available: 3 Insufficient nvidia.com/gpu
+#
+# → Significa que ningún nodo tiene 2 GPUs disponibles
+#
+#
+# Si está Running:
+# kubectl logs gpu-pod-nvidia
+#
+# Output esperado:
+# === NVIDIA GPU Information ===
+# +-----------------------------------------------------------------------------+
+# | NVIDIA-SMI 535.86.05    Driver Version: 535.86.05    CUDA Version: 12.3    |
+# |-------------------------------+----------------------+----------------------+
+# | GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+# | Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+# |===============================+======================+======================|
+# |   0  Tesla V100-SXM2...  Off  | 00000000:00:1E.0 Off |                    0 |
+# | N/A   30C    P0    25W / 300W |      0MiB / 16384MiB |      0%      Default |
+# +-------------------------------+----------------------+----------------------+
+# |   1  Tesla V100-SXM2...  Off  | 00000000:00:1F.0 Off |                    0 |
+# | N/A   31C    P0    26W / 300W |      0MiB / 16384MiB |      0%      Default |
+# +-----------------------------------------------------------------------------+
+#
+#
+# Ver GPUs asignadas desde dentro del Pod:
+# kubectl exec -it gpu-pod-nvidia -- nvidia-smi
+#
+# Ver variables de entorno CUDA:
+# kubectl exec -it gpu-pod-nvidia -- env | grep CUDA
+# Output: CUDA_VISIBLE_DEVICES=0,1
+#
+# =============================================================================
+# COMPARTIR vs EXCLUSIVIDAD
+# =============================================================================
+#
+# Comportamiento default:
+# ┌───────────────────────────────────────┐
+# │ Pod solicita: nvidia.com/gpu: 1       │
+# ├───────────────────────────────────────┤
+# │ → Asigna GPU completa (exclusiva)     │
+# │ → Otros Pods NO pueden usar esa GPU   │
+# └───────────────────────────────────────┘
+#
+# Ejemplo:
+# Nodo con 4 GPUs:
+# - Pod A solicita 2 GPUs → Asignadas GPU 0, 1
+# - Pod B solicita 1 GPU  → Asignada GPU 2
+# - Quedan: 1 GPU disponible (GPU 3)
+#
+# Si Pod C solicita 2 GPUs:
+# ❌ Insufficient nvidia.com/gpu
+#
+#
+# Para compartir GPUs (time-slicing):
+# Requiere configuración especial del Device Plugin
+# https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/gpu-sharing.html
+#
+# =============================================================================
+# CASOS DE USO
+# =============================================================================
+#
+# ✅ Machine Learning Training:
+# - TensorFlow, PyTorch models
+# - Necesitan 1+ GPUs
+# - Entrenamiento de horas/días
+#
+# ✅ Inferencia de modelos:
+# - Predicciones en batch
+# - Procesamiento de imágenes/video
+# - Generación de embeddings
+#
+# ✅ Rendering:
+# - Blender, 3D rendering
+# - Video transcoding con GPU
+#
+# ✅ Científico:
+# - Simulaciones (CUDA, OpenCL)
+# - Cálculos de física/química
+#
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+#
+# Problema: Pod Pending con "Insufficient nvidia.com/gpu"
+# ---------------------------------------------------------
+# kubectl describe pod gpu-pod-nvidia | grep -A 5 Events
+#
+# Soluciones:
+# 1. Verificar que hay nodos con GPUs:
+#    kubectl get nodes -o json | jq '.items[] | select(.status.capacity["nvidia.com/gpu"] != null) | .metadata.name'
+#
+# 2. Ver cuántas GPUs están disponibles:
+#    kubectl describe node <gpu-node> | grep nvidia.com/gpu
+#
+# 3. Ver si otras Pods están usando GPUs:
+#    kubectl get pods -A -o json | jq '.items[] | select(.spec.containers[].resources.limits["nvidia.com/gpu"] != null) | {name: .metadata.name, gpus: .spec.containers[].resources.limits["nvidia.com/gpu"]}'
+#
+# 4. Reducir request de GPUs:
+#    nvidia.com/gpu: 1  # Pedir solo 1 GPU
+#
+#
+# Problema: nvidia-smi no funciona dentro del Pod
+# ------------------------------------------------
+# Error: "nvidia-smi: command not found"
+#
+# Causas:
+# - Imagen no tiene NVIDIA drivers
+# - Device Plugin no monta /dev/nvidia*
+#
+# Solución:
+# - Usa imagen con CUDA: nvidia/cuda:*
+# - Verifica Device Plugin: kubectl get ds -n kube-system | grep nvidia
+#
+# =============================================================================
+# LIMPIEZA
+# =============================================================================
+#
+# kubectl delete -f pod.yaml
+#
+# Verificar que GPUs se liberaron:
+# kubectl describe node <gpu-node> | grep -A 3 "Allocated resources"

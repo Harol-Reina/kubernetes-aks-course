@@ -1,0 +1,99 @@
+# =============================================================================
+# Ejemplo 06: Ephemeral Storage Básico
+# =============================================================================
+#
+# Además de CPU y memoria, puedes limitar el almacenamiento efímero:
+# - emptyDir volumes (excepto tmpfs)
+# - Logs de contenedor
+# - Writable container layers
+#
+# ⚠️ Si excede el límite → Pod eviction (no OOMKill)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-storage-demo
+  labels:
+    app: demo
+    example: ephemeral-storage-basic
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+        ephemeral-storage: "1Gi"   # Mínimo de storage efímero
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+        ephemeral-storage: "2Gi"   # Máximo de storage efímero
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    - name: logs
+      mountPath: /var/log/nginx
+  
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: "500Mi"  # ✅ Límite específico del volumen
+  
+  - name: logs
+    emptyDir:
+      sizeLimit: "500Mi"
+
+# =============================================================================
+# ¿QUÉ CUENTA COMO EPHEMERAL STORAGE?
+# =============================================================================
+#
+# ✅ Cuenta como ephemeral-storage:
+#   - emptyDir volumes (excepto medium: Memory)
+#   - Container writable layers
+#   - Container logs (/var/log/containers/)
+#
+# ❌ NO cuenta como ephemeral-storage:
+#   - emptyDir con medium: Memory (cuenta como memory)
+#   - PersistentVolumes
+#   - ConfigMaps
+#   - Secrets
+#
+# =============================================================================
+# BEST PRACTICES
+# =============================================================================
+#
+# 1. Siempre usar sizeLimit en emptyDir:
+#    ✅ emptyDir:
+#         sizeLimit: "500Mi"
+#    ❌ emptyDir: {}  ← Sin límite (peligroso)
+#
+# 2. Definir ephemeral-storage limits:
+#    ✅ limits:
+#         ephemeral-storage: "2Gi"
+#
+# 3. Monitorear uso:
+#    kubectl exec pod -- df -h /cache
+#
+# 4. Limpiar archivos temporales periódicamente
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver uso de disco dentro del Pod:
+# kubectl exec ephemeral-storage-demo -- df -h
+#
+# Ver uso específico del volumen:
+# kubectl exec ephemeral-storage-demo -- du -sh /cache
+#
+# Ver recursos incluyendo storage:
+# kubectl describe pod ephemeral-storage-demo | grep -A 15 "Requests:"
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

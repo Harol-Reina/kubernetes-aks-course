@@ -1,0 +1,195 @@
+# =============================================================================
+# Múltiples emptyDir con Resource Limits
+# =============================================================================
+#
+# Demostración de cómo manejar múltiples volúmenes emptyDir con límites apropiados
+#
+# Consideraciones:
+# 1. Cada emptyDir debe tener su propio sizeLimit
+# 2. El límite total de ephemeral-storage debe ser >= suma de sizeLimits
+# 3. Cada volumen tiene su propósito específico
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multiple-emptydir
+  labels:
+    example: ephemeral-storage
+    type: multiple-volumes
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    - name: tmp
+      mountPath: /tmp-data
+    - name: logs
+      mountPath: /var/log/app
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+        ephemeral-storage: "2Gi"  # Suma de todos los volúmenes
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+        ephemeral-storage: "4Gi"  # Debe ser >= suma de sizeLimits
+  
+  volumes:
+  # Cache directory - mayor tamaño
+  - name: cache
+    emptyDir:
+      sizeLimit: "2Gi"
+  
+  # Temporary files
+  - name: tmp
+    emptyDir:
+      sizeLimit: "1Gi"
+  
+  # Application logs
+  - name: logs
+    emptyDir:
+      sizeLimit: "500Mi"
+
+# =============================================================================
+# CÁLCULO DE LÍMITES
+# =============================================================================
+#
+# Suma de sizeLimits:
+# cache:   2Gi
+# tmp:     1Gi
+# logs:   500Mi
+# ────────────────
+# Total:  3.5Gi
+#
+# ephemeral-storage límite: 4Gi ✅
+# 4Gi >= 3.5Gi → OK
+#
+# ⚠️ Si ephemeral-storage fuera 3Gi → PROBLEMA
+# El scheduler podría aceptar el Pod, pero:
+# - Si cada volumen se llena a su sizeLimit (3.5Gi total)
+# - Excede el límite del contenedor (3Gi)
+# - Pod será EVICTED
+#
+# =============================================================================
+# BEST PRACTICES
+# =============================================================================
+#
+# 1. Siempre define sizeLimit para cada emptyDir
+# ✅ Previene crecimiento descontrolado
+# ✅ Facilita troubleshooting
+#
+# 2. ephemeral-storage limit >= suma de sizeLimits + overhead
+# ✅ Incluye espacio para container layers y logs
+# ✅ Recomendado: +20% de overhead
+#
+# Ejemplo:
+# Suma sizeLimits: 3.5Gi
+# Overhead (20%):  0.7Gi
+# ─────────────────────────
+# Total:           4.2Gi → Redondear a 5Gi
+#
+# 3. Separa concerns en volúmenes diferentes
+# ✅ cache/ → Datos cacheables
+# ✅ tmp/ → Archivos temporales
+# ✅ logs/ → Logs de aplicación
+#
+# =============================================================================
+# USO DE CADA VOLUMEN
+# =============================================================================
+#
+# /cache (2Gi):
+# - Cache de contenido estático
+# - Assets compilados
+# - Resultados de queries frecuentes
+# - Puede regenerarse si se pierde
+#
+# /tmp-data (1Gi):
+# - Archivos temporales durante procesamiento
+# - Uploads en progreso
+# - Datos intermedios de pipelines
+# - Se borran al finalizar operación
+#
+# /var/log/app (500Mi):
+# - Logs de aplicación
+# - Solo logs recientes (rotación necesaria)
+# - Idealmente exportados a sistema centralizado
+# - No crecer indefinidamente
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver todos los volúmenes:
+# kubectl describe pod multiple-emptydir | grep -A 20 "Volumes:"
+#
+# Ver uso de cada volumen:
+# kubectl exec -it multiple-emptydir -- df -h | grep -E '(/cache|/tmp-data|/var/log/app)'
+#
+# Verificar sizeLimit de cada volumen:
+# kubectl get pod multiple-emptydir -o json | jq '.spec.volumes[] | {name: .name, sizeLimit: .emptyDir.sizeLimit}'
+#
+# Output:
+# {
+#   "name": "cache",
+#   "sizeLimit": "2Gi"
+# }
+# {
+#   "name": "tmp",
+#   "sizeLimit": "1Gi"
+# }
+# {
+#   "name": "logs",
+#   "sizeLimit": "500Mi"
+# }
+#
+# Escribir en cada volumen para testing:
+# kubectl exec -it multiple-emptydir -- sh -c '
+#   echo "cache data" > /cache/test.txt &&
+#   echo "temp data" > /tmp-data/temp.txt &&
+#   echo "log entry" > /var/log/app/app.log &&
+#   ls -lh /cache /tmp-data /var/log/app
+# '
+#
+# Monitorear uso total de ephemeral storage:
+# kubectl exec -it multiple-emptydir -- df -h
+#
+# Limpiar:
+# kubectl delete -f pod.yaml
+#
+# =============================================================================
+# EJEMPLO DE ALERTA PROMETHEUS
+# =============================================================================
+#
+# Alerta para cada volumen individualmente:
+#
+# - alert: EmptyDirVolumeHighUsage
+#   expr: |
+#     (kubelet_volume_stats_used_bytes / 
+#      kubelet_volume_stats_capacity_bytes) > 0.85
+#   for: 5m
+#   labels:
+#     severity: warning
+#   annotations:
+#     summary: "emptyDir volume {{ $labels.volume_name }} >85% full"
+#     description: "Pod {{ $labels.pod }} has volume {{ $labels.volume_name }} at {{ $value }}% capacity"
+#
+# Alerta para ephemeral-storage total del contenedor:
+#
+# - alert: EphemeralStorageHighUsage
+#   expr: |
+#     (container_fs_usage_bytes{container!=""} / 
+#      container_fs_limit_bytes{container!=""}) > 0.85
+#   for: 5m
+#   labels:
+#     severity: warning
+#   annotations:
+#     summary: "Container {{ $labels.container }} ephemeral storage >85%"

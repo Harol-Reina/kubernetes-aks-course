@@ -1,0 +1,75 @@
+# =============================================================================
+# Ejemplo 01: Requests y Limits Básicos
+# =============================================================================
+# 
+# Este ejemplo demuestra la configuración básica de requests y limits para
+# contenedores en un Pod.
+#
+# Conceptos cubiertos:
+# - Requests: Recursos mínimos garantizados
+# - Limits: Recursos máximos permitidos
+# - CPU en millicores (m)
+# - Memory en MiB/GiB
+#
+# QoS Class resultante: Burstable
+# (porque request < limit)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: requests-limits-basic
+  labels:
+    app: demo
+    example: requests-limits-basic
+  annotations:
+    description: "Ejemplo básico de requests y limits"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      # Requests: Lo que el Pod GARANTIZA que tendrá disponible
+      # El scheduler usa estos valores para decidir en qué nodo colocar el Pod
+      requests:
+        cpu: "250m"      # 0.25 CPU cores (millicores)
+        memory: "128Mi"  # 128 Mebibytes de RAM
+      
+      # Limits: Lo que el Pod MÁXIMO puede usar
+      # El kubelet enforza estos límites:
+      # - CPU: Throttling (restricción, no termina)
+      # - Memory: OOMKilled (termina el proceso, Exit Code 137)
+      limits:
+        cpu: "500m"      # 0.5 CPU cores máximo
+        memory: "256Mi"  # 256 MiB máximo
+    
+    ports:
+    - containerPort: 80
+    
+    # Verificar que el contenedor arranca correctamente
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver QoS Class:
+# kubectl get pod requests-limits-basic -o jsonpath='{.status.qosClass}'
+# Output: Burstable
+#
+# Ver recursos:
+# kubectl describe pod requests-limits-basic | grep -A 10 "Requests:"
+#
+# Monitorear uso:
+# kubectl top pod requests-limits-basic
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

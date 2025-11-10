@@ -1,0 +1,276 @@
+# =============================================================================
+# OOMKilled - Memory Leak Gradual
+# =============================================================================
+#
+# Simula memory leak gradual (más realista que stress test).
+#
+# Comportamiento:
+# - Comienza con bajo uso de memoria
+# - Gradualmente consume más memoria
+# - Eventualmente excede límite → OOMKilled
+#
+# Más cercano a memory leaks reales en aplicaciones de producción.
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gradual-memory-leak
+  labels:
+    app: memory-leak-test
+    example: troubleshooting
+    type: memory-leak
+spec:
+  restartPolicy: Always
+  
+  containers:
+  - name: leaker
+    image: busybox:1.36
+    
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Gradual Memory Leak Simulation ==="
+        echo "Memory limit: 256Mi"
+        echo "Will allocate 10MB every 2 seconds"
+        echo "Expected OOMKill after ~50 iterations (500MB)"
+        echo ""
+        
+        i=0
+        while true; do
+          # Escribe a /dev/shm (tmpfs) para consumir memoria
+          dd if=/dev/zero of=/dev/shm/file-$i bs=1M count=10 2>/dev/null
+          
+          i=$((i+1))
+          allocated=$((i * 10))
+          
+          echo "[$i] Allocated ${allocated} MB total"
+          
+          # Mostrar uso actual
+          echo "   Memory usage:"
+          df -h /dev/shm | tail -1
+          
+          sleep 2
+        done
+    
+    resources:
+      limits:
+        cpu: "200m"
+        memory: "256Mi"  # ← Límite que será excedido
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+
+# =============================================================================
+# TIMELINE ESPERADO
+# =============================================================================
+#
+# Tiempo  │ Allocated │ Estado
+# ────────┼───────────┼──────────────────────────────
+# 0s      │ 0 MB      │ Pod inicia
+# 2s      │ 10 MB     │ ✅ Escribiendo a /dev/shm
+# 4s      │ 20 MB     │ ✅ OK
+# 6s      │ 30 MB     │ ✅ OK
+# ...     │ ...       │ ✅ Crecimiento gradual
+# 50s     │ 250 MB    │ ⚠️ Cerca del límite (256Mi)
+# 52s     │ 260 MB    │ ❌ Excede límite
+# 52s     │ -         │ ❌ OOMKilled (Exit Code 137)
+# 55s     │ 0 MB      │ 🔄 Contenedor reinicia
+# 57s     │ 10 MB     │ ✅ Comienza de nuevo
+# ...     │ ...       │ 🔄 Ciclo se repite
+# 120s    │ -         │ ⚠️ CrashLoopBackOff
+#
+# =============================================================================
+# OBSERVAR EL LEAK EN TIEMPO REAL
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Monitorear logs en tiempo real (terminal 1):
+# kubectl logs -f gradual-memory-leak
+#
+# Output esperado:
+# === Gradual Memory Leak Simulation ===
+# Memory limit: 256Mi
+# Will allocate 10MB every 2 seconds
+#
+# [1] Allocated 10 MB total
+#    Memory usage:
+#    tmpfs            256M   10M    246M   4% /dev/shm
+#
+# [2] Allocated 20 MB total
+#    Memory usage:
+#    tmpfs            256M   20M    236M   8% /dev/shm
+#
+# [3] Allocated 30 MB total
+#    Memory usage:
+#    tmpfs            256M   30M    226M  12% /dev/shm
+# ...
+# [25] Allocated 250 MB total
+#    Memory usage:
+#    tmpfs            256M  250M      6M  98% /dev/shm
+#
+# (después de esto → OOMKilled, logs se detienen)
+#
+#
+# Monitorear uso de memoria (terminal 2):
+# watch -n 2 kubectl top pod gradual-memory-leak
+#
+# Output:
+# NAME                    CPU(cores)   MEMORY(bytes)
+# gradual-memory-leak     1m           50Mi
+# ↓ (después de ~20s)
+# gradual-memory-leak     1m           150Mi
+# ↓ (después de ~40s)
+# gradual-memory-leak     1m           250Mi
+# ↓ (después de ~50s)
+# gradual-memory-leak     1m           10Mi    ← Reinició!
+#
+#
+# Ver eventos en tiempo real (terminal 3):
+# kubectl get events --watch --field-selector involvedObject.name=gradual-memory-leak
+#
+# Verás:
+# LAST SEEN   TYPE      REASON      MESSAGE
+# 0s          Normal    Scheduled   Successfully assigned...
+# 0s          Normal    Pulling     Pulling image "busybox:1.36"
+# 0s          Normal    Pulled      Successfully pulled image
+# 0s          Normal    Created     Created container leaker
+# 0s          Normal    Started     Started container leaker
+# 52s         Warning   BackOff     Back-off restarting failed container
+#
+# =============================================================================
+# ANÁLISIS POST-MORTEM
+# =============================================================================
+#
+# Ver estado actual:
+# kubectl get pod gradual-memory-leak
+#
+# Describir para ver detalles del crash:
+# kubectl describe pod gradual-memory-leak
+#
+# Buscar sección "Last State":
+# Last State:     Terminated
+#   Reason:       OOMKilled
+#   Exit Code:    137
+#   Started:      Fri, 10 Jan 2025 10:10:00 +0000
+#   Finished:     Fri, 10 Jan 2025 10:10:52 +0000
+#
+# Calcular tiempo hasta OOMKill:
+# Finished - Started = 52 segundos ✅ (esperado ~50s)
+#
+# Ver restart count:
+# kubectl get pod gradual-memory-leak -o jsonpath='{.status.containerStatuses[0].restartCount}'
+#
+# Ver logs del intento anterior (antes del crash):
+# kubectl logs gradual-memory-leak --previous
+#
+# Última línea mostrará el último allocation exitoso:
+# [25] Allocated 250 MB total
+#
+# =============================================================================
+# COMPARACIÓN CON MEMORY LEAK REAL
+# =============================================================================
+#
+# Este ejemplo (simulado):
+# ┌────────────────────────────────────────┐
+# │ • Crecimiento lineal y predecible      │
+# │ • 10MB cada 2 segundos                 │
+# │ • Fácil de calcular cuándo crasheará   │
+# │ • Siempre llega al OOMKill             │
+# └────────────────────────────────────────┘
+#
+# Memory leak real (producción):
+# ┌────────────────────────────────────────┐
+# │ • Crecimiento irregular                │
+# │ • Depende de tráfico/carga             │
+# │ • Puede tomar horas/días               │
+# │ • A veces se estabiliza antes de OOM   │
+# └────────────────────────────────────────┘
+#
+# Ejemplos reales de memory leaks:
+# - Cache sin eviction policy
+# - Event listeners no removidos
+# - Conexiones de DB no cerradas
+# - Large objects en memoria global
+# - Circular references (en GC languages)
+#
+# =============================================================================
+# IDENTIFICAR MEMORY LEAKS EN PRODUCCIÓN
+# =============================================================================
+#
+# 1. Monitorear tendencia de memoria
+# -----------------------------------
+# Prometheus query:
+# container_memory_usage_bytes{pod="my-app"}
+#
+# Si ves crecimiento constante sin plateau → Posible leak
+#
+#
+# 2. Heap dump (para Java)
+# -------------------------
+# kubectl exec -it <pod> -- jmap -dump:live,format=b,file=/tmp/heap.bin <pid>
+# kubectl cp <pod>:/tmp/heap.bin ./heap.bin
+# # Analizar con Eclipse MAT o VisualVM
+#
+#
+# 3. Memory profiling (para Go)
+# ------------------------------
+# # En la app:
+# import _ "net/http/pprof"
+#
+# # Port-forward:
+# kubectl port-forward <pod> 6060:6060
+#
+# # Heap profile:
+# go tool pprof http://localhost:6060/debug/pprof/heap
+#
+#
+# 4. Node.js heap snapshot
+# -------------------------
+# kubectl exec -it <pod> -- node --expose-gc --inspect=0.0.0.0:9229 app.js
+# # Conecta Chrome DevTools para heap snapshot
+#
+# =============================================================================
+# PREVENCIÓN DE MEMORY LEAKS
+# =============================================================================
+#
+# ✅ Best practices:
+#
+# 1. Set memory limits apropiados
+#    resources:
+#      limits:
+#        memory: "512Mi"  # Basado en profiling
+#
+# 2. Implementa health checks
+#    livenessProbe:
+#      httpGet:
+#        path: /healthz
+#        port: 8080
+#      initialDelaySeconds: 30
+#      periodSeconds: 10
+#
+# 3. Restart periódico preventivo
+#    # Para apps con leaks conocidos difíciles de fix:
+#    # Usa un CronJob que reinicia Pods cada X horas
+#
+# 4. Monitoring y alertas
+#    - alert: MemoryLeakDetected
+#      expr: |
+#        (container_memory_usage_bytes - container_memory_usage_bytes offset 1h) > 100000000
+#      for: 2h
+#      annotations:
+#        summary: "Memory growing consistently in {{ $labels.pod }}"
+#
+# 5. Code reviews enfocados en:
+#    - Cache management
+#    - Resource cleanup
+#    - Event listener lifecycle
+#    - Connection pooling
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# kubectl delete -f pod.yaml

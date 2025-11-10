@@ -1,0 +1,308 @@
+# =============================================================================
+# CPU Throttling - Stress Test
+# =============================================================================
+#
+# Simula carga de CPU para demostrar throttling.
+#
+# Diferencia con OOMKilled:
+# - OOMKilled: Proceso TERMINADO (Exit Code 137)
+# - CPU Throttling: Proceso SLOW pero NO terminado
+#
+# ⚠️ SOLO PARA TESTING/EDUCACIÓN
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-throttling-demo
+  labels:
+    app: cpu-test
+    example: troubleshooting
+    type: cpu-throttling
+spec:
+  containers:
+  - name: cpu-stress
+    image: polinux/stress:1.0.4
+    
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"        # ← Intenta usar 2 CPUs completas
+    - "--timeout"
+    - "300s"     # Corre por 5 minutos
+    
+    resources:
+      limits:
+        cpu: "500m"   # ← Solo 0.5 CPU permitido
+        memory: "128Mi"
+      requests:
+        cpu: "250m"
+        memory: "64Mi"
+
+# =============================================================================
+# QUÉ ES CPU THROTTLING
+# =============================================================================
+#
+# CPU Throttling = Kernel limita cuánto CPU puede usar un proceso
+#
+# Cómo funciona (Linux CFS):
+# ┌────────────────────────────────────────────┐
+# │ CFS (Completely Fair Scheduler)           │
+# ├────────────────────────────────────────────┤
+# │ cpu.cfs_period_us:  100000 (100ms)        │
+# │ cpu.cfs_quota_us:   50000  (50ms)         │
+# │                                            │
+# │ → En cada período de 100ms:               │
+# │   - Proceso puede usar 50ms de CPU        │
+# │   - Restante 50ms: throttled              │
+# │                                            │
+# │ → CPU usage efectivo: 50ms/100ms = 50%    │
+# │   = 0.5 CPU (500 milicores)               │
+# └────────────────────────────────────────────┘
+#
+# En este ejemplo:
+# - Límite: 500m (0.5 CPU)
+# - Proceso intenta: 2 CPUs
+# - Resultado: Throttled 75% del tiempo
+#
+# =============================================================================
+# COMPORTAMIENTO ESPERADO
+# =============================================================================
+#
+# Timeline:
+#
+# 0-300s:   Proceso stress ejecuta
+#           ✅ Estado: Running (nunca termina)
+#           ⚠️ CPU usage stuck en ~500m
+#           ⚠️ Proceso slow (throttled)
+#           ✅ NO hay restart
+#           ✅ NO hay OOMKill
+#
+# Diferencia con sin límite:
+# ┌────────────────┬──────────────┬──────────────┐
+# │                │ Sin Límite   │ Con Límite   │
+# ├────────────────┼──────────────┼──────────────┤
+# │ CPU solicitado │ 2.0          │ 2.0          │
+# │ CPU permitido  │ 2.0          │ 0.5          │
+# │ CPU real usado │ 2.0          │ 0.5          │
+# │ Throttling     │ 0%           │ 75%          │
+# │ Performance    │ 100%         │ 25%          │
+# │ Estado         │ Running      │ Running      │
+# └────────────────┴──────────────┴──────────────┘
+#
+# =============================================================================
+# OBSERVAR THROTTLING
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver CPU usage (stuck en límite):
+# kubectl top pod cpu-throttling-demo
+#
+# Output:
+# NAME                    CPU(cores)   MEMORY(bytes)
+# cpu-throttling-demo     500m         10Mi
+#                         ↑ Stuck en el límite, no puede subir
+#
+# Ver en tiempo real:
+# watch -n 1 kubectl top pod cpu-throttling-demo
+#
+# Verás que CPU siempre ~500m, nunca sube a 2000m
+#
+#
+# Ver estado del Pod (siempre Running):
+# kubectl get pod cpu-throttling-demo
+# NAME                    READY   STATUS    RESTARTS   AGE
+# cpu-throttling-demo     1/1     Running   0          2m
+#                                 ↑ Nunca cambia a Failed/OOMKilled
+#
+#
+# Ver logs (stress output):
+# kubectl logs cpu-throttling-demo
+# Output:
+# stress: info: [1] dispatching hogs: 2 cpu, 0 io, 0 vm, 0 hdd
+# (no más output, sigue corriendo)
+#
+# =============================================================================
+# VER THROTTLING STATS (AVANZADO)
+# =============================================================================
+#
+# Exec en el contenedor y ver cgroup stats:
+# kubectl exec -it cpu-throttling-demo -- cat /sys/fs/cgroup/cpu/cpu.stat
+#
+# Output:
+# nr_periods 5000
+# nr_throttled 3750      # ← 75% de períodos throttled!
+# throttled_time 18750000000000  # nanosegundos throttled
+#
+# Interpretación:
+# - Total períodos: 5000
+# - Períodos throttled: 3750
+# - % throttled: 3750/5000 = 75% ✅
+#
+# Cálculo del tiempo throttled:
+# throttled_time (ns) / 1e9 = segundos throttled
+# 18750000000000 / 1e9 = 18750 segundos
+#
+#
+# Ver cuota y período:
+# kubectl exec -it cpu-throttling-demo -- sh -c '
+#   echo "Period: $(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us) us"
+#   echo "Quota:  $(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us) us"
+# '
+#
+# Output:
+# Period: 100000 us (100ms)
+# Quota:  50000 us (50ms)
+#
+# → En cada 100ms, puede usar 50ms → 50% → 0.5 CPU ✅
+#
+# =============================================================================
+# IMPACTO EN LA APLICACIÓN
+# =============================================================================
+#
+# Síntomas de CPU throttling:
+#
+# ⚠️ Aplicación slow:
+# - Requests tardan más
+# - Procesamiento lento
+# - Timeouts aumentan
+#
+# ⚠️ Backlog crece:
+# - Queue de tareas crece
+# - No procesa suficientemente rápido
+#
+# ⚠️ Latencia alta:
+# - P50, P95, P99 aumentan
+# - Users notan slowness
+#
+# ✅ Pero NO crashea:
+# - Sin restarts
+# - Sin OOMKill
+# - Solo slow
+#
+# =============================================================================
+# MONITOREO CON PROMETHEUS
+# =============================================================================
+#
+# Métricas clave:
+#
+# # Tiempo throttled (rate)
+# rate(container_cpu_cfs_throttled_seconds_total{pod="cpu-throttling-demo"}[5m])
+#
+# # Períodos throttled (rate)
+# rate(container_cpu_cfs_throttled_periods_total{pod="cpu-throttling-demo"}[5m])
+#
+# # % de tiempo throttled
+# (
+#   rate(container_cpu_cfs_throttled_seconds_total[5m])
+#   /
+#   rate(container_cpu_cfs_periods_total[5m])
+# ) * 100
+#
+# Alerta ejemplo:
+# - alert: HighCPUThrottling
+#   expr: |
+#     rate(container_cpu_cfs_throttled_periods_total{container!=""}[5m])
+#     /
+#     rate(container_cpu_cfs_periods_total{container!=""}[5m])
+#     > 0.25
+#   for: 5m
+#   labels:
+#     severity: warning
+#   annotations:
+#     summary: "High CPU throttling in {{ $labels.pod }}/{{ $labels.container }}"
+#     description: "{{ $labels.pod }}/{{ $labels.container }} is being throttled >25% of the time"
+#
+# =============================================================================
+# SOLUCIONES PARA CPU THROTTLING
+# =============================================================================
+#
+# Solución 1: Aumentar CPU limit
+# --------------------------------
+# resources:
+#   limits:
+#     cpu: "2"  # Aumentado de 500m
+#
+# ✅ Pros: Inmediato, simple
+# ❌ Cons: Más caro, puede no ser necesario
+#
+#
+# Solución 2: Optimizar aplicación
+# ---------------------------------
+# - Profile la app (pprof, perf, etc.)
+# - Identifica hot paths
+# - Optimiza algoritmos
+# - Reduce CPU usage
+#
+# ✅ Pros: Mejor performance general
+# ❌ Cons: Toma tiempo, requiere expertise
+#
+#
+# Solución 3: Horizontal scaling (HPA)
+# -------------------------------------
+# Mantén límite bajo, escala réplicas:
+#
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# spec:
+#   minReplicas: 2
+#   maxReplicas: 10
+#   metrics:
+#   - type: Resource
+#     resource:
+#       name: cpu
+#       target:
+#         type: Utilization
+#         averageUtilization: 70
+#
+# ✅ Pros: Cost-effective, alta disponibilidad
+# ❌ Cons: Más complejo, stateful apps difíciles
+#
+#
+# Solución 4: Quitar límite (usar solo request)
+# ----------------------------------------------
+# resources:
+#   requests:
+#     cpu: "500m"
+#   # No límite → sin throttling
+#
+# ✅ Pros: Sin throttling, burst permitido
+# ❌ Cons: Noisy neighbor, puede monopolizar CPU
+#
+# ⚠️ Solo en clusters dedicados o con buen monitoring
+#
+# =============================================================================
+# TROUBLESHOOTING EN PRODUCCIÓN
+# =============================================================================
+#
+# Problema: Aplicación slow, sin crash
+# -------------------------------------
+# 1. Verificar CPU throttling:
+#    kubectl top pod <pod>
+#    # Si CPU ~= límite → posible throttling
+#
+# 2. Confirmar con Prometheus:
+#    rate(container_cpu_cfs_throttled_seconds_total{pod="<pod>"}[5m])
+#    # Si > 0 → hay throttling
+#
+# 3. Ver % de throttling:
+#    (throttled_periods / total_periods) * 100
+#    # Si >25% → significativo
+#
+# 4. Decisión:
+#    - <10% throttling: Probablemente OK
+#    - 10-25%: Monitorear, considerar aumentar
+#    - >25%: Aumentar límite o escalar
+#    - >50%: Crítico, acción inmediata
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# kubectl delete -f pod.yaml
+#
+# Verificar eliminación:
+# kubectl get pod cpu-throttling-demo
+# Error from server (NotFound): pods "cpu-throttling-demo" not found

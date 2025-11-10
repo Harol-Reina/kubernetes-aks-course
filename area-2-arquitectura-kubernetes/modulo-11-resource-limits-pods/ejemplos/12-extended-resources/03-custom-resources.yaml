@@ -1,0 +1,331 @@
+# =============================================================================
+# Custom Extended Resources
+# =============================================================================
+#
+# Kubernetes permite crear tus propios extended resources para hardware
+# personalizado o recursos lógicos.
+#
+# Ejemplos:
+# - example.com/fpga (FPGAs)
+# - example.com/dongle (Dongles de licencia)
+# - example.com/special-nic (NICs especializadas)
+# - example.com/tpu (TPUs personalizadas)
+#
+# Proceso:
+# 1. Anuncia el recurso en el nodo (patch node status)
+# 2. Usa el recurso en Pod specs
+# 3. Opcionalmente: Crea Device Plugin para asignación automática
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-resource-pod
+  labels:
+    app: fpga-processor
+    example: extended-resources
+    type: custom
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Custom Resource Pod ==="
+        echo "This Pod has access to:"
+        echo "- 1x FPGA device (example.com/fpga)"
+        echo "- 2x License dongles (example.com/dongle)"
+        echo ""
+        echo "Checking device mounts..."
+        ls -l /dev/ | grep -E "(fpga|dongle)" || echo "No devices mounted (manual setup required)"
+        echo ""
+        echo "Running application for 1 hour..."
+        sleep 3600
+    
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"
+        example.com/fpga: 1    # ← Custom resource: 1 FPGA
+        example.com/dongle: 2  # ← Custom resource: 2 dongles
+
+# =============================================================================
+# CONFIGURAR CUSTOM EXTENDED RESOURCES
+# =============================================================================
+#
+# Paso 1: Anuncia el recurso en el nodo
+# --------------------------------------
+# Debes hacer patch del node.status.capacity manualmente:
+#
+# kubectl proxy &
+# 
+# NODE_NAME="your-node-name"
+#
+# curl --header "Content-Type: application/json-patch+json" \
+#   --request PATCH \
+#   --data '[{"op": "add", "path": "/status/capacity/example.com~1fpga", "value": "4"}]' \
+#   http://localhost:8001/api/v1/nodes/$NODE_NAME/status
+#
+# curl --header "Content-Type: application/json-patch+json" \
+#   --request PATCH \
+#   --data '[{"op": "add", "path": "/status/capacity/example.com~1dongle", "value": "10"}]' \
+#   http://localhost:8001/api/v1/nodes/$NODE_NAME/status
+#
+# ⚠️ Nota: ~1 representa / en JSON Pointer (RFC 6901)
+#
+# O usa kubectl patch (más simple):
+# kubectl patch node $NODE_NAME --subresource=status --type=json -p='[
+#   {"op":"add","path":"/status/capacity/example.com~1fpga","value":"4"},
+#   {"op":"add","path":"/status/capacity/example.com~1dongle","value":"10"}
+# ]'
+#
+#
+# Paso 2: Verificar que el recurso está disponible
+# -------------------------------------------------
+# kubectl describe node $NODE_NAME | grep -E "(fpga|dongle)"
+#
+# Output esperado:
+# Capacity:
+#   example.com/dongle:  10
+#   example.com/fpga:    4
+#
+# Allocatable:
+#   example.com/dongle:  10
+#   example.com/fpga:    4
+#
+#
+# Paso 3: Aplicar Pod que usa el recurso
+# ---------------------------------------
+# kubectl apply -f pod.yaml
+#
+# =============================================================================
+# REGLAS PARA CUSTOM EXTENDED RESOURCES
+# =============================================================================
+#
+# 1. Naming Convention
+# --------------------
+# Formato: domain/resource
+# Ejemplos:
+# ✅ example.com/fpga
+# ✅ mycompany.io/dongle
+# ✅ acme.corp/special-nic
+# ❌ fpga (sin domain)
+# ❌ kubernetes.io/fpga (kubernetes.io reservado)
+#
+#
+# 2. Valores
+# ----------
+# ✅ Deben ser enteros (no fracciones)
+# ✅ example.com/fpga: 2
+# ❌ example.com/fpga: 1.5
+#
+#
+# 3. Ubicación en spec
+# ---------------------
+# ✅ Solo en resources.limits (NO en requests)
+# spec:
+#   containers:
+#   - resources:
+#       limits:
+#         example.com/fpga: 1  ✅
+# 
+# spec:
+#   containers:
+#   - resources:
+#       requests:
+#         example.com/fpga: 1  ❌ ERROR
+#
+#
+# 4. Scheduling
+# -------------
+# - Kubernetes solo hace scheduling basado en cantidad
+# - NO sabe QUÉ FPGA específica asignar
+# - Necesitas Device Plugin para asignación real
+#
+# =============================================================================
+# DEVICE PLUGIN (RECOMENDADO PARA PRODUCCIÓN)
+# =============================================================================
+#
+# Sin Device Plugin:
+# ┌────────────────────────────────────────┐
+# │ 1. Anuncias capacidad manualmente      │
+# │ 2. Kubernetes schedules el Pod         │
+# │ 3. ❌ NO se montan devices automático   │
+# │ 4. ❌ Debes configurar acceso manual    │
+# └────────────────────────────────────────┘
+#
+# Con Device Plugin:
+# ┌────────────────────────────────────────┐
+# │ 1. Plugin anuncia capacidad automático │
+# │ 2. Kubernetes schedules el Pod         │
+# │ 3. ✅ Plugin monta devices              │
+# │ 4. ✅ Configura environment variables   │
+# │ 5. ✅ Todo automático                   │
+# └────────────────────────────────────────┘
+#
+# Crear Device Plugin:
+# https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/
+#
+# =============================================================================
+# CASOS DE USO PARA CUSTOM EXTENDED RESOURCES
+# =============================================================================
+#
+# 1. FPGAs (Field Programmable Gate Arrays)
+# ------------------------------------------
+# - Procesamiento de alta velocidad
+# - Aceleración de algoritmos específicos
+# - Crypto mining, video encoding
+#
+# spec:
+#   resources:
+#     limits:
+#       xilinx.com/fpga: 1
+#
+#
+# 2. License Dongles
+# ------------------
+# - Software que requiere dongles físicos
+# - Límite por número de dongles disponibles
+#
+# spec:
+#   resources:
+#     limits:
+#       company.com/license-dongle: 1
+#
+#
+# 3. TPUs (Tensor Processing Units)
+# ----------------------------------
+# - ML acceleration no-NVIDIA
+# - Google Cloud TPUs
+#
+# spec:
+#   resources:
+#     limits:
+#       cloud.google.com/tpu: 8
+#
+#
+# 4. Specialized NICs
+# -------------------
+# - Mellanox InfiniBand
+# - Intel QuickAssist
+#
+# spec:
+#   resources:
+#     limits:
+#       mellanox.com/infiniband: 1
+#
+#
+# 5. Custom Accelerators
+# -----------------------
+# - ASICs personalizados
+# - Co-processors específicos
+#
+# spec:
+#   resources:
+#     limits:
+#       mycompany.com/crypto-accelerator: 2
+#
+# =============================================================================
+# TESTING
+# =============================================================================
+#
+# ⚠️ Requiere haber configurado los recursos en el nodo primero
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado:
+# kubectl get pod custom-resource-pod
+#
+# Si Pending:
+# kubectl describe pod custom-resource-pod
+#
+# Buscar:
+# Events:
+#   Warning  FailedScheduling  ... 0/3 nodes available: 3 Insufficient example.com/fpga
+#
+# → Significa que ningún nodo tiene el recurso disponible
+#
+#
+# Si Running:
+# kubectl logs custom-resource-pod
+#
+# Ver recursos asignados:
+# kubectl describe node $NODE_NAME | grep -A 10 "Allocated resources"
+#
+# Output:
+# Allocated resources:
+#   Resource              Requests   Limits
+#   --------              --------   ------
+#   cpu                   500m       1
+#   memory                256Mi      512Mi
+#   example.com/fpga      1          1
+#   example.com/dongle    2          2
+#
+# =============================================================================
+# MONITORING
+# =============================================================================
+#
+# Ver uso de custom resources en el cluster:
+#
+# kubectl get nodes -o json | jq '.items[] | {
+#   name: .metadata.name,
+#   fpga_capacity: .status.capacity["example.com/fpga"],
+#   fpga_allocatable: .status.allocatable["example.com/fpga"],
+#   dongle_capacity: .status.capacity["example.com/dongle"],
+#   dongle_allocatable: .status.allocatable["example.com/dongle"]
+# }'
+#
+#
+# Ver Pods usando custom resources:
+#
+# kubectl get pods -A -o json | jq '.items[] | select(.spec.containers[].resources.limits | has("example.com/fpga") or has("example.com/dongle")) | {
+#   namespace: .metadata.namespace,
+#   name: .metadata.name,
+#   fpga: .spec.containers[].resources.limits["example.com/fpga"],
+#   dongle: .spec.containers[].resources.limits["example.com/dongle"]
+# }'
+#
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+#
+# Problema: "Insufficient example.com/fpga"
+# ------------------------------------------
+# Causa: Recurso no anunciado en ningún nodo
+#
+# Solución:
+# 1. Verificar capacidad del nodo:
+#    kubectl describe node <node> | grep example.com
+#
+# 2. Si no aparece, hacer patch:
+#    kubectl patch node <node> --subresource=status --type=json -p='[
+#      {"op":"add","path":"/status/capacity/example.com~1fpga","value":"4"}
+#    ]'
+#
+#
+# Problema: Recurso no persiste después de reiniciar kubelet
+# ------------------------------------------------------------
+# Causa: Patch manual se pierde en restart de kubelet
+#
+# Solución:
+# 1. Implementa Device Plugin que anuncia el recurso automáticamente
+# 2. O usa un DaemonSet que hace patch al iniciar
+#
+# =============================================================================
+# LIMPIEZA
+# =============================================================================
+#
+# Eliminar Pod:
+# kubectl delete -f pod.yaml
+#
+# Eliminar recursos del nodo (opcional):
+# kubectl patch node $NODE_NAME --subresource=status --type=json -p='[
+#   {"op":"remove","path":"/status/capacity/example.com~1fpga"},
+#   {"op":"remove","path":"/status/capacity/example.com~1dongle"}
+# ]'

@@ -1,0 +1,48 @@
+# =============================================================================
+# QoS Class: BURSTABLE - Solo Requests
+# =============================================================================
+#
+# Este Pod tiene solo requests (sin limits), lo que permite usar todos
+# los recursos disponibles del nodo si están idle.
+#
+# ⚠️ RIESGO: Puede consumir recursos sin límite
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable-request-only
+  labels:
+    qos-class: burstable
+    example: qos-demo
+  annotations:
+    description: "QoS: Burstable - solo requests"
+    warning: "Sin límites - puede usar todos los recursos disponibles"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+      # Sin limits → puede usar todos los recursos disponibles
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f request-only.yaml
+#
+# Verificar QoS Class:
+# kubectl get pod qos-burstable-request-only -o jsonpath='{.status.qosClass}'
+# Output: Burstable
+#
+# Ver que no tiene límites:
+# kubectl describe pod qos-burstable-request-only | grep -A 10 "Limits:"
+#
+# Limpiar:
+# kubectl delete -f request-only.yaml

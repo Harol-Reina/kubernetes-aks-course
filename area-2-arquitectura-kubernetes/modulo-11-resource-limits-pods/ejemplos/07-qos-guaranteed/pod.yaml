@@ -1,0 +1,58 @@
+# =============================================================================
+# QoS Class: GUARANTEED
+# =============================================================================
+#
+# Condiciones para Guaranteed:
+# 1. TODOS los contenedores tienen requests Y limits para CPU y Memory
+# 2. Para CADA contenedor: requests.cpu == limits.cpu
+# 3. Para CADA contenedor: requests.memory == limits.memory
+#
+# Características:
+# - 🛡️ Última en ser evicted (máxima protección)
+# - 📊 Recursos 100% predecibles
+# - 💰 Puede resultar en over-provisioning
+# - 🎯 Uso: Bases de datos, aplicaciones críticas
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-guaranteed
+  labels:
+    qos-class: guaranteed
+    example: qos-demo
+  annotations:
+    description: "QoS: Guaranteed - request == limit"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"      # ✅ Igual a request
+        memory: "256Mi"  # ✅ Igual a request
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Verificar QoS Class:
+# kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}'
+# Output: Guaranteed
+#
+# Ver detalles:
+# kubectl describe pod qos-guaranteed | grep "QoS Class"
+#
+# Ver recursos:
+# kubectl describe pod qos-guaranteed | grep -A 10 "Requests:"
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

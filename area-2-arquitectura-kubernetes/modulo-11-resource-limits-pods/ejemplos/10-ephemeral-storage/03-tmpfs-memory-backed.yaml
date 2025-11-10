@@ -1,0 +1,164 @@
+# =============================================================================
+# tmpfs emptyDir (Memory-backed)
+# =============================================================================
+#
+# ⚠️ IMPORTANTE: tmpfs NO cuenta como ephemeral-storage
+# Cuenta como USO DE MEMORIA del contenedor
+#
+# Características tmpfs:
+# - Almacena datos en RAM (no en disco)
+# - Mucho más rápido que disco
+# - Los datos se pierden en restart del Pod
+# - Consume del límite de memoria del contenedor
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-tmpfs
+  labels:
+    example: ephemeral-storage
+    type: tmpfs
+  annotations:
+    note: "tmpfs usa RAM, no disco - cuenta como memory usage"
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    
+    volumeMounts:
+    - name: tmpfs-volume
+      mountPath: /tmp
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"       # ← tmpfs consume de aquí
+      limits:
+        cpu: "200m"
+        memory: "256Mi"       # ← Límite incluye tmpfs
+        # ephemeral-storage NO aplica para tmpfs
+  
+  volumes:
+  - name: tmpfs-volume
+    emptyDir:
+      medium: Memory  # ← Almacena en RAM (tmpfs)
+      sizeLimit: "64Mi"
+
+# =============================================================================
+# DIFERENCIA CLAVE: tmpfs vs emptyDir (disco)
+# =============================================================================
+#
+# emptyDir con disco (default):
+# ┌──────────────────────────────────────────┐
+# │ Disk-backed emptyDir                     │
+# ├──────────────────────────────────────────┤
+# │ • Almacenado en: Disco del nodo          │
+# │ • Velocidad: Lento                       │
+# │ • Cuenta como: ephemeral-storage         │
+# │ • Límite: resources.limits.ephemeral-... │
+# │ • Uso: Cache, temp files, logs           │
+# └──────────────────────────────────────────┘
+#
+# emptyDir con medium: Memory (tmpfs):
+# ┌──────────────────────────────────────────┐
+# │ tmpfs emptyDir                           │
+# ├──────────────────────────────────────────┤
+# │ • Almacenado en: RAM                     │
+# │ • Velocidad: Muy rápido                  │
+# │ • Cuenta como: memory                    │
+# │ • Límite: resources.limits.memory        │
+# │ • Uso: Datos sensibles, alta performance │
+# └──────────────────────────────────────────┘
+#
+# =============================================================================
+# CASOS DE USO PARA tmpfs
+# =============================================================================
+#
+# ✅ Usar tmpfs para:
+# 1. Datos sensibles (passwords, tokens temporales)
+#    → Se borran automáticamente en restart
+#
+# 2. Performance crítica (caches en memoria)
+#    → Acceso mucho más rápido que disco
+#
+# 3. Datos de sesión de aplicaciones web
+#    → Fast access, no persistent
+#
+# 4. Compilación en memoria
+#    → Build artifacts temporales
+#
+#
+# ❌ NO usar tmpfs para:
+# 1. Grandes volúmenes de datos
+#    → Consume RAM limitada
+#
+# 2. Datos que deben persistir
+#    → Se pierden en restart
+#
+# 3. Cuando el Pod ya tiene alto uso de memoria
+#    → Puede causar OOMKill
+#
+# =============================================================================
+# CÁLCULO DE MEMORIA CON tmpfs
+# =============================================================================
+#
+# Ejemplo de este Pod:
+#
+# resources.limits.memory: 256Mi
+# └─ Incluye:
+#    ├─ Memoria del proceso nginx: ~50Mi
+#    ├─ tmpfs volume: hasta 64Mi (sizeLimit)
+#    └─ Otros procesos: ~10Mi
+#    ────────────────────────────
+#    Total máximo: 124Mi de 256Mi disponibles
+#
+# Si tmpfs se llena completamente (64Mi) y nginx usa 200Mi:
+# 64Mi + 200Mi = 264Mi > 256Mi límite → OOMKilled
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Verificar que usa tmpfs:
+# kubectl exec -it emptydir-tmpfs -- df -h /tmp
+# Output: tmpfs           64M      0     64M   0% /tmp
+#
+# Verificar tipo de filesystem:
+# kubectl exec -it emptydir-tmpfs -- mount | grep /tmp
+# Output: tmpfs on /tmp type tmpfs (rw,...)
+#
+# Escribir datos al tmpfs:
+# kubectl exec -it emptydir-tmpfs -- sh -c 'echo "test data" > /tmp/testfile.txt'
+#
+# Ver uso de memoria del Pod (incluye tmpfs):
+# kubectl top pod emptydir-tmpfs
+#
+# Ver configuración del volumen:
+# kubectl get pod emptydir-tmpfs -o jsonpath='{.spec.volumes[0].emptyDir}'
+# Output: {"medium":"Memory","sizeLimit":"64Mi"}
+#
+# Describir Pod:
+# kubectl describe pod emptydir-tmpfs
+#
+# Limpiar:
+# kubectl delete -f pod.yaml
+#
+# =============================================================================
+# MONITOREO
+# =============================================================================
+#
+# Alerta ejemplo para tmpfs en Prometheus:
+#
+# - alert: TmpfsHighUsage
+#   expr: |
+#     (kubelet_volume_stats_used_bytes{volume_name="tmpfs-volume"} / 
+#      kubelet_volume_stats_capacity_bytes{volume_name="tmpfs-volume"}) > 0.8
+#   for: 5m
+#   annotations:
+#     summary: "tmpfs volume >80% full in {{ $labels.pod }}"
+#
+# ⚠️ Recuerda: tmpfs TAMBIÉN consume del límite de memoria

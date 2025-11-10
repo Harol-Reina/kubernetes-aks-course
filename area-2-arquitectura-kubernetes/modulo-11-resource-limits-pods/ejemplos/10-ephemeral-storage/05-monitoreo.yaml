@@ -1,0 +1,249 @@
+# =============================================================================
+# Monitoreo de Ephemeral Storage
+# =============================================================================
+#
+# Pod con dos contenedores:
+# 1. Monitor: Reporta uso de storage cada 30 segundos
+# 2. Writer: Escribe archivos gradualmente para observar crecimiento
+#
+# Útil para:
+# - Entender cómo crece el uso de storage
+# - Validar que los límites funcionan correctamente
+# - Troubleshooting de problemas de storage
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-monitor
+  labels:
+    example: ephemeral-storage
+    type: monitoring
+spec:
+  containers:
+  # ============================================
+  # Monitor Container
+  # ============================================
+  - name: monitor
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Ephemeral Storage Monitor ==="
+        while true; do
+          echo ""
+          echo "$(date): Storage usage report"
+          echo "--------------------------------"
+          df -h /cache
+          echo ""
+          echo "Cache directory contents:"
+          du -sh /cache/* 2>/dev/null || echo "No files yet"
+          echo ""
+          echo "Detailed listing:"
+          ls -lh /cache/ 2>/dev/null || echo "Empty"
+          echo "--------------------------------"
+          sleep 30
+        done
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+        ephemeral-storage: "10Mi"  # Solo para monitoring
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+        ephemeral-storage: "10Mi"
+  
+  # ============================================
+  # Writer Container
+  # ============================================
+  - name: writer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Writing files to cache..."
+        for i in $(seq 1 1000); do
+          # Escribe archivos de 1MB cada uno
+          dd if=/dev/zero of=/cache/file-$i.dat bs=1M count=1 2>/dev/null
+          echo "Written file $i (total: ${i}MB)"
+          sleep 2
+        done
+        echo "Finished writing 1000 files (1GB total)"
+        sleep infinity
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      requests:
+        ephemeral-storage: "500Mi"
+      limits:
+        ephemeral-storage: "1Gi"  # Writer puede usar hasta 1GB
+  
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: "500Mi"  # Límite del volumen
+
+# =============================================================================
+# ⚠️ COMPORTAMIENTO ESPERADO
+# =============================================================================
+#
+# Este Pod INTENCIONALMENTE excederá el sizeLimit del volumen
+#
+# Timeline esperado:
+#
+# 0-250s:  Escribiendo files 1-250 (250MB)
+#          ✅ Monitor muestra crecimiento gradual
+#          ✅ Todo OK
+#
+# 250-500s: Escribiendo files 251-500 (500MB)
+#           ✅ Alcanza sizeLimit del volumen
+#           ⚠️ Posible error de escritura en writer
+#
+# 500s+:    Intenta escribir file 501+
+#           ❌ Excede sizeLimit (500Mi)
+#           ❌ Pod puede ser EVICTED
+#           ❌ O writer muestra error "no space left on device"
+#
+# =============================================================================
+# MONITOREO EN TIEMPO REAL
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver logs del monitor (en una terminal):
+# kubectl logs -f ephemeral-monitor -c monitor
+#
+# Output esperado cada 30s:
+# --------------------------------
+# Fri Jan 10 10:00:00 UTC 2025: Storage usage report
+# --------------------------------
+# Filesystem           Size      Used Available Use% Mounted on
+# overlay              500M       50M      450M  10% /cache
+#
+# Cache directory contents:
+# 50M     /cache/file-1.dat
+# 50M     /cache/file-2.dat
+# ...
+# --------------------------------
+#
+#
+# Ver logs del writer (en otra terminal):
+# kubectl logs -f ephemeral-monitor -c writer
+#
+# Output esperado:
+# Written file 1 (total: 1MB)
+# Written file 2 (total: 2MB)
+# ...
+# Written file 500 (total: 500MB)
+# dd: error writing '/cache/file-501.dat': No space left on device
+#
+#
+# Ver estado del Pod:
+# watch kubectl get pod ephemeral-monitor
+#
+# Si excede límites → Estado cambia a Evicted:
+# NAME                 READY   STATUS    RESTARTS   AGE
+# ephemeral-monitor    2/2     Running   0          5m
+# ↓
+# ephemeral-monitor    0/2     Evicted   0          6m
+#
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+#
+# Ver eventos de eviction:
+# kubectl get events --field-selector involvedObject.name=ephemeral-monitor
+#
+# Buscar mensaje:
+# Type     Reason   Message
+# Warning  Evicted  Pod ephemeral local storage usage exceeds the total limit of containers
+#
+#
+# Describir Pod evicted:
+# kubectl describe pod ephemeral-monitor
+#
+# Ver:
+# Status:  Failed
+# Reason:  Evicted
+# Message: Pod ephemeral local storage usage exceeds the total limit of containers 1Gi
+#
+#
+# Ver uso exacto antes de eviction:
+# kubectl exec -it ephemeral-monitor -c monitor -- df -h /cache
+#
+# =============================================================================
+# EXPERIMENTOS
+# =============================================================================
+#
+# Experimento 1: Aumentar sizeLimit
+# ----------------------------------
+# Edita el YAML:
+# sizeLimit: "1Gi"  # Era 500Mi
+#
+# Reaplicar:
+# kubectl delete pod ephemeral-monitor
+# kubectl apply -f pod.yaml
+#
+# Resultado: Writer puede escribir hasta 1000 archivos (1GB)
+#
+#
+# Experimento 2: Aumentar ephemeral-storage limit del writer
+# -----------------------------------------------------------
+# Edita el YAML:
+# resources:
+#   limits:
+#     ephemeral-storage: "2Gi"  # Era 1Gi
+#
+# Resultado: Writer puede usar más storage total
+#
+#
+# Experimento 3: Escribir más rápido
+# -----------------------------------
+# Cambia sleep 2 → sleep 0.5 en writer
+#
+# Resultado: Llega al límite más rápido (observar en monitor)
+#
+# =============================================================================
+# MÉTRICAS Y ALERTAS
+# =============================================================================
+#
+# Métricas Prometheus relevantes:
+#
+# # Uso del volumen
+# kubelet_volume_stats_used_bytes{volume_name="cache"}
+#
+# # Capacidad del volumen
+# kubelet_volume_stats_capacity_bytes{volume_name="cache"}
+#
+# # Porcentaje de uso
+# (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100
+#
+#
+# Query ejemplo en Prometheus:
+# kubelet_volume_stats_used_bytes{pod="ephemeral-monitor"} / 1024 / 1024
+# → Muestra uso en MB
+#
+#
+# Alerta ejemplo:
+# - alert: VolumeNearlyFull
+#   expr: |
+#     (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.9
+#   for: 2m
+#   annotations:
+#     summary: "Volume {{ $labels.volume_name }} >90% full"
+#
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+#
+# kubectl delete -f pod.yaml

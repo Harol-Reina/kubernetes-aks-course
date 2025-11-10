@@ -1,0 +1,81 @@
+# =============================================================================
+# Ejemplo 05: Solo Limits (sin Requests)
+# =============================================================================
+#
+# Si especificas limits pero NO requests:
+# - Kubernetes COPIA automáticamente el limit al request
+# - Equivale a: requests.cpu=500m, requests.memory=256Mi
+# - QoS Class: Guaranteed (porque request == limit)
+#
+# ⚠️ Puede resultar en over-provisioning (reserva más de lo necesario)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: limit-only
+  labels:
+    app: demo
+    example: limit-only
+  annotations:
+    note: "Kubernetes copia limits a requests automáticamente"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      # ❌ Sin requests definidos explícitamente
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    # Kubernetes internamente asigna automáticamente:
+    # requests.cpu = "500m"  (copiado del limit)
+    # requests.memory = "256Mi"  (copiado del limit)
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# COMPORTAMIENTO AUTOMÁTICO
+# =============================================================================
+#
+# Kubernetes aplica esta regla automáticamente:
+#   IF limits defined AND requests NOT defined:
+#     requests = limits
+#
+# Resultado:
+#   requests.cpu    = 500m  (copiado de limits)
+#   requests.memory = 256Mi (copiado de limits)
+#   limits.cpu      = 500m
+#   limits.memory   = 256Mi
+#
+# QoS Class = Guaranteed (porque request == limit)
+#
+# Problema (Over-provisioning):
+#   - Reservas 500m CPU pero tal vez solo usas 50m
+#   - Desperdicias recursos del cluster
+#   - El scheduler no puede colocar más Pods en el nodo
+#
+# Best Practice:
+#   ✅ Definir requests y limits explícitamente
+#   ✅ requests < limits (permite bursting)
+#   ✅ Usar VPA para ajustar automáticamente
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver QoS Class:
+# kubectl get pod limit-only -o jsonpath='{.status.qosClass}'
+# Output: Guaranteed
+#
+# Ver que requests == limits:
+# kubectl describe pod limit-only | grep -A 10 "Requests:"
+#
+# Verificar auto-copy:
+# kubectl get pod limit-only -o yaml | grep -A 10 "resources:"
+#
+# Limpiar:
+# kubectl delete -f pod.yaml

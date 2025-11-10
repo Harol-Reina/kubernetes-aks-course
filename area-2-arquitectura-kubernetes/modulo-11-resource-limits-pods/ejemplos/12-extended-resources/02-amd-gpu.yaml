@@ -1,0 +1,261 @@
+# =============================================================================
+# Extended Resources: AMD GPU
+# =============================================================================
+#
+# Similar a NVIDIA, pero con AMD GPUs (ROCm platform).
+#
+# Diferencias clave:
+# - Resource name: amd.com/gpu
+# - Requiere AMD Device Plugin
+# - Imagen: rocm/* en lugar de nvidia/*
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-pod-amd
+  labels:
+    app: ml-training
+    example: extended-resources
+    type: gpu-amd
+spec:
+  containers:
+  - name: rocm-app
+    image: rocm/tensorflow:latest
+    
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        echo "=== AMD GPU Information ==="
+        rocm-smi
+        echo ""
+        echo "=== ROCm Version ==="
+        cat /opt/rocm/.info/version || echo "Version file not found"
+        echo ""
+        echo "=== GPU Devices ==="
+        ls -l /dev/kfd /dev/dri/render*
+        echo ""
+        echo "=== Python + TensorFlow Test ==="
+        python3 -c "
+        import tensorflow as tf
+        print('TensorFlow version:', tf.__version__)
+        print('GPU Available:', tf.config.list_physical_devices('GPU'))
+        "
+        echo ""
+        echo "Running for 1 hour..."
+        sleep 3600
+    
+    resources:
+      limits:
+        amd.com/gpu: 1  # ← Solicita 1 GPU AMD
+        cpu: "4"
+        memory: "8Gi"
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+
+# =============================================================================
+# SETUP REQUERIDO
+# =============================================================================
+#
+# 1. Instalar AMD Device Plugin
+# ------------------------------
+# kubectl apply -f https://raw.githubusercontent.com/RadeonOpenCompute/k8s-device-plugin/v1.25.2.10/k8s-ds-amdgpu-dp.yaml
+#
+# Este plugin:
+# - Detecta GPUs AMD en nodos
+# - Anuncia amd.com/gpu en node capacity
+# - Asigna GPUs a Pods
+#
+#
+# 2. Verificar nodos con AMD GPUs
+# --------------------------------
+# kubectl get nodes -o json | jq '.items[] | {name: .metadata.name, amd_gpus: .status.capacity["amd.com/gpu"]}'
+#
+# Output esperado:
+# {
+#   "name": "amd-gpu-node",
+#   "amd_gpus": "2"
+# }
+#
+#
+# 3. Node Labels (opcional pero recomendado)
+# -------------------------------------------
+# kubectl label node <amd-node> gpu-type=amd
+#
+# Luego usa nodeSelector en el Pod:
+# spec:
+#   nodeSelector:
+#     gpu-type: amd
+#
+# =============================================================================
+# DIFERENCIAS: NVIDIA vs AMD
+# =============================================================================
+#
+# ┌────────────────────┬─────────────────┬─────────────────┐
+# │ Característica     │ NVIDIA          │ AMD             │
+# ├────────────────────┼─────────────────┼─────────────────┤
+# │ Resource name      │ nvidia.com/gpu  │ amd.com/gpu     │
+# │ Platform           │ CUDA            │ ROCm            │
+# │ Device Plugin      │ nvidia/k8s-...  │ RadeonOpen...   │
+# │ Base image         │ nvidia/cuda     │ rocm/...        │
+# │ SMI tool           │ nvidia-smi      │ rocm-smi        │
+# │ Devices            │ /dev/nvidia*    │ /dev/kfd, /dev  │
+# │                    │                 │ /dri/render*    │
+# └────────────────────┴─────────────────┴─────────────────┘
+#
+# =============================================================================
+# TESTING
+# =============================================================================
+#
+# ⚠️ Requiere nodo con AMD GPUs y AMD Device Plugin
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver estado:
+# kubectl get pod gpu-pod-amd
+#
+# Ver logs:
+# kubectl logs -f gpu-pod-amd
+#
+# Output esperado:
+# === AMD GPU Information ===
+# ========================= ROCm System Management Interface =========================
+# GPU  Temp   AvgPwr  SCLK     MCLK     Fan   Perf  PwrCap  VRAM%  GPU%
+# 0    45.0c  30.0W   1630Mhz  167Mhz   15%   auto  180.0W    0%     0%
+# ====================================================================================
+#
+#
+# Exec para ver GPU info:
+# kubectl exec -it gpu-pod-amd -- rocm-smi
+#
+# Ver devices montados:
+# kubectl exec -it gpu-pod-amd -- ls -l /dev/kfd /dev/dri/
+#
+# =============================================================================
+# CASOS DE USO AMD GPU
+# =============================================================================
+#
+# ✅ Machine Learning con ROCm:
+# - TensorFlow-ROCm
+# - PyTorch-ROCm
+# - ONNX Runtime
+#
+# ✅ HPC (High Performance Computing):
+# - OpenCL workloads
+# - Scientific simulations
+#
+# ✅ Video Processing:
+# - FFmpeg with ROCm acceleration
+# - Video transcoding
+#
+# ✅ 3D Rendering:
+# - Blender con ROCm
+# - ProRender
+#
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+#
+# Problema: Pod Pending "Insufficient amd.com/gpu"
+# -------------------------------------------------
+# Verificar:
+# 1. AMD Device Plugin running:
+#    kubectl get ds -n kube-system | grep amd
+#
+# 2. Nodos con AMD GPUs:
+#    kubectl describe node <node> | grep amd.com/gpu
+#
+# 3. GPUs disponibles:
+#    kubectl get nodes -o json | jq '.items[] | select(.status.capacity["amd.com/gpu"] != null)'
+#
+#
+# Problema: rocm-smi not found
+# ----------------------------
+# Causa: Imagen no tiene ROCm tools
+#
+# Solución:
+# - Usa imagen rocm/*: rocm/tensorflow, rocm/pytorch
+# - O instala ROCm en tu imagen personalizada
+#
+#
+# Problema: No access to /dev/kfd
+# --------------------------------
+# Causa: Device Plugin no monta correctamente
+#
+# Verificar:
+# kubectl exec -it gpu-pod-amd -- ls -l /dev/kfd
+#
+# Si no existe:
+# - Revisar logs del Device Plugin
+# - Verificar permisos en el nodo
+#
+# =============================================================================
+# COMPARACIÓN DE RENDIMIENTO
+# =============================================================================
+#
+# NVIDIA vs AMD para ML:
+#
+# NVIDIA (CUDA):
+# ✅ Mejor soporte de frameworks (TensorFlow, PyTorch)
+# ✅ Ecosystem más maduro
+# ✅ Más ejemplos y documentación
+# ❌ Más caro
+# ❌ Vendor lock-in
+#
+# AMD (ROCm):
+# ✅ Mejor precio/rendimiento
+# ✅ Open source
+# ✅ Buen rendimiento en HPC
+# ❌ Soporte de frameworks en desarrollo
+# ❌ Menos ejemplos disponibles
+#
+# =============================================================================
+# MULTI-VENDOR SETUP
+# =============================================================================
+#
+# Si tienes NVIDIA + AMD en el cluster:
+#
+# 1. Label nodes por tipo de GPU:
+#    kubectl label node nvidia-node gpu-type=nvidia
+#    kubectl label node amd-node gpu-type=amd
+#
+# 2. Usa nodeSelector en Pods:
+#    
+#    # Pod para NVIDIA
+#    spec:
+#      nodeSelector:
+#        gpu-type: nvidia
+#      resources:
+#        limits:
+#          nvidia.com/gpu: 1
+#    
+#    # Pod para AMD
+#    spec:
+#      nodeSelector:
+#        gpu-type: amd
+#      resources:
+#        limits:
+#          amd.com/gpu: 1
+#
+# 3. O usa node affinity:
+#    spec:
+#      affinity:
+#        nodeAffinity:
+#          requiredDuringSchedulingIgnoredDuringExecution:
+#            nodeSelectorTerms:
+#            - matchExpressions:
+#              - key: gpu-type
+#                operator: In
+#                values:
+#                - amd
+#
+# =============================================================================
+# LIMPIEZA
+# =============================================================================
+#
+# kubectl delete -f pod.yaml
+#
+# Verificar GPU liberada:
+# kubectl describe node <amd-node> | grep "amd.com/gpu"

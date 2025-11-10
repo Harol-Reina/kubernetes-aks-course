@@ -1,0 +1,74 @@
+# =============================================================================
+# Ejemplo 04: Solo Requests (sin Limits)
+# =============================================================================
+#
+# Si especificas requests pero NO limits:
+# - El contenedor tiene recursos GARANTIZADOS (requests)
+# - Puede usar TODOS los recursos disponibles del nodo (peligroso)
+# - QoS Class: Burstable
+#
+# ⚠️ NO recomendado para producción
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: request-only
+  labels:
+    app: demo
+    example: request-only
+  annotations:
+    warning: "Sin limits - puede consumir todos los recursos del nodo"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+      # ⚠️ Sin limits - puede usar toda la CPU/memoria disponible
+    ports:
+    - containerPort: 80
+
+# =============================================================================
+# COMPORTAMIENTO
+# =============================================================================
+#
+# El scheduler garantiza que el nodo tiene al menos:
+#   - 250m CPU disponibles
+#   - 128Mi memory disponibles
+#
+# Pero el Pod puede usar:
+#   - TODA la CPU disponible del nodo (si está idle)
+#   - TODA la memoria disponible del nodo
+#
+# Riesgos:
+#   - ❌ Puede causar starvation de otros Pods
+#   - ❌ Puede hacer que el nodo se quede sin recursos
+#   - ❌ No hay protección contra memory leaks
+#
+# Casos de uso válidos:
+#   - ✅ Batch jobs que necesitan procesar rápido
+#   - ✅ Development/testing environments
+#   - ✅ Cuando tienes control total del cluster
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# Aplicar:
+# kubectl apply -f pod.yaml
+#
+# Ver QoS Class:
+# kubectl get pod request-only -o jsonpath='{.status.qosClass}'
+# Output: Burstable
+#
+# Ver límites (vacíos):
+# kubectl describe pod request-only | grep -A 10 "Limits:"
+#
+# Monitorear uso (puede exceder requests):
+# kubectl top pod request-only
+#
+# Limpiar:
+# kubectl delete -f pod.yaml
