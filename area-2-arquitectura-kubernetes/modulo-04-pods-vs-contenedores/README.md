@@ -868,6 +868,8 @@ kubectl port-forward pod/app-with-proxy 8080:10000
 
 📚 **Guía completa:** Ver [`ejemplos/03-multi-container/README.md`](./ejemplos/03-multi-container/README.md)
 
+🧪 **Laboratorio práctico:** [`laboratorios/lab-03-sidecar-real-world.md`](./laboratorios/lab-03-sidecar-real-world.md) - Implementación real con Flask + Fluent Bit
+
 #### **🚀 Casos de Uso Comunes del Patrón Sidecar:**
 
 - **📊 Logging:** Fluentd, Logstash, Filebeat - Centralizar logs sin modificar la app
@@ -1335,24 +1337,63 @@ Todos los ejemplos YAML están disponibles en la carpeta `ejemplos/` organizados
 
 ### **🚀 Ejemplos Disponibles:**
 
-1. **[01-evolucion/](./ejemplos/01-evolucion/)** - Evolución LXC → Docker → Kubernetes
+#### **1. [01-evolucion/](./ejemplos/01-evolucion/)** - Evolución LXC → Docker → Kubernetes
    - `evolution-pod.yaml` - Demo de networking compartido
 
-2. **[02-namespaces/](./ejemplos/02-namespaces/)** - Exploración de namespace sharing
-   - `namespace-pod.yaml` - Análisis de Network, PID, IPC, UTS namespaces
+#### **2. [02-namespaces/](./ejemplos/02-namespaces/)** - Exploración detallada de los 7 namespaces
+   - `01-network-namespace.yaml` - 🌐 Network namespace compartido
+   - `02-pid-namespace.yaml` - 🔄 PID namespace (con/sin shareProcessNamespace)
+   - `03-ipc-namespace.yaml` - 💬 IPC namespace (shared memory, semaphores)
+   - `04-uts-namespace.yaml` - 🏷️ UTS namespace (hostname compartido)
+   - `05-mount-namespace.yaml` - 📁 Mount namespace (filesystem independiente)
+   - `06-user-namespace.yaml` - 👤 User namespace (UIDs/GIDs diferentes)
+   - `07-cgroup-namespace.yaml` - ⚙️ Cgroup namespace (recursos independientes)
+   - `namespace-pod.yaml` - Demo general (legacy)
 
-3. **[03-multi-container/](./ejemplos/03-multi-container/)** - Patrones multi-contenedor
-   - `sidecar-pod.yaml` - Aplicación web + Log processor sidecar
+#### **3. [03-multi-container/](./ejemplos/03-multi-container/)** - Patrones multi-contenedor
+   **Sidecar Pattern:**
+   - `01-sidecar-logging.yaml` - Fluent Bit para procesamiento de logs
+   - `02-sidecar-monitoring.yaml` - Prometheus exporter para métricas
+   - `03-sidecar-service-mesh.yaml` - Envoy proxy para service mesh
+   
+   **Multi-container avanzado:**
+   - `web-api-pod.yaml` - Comunicación localhost entre contenedores
+   - `tightly-coupled-pod.yaml` - Pod fuertemente acoplado (edge case)
+   - `advanced-realtime-processing.yaml` - Procesamiento en tiempo real
+   - `sidecar-pod.yaml` - Demo básica (legacy)
 
-4. **[04-init-containers/](./ejemplos/04-init-containers/)** - Init containers
-   - `postgres-pod.yaml` - Database para la demo
-   - `init-pod.yaml` - App con 3 init containers (wait-db, migrations, config)
+#### **4. [04-init-containers/](./ejemplos/04-init-containers/)** - Init containers
+   - `01-init-db-migration.yaml` - Migraciones SQL antes de iniciar
+   - `02-init-wait-for-deps.yaml` - Esperar múltiples dependencias
+   - `03-init-config-setup.yaml` - Generar configs, descargar assets
+   - `init-pod.yaml` - Demo básica (legacy)
+   - `postgres-pod.yaml` - Database para testing
 
-5. **[05-migracion-compose/](./ejemplos/05-migracion-compose/)** - Migración Docker Compose
-   - `docker-compose.yml` - Configuración original
-   - `web-deployment.yaml` - Frontend Nginx
-   - `api-deployment.yaml` - Backend Node.js
-   - `db-deployment.yaml` - Database PostgreSQL
+#### **5. [05-ambassador/](./ejemplos/05-ambassador/)** - Patrón Ambassador
+   - `01-ambassador-db-pool.yaml` - PgBouncer para connection pooling
+   - `02-ambassador-loadbalancer.yaml` - HAProxy para load balancing
+   - `03-ambassador-ssl.yaml` - Nginx para SSL/TLS termination
+
+#### **6. [05-migracion-compose/](./ejemplos/05-migracion-compose/)** - Migración Docker Compose
+   **Original:**
+   - `docker-compose.yml` - Configuración Docker Compose original
+   
+   **Kubernetes (Deployments):**
+   - `web-deployment.yaml` - Frontend Nginx con réplicas
+   - `api-deployment.yaml` - Backend Node.js con réplicas
+   - `db-deployment.yaml` - Database PostgreSQL con PVC
+   
+   **Kubernetes (Pods - para comparación):**
+   - `k8s/web-pod.yaml` - Web Pod con ConfigMap
+   - `k8s/api-pod.yaml` - API Pod con Service
+   - `k8s/db-pod.yaml` - DB Pod con PVC + Secret
+
+#### **7. [09-antipatrones/](./ejemplos/09-antipatrones/)** - Antipatrones y soluciones
+   - `01-fat-pods.yaml` - ❌ Fat Pods → ✅ Separación de responsabilidades
+   - `02-singleton-services.yaml` - ❌ Pod único → ✅ Deployment con réplicas
+   - `03-volume-abuse.yaml` - ❌ Filesystem para comunicación → ✅ HTTP/gRPC
+
+**Total: 40 archivos YAML** organizados en 7 carpetas temáticas
 
 ### **🎯 Inicio Rápido:**
 
@@ -1361,23 +1402,34 @@ Todos los ejemplos YAML están disponibles en la carpeta `ejemplos/` organizados
 kubectl apply -f ejemplos/01-evolucion/evolution-pod.yaml
 kubectl exec evolution-demo -c web -- wget -qO- http://localhost:8080
 
-# 2. Analizar namespace sharing
-kubectl apply -f ejemplos/02-namespaces/namespace-pod.yaml
-kubectl exec namespace-demo -c container1 -- ip addr
-kubectl exec namespace-demo -c container2 -- ps aux
+# 2. Analizar los 7 tipos de namespaces
+kubectl apply -f ejemplos/02-namespaces/01-network-namespace.yaml
+kubectl apply -f ejemplos/02-namespaces/02-pid-namespace.yaml
+kubectl apply -f ejemplos/02-namespaces/03-ipc-namespace.yaml
+# Ver README completo: ejemplos/02-namespaces/README.md
 
-# 3. Probar patrón sidecar
-kubectl apply -f ejemplos/03-multi-container/sidecar-pod.yaml
-kubectl logs webapp-sidecar -c log-processor -f
+# 3. Probar patrón sidecar (logging)
+kubectl apply -f ejemplos/03-multi-container/01-sidecar-logging.yaml
+kubectl logs web-with-logging -c log-processor -f
 
-# 4. Ver init containers en acción
-kubectl apply -f ejemplos/04-init-containers/postgres-pod.yaml
-kubectl apply -f ejemplos/04-init-containers/init-pod.yaml
-kubectl get pods app-with-init --watch
+# 4. Probar patrón sidecar (monitoring)
+kubectl apply -f ejemplos/03-multi-container/02-sidecar-monitoring.yaml
+kubectl port-forward pod/app-with-monitoring 9113:9113
+curl localhost:9113/metrics
 
-# 5. Migrar de Docker Compose
-kubectl apply -f ejemplos/05-migracion-compose/
-kubectl get all
+# 5. Ver init containers en acción
+kubectl apply -f ejemplos/04-init-containers/01-init-db-migration.yaml
+kubectl get pods -w  # Ver progreso de init containers
+kubectl logs <pod> -c wait-for-db
+kubectl logs <pod> -c database-migration
+
+# 6. Probar patrón Ambassador (DB pooling)
+kubectl apply -f ejemplos/05-ambassador/01-ambassador-db-pool.yaml
+kubectl logs app-with-pooling -c db-ambassador
+
+# 7. Estudiar antipatrones y soluciones
+kubectl apply -f ejemplos/09-antipatrones/01-fat-pods.yaml
+# Ver: ejemplos/09-antipatrones/README.md
 ```
 
 ### **📖 Documentación de Ejemplos:**
