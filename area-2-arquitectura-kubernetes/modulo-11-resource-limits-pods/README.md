@@ -17,9 +17,8 @@
 13. [Monitoreo de Recursos](#monitoreo-de-recursos)
 14. [Best Practices](#best-practices)
 15. [Troubleshooting](#troubleshooting)
-16. [Ejemplos Prácticos](#ejemplos-prácticos)
-17. [Laboratorios](#laboratorios)
-18. [Referencias](#referencias)
+16. [Laboratorios](#laboratorios)
+17. [Referencias](#referencias)
 
 ---
 
@@ -126,6 +125,8 @@ resources:
 - ✅ Si el nodo tiene recursos libres, el contenedor puede usar 2 CPU y 2 GB si lo necesita
 - ✅ En contención de CPU, este contenedor recibe al menos su share proporcional
 
+📄 **Ejemplo completo**: Ver [`ejemplos/04-solo-requests/pod.yaml`](./ejemplos/04-solo-requests/pod.yaml) para un Pod con solo requests definidos
+
 ### Limits (Límites)
 
 **Definición**: Cantidad **máxima** de recursos que un contenedor puede usar.
@@ -173,7 +174,11 @@ resources:
 - ✅ CPU: Si intenta usar más de 1 core → **throttling** (se frena)
 - ❌ Memory: Si intenta usar más de 512Mi → **OOMKilled** (se termina)
 
+📄 **Ejemplo completo**: Ver [`ejemplos/05-solo-limits/pod.yaml`](./ejemplos/05-solo-limits/pod.yaml) para un Pod con solo limits definidos
+
 ### Combinaciones Request + Limit
+
+📄 **Ejemplo básico completo**: [`ejemplos/01-requests-limits-basico/pod.yaml`](./ejemplos/01-requests-limits-basico/pod.yaml)
 
 #### 1. Solo Request (sin limit)
 
@@ -190,6 +195,8 @@ resources:
 - ⚠️ Puede usar TODA la CPU/memoria disponible del nodo (peligroso)
 - ⚠️ QoS Class: **BestEffort** o **Burstable**
 
+📄 **Ver ejemplo**: [`ejemplos/04-solo-requests/pod.yaml`](./ejemplos/04-solo-requests/pod.yaml)
+
 #### 2. Solo Limit (sin request)
 
 ```yaml
@@ -204,6 +211,8 @@ resources:
 - 🔄 Kubernetes **copia automáticamente** el limit al request
 - Equivale a: `requests.cpu = "1"`, `requests.memory = "512Mi"`
 - ⚠️ Puede resultar en over-provisioning (reserva más de lo necesario)
+
+📄 **Ver ejemplo**: [`ejemplos/05-solo-limits/pod.yaml`](./ejemplos/05-solo-limits/pod.yaml)
 
 #### 3. Request = Limit (recomendado para producción crítica)
 
@@ -223,6 +232,9 @@ resources:
 - ✅ Última en ser evicted en caso de presión de recursos
 - ✅ Ideal para bases de datos, aplicaciones críticas
 
+📄 **Ver ejemplos**:
+- QoS Guaranteed: [`ejemplos/07-qos-guaranteed/pod.yaml`](./ejemplos/07-qos-guaranteed/pod.yaml)
+
 #### 4. Request < Limit (común en desarrollo/staging)
 
 ```yaml
@@ -240,6 +252,18 @@ resources:
 - ✅ QoS Class: **Burstable**
 - ✅ Flexible para picos de carga
 - ⚠️ Puede sufrir throttling/OOMKill si excede límites
+
+📄 **Ver ejemplos**:
+- Burstable flexible: [`ejemplos/08-qos-burstable/flexible.yaml`](./ejemplos/08-qos-burstable/flexible.yaml)
+- Burstable mixed: [`ejemplos/08-qos-burstable/mixed.yaml`](./ejemplos/08-qos-burstable/mixed.yaml)
+
+### Multi-Container y Init Containers
+
+Para Pods con múltiples contenedores o init containers, los recursos se gestionan de forma especial.
+
+📄 **Ver ejemplos**:
+- Multi-container: [`ejemplos/02-multi-container/pod.yaml`](./ejemplos/02-multi-container/pod.yaml)
+- Init containers: [`ejemplos/03-init-containers/pod.yaml`](./ejemplos/03-init-containers/pod.yaml)
 
 ---
 
@@ -260,9 +284,31 @@ Kubernetes soporta varios tipos de recursos que se pueden gestionar:
 
 - **Unidad base**: Bytes
 - **Sufijos soportados**:
-  - Decimal: `E`, `P`, `T`, `G`, `M`, `k`
-  - Binario (potencia de 2): `Ei`, `Pi`, `Ti`, `Gi`, `Mi`, `Ki`
-- **Ejemplos**: `128974848`, `129M`, `123Mi`
+
+| Tipo | Sufijo | Nombre | Valor | Equivalente en bytes |
+|------|--------|--------|-------|---------------------|
+| **Decimal (Base 10)** | | | | |
+| | `k` | kilobyte | 10³ | 1,000 bytes |
+| | `M` | megabyte | 10⁶ | 1,000,000 bytes |
+| | `G` | gigabyte | 10⁹ | 1,000,000,000 bytes |
+| | `T` | terabyte | 10¹² | 1,000,000,000,000 bytes |
+| | `P` | petabyte | 10¹⁵ | 1,000,000,000,000,000 bytes |
+| | `E` | exabyte | 10¹⁸ | 1,000,000,000,000,000,000 bytes |
+| **Binario (Base 2)** | | | | |
+| | `Ki` | kibibyte | 2¹⁰ | 1,024 bytes |
+| | `Mi` | mebibyte | 2²⁰ | 1,048,576 bytes |
+| | `Gi` | gibibyte | 2³⁰ | 1,073,741,824 bytes |
+| | `Ti` | tebibyte | 2⁴⁰ | 1,099,511,627,776 bytes |
+| | `Pi` | pebibyte | 2⁵⁰ | 1,125,899,906,842,624 bytes |
+| | `Ei` | exbibyte | 2⁶⁰ | 1,152,921,504,606,846,976 bytes |
+
+**Diferencia clave**: 
+- `1 GB` (decimal) = 1,000,000,000 bytes
+- `1 GiB` (binario) = 1,073,741,824 bytes (~7.4% más)
+
+**⚠️ Importante**: Para memoria, siempre usa sufijos binarios (`Mi`, `Gi`) ya que la memoria se maneja en potencias de 2.
+
+- **Ejemplos**: `128974848`, `129M`, `123Mi`, `1Gi`
 
 ### 2. Ephemeral Storage (Almacenamiento Efímero)
 
@@ -380,14 +426,27 @@ cpu: "1500m"  # ✅ Válido (= 1.5 CPU)
 
 #### Sufijos soportados
 
-| Sufijo | Tipo | Base | Ejemplo | Bytes |
-|--------|------|------|---------|-------|
-| `k` | Decimal | 10³ | `1000k` | 1,000,000 |
-| `M` | Decimal | 10⁶ | `500M` | 500,000,000 |
-| `G` | Decimal | 10⁹ | `2G` | 2,000,000,000 |
-| `Ki` | Binario | 2¹⁰ | `1000Ki` | 1,024,000 |
-| `Mi` | Binario | 2²⁰ | `500Mi` | 524,288,000 |
-| `Gi` | Binario | 2³⁰ | `2Gi` | 2,147,483,648 |
+| Sufijo | Tipo | Potencia | Nombre | Ejemplo | Bytes Reales |
+|--------|------|----------|--------|---------|--------------|
+| **Decimal (Base 10)** | | | | | |
+| `k` | Decimal | 10³ | kilobyte | `1000k` | 1,000,000 |
+| `M` | Decimal | 10⁶ | megabyte | `500M` | 500,000,000 |
+| `G` | Decimal | 10⁹ | gigabyte | `2G` | 2,000,000,000 |
+| `T` | Decimal | 10¹² | terabyte | `1T` | 1,000,000,000,000 |
+| **Binario (Base 2)** | | | | | |
+| `Ki` | Binario | 2¹⁰ | kibibyte | `1000Ki` | 1,024,000 |
+| `Mi` | Binario | 2²⁰ | mebibyte | `500Mi` | 524,288,000 |
+| `Gi` | Binario | 2³⁰ | gibibyte | `2Gi` | 2,147,483,648 |
+| `Ti` | Binario | 2⁴⁰ | tebibyte | `1Ti` | 1,099,511,627,776 |
+
+**Comparación práctica**:
+```
+1 MB  = 1,000,000 bytes        (decimal)
+1 MiB = 1,048,576 bytes        (binario, +4.8% más)
+
+1 GB  = 1,000,000,000 bytes    (decimal)
+1 GiB = 1,073,741,824 bytes    (binario, +7.4% más)
+```
 
 #### Valores equivalentes:
 
@@ -481,6 +540,8 @@ spec:
 - 💰 **Costo**: Puede resultar en over-provisioning
 - 🎯 **Uso**: Bases de datos, aplicaciones críticas, stateful sets
 
+📄 **Ver ejemplo completo**: [`ejemplos/07-qos-guaranteed/pod.yaml`](./ejemplos/07-qos-guaranteed/pod.yaml)
+
 ### 2. Burstable (Flexible)
 
 **Condiciones**:
@@ -536,6 +597,11 @@ spec:
 - Pods que exceden más su request se evicted primero
 - Cálculo: `(current_usage - request) / request`
 
+📄 **Ver ejemplos completos**:
+- Flexible (request < limit): [`ejemplos/08-qos-burstable/flexible.yaml`](./ejemplos/08-qos-burstable/flexible.yaml)
+- Solo requests: [`ejemplos/08-qos-burstable/request-only.yaml`](./ejemplos/08-qos-burstable/request-only.yaml)
+- Configuración mixta: [`ejemplos/08-qos-burstable/mixed.yaml`](./ejemplos/08-qos-burstable/mixed.yaml)
+
 ### 3. BestEffort (Mejor Esfuerzo)
 
 **Condiciones**:
@@ -561,6 +627,10 @@ spec:
 - 🎲 **Sin garantías**: Puede usar recursos disponibles, pero sin protección
 - 💸 **Bajo costo**: No reserva recursos
 - 🎯 **Uso**: Batch jobs no críticos, tareas de limpieza, desarrollo/testing
+
+📄 **Ver ejemplos completos**:
+- Pod BestEffort: [`ejemplos/09-qos-besteffort/pod.yaml`](./ejemplos/09-qos-besteffort/pod.yaml)
+- Deployment BestEffort: [`ejemplos/09-qos-besteffort/deployment.yaml`](./ejemplos/09-qos-besteffort/deployment.yaml)
 
 ### Tabla Comparativa QoS
 
@@ -862,6 +932,11 @@ Si la suma de límites de contenedores excede el límite del Pod → ❌ Error d
 ⚠️ **Beta feature** (puede cambiar en futuras versiones)  
 ⚠️ Requiere K8s 1.34+ con feature gate habilitado
 
+📄 **Ver ejemplos completos**:
+- Pod-level básico: [`ejemplos/11-pod-level-resources/01-pod-level-basico.yaml`](./ejemplos/11-pod-level-resources/01-pod-level-basico.yaml)
+- Pod-level híbrido: [`ejemplos/11-pod-level-resources/02-pod-level-hibrido.yaml`](./ejemplos/11-pod-level-resources/02-pod-level-hibrido.yaml)
+- Deployment multi-sidecar: [`ejemplos/11-pod-level-resources/03-deployment-multi-sidecar.yaml`](./ejemplos/11-pod-level-resources/03-deployment-multi-sidecar.yaml)
+
 ---
 
 ## Ephemeral Storage
@@ -874,6 +949,8 @@ Almacenamiento **local temporal** en el nodo, sin garantía de durabilidad a lar
 1. Volúmenes `emptyDir` (excepto tmpfs)
 2. Logs de contenedor a nivel de nodo (`/var/log`)
 3. Writable container layers (imágenes de contenedor)
+
+📄 **Ejemplo básico**: [`ejemplos/06-ephemeral-storage-basico/pod.yaml`](./ejemplos/06-ephemeral-storage-basico/pod.yaml)
 
 ### Configuración
 
@@ -953,6 +1030,15 @@ volumes:
     sizeLimit: "500Mi"  # ✅ Límite explícito
 ```
 
+📄 **Ver ejemplos completos de Ephemeral Storage**:
+- EmptyDir con sizeLimit: [`ejemplos/10-ephemeral-storage/01-emptydir-con-sizelimit.yaml`](./ejemplos/10-ephemeral-storage/01-emptydir-con-sizelimit.yaml)
+- EmptyDir sin sizeLimit (peligroso): [`ejemplos/10-ephemeral-storage/02-emptydir-sin-sizelimit-peligroso.yaml`](./ejemplos/10-ephemeral-storage/02-emptydir-sin-sizelimit-peligroso.yaml)
+- Tmpfs (memory-backed): [`ejemplos/10-ephemeral-storage/03-tmpfs-memory-backed.yaml`](./ejemplos/10-ephemeral-storage/03-tmpfs-memory-backed.yaml)
+- Múltiples emptyDir: [`ejemplos/10-ephemeral-storage/04-multiples-emptydir.yaml`](./ejemplos/10-ephemeral-storage/04-multiples-emptydir.yaml)
+- Monitoreo de uso: [`ejemplos/10-ephemeral-storage/05-monitoreo.yaml`](./ejemplos/10-ephemeral-storage/05-monitoreo.yaml)
+- Demo de eviction: [`ejemplos/10-ephemeral-storage/06-eviction-demo.yaml`](./ejemplos/10-ephemeral-storage/06-eviction-demo.yaml)
+- Deployment best practices: [`ejemplos/10-ephemeral-storage/07-deployment-best-practices.yaml`](./ejemplos/10-ephemeral-storage/07-deployment-best-practices.yaml)
+
 #### 3. Múltiples emptyDir pueden agotar memoria
 
 ```yaml
@@ -1029,6 +1115,11 @@ resources:
 1. ✅ Solo **cantidades enteras** (no `0.5`, `1.5m`)
 2. ✅ Request == Limit (deben ser iguales si ambos existen)
 3. ✅ **No se puede overcommit**
+
+📄 **Ver ejemplos completos de Extended Resources**:
+- NVIDIA GPU: [`ejemplos/12-extended-resources/01-nvidia-gpu.yaml`](./ejemplos/12-extended-resources/01-nvidia-gpu.yaml)
+- AMD GPU: [`ejemplos/12-extended-resources/02-amd-gpu.yaml`](./ejemplos/12-extended-resources/02-amd-gpu.yaml)
+- Custom resources: [`ejemplos/12-extended-resources/03-custom-resources.yaml`](./ejemplos/12-extended-resources/03-custom-resources.yaml)
 
 ### Anunciar Extended Resources (node-level)
 
@@ -1805,6 +1896,12 @@ env:
 
 **4. Usar memory profiling** en desarrollo
 
+📄 **Ver ejemplos de troubleshooting OOMKilled**:
+- Memory stress test: [`ejemplos/13-troubleshooting-oom/01-oomkilled-demo.yaml`](./ejemplos/13-troubleshooting-oom/01-oomkilled-demo.yaml)
+- Gradual memory leak: [`ejemplos/13-troubleshooting-oom/02-gradual-leak.yaml`](./ejemplos/13-troubleshooting-oom/02-gradual-leak.yaml)
+
+🧪 **Laboratorio**: Ver [Lab 02: Troubleshooting](./laboratorios/lab-02-troubleshooting.md#parte-1-oomkilled) para práctica guiada
+
 ### Problema 3: CPU Throttling - Alta Latencia
 
 #### Síntoma
@@ -1878,6 +1975,13 @@ spec:
         type: Utilization
         averageUtilization: 70
 ```
+
+📄 **Ver ejemplos de troubleshooting CPU Throttling**:
+- CPU stress test: [`ejemplos/14-troubleshooting-cpu/01-cpu-stress.yaml`](./ejemplos/14-troubleshooting-cpu/01-cpu-stress.yaml)
+- CPU monitoring y comparación: [`ejemplos/14-troubleshooting-cpu/02-cpu-comparison.yaml`](./ejemplos/14-troubleshooting-cpu/02-cpu-comparison.yaml)
+- Deployment con HPA: [`ejemplos/14-troubleshooting-cpu/03-deployment-con-hpa.yaml`](./ejemplos/14-troubleshooting-cpu/03-deployment-con-hpa.yaml)
+
+🧪 **Laboratorio**: Ver [Lab 02: Troubleshooting](./laboratorios/lab-02-troubleshooting.md#parte-2-cpu-throttling) para práctica guiada
 
 ### Problema 4: Ephemeral Storage - Pod Evicted
 
@@ -2024,77 +2128,12 @@ spec:
 | Evicted | - | Ephemeral storage | Definir sizeLimit, aumentar limite |
 | Forbidden | - | ResourceQuota | Reducir requests o aumentar quota |
 
+📄 **Catálogo completo de ejemplos**: Ver [ejemplos/README.md](./ejemplos/README.md) para 29 ejemplos organizados por categoría
+
 ---
 
-## Ejemplos Prácticos
-
-Ver la carpeta [`ejemplos/`](./ejemplos/) para ejemplos completos y organizados. Consulta el [README de ejemplos](./ejemplos/README.md) para una guía detallada.
-
-### Fundamentos
-
-1. **[Requests y Limits Básico](./ejemplos/01-requests-limits-basico/pod.yaml)**
-   - Configuración simple de CPU y memoria
-   - Ejemplo base para aprendizaje
-
-2. **[Multi-Container con Resources](./ejemplos/02-multi-container/pod.yaml)**
-   - Múltiples contenedores con diferentes límites
-   - Gestión independiente de recursos
-
-3. **[Init Containers](./ejemplos/03-init-containers/pod.yaml)**
-   - Resources para init containers
-   - Impacto en scheduling
-
-4. **[Solo Requests](./ejemplos/04-solo-requests/pod.yaml)**
-   - Definir solo requests sin limits
-   - Comportamiento de QoS Burstable
-
-5. **[Solo Limits](./ejemplos/05-solo-limits/pod.yaml)**
-   - Definir solo limits (requests = limits)
-   - Comportamiento implícito
-
-### QoS Classes
-
-6. **[QoS Guaranteed](./ejemplos/07-qos-guaranteed/pod.yaml)**
-   - Requests = Limits
-   - Máxima prioridad de eviction
-
-7. **[QoS Burstable](./ejemplos/08-qos-burstable/)**
-   - [Flexible](./ejemplos/08-qos-burstable/flexible.yaml): Requests < Limits
-   - [Solo Requests](./ejemplos/08-qos-burstable/request-only.yaml): Sin limits
-   - [Mixed](./ejemplos/08-qos-burstable/mixed.yaml): Combinaciones
-
-8. **[QoS BestEffort](./ejemplos/09-qos-besteffort/)**
-   - [Pod sin recursos](./ejemplos/09-qos-besteffort/pod.yaml): Sin requests ni limits
-   - [Deployment](./ejemplos/09-qos-besteffort/deployment.yaml): Aplicación práctica
-
-### Ephemeral Storage
-
-9. **[Ephemeral Storage](./ejemplos/10-ephemeral-storage/)**
-   - Gestión de almacenamiento efímero
-   - 7 ejemplos desde básico hasta avanzado
-
-### Features Avanzados
-
-10. **[Pod-level Resources](./ejemplos/11-pod-level-resources/)**
-    - Feature beta K8s 1.34+
-    - Presupuesto total del Pod
-    - 3 ejemplos de configuración
-
-11. **[Extended Resources](./ejemplos/12-extended-resources/)**
-    - GPU y recursos personalizados
-    - Device plugins
-    - 3 ejemplos prácticos
-
-### Troubleshooting
-
-12. **[OOMKilled](./ejemplos/13-troubleshooting-oom/)**
-    - [Memory stress](./ejemplos/13-troubleshooting-oom/01-memory-stress.yaml): Simulación OOM
-    - [Leak detection](./ejemplos/13-troubleshooting-oom/02-memory-leak.yaml): Detectar leaks
-
-13. **[CPU Throttling](./ejemplos/14-troubleshooting-cpu/)**
-    - [CPU stress](./ejemplos/14-troubleshooting-cpu/01-cpu-stress.yaml): Detectar throttling
-    - [Monitoring](./ejemplos/14-troubleshooting-cpu/02-cpu-monitoring.yaml): Observar métricas
-    - [Tuning](./ejemplos/14-troubleshooting-cpu/03-cpu-tuning.yaml): Optimizar límites
+## Laboratorios
+📄 **Catálogo completo de ejemplos**: Ver [ejemplos/README.md](./ejemplos/README.md) para 29 ejemplos organizados por categoría
 
 ---
 
