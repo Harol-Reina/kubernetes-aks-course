@@ -19,6 +19,8 @@ Al completar este módulo serás capaz de:
 
 ## � 1. La Evolución de los Contenedores
 
+🧪 **Laboratorio práctico**: [`laboratorios/lab-01-evolucion.md`](./laboratorios/lab-01-evolucion.md) - Demuestra la evolución con ejemplos ejecutables
+
 ### **� Línea de Tiempo: LXC → Docker → Kubernetes**
 
 ```
@@ -136,7 +138,13 @@ Cada contenedor normalmente tiene su **propio conjunto de namespaces**, lo que l
 
 En Kubernetes, **todos los contenedores dentro del mismo Pod comparten automáticamente**:
 
+📂 **Ver ejemplos prácticos completos**: [`ejemplos/02-namespaces/`](./ejemplos/02-namespaces/)  
+🧪 **Laboratorio práctico**: [`laboratorios/lab-02-namespace-sharing.md`](./laboratorios/lab-02-namespace-sharing.md) - Explora todos los 7 tipos de namespaces
+
 #### **1. 🌐 Network Namespace (net) - COMPARTIDO**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/01-network-namespace.yaml`](./ejemplos/02-namespaces/01-network-namespace.yaml)
+
 ```bash
 # Todos los contenedores del Pod comparten:
 # - Misma IP del Pod
@@ -164,6 +172,9 @@ kubectl exec my-pod -c container2 -- ip addr show eth0
 ---
 
 #### **2. 💬 IPC Namespace (ipc) - COMPARTIDO**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/03-ipc-namespace.yaml`](./ejemplos/02-namespaces/03-ipc-namespace.yaml)
+
 ```bash
 # Inter-Process Communication: Los contenedores pueden comunicarse mediante:
 # - POSIX Shared Memory (/dev/shm)
@@ -200,6 +211,9 @@ kubectl exec my-pod -c reader -- cat /dev/shm/data.txt
 ---
 
 #### **3. 🏷️ UTS Namespace (uts) - COMPARTIDO**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/04-uts-namespace.yaml`](./ejemplos/02-namespaces/04-uts-namespace.yaml)
+
 ```bash
 # Unix Timesharing System: Comparten hostname y dominio
 
@@ -223,6 +237,9 @@ kubectl exec my-pod -c container1 -- uname -n
 ### **⚙️ Namespaces Opcionales o Parcialmente Compartidos**
 
 #### **4. 🔄 PID Namespace (pid) - OPCIONAL**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/02-pid-namespace.yaml`](./ejemplos/02-namespaces/02-pid-namespace.yaml)
+
 ```bash
 # Por defecto: NO compartido
 # Se puede habilitar con: shareProcessNamespace: true
@@ -273,6 +290,9 @@ kubectl exec shared-pid-demo -c debug -- ps aux
 ---
 
 #### **5. 📁 Mount Namespace (mnt) - NO COMPARTIDO (pero pueden compartir volúmenes)**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/05-mount-namespace.yaml`](./ejemplos/02-namespaces/05-mount-namespace.yaml)
+
 ```yaml
 # Cada contenedor tiene su PROPIO filesystem raíz
 # PERO pueden montar los MISMOS volúmenes
@@ -309,6 +329,9 @@ spec:
 ### **🚫 Namespaces NO Compartidos**
 
 #### **6. 👤 User Namespace (user) - NO COMPARTIDO**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/06-user-namespace.yaml`](./ejemplos/02-namespaces/06-user-namespace.yaml)
+
 ```bash
 # Cada contenedor puede tener diferentes UIDs/GIDs
 # Útil para seguridad (root en container != root en host)
@@ -327,6 +350,9 @@ kubectl exec my-pod -c container2 -- id
 ---
 
 #### **7. ⚙️ Cgroup Namespace - NO COMPARTIDO (Control de Recursos)**
+
+📄 **Ejemplo práctico**: [`ejemplos/02-namespaces/07-cgroup-namespace.yaml`](./ejemplos/02-namespaces/07-cgroup-namespace.yaml)
+
 ```yaml
 # Cada contenedor tiene control INDEPENDIENTE de recursos
 containers:
@@ -869,6 +895,8 @@ kubectl port-forward pod/app-with-proxy 8080:10000
 
 ### **🚀 Patrón 2: Init Container**
 
+🧪 **Laboratorio práctico**: [`laboratorios/lab-04-init-migration.md`](./laboratorios/lab-04-init-migration.md) - Migración de Docker setup a Init Containers
+
 #### **📖 ¿Qué es un Init Container?**
 
 > **Init Container** = Contenedor que **se ejecuta y completa ANTES** de que los contenedores principales inicien.
@@ -1094,6 +1122,8 @@ curl -k https://localhost:8443
 ---
 
 ## 🛠️ 5. Migración: Docker Compose → Kubernetes
+
+🧪 **Laboratorio práctico**: [`laboratorios/lab-05-compose-migration.md`](./laboratorios/lab-05-compose-migration.md) - Migración paso a paso completa
 
 ### **🐳 Docker Compose Original:**
 
