@@ -24,7 +24,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | grep APP_ && sleep 3600"]
     env:
     - name: APP_NAME
@@ -78,7 +78,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | grep POD_ && sleep 3600"]
     env:
     - name: POD_NAME
@@ -143,7 +143,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | grep -E '(CPU|MEM)' && sleep 3600"]
     
     resources:
@@ -217,7 +217,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: busybox:1.36
+        image: busybox
         command: 
         - sh
         - -c
@@ -283,7 +283,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | sort && sleep 3600"]
     
     resources:

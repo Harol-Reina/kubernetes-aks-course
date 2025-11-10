@@ -73,7 +73,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27-alpine
+    image: nginx:alpine
     env:
     - name: DATABASE_HOST
       value: "db.example.com"
@@ -155,7 +155,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env && sleep 3600"]
     env:
     # Metadata
@@ -379,7 +379,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env && sleep 3600"]
     env:
     - name: DATABASE_HOST
@@ -410,7 +410,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | sort && sleep 3600"]
     envFrom:
     - configMapRef:
@@ -434,7 +434,7 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.27-alpine
+    image: nginx:alpine
     volumeMounts:
     - name: config
       mountPath: /etc/nginx/nginx.conf
@@ -1113,7 +1113,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: node:20-alpine
+        image: node:alpine
         ports:
         - containerPort: 3000
         

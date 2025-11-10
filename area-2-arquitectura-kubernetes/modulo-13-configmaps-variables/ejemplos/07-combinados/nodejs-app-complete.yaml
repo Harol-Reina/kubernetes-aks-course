@@ -64,7 +64,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: node:20-alpine
+        image: node:alpine
         ports:
         - containerPort: 3000
           name: http

@@ -24,7 +24,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27-alpine
+    image: nginx:alpine
     envFrom:
     - configMapRef:
         name: missing-config  # ❌ No existe
@@ -59,7 +59,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27-alpine
+    image: nginx:alpine
     envFrom:
     - configMapRef:
         name: missing-config
@@ -86,7 +86,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sleep", "3600"]
     env:
     - name: APP_PORT
@@ -145,7 +145,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "while true; do echo Version: \$APP_VERSION; sleep 5; done"]
     env:
     - name: APP_VERSION
@@ -199,12 +199,11 @@ metadata:
   name: nginx-subpath
 spec:
   containers:
-  - name: nginx
-    image: nginx:1.27-alpine
+  - name: web
+    image: nginx:alpine
     volumeMounts:
     - name: config
-      mountPath: /etc/nginx/nginx.conf
-      subPath: nginx.conf  # ❌ subPath impide auto-update
+      mountPath: /etc/nginx/conf.d
   volumes:
   - name: config
     configMap:
@@ -264,7 +263,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | sort && sleep 3600"]
     envFrom:
     - configMapRef:
@@ -343,7 +342,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env && sleep 3600"]
     
     envFrom:
@@ -378,7 +377,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env && sleep 3600"]
     
     envFrom:

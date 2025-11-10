@@ -6,7 +6,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "ls -la /etc/config && cat /etc/config/* && sleep 3600"]
     
     volumeMounts:

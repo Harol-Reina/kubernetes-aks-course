@@ -6,7 +6,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "echo '=== Variables desde ConfigMap ===' && env | sort && sleep 3600"]
     
     # Importar TODAS las claves del ConfigMap como variables

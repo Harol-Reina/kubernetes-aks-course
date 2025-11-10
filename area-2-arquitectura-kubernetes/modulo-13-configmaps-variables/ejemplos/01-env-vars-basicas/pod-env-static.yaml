@@ -9,7 +9,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.27-alpine
+    image: nginx:alpine
     
     # Variables de entorno estáticas
     env:

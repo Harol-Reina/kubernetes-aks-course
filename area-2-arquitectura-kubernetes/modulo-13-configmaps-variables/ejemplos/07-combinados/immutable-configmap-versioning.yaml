@@ -47,7 +47,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: busybox:1.36
+        image: busybox
         command: ["sh", "-c", "env | grep feature && sleep 3600"]
         
         envFrom:

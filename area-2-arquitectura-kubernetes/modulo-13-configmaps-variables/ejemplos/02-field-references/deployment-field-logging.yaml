@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: nginx:1.27-alpine
+        image: nginx:alpine
         
         env:
         # Variables para structured logging

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: nginx:1.27-alpine
+        image: nginx:alpine
         
         # Importar variables desde MÚLTIPLES ConfigMaps
         envFrom:

@@ -93,7 +93,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | grep DB_ && sleep 3600"]
     env:
     - name: DB_HOST
@@ -129,7 +129,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: busybox:1.36
+    image: busybox
     command: ["sh", "-c", "env | sort && sleep 3600"]
     envFrom:
     - configMapRef:
@@ -163,7 +163,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.27-alpine
+        image: nginx:alpine
         ports:
         - containerPort: 8080
         
@@ -249,7 +249,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: busybox:1.36
+        image: busybox
         command: ["sh", "-c", "env | grep -E '(DB_|APP_)' && sleep 3600"]
         
         # Variables desde ConfigMap
@@ -347,7 +347,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: nginx:1.27-alpine
+        image: nginx:alpine
         
         # Variables desde ConfigMap
         envFrom:
