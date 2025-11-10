@@ -1,0 +1,142 @@
+# Ejemplo de aplicación Node.js con Express
+# Muestra implementación realista de probes con endpoints dedicados
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-api
+  labels:
+    app: nodejs
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nodejs
+  template:
+    metadata:
+      labels:
+        app: nodejs
+    spec:
+      containers:
+      - name: api
+        image: node:20-alpine
+        workingDir: /app
+        command:
+        - sh
+        - -c
+        - |
+          cat > server.js <<'EOF'
+          const express = require('express');
+          const app = express();
+          
+          let isStarted = false;
+          let isReady = false;
+          
+          // Simula inicialización (cargar datos, conectar BD, etc.)
+          setTimeout(() => {
+            console.log('App initialized');
+            isStarted = true;
+            isReady = true;
+          }, 10000);  // 10 segundos de inicialización
+          
+          // Endpoint de startup
+          app.get('/startup', (req, res) => {
+            if (isStarted) {
+              res.status(200).send('Started');
+            } else {
+              res.status(503).send('Starting...');
+            }
+          });
+          
+          // Endpoint de health (liveness)
+          app.get('/health', (req, res) => {
+            res.status(200).send('OK');
+          });
+          
+          // Endpoint de readiness
+          app.get('/ready', (req, res) => {
+            if (isReady) {
+              res.status(200).send('Ready');
+            } else {
+              res.status(503).send('Not Ready');
+            }
+          });
+          
+          // API endpoint
+          app.get('/api/data', (req, res) => {
+            res.json({ message: 'Hello from Node.js API!' });
+          });
+          
+          app.listen(3000, () => {
+            console.log('Server started on port 3000');
+          });
+          EOF
+          npm init -y
+          npm install express
+          node server.js
+        ports:
+        - name: http
+          containerPort: 3000
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        
+        # Startup Probe
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          failureThreshold: 12    # 12 × 5s = 60s
+        
+        # Liveness Probe
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        
+        # Readiness Probe
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-api
+spec:
+  selector:
+    app: nodejs
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: http
+
+---
+# Para probar:
+# kubectl apply -f nodejs-express-probes.yaml
+# kubectl get pods -l app=nodejs -w
+# kubectl logs -f deployment/nodejs-api
+#
+# Probar los endpoints:
+# kubectl port-forward deployment/nodejs-api 3000:3000
+# curl http://localhost:3000/startup
+# curl http://localhost:3000/health
+# curl http://localhost:3000/ready
+# curl http://localhost:3000/api/data

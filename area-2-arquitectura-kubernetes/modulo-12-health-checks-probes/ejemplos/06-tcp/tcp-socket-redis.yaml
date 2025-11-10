@@ -1,0 +1,53 @@
+# TCP Socket Probe para Redis
+# Verifica que Redis esté escuchando en el puerto
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis-tcp
+  labels:
+    app: redis
+spec:
+  containers:
+  - name: redis
+    image: redis:7-alpine
+    ports:
+    - name: redis
+      containerPort: 6379
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    
+    # Liveness: Verifica que Redis responda en el puerto
+    livenessProbe:
+      tcpSocket:
+        port: redis
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+    
+    # Readiness: También por TCP
+    readinessProbe:
+      tcpSocket:
+        port: redis
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+
+---
+# TCP Probe es ideal para:
+# - Bases de datos (MySQL, PostgreSQL, MongoDB, Redis)
+# - Servidores TCP que no tienen endpoint HTTP
+# - Servicios donde solo importa que el puerto esté abierto
+#
+# Para probar:
+# kubectl apply -f tcp-socket-redis.yaml
+# kubectl exec redis-tcp -- redis-cli ping
+# kubectl exec redis-tcp -- redis-cli set mykey myvalue
+# kubectl exec redis-tcp -- redis-cli get mykey

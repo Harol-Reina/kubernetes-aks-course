@@ -1,0 +1,41 @@
+# Readiness Probe con TCP Socket
+# Usado típicamente para servicios que no tienen endpoint HTTP
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: goproxy
+  labels:
+    app: goproxy
+spec:
+  containers:
+  - name: goproxy
+    image: registry.k8s.io/goproxy:0.1
+    ports:
+    - name: proxy-port
+      containerPort: 8080
+    
+    # Readiness Probe: Verifica que el puerto TCP esté abierto
+    readinessProbe:
+      tcpSocket:
+        port: proxy-port
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      successThreshold: 1
+      failureThreshold: 3
+    
+    # Liveness Probe: Verifica que el proceso siga vivo
+    livenessProbe:
+      tcpSocket:
+        port: proxy-port
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      failureThreshold: 3
+
+---
+# Este ejemplo muestra Liveness y Readiness juntas con TCP
+#
+# Para probar:
+# kubectl apply -f readiness-tcp-socket.yaml
+# kubectl get pods goproxy
+# kubectl describe pod goproxy

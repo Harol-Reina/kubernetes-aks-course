@@ -1,0 +1,100 @@
+# Probes combinadas: Startup + Liveness + Readiness
+# Patrón recomendado para aplicaciones en producción
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-production
+  labels:
+    app: webapp
+    env: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.27-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        
+        # 1. Startup Probe: Permite arranque lento (hasta 5 min)
+        startupProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          failureThreshold: 30    # 30 × 10s = 300s
+          timeoutSeconds: 3
+        
+        # 2. Liveness Probe: Detecta deadlocks (se activa después de Startup)
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3     # Tolerante a fallos temporales
+          timeoutSeconds: 5
+        
+        # 3. Readiness Probe: Controla tráfico (se activa después de Startup)
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1     # Rápido para marcar Ready
+          failureThreshold: 3     # Tolerante
+          timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+spec:
+  selector:
+    app: webapp
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: http
+  type: ClusterIP
+
+---
+# Este es el patrón RECOMENDADO para producción:
+#
+# 1. Startup Probe:
+#    - Da tiempo para arrancar sin reinicios prematuros
+#    - Bloquea Liveness/Readiness hasta tener éxito
+#
+# 2. Liveness Probe:
+#    - Detecta deadlocks y aplicaciones colgadas
+#    - Configuración tolerante para evitar cascading failures
+#
+# 3. Readiness Probe:
+#    - Controla cuándo el Pod recibe tráfico del Service
+#    - Más frecuente y sensible que Liveness
+#
+# Para probar:
+# kubectl apply -f probes-completas.yaml
+# kubectl get pods -l app=webapp -w
+# kubectl get endpoints webapp-service
+# kubectl describe deployment webapp-production

@@ -1,0 +1,65 @@
+# TCP Socket Probe para MySQL
+# Base de datos MySQL con verificación de puerto
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-tcp
+  labels:
+    app: mysql
+spec:
+  containers:
+  - name: mysql
+    image: mysql:8.0
+    env:
+    - name: MYSQL_ROOT_PASSWORD
+      value: "rootpassword"
+    - name: MYSQL_DATABASE
+      value: "myapp"
+    ports:
+    - name: mysql
+      containerPort: 3306
+    
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    
+    # Startup: MySQL puede tardar en inicializar
+    startupProbe:
+      tcpSocket:
+        port: mysql
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      failureThreshold: 30    # 30 × 5s = 150s
+    
+    # Liveness: Verifica que MySQL siga vivo
+    livenessProbe:
+      tcpSocket:
+        port: mysql
+      periodSeconds: 10
+      failureThreshold: 3
+    
+    # Readiness: Verifica que esté listo para conexiones
+    readinessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - mysqladmin ping -h 127.0.0.1 -u root -p$MYSQL_ROOT_PASSWORD
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+
+---
+# Nota: Combinamos TCP y exec probes
+# - TCP para liveness (simple y rápido)
+# - exec para readiness (verificación más completa)
+#
+# Para probar:
+# kubectl apply -f tcp-socket-mysql.yaml
+# kubectl logs mysql-tcp -f
+# kubectl exec mysql-tcp -- mysql -uroot -prootpassword -e "SHOW DATABASES;"

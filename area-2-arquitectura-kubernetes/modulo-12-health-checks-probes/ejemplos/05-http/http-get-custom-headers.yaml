@@ -1,0 +1,43 @@
+# HTTP Probe con custom headers
+# Útil para APIs que requieren autenticación o headers específicos
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: http-custom-headers
+  labels:
+    app: api
+spec:
+  containers:
+  - name: api
+    image: nginx:1.27-alpine
+    ports:
+    - name: http
+      containerPort: 80
+    
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http
+        scheme: HTTP              # HTTP o HTTPS
+        httpHeaders:
+        - name: X-Custom-Header
+          value: MyCustomValue
+        - name: Authorization
+          value: Bearer token123
+        - name: Accept
+          value: application/json
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+
+---
+# Los headers se envían con cada probe request
+# Útil para:
+# - APIs con autenticación
+# - Balanceadores que requieren headers específicos
+# - Versioning de API
+#
+# Para probar:
+# kubectl apply -f http-get-custom-headers.yaml
+# kubectl exec http-custom-headers -- sh -c 'apk add curl && curl -v http://localhost/health'

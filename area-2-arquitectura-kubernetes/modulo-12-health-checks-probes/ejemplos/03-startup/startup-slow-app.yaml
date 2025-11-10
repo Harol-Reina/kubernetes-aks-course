@@ -1,0 +1,51 @@
+# Startup Probe para aplicaciones de arranque lento
+# Permite hasta 5 minutos para que la aplicación inicie
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: startup-slow-app
+  labels:
+    app: legacy
+spec:
+  containers:
+  - name: slow-app
+    image: nginx:1.27-alpine
+    ports:
+    - name: http
+      containerPort: 80
+    
+    # Startup Probe: Desbloquea Liveness/Readiness después del arranque
+    startupProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 0
+      periodSeconds: 10       # Verifica cada 10 segundos
+      failureThreshold: 30    # 30 × 10s = 300s = 5 minutos máximo
+      timeoutSeconds: 3
+    
+    # Liveness: Se activa DESPUÉS de que Startup tenga éxito
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      periodSeconds: 10
+      failureThreshold: 3
+    
+    # Readiness: Se activa DESPUÉS de que Startup tenga éxito
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      periodSeconds: 5
+      failureThreshold: 2
+
+---
+# Tiempo máximo de arranque = failureThreshold × periodSeconds
+#                            = 30 × 10s = 300s (5 minutos)
+#
+# Para probar:
+# kubectl apply -f startup-slow-app.yaml
+# kubectl get pods startup-slow-app -w
+# kubectl describe pod startup-slow-app

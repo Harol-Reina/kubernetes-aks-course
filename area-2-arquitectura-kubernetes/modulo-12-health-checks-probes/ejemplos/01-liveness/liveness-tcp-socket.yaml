@@ -1,0 +1,36 @@
+# Liveness Probe con TCP Socket
+# Verifica que el puerto esté abierto y aceptando conexiones
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-tcp
+  labels:
+    app: tcp-server
+spec:
+  containers:
+  - name: server
+    image: nginx:1.27-alpine
+    ports:
+    - name: http
+      containerPort: 80
+    
+    # Liveness Probe: Intenta conectar al puerto TCP
+    livenessProbe:
+      tcpSocket:
+        port: http          # Verifica puerto 80
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+---
+# Este ejemplo es simple: mientras nginx esté corriendo y escuchando
+# en el puerto 80, la probe pasará. Si nginx se detiene o el puerto
+# se cierra, la probe fallará y el contenedor se reiniciará.
+#
+# Para probar:
+# kubectl apply -f liveness-tcp-socket.yaml
+# kubectl get pods liveness-tcp
+# kubectl exec liveness-tcp -- pkill nginx  # Mata nginx manualmente
+# kubectl get pods liveness-tcp -w  # Observa el reinicio

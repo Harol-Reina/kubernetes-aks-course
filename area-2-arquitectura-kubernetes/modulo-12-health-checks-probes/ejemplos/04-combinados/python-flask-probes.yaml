@@ -1,0 +1,143 @@
+# Ejemplo de aplicación Python con Flask
+# Incluye verificación de base de datos PostgreSQL
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-flask-api
+  labels:
+    app: python-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: python-api
+  template:
+    metadata:
+      labels:
+        app: python-api
+    spec:
+      containers:
+      - name: api
+        image: python:3.12-alpine
+        workingDir: /app
+        command:
+        - sh
+        - -c
+        - |
+          cat > app.py <<'EOF'
+          from flask import Flask, jsonify
+          import time
+          import os
+          
+          app = Flask(__name__)
+          
+          # Simula tiempo de arranque
+          startup_time = time.time()
+          is_ready = False
+          
+          @app.route('/startup')
+          def startup():
+              # Espera 15 segundos para estar "started"
+              if time.time() - startup_time > 15:
+                  return jsonify({"status": "started"}), 200
+              else:
+                  return jsonify({"status": "starting"}), 503
+          
+          @app.route('/health')
+          def health():
+              return jsonify({"status": "healthy"}), 200
+          
+          @app.route('/ready')
+          def ready():
+              # En producción, verificaría conexión a BD aquí
+              # try:
+              #     conn = psycopg2.connect(...)
+              #     conn.close()
+              #     return 200
+              # except:
+              #     return 503
+              
+              if time.time() - startup_time > 15:
+                  return jsonify({"status": "ready"}), 200
+              else:
+                  return jsonify({"status": "not ready"}), 503
+          
+          @app.route('/api/users')
+          def users():
+              return jsonify({
+                  "users": [
+                      {"id": 1, "name": "Alice"},
+                      {"id": 2, "name": "Bob"}
+                  ]
+              }), 200
+          
+          if __name__ == '__main__':
+              app.run(host='0.0.0.0', port=5000)
+          EOF
+          pip install flask
+          python app.py
+        ports:
+        - name: http
+          containerPort: 5000
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        
+        # Startup Probe
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          failureThreshold: 20    # 20 × 5s = 100s
+        
+        # Liveness Probe
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        
+        # Readiness Probe
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-api
+spec:
+  selector:
+    app: python-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: http
+
+---
+# Para probar:
+# kubectl apply -f python-flask-probes.yaml
+# kubectl get pods -l app=python-api -w
+# kubectl logs -f deployment/python-flask-api
+#
+# Acceder a la API:
+# kubectl port-forward deployment/python-flask-api 5000:5000
+# curl http://localhost:5000/startup
+# curl http://localhost:5000/health
+# curl http://localhost:5000/ready
+# curl http://localhost:5000/api/users

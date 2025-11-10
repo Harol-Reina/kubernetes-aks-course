@@ -1,0 +1,42 @@
+# Liveness Probe con HTTP GET
+# Este ejemplo simula una aplicación que funciona bien los primeros 10 segundos
+# y luego empieza a devolver errores 500
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-http
+  labels:
+    test: liveness
+    app: demo
+spec:
+  containers:
+  - name: webapp
+    image: registry.k8s.io/e2e-test-images/agnhost:2.40
+    args:
+    - liveness  # Este comando inicia un servidor que simula fallos después de 10s
+    ports:
+    - name: http
+      containerPort: 8080
+    
+    # Liveness Probe: Verifica que la app responda correctamente por HTTP
+    livenessProbe:
+      httpGet:
+        path: /healthz          # Endpoint a verificar
+        port: http              # Usa el puerto nombrado
+        httpHeaders:
+        - name: Custom-Header
+          value: Awesome
+      initialDelaySeconds: 3    # Espera 3s después del arranque
+      periodSeconds: 3          # Verifica cada 3 segundos
+      timeoutSeconds: 1         # Timeout de 1 segundo
+      failureThreshold: 3       # 3 fallos consecutivos = reinicia contenedor
+
+---
+# Para probar:
+# kubectl apply -f liveness-http-deadlock.yaml
+# kubectl get pods -w
+# kubectl describe pod liveness-http
+#
+# Observarás que después de ~10 segundos el Pod empieza a fallar la probe
+# y Kubernetes lo reinicia automáticamente

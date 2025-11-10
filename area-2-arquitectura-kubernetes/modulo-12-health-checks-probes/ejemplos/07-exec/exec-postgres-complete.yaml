@@ -1,0 +1,85 @@
+# Exec Probe con PostgreSQL
+# Verificación completa de base de datos
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres-exec
+  labels:
+    app: postgres
+spec:
+  containers:
+  - name: postgres
+    image: postgres:16-alpine
+    env:
+    - name: POSTGRES_PASSWORD
+      value: "postgres123"
+    - name: POSTGRES_DB
+      value: "production_db"
+    ports:
+    - name: postgres
+      containerPort: 5432
+    
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    
+    # Startup: Permite inicialización completa
+    startupProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 60    # 60 × 5s = 300s = 5 min
+    
+    # Liveness: Verifica que PostgreSQL esté vivo
+    livenessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    
+    # Readiness: Verifica conexión y queries
+    readinessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - |
+          pg_isready -U postgres && \
+          psql -U postgres -d production_db -c 'SELECT 1' > /dev/null 2>&1
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+---
+# Este ejemplo muestra verificación completa de PostgreSQL:
+#
+# Startup Probe:
+# - pg_isready: Verifica que PostgreSQL esté escuchando
+#
+# Liveness Probe:
+# - pg_isready: Verifica que el proceso esté vivo
+#
+# Readiness Probe:
+# - pg_isready: Verifica conexión
+# - SELECT 1: Ejecuta query para verificar que puede procesar
+#
+# Para probar:
+# kubectl apply -f exec-postgres-complete.yaml
+# kubectl logs postgres-exec -f
+# kubectl exec postgres-exec -- psql -U postgres -d production_db -c '\l'
+# kubectl exec postgres-exec -- psql -U postgres -d production_db -c 'CREATE TABLE test (id INT);'

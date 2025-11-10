@@ -1,0 +1,39 @@
+# Readiness Probe con HTTP
+# Controla cuándo un Pod está listo para recibir tráfico del Service
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-http
+  labels:
+    app: backend
+spec:
+  containers:
+  - name: backend
+    image: nginx:1.27-alpine
+    ports:
+    - name: http
+      containerPort: 80
+    
+    # Readiness Probe: Verifica si el Pod puede recibir tráfico
+    readinessProbe:
+      httpGet:
+        path: /           # En producción sería /ready o /health
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1   # Un éxito = Listo
+      failureThreshold: 3   # 3 fallos = No listo (sin tráfico)
+      timeoutSeconds: 2
+
+---
+# La diferencia clave con Liveness:
+# - Liveness falla → Reinicia el contenedor
+# - Readiness falla → Quita del Service (sin reiniciar)
+#
+# Para probar con Service:
+# kubectl apply -f readiness-database-check.yaml
+# kubectl expose pod readiness-http --port=80 --type=ClusterIP
+# kubectl get endpoints readiness-http
+#
+# Si la readiness falla, no verás la IP del Pod en los endpoints

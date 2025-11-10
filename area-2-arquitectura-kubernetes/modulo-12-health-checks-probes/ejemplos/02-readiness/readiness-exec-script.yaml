@@ -1,0 +1,44 @@
+# Readiness Probe con exec
+# Ejecuta script personalizado para verificar dependencias
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-exec
+  labels:
+    app: api
+spec:
+  containers:
+  - name: api
+    image: alpine:3.19
+    command:
+    - sh
+    - -c
+    - |
+      # Simula una API que necesita cargar datos antes de estar lista
+      echo "Cargando datos..."
+      sleep 20
+      echo "ready" > /tmp/ready
+      echo "API lista!"
+      sleep 3600
+    
+    # Readiness Probe: Verifica que el archivo /tmp/ready exista
+    readinessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/ready
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      successThreshold: 1
+      failureThreshold: 3
+
+---
+# Comportamiento:
+# - Primeros 20s: Archivo no existe → Not Ready (sin tráfico)
+# - Después de 20s: Archivo creado → Ready (recibe tráfico)
+#
+# Para probar:
+# kubectl apply -f readiness-exec-script.yaml
+# kubectl get pods readiness-exec -w
+# kubectl describe pod readiness-exec | grep -A5 Readiness

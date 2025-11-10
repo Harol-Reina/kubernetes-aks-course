@@ -1,0 +1,92 @@
+# Exec Probe con script personalizado
+# Script que verifica múltiples condiciones
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: exec-custom-script
+  labels:
+    app: custom-app
+spec:
+  containers:
+  - name: app
+    image: alpine:3.19
+    command:
+    - sh
+    - -c
+    - |
+      # Script de la aplicación
+      cat > /app/health_check.sh <<'EOF'
+      #!/bin/sh
+      # Script de health check personalizado
+      
+      # 1. Verifica que el archivo de PID existe
+      if [ ! -f /tmp/app.pid ]; then
+        echo "ERROR: PID file not found"
+        exit 1
+      fi
+      
+      # 2. Verifica que el proceso está corriendo
+      if ! kill -0 $(cat /tmp/app.pid) 2>/dev/null; then
+        echo "ERROR: Process not running"
+        exit 1
+      fi
+      
+      # 3. Verifica espacio en disco
+      DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+      if [ $DISK_USAGE -gt 90 ]; then
+        echo "ERROR: Disk usage > 90%"
+        exit 1
+      fi
+      
+      # 4. Verifica memoria disponible
+      MEM_AVAILABLE=$(free | grep Mem | awk '{print int($7/$2 * 100)}')
+      if [ $MEM_AVAILABLE -lt 10 ]; then
+        echo "ERROR: Memory < 10%"
+        exit 1
+      fi
+      
+      echo "OK: All checks passed"
+      exit 0
+      EOF
+      chmod +x /app/health_check.sh
+      
+      # Simula la aplicación
+      echo $$ > /tmp/app.pid
+      echo "App started with PID $$"
+      sleep 3600
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+    
+    # Liveness con exec probe
+    livenessProbe:
+      exec:
+        command:
+        - /app/health_check.sh
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+---
+# Exec probe es ideal para:
+# - Verificaciones complejas que no se pueden hacer con HTTP/TCP
+# - Scripts personalizados de health check
+# - Aplicaciones legacy sin endpoint HTTP
+# - Verificación de múltiples condiciones
+#
+# ⚠️ PRECAUCIÓN:
+# - El comando debe ser rápido (< timeoutSeconds)
+# - Exit code 0 = success, otro = failure
+# - Consume más recursos que HTTP/TCP
+#
+# Para probar:
+# kubectl apply -f exec-custom-script.yaml
+# kubectl exec exec-custom-script -- /app/health_check.sh
+# kubectl logs exec-custom-script

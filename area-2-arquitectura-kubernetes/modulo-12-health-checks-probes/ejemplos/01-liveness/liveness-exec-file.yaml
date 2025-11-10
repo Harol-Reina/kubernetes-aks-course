@@ -1,0 +1,40 @@
+# Liveness Probe con comando exec
+# Este ejemplo verifica la existencia de un archivo como señal de salud
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-exec
+  labels:
+    test: liveness
+    app: demo
+spec:
+  containers:
+  - name: liveness
+    image: registry.k8s.io/busybox:1.36
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
+    
+    # Liveness Probe: Ejecuta un comando para verificar salud
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy      # Intenta leer el archivo
+      initialDelaySeconds: 5
+      periodSeconds: 5      # Verifica cada 5 segundos
+      timeoutSeconds: 1
+      failureThreshold: 3
+
+---
+# Comportamiento:
+# - Segundo 0-30: Archivo existe → Probe OK
+# - Segundo 30: Archivo eliminado
+# - Segundo 35-45: Probe falla 3 veces → Reinicia contenedor
+#
+# Para probar:
+# kubectl apply -f liveness-exec-file.yaml
+# kubectl get pods liveness-exec -w
+# kubectl describe pod liveness-exec

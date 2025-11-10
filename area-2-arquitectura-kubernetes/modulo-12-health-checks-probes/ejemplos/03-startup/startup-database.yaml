@@ -1,0 +1,66 @@
+# Startup Probe para base de datos
+# PostgreSQL puede tardar en estar listo
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres-startup
+  labels:
+    app: database
+spec:
+  containers:
+  - name: postgres
+    image: postgres:16-alpine
+    env:
+    - name: POSTGRES_PASSWORD
+      value: "mi_password_super_secreto"
+    - name: POSTGRES_DB
+      value: "mi_base_datos"
+    ports:
+    - name: postgres
+      containerPort: 5432
+    
+    # Startup Probe: Espera hasta que PostgreSQL esté inicializado
+    startupProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 60    # 60 × 5s = 300s = 5 minutos
+      timeoutSeconds: 3
+    
+    # Liveness: Verifica que PostgreSQL siga vivo
+    livenessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres
+      periodSeconds: 10
+      failureThreshold: 3
+    
+    # Readiness: Verifica que pueda aceptar conexiones
+    readinessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres && psql -U postgres -d mi_base_datos -c 'SELECT 1'
+      periodSeconds: 10
+      failureThreshold: 3
+
+---
+# PostgreSQL necesita:
+# 1. Inicializar el cluster de base de datos
+# 2. Cargar configuraciones
+# 3. Preparar para aceptar conexiones
+#
+# La Startup Probe permite este tiempo sin reiniciar el Pod
+#
+# Para probar:
+# kubectl apply -f startup-database.yaml
+# kubectl logs postgres-startup -f
+# kubectl exec postgres-startup -- psql -U postgres -c '\l'

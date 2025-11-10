@@ -1,0 +1,52 @@
+# gRPC Health Check Probe
+# Requiere Kubernetes 1.27+ (Stable) y gRPC Health Checking Protocol
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-grpc
+  labels:
+    app: etcd
+spec:
+  containers:
+  - name: etcd
+    image: registry.k8s.io/etcd:3.5.1-0
+    command:
+    - /usr/local/bin/etcd
+    - --data-dir=/var/lib/etcd
+    - --listen-client-urls=http://0.0.0.0:2379
+    - --advertise-client-urls=http://127.0.0.1:2379
+    - --log-level=debug
+    ports:
+    - name: grpc
+      containerPort: 2379
+    
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    
+    # gRPC Liveness Probe
+    livenessProbe:
+      grpc:
+        port: 2379
+        service: liveness     # Opcional: nombre del servicio gRPC
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+---
+# Nota sobre gRPC probes:
+# - No soporta nombres de puerto, solo números
+# - No soporta parámetros de autenticación
+# - La aplicación debe implementar gRPC Health Checking Protocol
+# - Disponible desde Kubernetes 1.23 (alpha) → 1.27 (stable)
+#
+# Para probar:
+# kubectl apply -f grpc-etcd-probe.yaml
+# kubectl logs etcd-grpc
+# kubectl exec etcd-grpc -- etcdctl endpoint health

@@ -1,0 +1,52 @@
+# Named Ports con HTTP Probes
+# Facilita mantenimiento y legibilidad
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-named-ports
+  labels:
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.27-alpine
+    ports:
+    - name: http-port       # ← Puerto nombrado
+      containerPort: 80
+    - name: metrics-port    # ← Puerto de métricas
+      containerPort: 9090
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+    
+    # Liveness usa el puerto por nombre
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http-port     # ← Usa el nombre en lugar del número
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    
+    # Readiness también usa nombre de puerto
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http-port
+      initialDelaySeconds: 5
+      periodSeconds: 5
+
+---
+# Ventajas de named ports:
+# ✅ Más legible
+# ✅ Fácil cambiar puerto sin tocar las probes
+# ✅ Auto-documentación
+#
+# Para probar:
+# kubectl apply -f named-ports.yaml
+# kubectl get pod nginx-named-ports -o yaml | grep -A10 ports
