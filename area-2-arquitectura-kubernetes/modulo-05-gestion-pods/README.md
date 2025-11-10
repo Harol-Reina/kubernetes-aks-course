@@ -29,7 +29,8 @@ Al completar este módulo serás capaz de:
 6. [Labels y Selectors](#-6-labels-y-selectors)
 7. [Limitaciones de los Pods](#-7-limitaciones-de-los-pods)
 8. [Mejores Prácticas](#-8-mejores-prácticas)
-9. [Recursos Adicionales](#-9-recursos-adicionales)
+9. [Ejemplos y Laboratorios Prácticos](#-ejemplos-y-laboratorios-prácticos)
+10. [Recursos Adicionales](#-9-recursos-adicionales)
 
 ---
 
@@ -138,19 +139,21 @@ mkdir -p ~/kubernetes/pods
 cd ~/kubernetes/pods
 ```
 
-**`pod-simple.yaml`**:
+📄 **Ver ejemplo completo**: [`ejemplos/basicos/pod-nginx.yaml`](./ejemplos/basicos/pod-nginx.yaml)
+
+**Contenido del archivo `pod-nginx.yaml`**:
 ```yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nginx-pod
+  name: nginx-simple
   labels:
     app: nginx
-    environment: development
+    example: "true"
 spec:
   containers:
   - name: nginx
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     ports:
     - containerPort: 80
 ```
@@ -159,16 +162,16 @@ spec:
 
 ```bash
 # Crear el Pod
-kubectl apply -f pod-simple.yaml
+kubectl apply -f ejemplos/basicos/pod-nginx.yaml
 
 # Verificar creación
 kubectl get pods
 
 # Ver YAML completo generado por Kubernetes
-kubectl get pod nginx-pod -o yaml
+kubectl get pod nginx-simple -o yaml
 
 # Ver solo la especificación
-kubectl get pod nginx-pod -o jsonpath='{.spec}' | jq
+kubectl get pod nginx-simple -o jsonpath='{.spec}' | jq
 ```
 
 #### **Anatomía del manifiesto Pod**
@@ -263,6 +266,14 @@ kubectl port-forward pod/python-server 8080:8080
 # En otra terminal, probar:
 curl http://localhost:8080
 ```
+
+---
+
+### **💡 Práctica Recomendada**
+
+🧪 **Laboratorio práctico**: [`laboratorios/lab-01-crear-pods.md`](./laboratorios/lab-01-crear-pods.md)
+
+Este laboratorio te guía paso a paso en la creación de Pods usando métodos imperativos y declarativos con ejercicios prácticos.
 
 ---
 
@@ -597,10 +608,16 @@ kubectl apply -f pod.yaml
 2. **Ambassador**: Proxy que simplifica comunicación con servicios externos
 3. **Adapter**: Normaliza y estandariza salida de logs/metrics
 
+📄 **Ver ejemplos completos**:
+- [`ejemplos/multi-contenedor/pod-dos-contenedores.yaml`](./ejemplos/multi-contenedor/pod-dos-contenedores.yaml) - Demo básica
+- [`ejemplos/patterns/sidecar-logging.yaml`](./ejemplos/patterns/sidecar-logging.yaml) - Patrón Sidecar
+- [`ejemplos/patterns/ambassador-proxy.yaml`](./ejemplos/patterns/ambassador-proxy.yaml) - Patrón Ambassador
+- [`ejemplos/patterns/adapter-logging.yaml`](./ejemplos/patterns/adapter-logging.yaml) - Patrón Adapter
+
 **Ejemplo: Pod con dos contenedores**
 
-**`pod-dos-contenedores.yaml`**:
 ```yaml
+# Archivo: ejemplos/multi-contenedor/pod-dos-contenedores.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -611,30 +628,20 @@ spec:
   containers:
   # Contenedor 1: Servidor web
   - name: nginx
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     ports:
     - containerPort: 80
-    command: ['sh', '-c']
-    args:
-    - |
-      echo "Contenedor 1: NGINX" > /usr/share/nginx/html/index.html
-      nginx -g 'daemon off;'
   
   # Contenedor 2: Servidor Python
   - name: python-server
-    image: python:3.11-alpine
+    image: python:alpine
     ports:
     - containerPort: 8080
-    command: ['sh', '-c']
-    args:
-    - |
-      echo "Contenedor 2: Python" > index.html
-      python -m http.server 8080
 ```
 
 ```bash
 # Crear Pod
-kubectl apply -f pod-dos-contenedores.yaml
+kubectl apply -f ejemplos/multi-contenedor/pod-dos-contenedores.yaml
 
 # Ver estado (deben estar READY 2/2)
 kubectl get pod dos-contenedores
@@ -759,6 +766,14 @@ kubectl logs dos-contenedores -c python-server
 kubectl logs dos-contenedores -c nginx -f
 kubectl logs dos-contenedores -c python-server -f
 ```
+
+---
+
+### **💡 Práctica Avanzada**
+
+🧪 **Laboratorio práctico**: [`laboratorios/lab-02-multi-contenedor-labels.md`](./laboratorios/lab-02-multi-contenedor-labels.md)
+
+Este laboratorio combina Pods multi-contenedor con gestión avanzada de labels y selectors, incluyendo ejercicios de troubleshooting.
 
 ---
 
@@ -1175,6 +1190,71 @@ spec:
       capabilities:
         drop:
         - ALL
+```
+
+---
+
+## 🧪 Ejemplos y Laboratorios Prácticos
+
+### **📁 Ejemplos YAML Disponibles**
+
+Todos los ejemplos están en [`ejemplos/`](./ejemplos/) organizados por categoría:
+
+#### **Básicos** ([`ejemplos/basicos/`](./ejemplos/basicos/))
+| Archivo | Descripción | Uso |
+|---------|-------------|-----|
+| `pod-nginx.yaml` | Pod simple con NGINX | Testing básico, port-forward |
+| `pod-python.yaml` | Pod con Python HTTP server | Demo de aplicaciones custom |
+| `pod-con-env.yaml` | Pod con variables de entorno | Configuración de apps |
+| `pod-volumenes.yaml` | Pod con volúmenes | Persistencia de datos |
+
+#### **Multi-Contenedor** ([`ejemplos/multi-contenedor/`](./ejemplos/multi-contenedor/))
+| Archivo | Descripción | Patrón |
+|---------|-------------|--------|
+| `pod-dos-contenedores.yaml` | 2 contenedores comunicándose | Demo básica |
+
+#### **Patrones de Diseño** ([`ejemplos/patterns/`](./ejemplos/patterns/))
+| Archivo | Descripción | Patrón |
+|---------|-------------|--------|
+| `sidecar-logging.yaml` | Logging con Fluent Bit | Sidecar |
+| `ambassador-proxy.yaml` | Proxy para bases de datos | Ambassador |
+| `adapter-logging.yaml` | Normalización de logs | Adapter |
+
+#### **Production-Ready** ([`ejemplos/production-ready/`](./ejemplos/production-ready/))
+| Archivo | Descripción | Features |
+|---------|-------------|----------|
+| `pod-completo.yaml` | Pod con todas las best practices | Resources, probes, security |
+| `pod-con-init.yaml` | Pod con init containers | Setup previo |
+| `pod-lifecycle.yaml` | Pod con lifecycle hooks | PreStop, PostStart |
+
+#### **Troubleshooting** ([`ejemplos/troubleshooting/`](./ejemplos/troubleshooting/))
+| Archivo | Descripción | Problema |
+|---------|-------------|----------|
+| `pod-crashloop.yaml` | Demo de CrashLoopBackOff | Debugging crashes |
+| `pod-imagepull-error.yaml` | Demo de ImagePullBackOff | Errores de imagen |
+| `pod-recursos-insuficientes.yaml` | Demo de recursos insuficientes | OOMKilled |
+
+**Ver guía completa**: [`ejemplos/README.md`](./ejemplos/README.md)
+
+---
+
+### **🎓 Laboratorios Hands-On**
+
+| # | Laboratorio | Duración | Nivel | Temas |
+|---|-------------|----------|-------|-------|
+| 1 | [Creación de Pods](./laboratorios/lab-01-crear-pods.md) | 30 min | Básico | Imperativo, Declarativo, YAML |
+| 2 | [Multi-contenedor y Labels](./laboratorios/lab-02-multi-contenedor-labels.md) | 45 min | Intermedio | Sidecar, Labels, Selectors |
+
+**Comandos rápidos**:
+```bash
+# Aplicar todos los ejemplos básicos
+kubectl apply -f ejemplos/basicos/
+
+# Aplicar ejemplos de patterns
+kubectl apply -f ejemplos/patterns/
+
+# Ver README de ejemplos
+cat ejemplos/README.md
 ```
 
 ---
