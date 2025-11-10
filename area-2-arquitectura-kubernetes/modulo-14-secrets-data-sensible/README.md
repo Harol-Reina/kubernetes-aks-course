@@ -11,9 +11,8 @@
 7. [Secrets Inmutables](#secrets-inmutables)
 8. [Buenas Prácticas de Seguridad](#buenas-prácticas-de-seguridad)
 9. [Troubleshooting](#troubleshooting)
-10. [Ejemplos Prácticos](#ejemplos-prácticos)
-11. [Laboratorios](#laboratorios)
-12. [Referencias](#referencias)
+10. [Laboratorios Prácticos](#laboratorios-prácticos)
+11. [Referencias](#referencias)
 
 ---
 
@@ -209,6 +208,11 @@ spec:
     image: myregistry.example.com/myapp:latest
 ```
 
+📁 **Ejemplos completos**: [`ejemplos/07-secrets-docker-registry/`](./ejemplos/07-secrets-docker-registry/)
+- `secret-docker-registry.yaml` - Secret de Docker Registry
+- `deployment-private-image.yaml` - Deployment usando imagePullSecrets
+- `create-docker-secret.sh` - Script de creación imperativa
+
 ### 4. **kubernetes.io/tls**
 
 Certificados TLS y claves privadas para HTTPS.
@@ -255,6 +259,11 @@ spec:
             port:
               number: 80
 ```
+
+📁 **Ejemplos completos**: [`ejemplos/06-secrets-tls/`](./ejemplos/06-secrets-tls/)
+- `generate-tls-cert.sh` - Generar certificado TLS autofirmado
+- `secret-tls.yaml` - Secret TLS con certificado
+- `ingress-tls.yaml` - Ingress usando TLS
 
 ### 5. **kubernetes.io/basic-auth**
 
@@ -347,6 +356,8 @@ kubectl describe secret db-credentials
 **Ventajas**: Rápido para pruebas
 **Desventajas**: Las credenciales quedan en el historial de bash
 
+📁 **Ejemplo completo con script**: [`ejemplos/02-secrets-literales/create-from-literal.sh`](./ejemplos/02-secrets-literales/create-from-literal.sh)
+
 #### Desde Archivos (--from-file)
 
 Crear secretos desde archivos existentes:
@@ -365,6 +376,11 @@ kubectl create secret generic file-secrets \
 kubectl create secret generic ssh-key \
   --from-file=id_rsa=~/.ssh/id_rsa
 ```
+
+📁 **Ejemplos completos**: [`ejemplos/03-secrets-archivos/`](./ejemplos/03-secrets-archivos/)
+- `credentials.txt` - Archivo de credenciales de ejemplo
+- `api-token.txt` - Token JWT de ejemplo
+- `create-from-files.sh` - Script completo de creación
 
 #### Desde Directorio
 
@@ -420,6 +436,8 @@ echo -n 'SecurePassword' | base64   # U2VjdXJlUGFzc3dvcmQ=
 echo 'YWRtaW4=' | base64 --decode   # admin
 ```
 
+📁 **Ejemplo completo**: [`ejemplos/01-secrets-basicos/secret-opaque-data.yaml`](./ejemplos/01-secrets-basicos/secret-opaque-data.yaml)
+
 #### Con `stringData` (Recomendado para desarrollo)
 
 ```yaml
@@ -444,6 +462,8 @@ kubectl apply -f secret.yaml
 kubectl get secret string-data-secret -o yaml
 # Verás que stringData se convirtió a data con valores Base64
 ```
+
+📁 **Ejemplo completo**: [`ejemplos/01-secrets-basicos/secret-opaque-stringdata.yaml`](./ejemplos/01-secrets-basicos/secret-opaque-stringdata.yaml)
 
 #### Combinando `data` y `stringData`
 
@@ -500,6 +520,22 @@ stringData:
   password: ${DB_PASSWORD}      # Placeholder
   api-key: ${API_KEY}           # Placeholder
 ```
+
+**Aplicación segura**:
+```bash
+# 1. Exportar variables de entorno (desde un vault, CI/CD, etc.)
+export DB_USERNAME="admin"
+export DB_PASSWORD="RealSecurePassword"
+export API_KEY="real-api-key-abc123"
+
+# 2. Sustituir placeholders y aplicar
+envsubst < secret-template.yaml | kubectl apply -f -
+
+# 3. Las credenciales NUNCA se guardan en Git
+# El template con placeholders es seguro para versionar
+```
+
+📁 **Ejemplo completo**: [`ejemplos/08-combinados/secret-template.yaml`](./ejemplos/08-combinados/secret-template.yaml)
 
 **Aplicación segura**:
 ```bash
@@ -629,6 +665,8 @@ kubectl exec app-with-all-env -- env | sort
 # DB_USER=admin
 ```
 
+📁 **Ejemplo completo**: [`ejemplos/04-secrets-env/pod-env-all.yaml`](./ejemplos/04-secrets-env/pod-env-all.yaml)
+
 #### Combinando ConfigMaps y Secrets
 
 ```yaml
@@ -657,6 +695,8 @@ spec:
     - secretRef:
         name: db-secret
 ```
+
+📁 **Ejemplo completo con múltiples Secrets**: [`ejemplos/04-secrets-env/deployment-multi-secrets.yaml`](./ejemplos/04-secrets-env/deployment-multi-secrets.yaml)
 
 ### 2. Como Volúmenes (Montaje de Archivos)
 
@@ -688,22 +728,12 @@ spec:
 **Resultado en el contenedor**:
 ```bash
 kubectl exec app-with-volume -- ls -la /etc/secrets
-# total 0
-# drwxrwxrwt 3 root root  140 Jan 01 00:00 .
-# drwxr-xr-x 1 root root 4096 Jan 01 00:00 ..
-# drwxr-xr-x 2 root root  100 Jan 01 00:00 ..2024_01_01_00_00_00.123456789
-# lrwxrwxrwx 1 root root   31 Jan 01 00:00 ..data -> ..2024_01_01_00_00_00.123456789
-# lrwxrwxrwx 1 root root   14 Jan 01 00:00 DB_HOST -> ..data/DB_HOST
-# lrwxrwxrwx 1 root root   14 Jan 01 00:00 DB_NAME -> ..data/DB_NAME
-# lrwxrwxrwx 1 root root   18 Jan 01 00:00 DB_PASSWORD -> ..data/DB_PASSWORD
-# lrwxrwxrwx 1 root root   14 Jan 01 00:00 DB_PORT -> ..data/DB_PORT
-# lrwxrwxrwx 1 root root   14 Jan 01 00:00 DB_USER -> ..data/DB_USER
-
+# Cada clave del Secret se convierte en un archivo
 kubectl exec app-with-volume -- cat /etc/secrets/DB_PASSWORD
 # SecurePass123
 ```
 
-**Cada clave del Secret se convierte en un archivo** en el directorio de montaje.
+📁 **Ejemplo completo**: [`ejemplos/05-secrets-volume/pod-volume-all.yaml`](./ejemplos/05-secrets-volume/pod-volume-all.yaml)
 
 #### Montar Claves Específicas con `items`
 
@@ -735,13 +765,11 @@ spec:
 
 **Resultado**:
 ```bash
-kubectl exec app-selective-mount -- ls -la /etc/secrets
-# /etc/secrets/username.txt
-# /etc/secrets/credentials/password.txt
-
 kubectl exec app-selective-mount -- cat /etc/secrets/username.txt
 # admin
 ```
+
+📁 **Ejemplo completo**: [`ejemplos/05-secrets-volume/pod-volume-selective.yaml`](./ejemplos/05-secrets-volume/pod-volume-selective.yaml)
 
 #### Montar en Ruta Específica con `subPath`
 
@@ -775,6 +803,8 @@ spec:
 ```
 
 ⚠️ **Importante**: Con `subPath`, **no se reciben actualizaciones automáticas** del Secret.
+
+📁 **Ejemplo completo con subPath**: [`ejemplos/05-secrets-volume/pod-volume-subpath.yaml`](./ejemplos/05-secrets-volume/pod-volume-subpath.yaml)
 
 ### 3. Secrets Opcionales
 
@@ -1130,6 +1160,8 @@ spec:
               name: db-secret-v1  # Referencia versionada
               key: password
 ```
+
+📁 **Ejemplo completo con versionamiento**: [`ejemplos/08-combinados/immutable-secrets-versioning.yaml`](./ejemplos/08-combinados/immutable-secrets-versioning.yaml)
 
 **Para actualizar**:
 
@@ -1732,29 +1764,7 @@ kubectl describe pod mypod
 
 ---
 
-## Ejemplos Prácticos
-
-Todos los ejemplos completos están disponibles en el directorio [`ejemplos/`](./ejemplos/):
-
-### 📁 Estructura de Ejemplos
-
-```
-ejemplos/
-├── 01-secrets-basicos/          # Creación básica de Secrets
-├── 02-secrets-literales/        # Secrets desde literales (kubectl create)
-├── 03-secrets-archivos/         # Secrets desde archivos
-├── 04-secrets-env/              # Consumo como variables de entorno
-├── 05-secrets-volume/           # Montaje como volúmenes
-├── 06-secrets-tls/              # Certificados TLS
-├── 07-secrets-docker-registry/  # Credenciales de registros Docker
-└── 08-combinados/               # Casos de uso avanzados
-```
-
-Ver [`ejemplos/README.md`](./ejemplos/README.md) para instrucciones detalladas de cada ejemplo.
-
----
-
-## Laboratorios
+## Laboratorios Prácticos
 
 ### 🧪 Laboratorios Prácticos Disponibles
 
