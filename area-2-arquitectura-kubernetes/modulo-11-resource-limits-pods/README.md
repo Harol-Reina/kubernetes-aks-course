@@ -57,24 +57,24 @@ Los **requests** y **limits** son dos mecanismos para controlar el uso de recurs
 │                    NODO (8 CPU, 16 GB)                  │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Pod A                                            │  │
-│  │  Request: 1 CPU, 2 GB  ◄── Scheduler garantiza  │  │
-│  │  Limit:   2 CPU, 4 GB  ◄── Kubelet enforza       │  │
-│  │                                                  │  │
-│  │  Uso real: 1.5 CPU, 3 GB ✓ (dentro del límite) │  │
-│  └──────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ Pod A                                            │   │
+│  │  Request: 1 CPU, 2 GB  ◄── Scheduler garantiza   │   │
+│  │  Limit:   2 CPU, 4 GB  ◄── Kubelet enforza       │   │
+│  │                                                  │   │
+│  │  Uso real: 1.5 CPU, 3 GB ✓ (dentro del límite)   │   │
+│  └──────────────────────────────────────────────────┘   │
 │                                                         │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ Pod B                                            │  │
-│  │  Request: 0.5 CPU, 1 GB                          │  │
-│  │  Limit:   1 CPU, 2 GB                            │  │
-│  │                                                  │  │
-│  │  Uso real: 0.8 CPU, 1.5 GB ✓                    │  │
-│  └──────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ Pod B                                            │   │
+│  │  Request: 0.5 CPU, 1 GB                          │   │
+│  │  Limit:   1 CPU, 2 GB                            │   │
+│  │                                                  │   │
+│  │  Uso real: 0.8 CPU, 1.5 GB ✓                     │   │
+│  └──────────────────────────────────────────────────┘   │
 │                                                         │
-│  Total Requests:  1.5 CPU, 3 GB   (scheduler check)    │
-│  Total Limits:    3 CPU, 6 GB     (puede overcommit)   │
+│  Total Requests:  1.5 CPU, 3 GB   (scheduler check)     │
+│  Total Limits:    3 CPU, 6 GB     (puede overcommit)    │
 │  Capacidad nodo:  8 CPU, 16 GB                          │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -434,16 +434,16 @@ Kubernetes asigna automáticamente una **QoS Class** a cada Pod basándose en su
 ┌─────────────────────────────────────────────────────────────┐
 │                    PRESIÓN DE RECURSOS                      │
 │                                                             │
-│  Orden de Eviction (primero → último)                      │
+│  Orden de Eviction (primero → último)                       │
 │                                                             │
-│  1. BestEffort  ◄─── Sin requests/limits                   │
-│     └─ Se eliminan PRIMERO                                 │
+│  1. BestEffort  ◄─── Sin requests/limits                    │
+│     └─ Se eliminan PRIMERO                                  │
 │                                                             │
-│  2. Burstable   ◄─── Request < Limit                       │
-│     └─ Se eliminan según uso vs request                    │
+│  2. Burstable   ◄─── Request < Limit                        │
+│     └─ Se eliminan según uso vs request                     │
 │                                                             │
-│  3. Guaranteed  ◄─── Request = Limit (todos los recursos)  │
-│     └─ Se eliminan ÚLTIMO (máxima protección)              │
+│  3. Guaranteed  ◄─── Request = Limit (todos los recursos)   │
+│     └─ Se eliminan ÚLTIMO (máxima protección)               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1072,23 +1072,23 @@ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/mai
                   ▼
 ┌──────────────────────────────────────────────────────────────┐
 │ 2. Scheduler evalúa CADA nodo                                │
-│    ┌──────────────────────────────────────────────────────┐ │
-│    │ Nodo A                                               │ │
-│    │  Capacity:    cpu=4, memory=8Gi                      │ │
-│    │  Allocatable: cpu=3.8, memory=7.5Gi (después daemons)│ │
-│    │  Allocated:   cpu=2.5, memory=5Gi (Pods existentes) │ │
-│    │  Available:   cpu=1.3, memory=2.5Gi                  │ │
-│    │                                                      │ │
-│    │  Check: 500m <= 1.3 ✅ AND 1Gi <= 2.5Gi ✅          │ │
-│    │  → Nodo A es CANDIDATO                              │ │
-│    └──────────────────────────────────────────────────────┘ │
+│    ┌──────────────────────────────────────────────────────┐  │
+│    │ Nodo A                                               │  │
+│    │  Capacity:    cpu=4, memory=8Gi                      │  │
+│    │  Allocatable: cpu=3.8, memory=7.5Gi (después daemons)│  │
+│    │  Allocated:   cpu=2.5, memory=5Gi (Pods existentes)  │  │
+│    │  Available:   cpu=1.3, memory=2.5Gi                  │  │
+│    │                                                      │  │
+│    │  Check: 500m <= 1.3 ✅ AND 1Gi <= 2.5Gi ✅           │  │
+│    │  → Nodo A es CANDIDATO                               │  │
+│    └──────────────────────────────────────────────────────┘  │
 │                                                              │
-│    ┌──────────────────────────────────────────────────────┐ │
-│    │ Nodo B                                               │ │
-│    │  Available: cpu=300m, memory=3Gi                     │ │
-│    │  Check: 500m <= 300m ❌                              │ │
-│    │  → Nodo B RECHAZADO                                 │ │
-│    └──────────────────────────────────────────────────────┘ │
+│    ┌──────────────────────────────────────────────────────┐  │
+│    │ Nodo B                                               │  │
+│    │  Available: cpu=300m, memory=3Gi                     │  │
+│    │  Check: 500m <= 300m ❌                              │  │
+│    │  → Nodo B RECHAZADO                                  │  │
+│    └──────────────────────────────────────────────────────┘  │
 └─────────────────┬────────────────────────────────────────────┘
                   │
                   ▼
@@ -1169,26 +1169,26 @@ kubectl describe pod <pod-name>
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ Período de CPU: 100ms (cfs_period_us=100000)              │
+│ Período de CPU: 100ms (cfs_period_us=100000)               │
 ├────────────────────────────────────────────────────────────┤
 │                                                            │
-│ Contenedor con limit cpu=1 → quota=100ms por período      │
+│ Contenedor con limit cpu=1 → quota=100ms por período       │
 │                                                            │
-│ ┌──────────────────────────────────────────────────────┐  │
-│ │ 0ms                     50ms                 100ms   │  │
-│ │  ├────────────── RUNNING ────────────┤              │  │
-│ │                                       └─ Usa 50ms    │  │
-│ │                                                      │  │
-│ │  ✅ OK: Solo usó 50ms de 100ms permitidos           │  │
-│ └──────────────────────────────────────────────────────┘  │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ 0ms                     50ms                 100ms   │   │
+│ │  ├────────────── RUNNING ────────────┤               │   │
+│ │                                      └─ Usa 50ms     │   │
+│ │                                                      │   │
+│ │  ✅ OK: Solo usó 50ms de 100ms permitidos            │   │
+│ └──────────────────────────────────────────────────────┘   │
 │                                                            │
-│ ┌──────────────────────────────────────────────────────┐  │
-│ │ 0ms                                            100ms │  │
-│ │  ├────────────── RUNNING ──────────────────────┤     │  │
-│ │                                                │      │  │
-│ │  ⚠️ THROTTLED: Usó 100ms completos            │      │  │
-│ │  Siguiente período: debe esperar hasta obtener cuota│  │
-│ └──────────────────────────────────────────────────────┘  │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ 0ms                                            100ms │   │
+│ │  ├────────────── RUNNING ──────────────────────┤     │   │
+│ │                                                │     │   │
+│ │  ⚠️ THROTTLED: Usó 100ms completos             │     │   │
+│ │  Siguiente período: debe esperar hasta obtener cuota │   │
+│ └──────────────────────────────────────────────────────┘   │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -1233,24 +1233,24 @@ kubectl exec -it <pod-name> -- cat /sys/fs/cgroup/cpu/cpu.stat
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ Contenedor con limit memory=512Mi                       │
+│ Contenedor con limit memory=512Mi                        │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│ Uso de memoria crece gradualmente:                      │
+│ Uso de memoria crece gradualmente:                       │
 │                                                          │
 │  256Mi  ✅ OK                                            │
 │  384Mi  ✅ OK                                            │
-│  512Mi  ⚠️ En el límite                                 │
-│  513Mi  ❌ EXCEDE LÍMITE                                │
+│  512Mi  ⚠️ En el límite                                  │
+│  513Mi  ❌ EXCEDE LÍMITE                                 │
 │         │                                                │
-│         └──► Kernel detecta exceso de memoria           │
+│         └──► Kernel detecta exceso de memoria            │
 │              │                                           │
-│              └──► OOM Killer selecciona proceso         │
+│              └──► OOM Killer selecciona proceso          │
 │                   │                                      │
-│                   └──► SIGKILL al proceso               │
+│                   └──► SIGKILL al proceso                │
 │                        (típicamente PID 1)               │
 │                        │                                 │
-│                        └──► Exit Code: 137              │
+│                        └──► Exit Code: 137               │
 │                             Reason: OOMKilled            │
 └──────────────────────────────────────────────────────────┘
 ```
