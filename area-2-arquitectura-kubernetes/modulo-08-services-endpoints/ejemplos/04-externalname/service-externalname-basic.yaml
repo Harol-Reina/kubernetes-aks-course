@@ -1,0 +1,335 @@
+# ====================================================================
+# SERVICE EXTERNALNAME
+# ====================================================================
+# Descripción:
+#   Service tipo ExternalName para redirección DNS
+#   Crea alias CNAME a servicios externos
+#   NO se crean ClusterIP, Endpoints, ni proxy
+#
+# Conceptos:
+#   - CNAME DNS
+#   - Servicios externos
+#   - Migración gradual
+#   - Abstracción de endpoints
+#
+# Uso:
+#   kubectl apply -f service-externalname-basic.yaml
+#   Desde Pod: curl http://external-api
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-api
+  labels:
+    type: externalname
+spec:
+  # ExternalName: redirecciona a un DNS externo
+  type: ExternalName
+  
+  # FQDN del servicio externo
+  # Kubernetes NO crea proxy, solo entrada DNS
+  externalName: api.example.com
+  
+  # NO se usa selector (no hay Pods)
+  # selector: {}  ← NO APLICA
+  
+  # Puertos son opcionales (solo para documentación)
+  # ports:
+  #   - port: 80
+  #     targetPort: 80
+
+# ====================================================================
+# CÓMO FUNCIONA EXTERNALNAME:
+# ====================================================================
+#
+# 1. Kubernetes crea entrada DNS:
+#    external-api.default.svc.cluster.local → api.example.com
+#
+# 2. NO se crea:
+#    - ClusterIP ❌
+#    - Endpoints ❌
+#    - kube-proxy rules ❌
+#    - Load balancing ❌
+#
+# 3. Es solo un CNAME:
+#    nslookup external-api → CNAME api.example.com
+#
+# 4. Peticiones van DIRECTAMENTE al servicio externo:
+#
+#    Pod → DNS lookup (external-api)
+#        ↓
+#    Resuelve CNAME → api.example.com
+#        ↓
+#    DNS lookup → api.example.com
+#        ↓
+#    Resuelve IP → 203.0.113.10
+#        ↓
+#    Conexión directa → 203.0.113.10:80
+#
+# ====================================================================
+#
+# VERIFICAR SERVICE:
+# ====================================================================
+#
+# kubectl get service external-api
+#
+# Output:
+# NAME           TYPE           CLUSTER-IP   EXTERNAL-IP        PORT(S)   AGE
+# external-api   ExternalName   <none>       api.example.com    <none>    10s
+#                                ↑                ↑
+#                            Sin ClusterIP    CNAME destino
+#
+# kubectl describe service external-api
+#
+# Output:
+# Name:              external-api
+# Type:              ExternalName
+# External Name:     api.example.com
+# Endpoints:         <none>
+#
+# ====================================================================
+#
+# TESTEAR DNS:
+# ====================================================================
+#
+# Desde un Pod:
+# kubectl run -it --rm debug --image=busybox --restart=Never -- sh
+#
+# # DNS lookup
+# / # nslookup external-api
+# Server:    10.96.0.10
+# Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+#
+# Name:      external-api
+# Address 1: external-api.default.svc.cluster.local
+# ↓ CNAME
+# api.example.com
+#
+# # Test conexión
+# / # wget -O- http://external-api
+# ↑ Conecta a api.example.com
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# 1. MIGRACIÓN GRADUAL:
+# ---------------------
+# Moviendo servicio de externo a cluster:
+#
+# Fase 1: Servicio externo (api.example.com)
+#   ExternalName → api.example.com
+#
+# Fase 2: Servicio híbrido
+#   ExternalName → blue-green deploy
+#
+# Fase 3: Servicio interno completo
+#   Cambiar a ClusterIP con Pods internos
+#
+# Ventaja: NO cambias código de clientes
+#
+# 2. ABSTRACCIÓN DE DEPENDENCIAS:
+# -------------------------------
+# # Desarrollo
+# externalName: api-dev.example.com
+#
+# # Staging
+# externalName: api-staging.example.com
+#
+# # Producción
+# externalName: api.example.com
+#
+# Código cliente siempre usa: http://external-api
+#
+# 3. SERVICIOS COMPARTIDOS:
+# -------------------------
+# - Base de datos RDS (AWS)
+# - API SaaS externa
+# - Legacy systems
+# - Servicios en otra VPC/cluster
+#
+# 4. MULTI-CLUSTER:
+# -----------------
+# Cluster A:
+#   externalName: service.cluster-b.example.com
+#
+# Cluster B tiene el servicio real
+#
+# ====================================================================
+#
+# EJEMPLO COMPLETO - Base de datos externa:
+# ====================================================================
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+  labels:
+    app: postgres
+    environment: production
+spec:
+  type: ExternalName
+  # RDS endpoint de AWS
+  externalName: mydb.abc123.us-east-1.rds.amazonaws.com
+
+---
+# Deployment que usa la database
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: api
+        image: myapp:latest
+        env:
+        # Usar nombre del Service, NO hostname externo
+        - name: DB_HOST
+          value: "postgres-db"  # ← Abstracción
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: database
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+
+# ====================================================================
+# VENTAJA: Cambiar de RDS a Postgres en cluster sin tocar Deployment
+# ====================================================================
+#
+# ANTES (RDS externo):
+# -------------------
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: postgres-db
+# spec:
+#   type: ExternalName
+#   externalName: mydb.abc123.us-east-1.rds.amazonaws.com
+#
+# DESPUÉS (Postgres interno):
+# --------------------------
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: postgres-db
+# spec:
+#   type: ClusterIP
+#   selector:
+#     app: postgres
+#   ports:
+#   - port: 5432
+#     targetPort: 5432
+#
+# Deployment NO cambia! ✅
+# DB_HOST sigue siendo "postgres-db"
+#
+# ====================================================================
+#
+# LIMITACIONES:
+# ====================================================================
+#
+# 1. NO funciona con IPs:
+#    externalName: 203.0.113.10  ❌
+#    Debe ser FQDN válido
+#
+# 2. NO hay load balancing:
+#    Si api.example.com tiene múltiples IPs
+#    DNS round-robin depende del cliente
+#
+# 3. NO hay health checks:
+#    Si servicio externo cae, no hay detección
+#
+# 4. NO funciona con algunos protocolos:
+#    - Puede tener problemas con SNI (TLS)
+#    - HTTP Host header puede no coincidir
+#
+# 5. Depende de DNS:
+#    - TTL del DNS externo
+#    - Propagación de cambios
+#
+# ====================================================================
+#
+# ALTERNATIVA - ENDPOINTS MANUALES:
+# ====================================================================
+#
+# Si necesitas IP directa o control de health:
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: external-api
+# spec:
+#   type: ClusterIP
+#   ports:
+#   - port: 80
+#     targetPort: 80
+# # Sin selector! ← Endpoints manuales
+#
+# ---
+# apiVersion: v1
+# kind: Endpoints
+# metadata:
+#   name: external-api  # ← Mismo nombre que Service
+# subsets:
+# - addresses:
+#   - ip: 203.0.113.10  # ← IP directa
+#   ports:
+#   - port: 80
+#
+# Ver: ejemplos/05-endpoints/service-manual-endpoints.yaml
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: DNS no resuelve
+# -------------------------
+# 1. Verificar externalName es FQDN válido:
+#    kubectl get svc external-api -o jsonpath='{.spec.externalName}'
+#
+# 2. Test DNS desde Pod:
+#    kubectl run -it --rm test --image=busybox --restart=Never -- sh
+#    / # nslookup external-api
+#
+# 3. Verificar CoreDNS funciona:
+#    kubectl -n kube-system get pods -l k8s-app=kube-dns
+#
+# Problema: Conexión falla
+# ------------------------
+# 1. Verificar servicio externo accesible:
+#    kubectl run -it --rm test --image=curlimages/curl --restart=Never -- sh
+#    # curl -v http://api.example.com
+#
+# 2. Verificar firewall/egress rules:
+#    - Cluster puede tener reglas de salida
+#    - NetworkPolicies bloqueando tráfico
+#
+# 3. Verificar SNI/TLS:
+#    curl -v --resolve external-api:443:203.0.113.10 https://external-api
+#
+# ====================================================================

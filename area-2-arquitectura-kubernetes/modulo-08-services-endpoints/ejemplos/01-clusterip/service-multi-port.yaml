@@ -1,0 +1,200 @@
+# ====================================================================
+# SERVICE CON MÚLTIPLES PUERTOS
+# ====================================================================
+# Descripción:
+#   Service ClusterIP exponiendo múltiples puertos
+#   HTTP (80), HTTPS (443), Metrics (9090)
+#
+# Conceptos:
+#   - Múltiples definiciones de puertos
+#   - Nombres obligatorios para cada puerto
+#   - targetPort por nombre o número
+#
+# Uso:
+#   kubectl apply -f service-multi-port.yaml
+#   kubectl get service webapp-service
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  labels:
+    app: webapp
+    tier: frontend
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: webapp
+    tier: frontend
+  
+  # IMPORTANTE: Con múltiples puertos, TODOS deben tener nombre
+  ports:
+    # Puerto HTTP
+    - name: http              # ¡Nombre obligatorio!
+      protocol: TCP
+      port: 80               # Puerto del Service
+      targetPort: http-port  # Referencia al puerto del Pod por nombre
+    
+    # Puerto HTTPS
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: https-port
+    
+    # Puerto Metrics (Prometheus)
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: metrics-port
+
+---
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:alpine
+        
+        # Puertos con NOMBRES (para referenciar desde Service)
+        ports:
+        - name: http-port     # Service usa este nombre
+          containerPort: 8080
+          protocol: TCP
+        
+        - name: https-port
+          containerPort: 8443
+          protocol: TCP
+        
+        - name: metrics-port
+          containerPort: 9090
+          protocol: TCP
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+# ====================================================================
+# VENTAJAS DE USAR NOMBRES EN targetPort:
+# ====================================================================
+#
+# ✅ Flexibilidad: Cambiar puerto del contenedor sin modificar Service
+#
+# Ejemplo:
+# 1. Cambias containerPort de 8080 a 3000
+# 2. Service sigue funcionando (usa nombre, no número)
+#
+# ❌ Sin nombres (hardcoded):
+# targetPort: 8080  # Si cambias containerPort, Service se rompe
+#
+# ✅ Con nombres:
+# targetPort: http-port  # Funciona siempre que el nombre coincida
+#
+# ====================================================================
+#
+# ACCESO A CADA PUERTO:
+# ====================================================================
+#
+# HTTP (puerto 80):
+# curl http://webapp-service:80
+#
+# HTTPS (puerto 443):
+# curl https://webapp-service:443
+#
+# Metrics (puerto 9090):
+# curl http://webapp-service:9090/metrics
+#
+# ====================================================================
+#
+# DESDE FUERA DEL CLUSTER (port-forward):
+# ====================================================================
+#
+# Exponer puerto HTTP:
+# kubectl port-forward service/webapp-service 8080:80
+# curl http://localhost:8080
+#
+# Exponer puerto HTTPS:
+# kubectl port-forward service/webapp-service 8443:443
+#
+# Exponer puerto Metrics:
+# kubectl port-forward service/webapp-service 9090:9090
+# curl http://localhost:9090/metrics
+#
+# ====================================================================
+#
+# VERIFICACIÓN:
+# ====================================================================
+#
+# Ver todos los puertos:
+# kubectl get service webapp-service -o yaml | grep -A 20 ports
+#
+# Ver Endpoints (debe mostrar los 3 puertos):
+# kubectl get endpoints webapp-service
+#
+# Output esperado:
+# NAME              ENDPOINTS                                               AGE
+# webapp-service    10.1.2.3:8080,10.1.2.3:8443,10.1.2.3:9090 + 6 more...  5m
+#
+# Ver en formato YAML:
+# kubectl get endpoints webapp-service -o yaml
+#
+# ====================================================================
+#
+# REGLAS DE NAMING:
+# ====================================================================
+#
+# ✅ Nombres válidos:
+#   - http
+#   - https
+#   - http-8080
+#   - metrics-port
+#   - api-endpoint
+#
+# ❌ Nombres inválidos:
+#   - 123-abc (no puede empezar con número)
+#   - http_port (guiones bajos no permitidos)
+#   - -http (no puede empezar con guión)
+#
+# Formato: [a-z0-9]([-a-z0-9]*[a-z0-9])?
+# Máximo: 63 caracteres
+#
+# ====================================================================
+#
+# CASO DE USO - PROMETHEUS SCRAPING:
+# ====================================================================
+#
+# Las annotations permiten que Prometheus descubra automáticamente
+# el endpoint de métricas:
+#
+# annotations:
+#   prometheus.io/scrape: "true"    # Habilitar scraping
+#   prometheus.io/port: "9090"      # Puerto de métricas
+#   prometheus.io/path: "/metrics"  # Path del endpoint
+#
+# Prometheus scrapea: http://webapp-service:9090/metrics
+#
+# ====================================================================

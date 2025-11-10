@@ -1,0 +1,416 @@
+# ====================================================================
+# SERVICE HEADLESS CON STATEFULSET
+# ====================================================================
+# Descripción:
+#   Service tipo Headless (clusterIP: None)
+#   Sin ClusterIP, retorna IPs de Pods directamente
+#   Usado con StatefulSets para aplicaciones stateful
+#
+# Conceptos:
+#   - clusterIP: None
+#   - DNS por Pod individual
+#   - StatefulSet identity
+#   - Sticky identity
+#
+# Uso:
+#   kubectl apply -f service-headless-statefulset.yaml
+#   nslookup mysql-0.mysql-headless
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+  labels:
+    app: mysql
+spec:
+  # clusterIP: None = Service Headless
+  # NO se asigna ClusterIP
+  # DNS retorna IPs de Pods directamente
+  clusterIP: None
+  
+  selector:
+    app: mysql
+  
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+  
+  # publishNotReadyAddresses: true
+  # Crear DNS records incluso para Pods no ready
+  # Útil para StatefulSets durante bootstrap
+  publishNotReadyAddresses: true
+
+---
+# ====================================================================
+# STATEFULSET - MySQL Cluster
+# ====================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  # Service name apunta al headless service
+  serviceName: "mysql-headless"
+  
+  replicas: 3
+  
+  selector:
+    matchLabels:
+      app: mysql
+  
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        
+        ports:
+        - name: mysql
+          containerPort: 3306
+        
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root-password
+        
+        # Variable de entorno con nombre del Pod
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        # Configuración para replicación
+        - name: MYSQL_REPLICATION_MODE
+          value: "master"
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        # Volumen persistente para datos
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+        
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        
+        readinessProbe:
+          exec:
+            command:
+            - mysql
+            - -h
+            - localhost
+            - -e
+            - "SELECT 1"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 1
+  
+  # VolumeClaimTemplates: cada Pod obtiene PVC único
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# ====================================================================
+# SECRET PARA MYSQL
+# ====================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secret
+type: Opaque
+stringData:
+  root-password: "MySecurePassword123!"
+
+# ====================================================================
+# CÓMO FUNCIONA HEADLESS SERVICE:
+# ====================================================================
+#
+# Service NORMAL (ClusterIP):
+# ---------------------------
+# spec:
+#   clusterIP: 10.96.0.50  ← Asignada
+#   selector:
+#     app: mysql
+#
+# DNS:
+#   mysql.default.svc.cluster.local → 10.96.0.50
+#   ↑ Resuelve a ClusterIP
+#
+# Tráfico:
+#   Cliente → ClusterIP → kube-proxy balancea → Pods
+#
+# -------------------------------------------------------------------
+#
+# Service HEADLESS (clusterIP: None):
+# -----------------------------------
+# spec:
+#   clusterIP: None  ← SIN ClusterIP
+#   selector:
+#     app: mysql
+#
+# DNS:
+#   mysql-headless.default.svc.cluster.local → 10.1.2.3, 10.1.2.4, 10.1.2.5
+#   ↑ Resuelve a IPs de PODS directamente
+#
+# Tráfico:
+#   Cliente → DNS round-robin → Pod directo (NO proxy)
+#
+# ====================================================================
+#
+# DNS POR POD INDIVIDUAL (con StatefulSet):
+# ====================================================================
+#
+# StatefulSet crea Pods con nombres predecibles:
+# - mysql-0
+# - mysql-1
+# - mysql-2
+#
+# Con Headless Service, cada Pod tiene DNS:
+#
+# mysql-0.mysql-headless.default.svc.cluster.local → 10.1.2.3
+# mysql-1.mysql-headless.default.svc.cluster.local → 10.1.2.4
+# mysql-2.mysql-headless.default.svc.cluster.local → 10.1.2.5
+#
+# Formato:
+# <pod-name>.<service-name>.<namespace>.svc.cluster.local
+#
+# ====================================================================
+#
+# VERIFICAR HEADLESS SERVICE:
+# ====================================================================
+#
+# Ver Service:
+# kubectl get service mysql-headless
+#
+# Output:
+# NAME             TYPE        CLUSTER-IP   PORT(S)    AGE
+# mysql-headless   ClusterIP   None         3306/TCP   5m
+#                              ↑ None = Headless
+#
+# Ver Endpoints:
+# kubectl get endpoints mysql-headless
+#
+# Output:
+# NAME             ENDPOINTS                                   AGE
+# mysql-headless   10.1.2.3:3306,10.1.2.4:3306,10.1.2.5:3306   5m
+#
+# Ver Pods:
+# kubectl get pods -l app=mysql -o wide
+#
+# Output:
+# NAME      READY   STATUS    IP         NODE
+# mysql-0   1/1     Running   10.1.2.3   node1
+# mysql-1   1/1     Running   10.1.2.4   node2
+# mysql-2   1/1     Running   10.1.2.5   node3
+#
+# ====================================================================
+#
+# TESTEAR DNS:
+# ====================================================================
+#
+# Desde un Pod:
+# kubectl run -it --rm debug --image=busybox --restart=Never -- sh
+#
+# # DNS del Service (retorna múltiples IPs)
+# / # nslookup mysql-headless
+# Server:    10.96.0.10
+# Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+#
+# Name:      mysql-headless
+# Address 1: 10.1.2.3 mysql-0.mysql-headless.default.svc.cluster.local
+# Address 2: 10.1.2.4 mysql-1.mysql-headless.default.svc.cluster.local
+# Address 3: 10.1.2.5 mysql-2.mysql-headless.default.svc.cluster.local
+#
+# # DNS de Pod individual (mysql-0)
+# / # nslookup mysql-0.mysql-headless
+# Server:    10.96.0.10
+#
+# Name:      mysql-0.mysql-headless
+# Address 1: 10.1.2.3 mysql-0.mysql-headless.default.svc.cluster.local
+#
+# # Test conexión a Pod específico
+# / # telnet mysql-0.mysql-headless 3306
+# Connected to mysql-0.mysql-headless
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ StatefulSets con replicación:
+#    - MySQL/PostgreSQL cluster
+#    - MongoDB replica set
+#    - Cassandra
+#    - Elasticsearch
+#
+# ✅ Peer discovery:
+#    - Pods necesitan conocerse entre sí
+#    - Clustering (ZooKeeper, etcd, Consul)
+#
+# ✅ Master-Slave architecture:
+#    - Conectar a master específico: mysql-0
+#    - Lecturas a slaves: mysql-1, mysql-2
+#
+# ✅ Session affinity por Pod:
+#    - Cliente conecta a Pod específico
+#    - WebSockets persistentes
+#
+# ====================================================================
+#
+# EJEMPLO - MySQL Master-Slave:
+# ====================================================================
+#
+# Pod mysql-0 = Master (escrituras)
+# Pods mysql-1, mysql-2 = Slaves (lecturas)
+#
+# Aplicación conecta:
+#
+# # Escrituras
+# mysql://mysql-0.mysql-headless:3306
+#
+# # Lecturas (balanceo cliente)
+# mysql://mysql-1.mysql-headless:3306
+# mysql://mysql-2.mysql-headless:3306
+#
+# O balanceo con DNS round-robin:
+# mysql://mysql-headless:3306
+# ↑ DNS retorna todas las IPs, cliente elige
+#
+# ====================================================================
+#
+# PUBLISHNOTREADYADDRESSES:
+# ====================================================================
+#
+# spec:
+#   publishNotReadyAddresses: true
+#
+# Con true:
+# --------
+# - DNS records creados INCLUSO si Pod no está ready
+# - Útil para StatefulSets durante bootstrap
+# - Pods pueden conectarse entre sí antes de estar ready
+#
+# Ejemplo: MySQL replicación
+# - mysql-0 inicia (not ready)
+# - mysql-1 inicia, necesita conectar a mysql-0
+# - Con publishNotReadyAddresses: true, puede resolverlo
+#
+# Con false (default):
+# -------------------
+# - DNS solo para Pods ready
+# - Pods not ready NO aparecen en DNS
+#
+# ====================================================================
+#
+# STATEFULSET GUARANTEES:
+# ====================================================================
+#
+# Con serviceName: "mysql-headless":
+#
+# 1. Pod Names:
+#    - Predecibles: mysql-0, mysql-1, mysql-2
+#    - Estables: Si mysql-1 muere, se recrea como mysql-1
+#
+# 2. DNS Stable:
+#    - mysql-0.mysql-headless siempre apunta al mismo Pod
+#    - Incluso después de reinicios
+#
+# 3. Ordered Deployment:
+#    - mysql-0 se crea primero
+#    - mysql-1 solo si mysql-0 está ready
+#    - mysql-2 solo si mysql-1 está ready
+#
+# 4. Ordered Termination:
+#    - Reverso: mysql-2, luego mysql-1, luego mysql-0
+#
+# 5. Persistent Volumes:
+#    - Cada Pod tiene su PVC único
+#    - PVC persiste incluso si Pod se elimina
+#
+# ====================================================================
+#
+# DIFERENCIA CON SERVICE NORMAL:
+# ====================================================================
+#
+# Normal Service (ClusterIP):
+# --------------------------
+# kubectl get svc backend
+# NAME      TYPE        CLUSTER-IP    PORT(S)
+# backend   ClusterIP   10.96.0.20    80/TCP
+#
+# nslookup backend
+# → 10.96.0.20 (ClusterIP)
+#
+# Tráfico:
+# Cliente → 10.96.0.20 → kube-proxy → Pod aleatorio
+#
+# Headless Service (clusterIP: None):
+# -----------------------------------
+# kubectl get svc mysql-headless
+# NAME             TYPE        CLUSTER-IP   PORT(S)
+# mysql-headless   ClusterIP   None         3306/TCP
+#
+# nslookup mysql-headless
+# → 10.1.2.3, 10.1.2.4, 10.1.2.5 (IPs de Pods)
+#
+# Tráfico:
+# Cliente → DNS round-robin → Pod directo (NO proxy)
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: DNS no resuelve Pods individuales
+# -------------------------------------------
+# 1. Verificar serviceName en StatefulSet:
+#    kubectl get statefulset mysql -o jsonpath='{.spec.serviceName}'
+#    # Debe ser: mysql-headless
+#
+# 2. Verificar Service es headless:
+#    kubectl get service mysql-headless -o jsonpath='{.spec.clusterIP}'
+#    # Debe ser: None
+#
+# 3. Verificar Pods existen:
+#    kubectl get pods -l app=mysql
+#
+# Problema: Pods no pueden conectarse entre sí
+# --------------------------------------------
+# 1. Verificar publishNotReadyAddresses:
+#    kubectl get service mysql-headless -o yaml | grep publishNotReadyAddresses
+#
+# 2. Test desde Pod:
+#    kubectl exec -it mysql-0 -- bash
+#    # mysql -h mysql-1.mysql-headless -u root -p
+#
+# 3. Verificar NetworkPolicy no bloquea:
+#    kubectl get networkpolicies
+#
+# ====================================================================

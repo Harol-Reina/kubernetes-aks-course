@@ -1,0 +1,174 @@
+# ====================================================================
+# SERVICE CLUSTERIP BÁSICO
+# ====================================================================
+# Descripción:
+#   Service tipo ClusterIP (por defecto)
+#   IP interna solo accesible dentro del cluster
+#   Usado para comunicación entre microservicios
+#
+# Conceptos:
+#   - ClusterIP (tipo por defecto)
+#   - Selector de Pods
+#   - DNS interno
+#   - Balanceo de carga automático
+#
+# Uso:
+#   kubectl apply -f service-clusterip-basic.yaml
+#   kubectl get service backend-service
+#   kubectl get endpoints backend-service
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  labels:
+    app: backend
+    tier: api
+    environment: development
+  annotations:
+    description: "Service ClusterIP para backend API"
+spec:
+  # type: ClusterIP es el valor por defecto (puede omitirse)
+  type: ClusterIP
+  
+  # Selector: define qué Pods serán parte de este Service
+  # Los Pods deben tener TODAS estas labels
+  selector:
+    app: backend
+    tier: api
+  
+  # Puertos expuestos por el Service
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80          # Puerto del Service (interno)
+      targetPort: 8080  # Puerto del contenedor en el Pod
+
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO (backend-deployment.yaml)
+# ====================================================================
+# Aplicar junto con este Service:
+#
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: backend-deployment
+# spec:
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: backend
+#       tier: api
+#   template:
+#     metadata:
+#       labels:
+#         app: backend
+#         tier: api
+#     spec:
+#       containers:
+#       - name: api
+#         image: nginx:alpine
+#         ports:
+#         - name: http
+#           containerPort: 8080
+#
+# ====================================================================
+#
+# CÓMO FUNCIONA:
+# ====================================================================
+#
+# 1. Kubernetes asigna una ClusterIP automáticamente
+#    Ejemplo: 10.96.0.10
+#
+# 2. Se crea un registro DNS automáticamente:
+#    - Mismo namespace: backend-service
+#    - Otro namespace: backend-service.default
+#    - FQDN: backend-service.default.svc.cluster.local
+#
+# 3. El controlador de Endpoints rastrea Pods con labels:
+#    app=backend, tier=api
+#
+# 4. kube-proxy configura reglas iptables/IPVS para balanceo
+#
+# ====================================================================
+#
+# ACCESO AL SERVICE:
+# ====================================================================
+#
+# Desde un Pod en el MISMO namespace:
+# curl http://backend-service:80
+# curl http://backend-service
+#
+# Desde un Pod en OTRO namespace:
+# curl http://backend-service.default:80
+# curl http://backend-service.default.svc.cluster.local:80
+#
+# Con kubectl port-forward (para testing local):
+# kubectl port-forward service/backend-service 8080:80
+# curl http://localhost:8080
+#
+# ====================================================================
+#
+# VERIFICACIÓN:
+# ====================================================================
+#
+# Ver Service:
+# kubectl get service backend-service
+# kubectl describe service backend-service
+#
+# Ver ClusterIP asignada:
+# kubectl get service backend-service -o jsonpath='{.spec.clusterIP}'
+#
+# Ver Endpoints (IPs de los Pods):
+# kubectl get endpoints backend-service
+# kubectl describe endpoints backend-service
+#
+# Output esperado de Endpoints:
+# NAME              ENDPOINTS                                   AGE
+# backend-service   10.1.2.3:8080,10.1.2.4:8080,10.1.2.5:8080   5m
+#
+# Test DNS desde un Pod:
+# kubectl run -it --rm debug --image=busybox --restart=Never -- sh
+# / # nslookup backend-service
+# / # wget -O- http://backend-service:80
+#
+# ====================================================================
+#
+# FLUJO DE COMUNICACIÓN:
+# ====================================================================
+#
+# Pod cliente → DNS lookup (backend-service)
+#     ↓
+# Resuelve a ClusterIP (10.96.0.10)
+#     ↓
+# kube-proxy intercepta (iptables/IPVS)
+#     ↓
+# Balanceo entre Endpoints:
+#   - 10.1.2.3:8080 (Pod-1)
+#   - 10.1.2.4:8080 (Pod-2)
+#   - 10.1.2.5:8080 (Pod-3)
+#     ↓
+# NAT hacia Pod seleccionado
+#     ↓
+# Pod backend procesa request
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ Comunicación interna entre microservicios
+#    Frontend → Backend API
+#    API → Database Service
+#
+# ✅ Desacoplar clientes de Pods efímeros
+#    Los Pods pueden morir/recrearse, ClusterIP permanece
+#
+# ✅ Balanceo de carga automático
+#    Tráfico distribuido entre réplicas
+#
+# ✅ Descubrimiento de servicios vía DNS
+#    No hardcodear IPs, usar nombres de servicios
+#
+# ====================================================================

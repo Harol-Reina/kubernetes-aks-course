@@ -1,0 +1,416 @@
+# ====================================================================
+# SERVICE CON ENDPOINTS MANUALES
+# ====================================================================
+# Descripción:
+#   Service SIN selector + Endpoints manuales
+#   Para integrar servicios que NO son Pods
+#   IPs externas, bases de datos, legacy systems
+#
+# Conceptos:
+#   - Service sin selector
+#   - Endpoints objeto manual
+#   - Sincronización de nombres
+#   - Control total de backends
+#
+# Uso:
+#   kubectl apply -f service-manual-endpoints.yaml
+#   kubectl get endpoints external-database
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database
+  labels:
+    app: database
+    type: external
+spec:
+  type: ClusterIP
+  
+  # SIN selector → Endpoints NO se crean automáticamente
+  # selector: {}  ← Omitido intencionalmente
+  
+  ports:
+    - name: mysql
+      protocol: TCP
+      port: 3306
+      targetPort: 3306
+
+---
+# ====================================================================
+# ENDPOINTS MANUALES
+# ====================================================================
+# IMPORTANTE: metadata.name debe coincidir con Service name
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: external-database  # ← MISMO nombre que Service!
+  labels:
+    app: database
+    type: external
+
+subsets:
+  # Grupo 1: Base de datos principal
+  - addresses:
+      # IP de la base de datos externa
+      - ip: 192.168.1.100
+        # Opcional: hostname para identificación
+        hostname: db-primary
+    
+    # Puertos debe coincidir con Service
+    ports:
+      - name: mysql
+        port: 3306
+        protocol: TCP
+  
+  # Grupo 2: Réplica de lectura (opcional)
+  - addresses:
+      - ip: 192.168.1.101
+        hostname: db-replica-1
+      - ip: 192.168.1.102
+        hostname: db-replica-2
+    
+    ports:
+      - name: mysql
+        port: 3306
+        protocol: TCP
+
+# ====================================================================
+# CÓMO FUNCIONA:
+# ====================================================================
+#
+# Service SIN selector:
+# --------------------
+# metadata:
+#   name: external-database
+# spec:
+#   # Sin selector!
+#   ports: [...]
+#
+# → Kubernetes NO crea Endpoints automáticamente
+# → NO rastrea Pods
+#
+# Endpoints manuales:
+# ------------------
+# metadata:
+#   name: external-database  ← Mismo nombre
+# subsets:
+#   - addresses: [IPs...]
+#
+# → Tú defines las IPs manualmente
+# → kube-proxy configura load balancing
+#
+# Tráfico fluye:
+# --------------
+# Pod → external-database (DNS)
+#     ↓
+# ClusterIP: 10.96.0.30
+#     ↓
+# kube-proxy balancea entre:
+#   - 192.168.1.100:3306 (db-primary)
+#   - 192.168.1.101:3306 (db-replica-1)
+#   - 192.168.1.102:3306 (db-replica-2)
+#
+# ====================================================================
+#
+# VERIFICAR CONFIGURACIÓN:
+# ====================================================================
+#
+# Ver Service:
+# kubectl get service external-database
+#
+# Output:
+# NAME                TYPE        CLUSTER-IP    PORT(S)    AGE
+# external-database   ClusterIP   10.96.0.30    3306/TCP   5m
+#
+# Ver Endpoints:
+# kubectl get endpoints external-database
+#
+# Output:
+# NAME                ENDPOINTS                                           AGE
+# external-database   192.168.1.100:3306,192.168.1.101:3306 + 1 more...   5m
+#
+# Ver detalles completos:
+# kubectl describe endpoints external-database
+#
+# Output:
+# Name:         external-database
+# Subsets:
+#   Addresses:          192.168.1.100,192.168.1.101,192.168.1.102
+#   NotReadyAddresses:  <none>
+#   Ports:
+#     Name   Port  Protocol
+#     ----   ----  --------
+#     mysql  3306  TCP
+#
+# ====================================================================
+#
+# USAR DESDE PODS:
+# ====================================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: api
+        image: myapp:latest
+        
+        env:
+        # Usar nombre del Service como hostname
+        - name: DB_HOST
+          value: "external-database"  # ← DNS del Service
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+# Conexión desde la app:
+# mysql://external-database:3306
+# ↑ kube-proxy balancea automáticamente
+
+# ====================================================================
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ Base de datos externa:
+#    - AWS RDS
+#    - Azure Database
+#    - GCP Cloud SQL
+#    - On-premise MySQL/PostgreSQL
+#
+# ✅ Legacy systems:
+#    - Aplicaciones fuera del cluster
+#    - Mainframes
+#    - Servicios Windows
+#
+# ✅ Servicios gestionados:
+#    - Redis externo
+#    - Memcached
+#    - Elasticsearch cluster
+#
+# ✅ Multi-datacenter:
+#    - Servicios en otro DC
+#    - Replicación cross-region
+#
+# ====================================================================
+#
+# ENDPOINTS CON NOTREADYADDRESSES:
+# ====================================================================
+#
+# Para backends que pueden no estar listos:
+
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: database-with-maintenance
+subsets:
+  # Backends activos
+  - addresses:
+      - ip: 192.168.1.100
+        hostname: db-primary
+    
+    # Backends NO listos (en mantenimiento)
+    notReadyAddresses:
+      - ip: 192.168.1.101
+        hostname: db-replica-maint
+    
+    ports:
+      - name: mysql
+        port: 3306
+        protocol: TCP
+
+# kube-proxy NO envía tráfico a notReadyAddresses
+# Útil para:
+# - Mantenimiento programado
+# - Warming up
+# - Migraciones
+
+# ====================================================================
+# ACTUALIZAR ENDPOINTS DINÁMICAMENTE:
+# ====================================================================
+#
+# Opción 1: kubectl edit
+# ----------------------
+# kubectl edit endpoints external-database
+# # Modificar IPs
+# # Guardar
+#
+# Opción 2: kubectl patch
+# -----------------------
+# kubectl patch endpoints external-database --type='json' -p='[
+#   {
+#     "op": "add",
+#     "path": "/subsets/0/addresses/-",
+#     "value": {"ip": "192.168.1.103", "hostname": "db-replica-3"}
+#   }
+# ]'
+#
+# Opción 3: Re-apply YAML
+# -----------------------
+# # Editar service-manual-endpoints.yaml
+# kubectl apply -f service-manual-endpoints.yaml
+#
+# ====================================================================
+#
+# EJEMPLO AVANZADO - MÚLTIPLES PUERTOS:
+# ====================================================================
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: legacy-app
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: admin
+      port: 9090
+      targetPort: 9090
+
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: legacy-app
+subsets:
+  - addresses:
+      - ip: 10.50.1.10
+        hostname: legacy-server-1
+      - ip: 10.50.1.11
+        hostname: legacy-server-2
+    
+    ports:
+      - name: http
+        port: 8080
+        protocol: TCP
+      - name: admin
+        port: 9090
+        protocol: TCP
+
+# Acceso:
+# http://legacy-app:80 → 10.50.1.10:8080 o 10.50.1.11:8080
+# http://legacy-app:9090 → 10.50.1.10:9090 o 10.50.1.11:9090
+
+# ====================================================================
+# MONITOREO DE ENDPOINTS:
+# ====================================================================
+#
+# Watch cambios en endpoints:
+# kubectl get endpoints external-database -w
+#
+# Ver eventos:
+# kubectl get events --field-selector involvedObject.name=external-database
+#
+# Ver con jsonpath:
+# kubectl get endpoints external-database \
+#   -o jsonpath='{.subsets[*].addresses[*].ip}' | tr ' ' '\n'
+#
+# Output:
+# 192.168.1.100
+# 192.168.1.101
+# 192.168.1.102
+#
+# ====================================================================
+#
+# LIMITACIONES:
+# ====================================================================
+#
+# 1. Mantenimiento manual:
+#    ❌ NO hay health checks automáticos
+#    ❌ Debes actualizar IPs manualmente
+#    ❌ No detecta backends caídos
+#
+# 2. Sin autodiscovery:
+#    ❌ Si backend cambia IP, debes actualizar
+#    ❌ No escala automáticamente
+#
+# 3. Responsabilidad:
+#    ⚠️ Tú aseguras que IPs son alcanzables
+#    ⚠️ Tú gestionas el ciclo de vida
+#
+# ====================================================================
+#
+# ALTERNATIVAS CON HEALTH CHECKS:
+# ====================================================================
+#
+# Usar operador/controller que gestione Endpoints:
+#
+# 1. External-DNS:
+#    - Sincroniza DNS records
+#    - Actualiza Endpoints desde DNS
+#
+# 2. Custom controller:
+#    - Implementar health checks
+#    - Actualizar Endpoints dinámicamente
+#
+# 3. Service Mesh (Istio):
+#    - ServiceEntry para servicios externos
+#    - Health checks integrados
+#    - Circuit breaking
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: Endpoints vacíos
+# ---------------------------
+# kubectl get endpoints external-database
+# NAME                ENDPOINTS   AGE
+# external-database   <none>      5m
+#
+# Causas:
+# 1. Nombres no coinciden:
+#    Service: external-database
+#    Endpoints: external-db  ❌
+#
+# 2. No aplicaste Endpoints:
+#    kubectl apply -f service-manual-endpoints.yaml
+#
+# Problema: Conexión falla
+# ------------------------
+# 1. Verificar IPs alcanzables:
+#    kubectl run -it --rm test --image=busybox --restart=Never -- sh
+#    / # ping 192.168.1.100
+#    / # telnet 192.168.1.100 3306
+#
+# 2. Verificar firewall:
+#    - IPs deben ser accesibles desde Pods
+#    - Security groups / NetworkPolicies
+#
+# 3. Verificar puerto correcto:
+#    kubectl get endpoints external-database -o yaml
+#
+# ====================================================================

@@ -1,0 +1,250 @@
+# ====================================================================
+# SERVICE CON SESSION AFFINITY
+# ====================================================================
+# Descripción:
+#   Service con afinidad de sesión (sticky sessions)
+#   Mantiene conexiones del mismo cliente al mismo Pod
+#
+# Conceptos:
+#   - sessionAffinity: ClientIP
+#   - sessionAffinityConfig
+#   - timeoutSeconds
+#
+# Uso:
+#   kubectl apply -f service-session-affinity.yaml
+#   Testear desde mismo IP multiple veces
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sticky-service
+  labels:
+    app: webapp
+    feature: session-affinity
+spec:
+  type: ClusterIP
+  selector:
+    app: webapp
+  
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+  
+  # ═══════════════════════════════════════════════════════════
+  # SESSION AFFINITY CONFIGURATION
+  # ═══════════════════════════════════════════════════════════
+  
+  # Valores posibles:
+  # - None (default): Sin afinidad, balanceo aleatorio
+  # - ClientIP: Mismo cliente → Mismo Pod
+  sessionAffinity: ClientIP
+  
+  sessionAffinityConfig:
+    clientIP:
+      # Tiempo en segundos que dura la "pegajosidad"
+      # Default: 10800 (3 horas)
+      # Máximo: 86400 (24 horas)
+      timeoutSeconds: 10800
+
+---
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-sticky
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:alpine
+        ports:
+        - containerPort: 8080
+        
+        # Variable de entorno para identificar el Pod
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+# ====================================================================
+# CÓMO FUNCIONA SESSION AFFINITY:
+# ====================================================================
+#
+# SIN Session Affinity (None):
+# ----------------------------
+# Cliente (IP: 203.0.113.10)
+#   Request 1 → Pod-1 (10.1.2.3)
+#   Request 2 → Pod-3 (10.1.2.5)
+#   Request 3 → Pod-2 (10.1.2.4)
+#   Request 4 → Pod-1 (10.1.2.3)
+#   ↑ Balanceo aleatorio/round-robin
+#
+# CON Session Affinity (ClientIP):
+# ---------------------------------
+# Cliente (IP: 203.0.113.10)
+#   Request 1 → Pod-2 (10.1.2.4)
+#   Request 2 → Pod-2 (10.1.2.4)  ← MISMO Pod
+#   Request 3 → Pod-2 (10.1.2.4)  ← MISMO Pod
+#   Request 4 → Pod-2 (10.1.2.4)  ← MISMO Pod
+#   ↑ Todas van al mismo Pod durante timeoutSeconds
+#
+# Otro Cliente (IP: 203.0.113.20)
+#   Request 1 → Pod-1 (10.1.2.3)
+#   Request 2 → Pod-1 (10.1.2.3)  ← MISMO Pod
+#   ↑ Diferente cliente → Puede ir a diferente Pod
+#
+# ====================================================================
+#
+# TESTEAR SESSION AFFINITY:
+# ====================================================================
+#
+# Opción 1: Desde un Pod de debug
+# --------------------------------
+# kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- sh
+#
+# # Hacer múltiples requests
+# for i in {1..10}; do
+#   curl http://sticky-service
+#   echo "Request $i"
+#   sleep 1
+# done
+#
+# # Deberías ver siempre el mismo Pod respondiendo
+#
+# Opción 2: Port-forward y curl local
+# ------------------------------------
+# kubectl port-forward service/sticky-service 8080:80
+#
+# # En otra terminal:
+# for i in {1..10}; do
+#   curl http://localhost:8080
+#   echo "Request $i"
+#   sleep 1
+# done
+#
+# Opción 3: Ver con kubectl logs
+# -------------------------------
+# # Terminal 1: Ver logs de un Pod
+# kubectl logs -f <pod-name>
+#
+# # Terminal 2: Hacer requests
+# kubectl run -it --rm test --image=curlimages/curl --restart=Never -- sh
+# # curl http://sticky-service (múltiples veces)
+#
+# # Terminal 1 mostrará todas las requests llegando al mismo Pod
+#
+# ====================================================================
+#
+# VERIFICAR CONFIGURACIÓN:
+# ====================================================================
+#
+# Ver session affinity:
+# kubectl get service sticky-service -o yaml | grep -A 3 sessionAffinity
+#
+# Output esperado:
+#   sessionAffinity: ClientIP
+#   sessionAffinityConfig:
+#     clientIP:
+#       timeoutSeconds: 10800
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ Aplicaciones con estado de sesión local
+#    - Session storage en memoria del Pod
+#    - Carritos de compra (sin Redis)
+#    - User sessions temporales
+#
+# ✅ WebSockets / Long-polling
+#    - Conexiones persistentes
+#    - Chat applications
+#    - Real-time updates
+#
+# ✅ Upload de archivos grandes
+#    - Multi-part uploads
+#    - Chunks deben ir al mismo Pod
+#
+# ❌ NO usar para:
+#    - Aplicaciones stateless (mejor balanceo)
+#    - Cuando se usa store externo (Redis, Memcached)
+#    - APIs RESTful puras
+#
+# ====================================================================
+#
+# LIMITACIONES:
+# ====================================================================
+#
+# 1. Basado en IP ORIGEN:
+#    - NAT puede agrupar múltiples usuarios en una IP
+#    - Proxies/Load Balancers pueden cambiar IP origen
+#
+# 2. NO funciona con:
+#    - Cookies HTTP (solo IP)
+#    - Headers personalizados
+#    - User-Agent
+#
+# 3. Balanceo desigual:
+#    - Si muchos clientes comparten IP (NAT)
+#    - Un Pod puede recibir mucho más tráfico
+#
+# 4. Timeout:
+#    - Después de timeoutSeconds, puede cambiar de Pod
+#    - No es "sticky" permanente
+#
+# ====================================================================
+#
+# ALTERNATIVAS:
+# ====================================================================
+#
+# Para session management más robusto:
+#
+# 1. Redis/Memcached:
+#    - Session store externo
+#    - No dependes de session affinity
+#    - Pods pueden ser stateless
+#
+# 2. Ingress Controller:
+#    - Cookie-based affinity (nginx-ingress)
+#    - Header-based routing
+#    - Más flexible que ClientIP
+#
+# 3. Service Mesh (Istio, Linkerd):
+#    - Header-based routing
+#    - Consistent hashing
+#    - Circuit breaking
+#
+# ====================================================================
+#
+# DEBUGGING:
+# ====================================================================
+#
+# Ver iptables rules (en el nodo):
+# sudo iptables-save | grep sticky-service
+#
+# Ver IPVS rules (si usa IPVS):
+# sudo ipvsadm -Ln | grep -A 5 sticky-service
+#
+# Ver kube-proxy logs:
+# kubectl -n kube-system logs -l k8s-app=kube-proxy | grep sticky-service
+#
+# ====================================================================

@@ -1,0 +1,295 @@
+# ====================================================================
+# SERVICE NODEPORT CON PUERTO PERSONALIZADO
+# ====================================================================
+# Descripción:
+#   NodePort con puerto específico definido
+#   Útil para estandarizar puertos en el cluster
+#
+# Conceptos:
+#   - nodePort personalizado
+#   - externalTrafficPolicy
+#   - Preservación de IP origen
+#
+# Uso:
+#   kubectl apply -f service-nodeport-custom-port.yaml
+#   curl http://<NODE_IP>:30080
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-nodeport-custom
+  labels:
+    app: webapp
+    type: nodeport-custom
+spec:
+  type: NodePort
+  
+  selector:
+    app: webapp
+    tier: frontend
+  
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+      # Puerto específico del nodo (debe estar en range 30000-32767)
+      nodePort: 30080
+    
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8443
+      nodePort: 30443
+  
+  # ═══════════════════════════════════════════════════════════
+  # EXTERNAL TRAFFIC POLICY
+  # ═══════════════════════════════════════════════════════════
+  
+  # Cluster (default): Puede redirigir a Pod en cualquier nodo
+  #   - Balanceo uniforme
+  #   - Pierde IP origen (SNAT)
+  #   - Un hop extra si Pod no está en mismo nodo
+  
+  # Local: Solo redirige a Pods en el MISMO nodo
+  #   - Preserva IP origen
+  #   - Sin hop extra
+  #   - Balanceo desigual (solo Pods locales)
+  externalTrafficPolicy: Local
+
+---
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: https
+          containerPort: 8443
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+# ====================================================================
+# EXTERNAL TRAFFIC POLICY: Cluster vs Local
+# ====================================================================
+#
+# CLUSTER (default):
+# ------------------
+#
+#   Cliente → Node1:30080
+#       ↓
+#   kube-proxy (Node1)
+#       ↓
+#   SNAT (IP origen → Node1 IP)
+#       ↓
+#   Pod en Node2 (puede estar en otro nodo)
+#       ↓
+#   Pod ve: source IP = Node1 IP ❌
+#
+# Ventajas:
+# ✅ Balanceo uniforme (todos los Pods)
+# ✅ Funciona siempre (incluso si nodo no tiene Pods)
+#
+# Desventajas:
+# ❌ Pierde IP origen del cliente
+# ❌ Hop extra de red (nodo → otro nodo)
+# ❌ No puede ver IP real del cliente
+#
+# -------------------------------------------------------------------
+#
+# LOCAL:
+# ------
+#
+#   Cliente → Node2:30080
+#       ↓
+#   kube-proxy (Node2)
+#       ↓
+#   Solo Pods en Node2 (NO SNAT)
+#       ↓
+#   Pod en Node2
+#       ↓
+#   Pod ve: source IP = Cliente IP ✅
+#
+# Ventajas:
+# ✅ Preserva IP origen del cliente
+# ✅ Sin hop extra (siempre local)
+# ✅ Logs muestran IP real
+# ✅ Mejor para geolocation, rate limiting
+#
+# Desventajas:
+# ❌ Balanceo desigual (solo Pods locales)
+# ❌ Si nodo no tiene Pods, tráfico se pierde ❗
+# ❌ Health checks fallan en nodos sin Pods
+#
+# ====================================================================
+#
+# CUÁNDO USAR externalTrafficPolicy: Local:
+# ====================================================================
+#
+# ✅ Necesitas IP origen real:
+#    - Rate limiting por IP cliente
+#    - Geolocation
+#    - Analytics
+#    - Auditoría de accesos
+#
+# ✅ Baja latencia crítica:
+#    - No quieres hop extra entre nodos
+#    - Aplicaciones tiempo-real
+#
+# ✅ DaemonSet:
+#    - Tienes un Pod en CADA nodo
+#    - Balanceo natural
+#
+# ❌ NO usar si:
+#    - Pods no están en todos los nodos
+#    - Replicas < número de nodos
+#    - Balanceo uniforme es crítico
+#
+# ====================================================================
+#
+# PUERTO PERSONALIZADO CONSIDERATIONS:
+# ====================================================================
+#
+# Ventajas de nodePort: 30080:
+# ✅ Estandarización (todos saben el puerto)
+# ✅ Documentación más simple
+# ✅ Scripts/automation más fáciles
+# ✅ Firewall rules específicas
+#
+# Desventajas:
+# ❌ Conflictos si ya está en uso
+# ❌ Debes coordinarlo manualmente
+# ❌ No escala (range limitado)
+#
+# Recomendación:
+# - Desarrollo: Dejar auto-asignado
+# - Producción: Especificar si necesitas consistencia
+#
+# ====================================================================
+#
+# VERIFICAR EXTERNAL TRAFFIC POLICY:
+# ====================================================================
+#
+# kubectl get service webapp-nodeport-custom -o yaml | grep externalTrafficPolicy
+#
+# Output:
+# externalTrafficPolicy: Local
+#
+# Ver health checks (solo con Local):
+# kubectl get service webapp-nodeport-custom -o jsonpath='{.spec.healthCheckNodePort}'
+#
+# Output (si Local):
+# 32123  ← Puerto health check
+#
+# ====================================================================
+#
+# TEST PRESERVACIÓN DE IP:
+# ====================================================================
+#
+# Modificar Pod para loguear IP origen:
+#
+# kubectl run test-ip --image=nginx:alpine --port=8080
+# kubectl exec -it test-ip -- sh
+#
+# # Dentro del Pod, crear script para ver IP:
+# cat > /usr/share/nginx/html/ip.html << 'EOF'
+# <!DOCTYPE html>
+# <html>
+# <body>
+# <script>
+# fetch('https://api.ipify.org?format=json')
+#   .then(r => r.json())
+#   .then(data => document.write('Your IP: ' + data.ip));
+# </script>
+# </body>
+# </html>
+# EOF
+#
+# Mejor: Usar nginx real-ip module
+# --------------------------------
+# location / {
+#     set_real_ip_from 0.0.0.0/0;
+#     real_ip_header X-Forwarded-For;
+#     add_header X-Real-IP $remote_addr;
+# }
+#
+# Con externalTrafficPolicy: Local
+# curl http://<node-ip>:30080
+# Response header: X-Real-IP: 203.0.113.50 ✅
+#
+# Con externalTrafficPolicy: Cluster
+# curl http://<node-ip>:30080
+# Response header: X-Real-IP: 192.168.1.10 (node IP) ❌
+#
+# ====================================================================
+#
+# HEALTH CHECK CON LOCAL POLICY:
+# ====================================================================
+#
+# Con externalTrafficPolicy: Local, Kubernetes crea health check:
+#
+# kubectl get svc webapp-nodeport-custom -o yaml
+#
+# healthCheckNodePort: 32123  ← Puerto automático
+#
+# Test health check:
+# curl http://<node-ip>:32123/healthz
+#
+# Respuestas:
+# - 200 OK: Nodo tiene Pods saludables
+# - 503 Service Unavailable: Sin Pods en este nodo
+#
+# LoadBalancers externos usan esto para evitar nodos sin Pods
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: Tráfico se pierde con Local policy
+# ---------------------------------------------
+# 1. Verificar Pods en cada nodo:
+#    kubectl get pods -o wide -l app=webapp
+#
+# 2. Si hay nodos sin Pods:
+#    - Aumentar replicas
+#    - Usar DaemonSet
+#    - Cambiar a externalTrafficPolicy: Cluster
+#
+# Problema: Puerto 30080 ya en uso
+# ---------------------------------
+# Error: "provided port is already allocated"
+#
+# 1. Ver Services usando ese puerto:
+#    kubectl get svc --all-namespaces -o json | \
+#      jq '.items[] | select(.spec.ports[]?.nodePort==30080) | .metadata.name'
+#
+# 2. Cambiar a otro puerto o dejar auto-asignación
+#
+# ====================================================================

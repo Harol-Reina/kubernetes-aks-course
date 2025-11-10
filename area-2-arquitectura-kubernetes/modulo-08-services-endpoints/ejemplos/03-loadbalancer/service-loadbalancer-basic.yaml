@@ -1,0 +1,348 @@
+# ====================================================================
+# SERVICE LOADBALANCER BÁSICO
+# ====================================================================
+# Descripción:
+#   Service tipo LoadBalancer con IP pública
+#   Requiere cloud provider (AWS, GCP, Azure)
+#   Crea balanceador de carga externo automáticamente
+#
+# Conceptos:
+#   - LoadBalancer (IP pública)
+#   - Cloud provider integration
+#   - Provisioning automático
+#
+# Uso:
+#   kubectl apply -f service-loadbalancer-basic.yaml
+#   kubectl get service webapp-lb
+#   # Esperar EXTERNAL-IP asignada
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-lb
+  labels:
+    app: webapp
+    type: loadbalancer
+spec:
+  # LoadBalancer: crea balanceador externo con IP pública
+  type: LoadBalancer
+  
+  selector:
+    app: webapp
+    tier: frontend
+  
+  ports:
+    - name: http
+      protocol: TCP
+      # Puerto externo (LoadBalancer)
+      port: 80
+      # Puerto del contenedor
+      targetPort: 8080
+    
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8443
+  
+  # Opcional: Solicitar IP estática específica
+  # loadBalancerIP: 203.0.113.50
+  
+  # Opcional: Limitar IPs que pueden acceder
+  # loadBalancerSourceRanges:
+  #   - "203.0.113.0/24"   # Solo esta subnet
+  #   - "198.51.100.0/24"  # Y esta otra
+
+---
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: https
+          containerPort: 8443
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        # Health checks recomendados
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+# ====================================================================
+# CÓMO FUNCIONA LOADBALANCER:
+# ====================================================================
+#
+# 1. Kubernetes contacta cloud provider API
+#    AWS: crea ELB/ALB/NLB
+#    GCP: crea Cloud Load Balancer
+#    Azure: crea Azure Load Balancer
+#
+# 2. Cloud provider asigna IP pública
+#    Ejemplo: 203.0.113.50
+#
+# 3. LoadBalancer apunta a NodePorts en todos los nodos
+#    LoadBalancer → Node1:31234
+#                 → Node2:31234
+#                 → Node3:31234
+#
+# 4. Tráfico fluye:
+#
+#    Cliente → LoadBalancer IP (203.0.113.50:80)
+#        ↓
+#    Cloud LoadBalancer
+#        ↓
+#    NodePort (31234) en nodos saludables
+#        ↓
+#    kube-proxy → ClusterIP
+#        ↓
+#    Pods (containerPort 8080)
+#
+# ====================================================================
+#
+# VERIFICAR LOADBALANCER:
+# ====================================================================
+#
+# Ver Service:
+# kubectl get service webapp-lb
+#
+# Output (inicialmente):
+# NAME        TYPE           CLUSTER-IP     EXTERNAL-IP   PORT(S)         AGE
+# webapp-lb   LoadBalancer   10.96.0.20     <pending>     80:31456/TCP    10s
+#                                            ↑ Esperando provisioning
+#
+# Output (después de ~1-3 min):
+# NAME        TYPE           CLUSTER-IP     EXTERNAL-IP      PORT(S)         AGE
+# webapp-lb   LoadBalancer   10.96.0.20     203.0.113.50     80:31456/TCP    2m
+#                                            ↑ IP pública asignada
+#
+# Obtener solo la IP externa:
+# kubectl get service webapp-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+#
+# Ver detalles completos:
+# kubectl describe service webapp-lb
+#
+# Output esperado:
+# LoadBalancer Ingress:     203.0.113.50
+# Port:                     http  80/TCP
+# TargetPort:               8080/TCP
+# NodePort:                 http  31456/TCP
+# Endpoints:                10.1.2.3:8080,10.1.2.4:8080,10.1.2.5:8080
+#
+# ====================================================================
+#
+# ACCEDER AL SERVICE:
+# ====================================================================
+#
+# Desde cualquier lugar (Internet):
+# curl http://203.0.113.50
+# curl https://203.0.113.50
+#
+# Desde DNS (si configurado):
+# curl http://myapp.example.com
+#
+# Test con navegador:
+# http://203.0.113.50
+#
+# ====================================================================
+#
+# CLOUD PROVIDER SPECIFIC:
+# ====================================================================
+#
+# AWS:
+# ----
+# - Crea Classic ELB por defecto
+# - Cobra ~$20/mes por LoadBalancer
+# - Ver en AWS Console: EC2 → Load Balancers
+#
+# GCP:
+# ----
+# - Crea Network Load Balancer (L4)
+# - Cobra ~$18/mes por LoadBalancer
+# - Ver en GCP Console: Network services → Load balancing
+#
+# Azure:
+# ------
+# - Crea Azure Load Balancer (Basic)
+# - Primeras 5 reglas gratis
+# - Ver en Azure Portal: Load balancers
+#
+# DigitalOcean:
+# -------------
+# - Crea DO Load Balancer
+# - $12/mes por LoadBalancer
+#
+# On-premise (MetalLB):
+# --------------------
+# - Requiere MetalLB instalado
+# - Asigna IP del pool configurado
+# - No crea infraestructura externa
+#
+# ====================================================================
+#
+# LOADBALANCERSOURCERANGES (Seguridad):
+# ====================================================================
+#
+# Limitar acceso a IPs específicas:
+#
+# spec:
+#   loadBalancerSourceRanges:
+#     - "203.0.113.0/24"      # Office network
+#     - "198.51.100.50/32"    # VPN IP
+#     - "0.0.0.0/0"           # TODO: Restringir en prod!
+#
+# Cloud providers traducen esto a Security Groups/Firewall Rules
+#
+# AWS: Security Group rules
+# GCP: Firewall rules
+# Azure: NSG rules
+#
+# Test acceso bloqueado:
+# curl http://203.0.113.50 (desde IP no permitida)
+# → Timeout o Connection refused
+#
+# ====================================================================
+#
+# LOADBALANCERIP (IP Estática):
+# ====================================================================
+#
+# Reservar IP estática primero:
+#
+# AWS:
+# aws ec2 allocate-address --domain vpc
+#
+# GCP:
+# gcloud compute addresses create webapp-ip --region us-central1
+# gcloud compute addresses describe webapp-ip --region us-central1
+#
+# Azure:
+# az network public-ip create \
+#   --name webapp-ip \
+#   --resource-group myResourceGroup \
+#   --allocation-method Static
+#
+# Luego especificar en Service:
+# spec:
+#   loadBalancerIP: 203.0.113.50
+#
+# ====================================================================
+#
+# COSTOS:
+# ====================================================================
+#
+# Por LoadBalancer/mes (aprox):
+# - AWS ELB:        $20 + $0.008/GB
+# - GCP LB:         $18 + $0.008/GB
+# - Azure LB:       $0 (5 reglas) + $0.005/GB
+# - DigitalOcean:   $12 flat
+#
+# ⚠️ CADA Service tipo LoadBalancer = NUEVO balanceador
+#
+# 10 Services = 10 LoadBalancers = $200/mes en AWS ❗
+#
+# Alternativa: Ingress Controller
+# - 1 LoadBalancer
+# - Múltiples Services detrás
+# - $20/mes total (+ costo Ingress)
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ Producción en cloud:
+#    - AWS EKS, GKS, AKS
+#    - Necesitas IP pública estable
+#
+# ✅ Servicios individuales críticos:
+#    - API principal
+#    - Base de datos externa
+#    - Servicio legacy
+#
+# ✅ Aplicaciones simples:
+#    - Single service
+#    - No necesitas routing complejo
+#
+# ❌ NO usar para:
+#    - Múltiples servicios HTTP (usar Ingress)
+#    - Desarrollo local (sin cloud provider)
+#    - Cost-sensitive (múltiples LBs = caro)
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: EXTERNAL-IP en <pending> por mucho tiempo
+# ---------------------------------------------------
+# 1. Verificar cloud provider instalado:
+#    kubectl get nodes -o yaml | grep providerID
+#
+# 2. Verificar cloud-controller-manager:
+#    kubectl -n kube-system get pods -l component=cloud-controller-manager
+#
+# 3. Ver logs:
+#    kubectl -n kube-system logs -l component=cloud-controller-manager
+#
+# 4. Verificar permisos IAM (AWS/GCP/Azure):
+#    - Cluster necesita permisos para crear LB
+#
+# 5. Verificar quotas:
+#    - AWS: ELB quota
+#    - GCP: Forwarding rules quota
+#    - Azure: Public IP quota
+#
+# Problema: LoadBalancer creado pero no accesible
+# -----------------------------------------------
+# 1. Verificar Endpoints:
+#    kubectl get endpoints webapp-lb
+#
+# 2. Verificar health checks del LB:
+#    - AWS: Target Groups healthy
+#    - GCP: Backend health checks passing
+#    - Azure: Health probes passing
+#
+# 3. Verificar NodePort accesible:
+#    curl http://<node-ip>:<nodePort>
+#
+# 4. Verificar Security Groups/Firewall:
+#    - Permitir tráfico del LB a NodePort
+#    - Permitir tráfico Internet a LB
+#
+# ====================================================================

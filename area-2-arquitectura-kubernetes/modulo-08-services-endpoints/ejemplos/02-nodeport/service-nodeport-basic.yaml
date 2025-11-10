@@ -1,0 +1,265 @@
+# ====================================================================
+# SERVICE NODEPORT BÁSICO
+# ====================================================================
+# Descripción:
+#   Service tipo NodePort para acceso externo
+#   Expone puerto en TODOS los nodos del cluster
+#   Rango: 30000-32767
+#
+# Conceptos:
+#   - NodePort (acceso externo)
+#   - Puerto del nodo (node)
+#   - Puerto del Service (interno)
+#   - targetPort (Pod)
+#
+# Uso:
+#   kubectl apply -f service-nodeport-basic.yaml
+#   curl http://<NODE_IP>:<NODE_PORT>
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-nodeport
+  labels:
+    app: webapp
+    type: nodeport
+spec:
+  # NodePort: expone el Service en cada IP del nodo
+  type: NodePort
+  
+  selector:
+    app: webapp
+    tier: frontend
+  
+  ports:
+    - name: http
+      protocol: TCP
+      # Puerto del Service (ClusterIP interno)
+      port: 80
+      # Puerto del contenedor
+      targetPort: 8080
+      # Puerto del NODO (30000-32767)
+      # Si se omite, Kubernetes asigna uno automáticamente
+      # nodePort: 30080  # Comentado = asignación automática
+
+---
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 8080
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+# ====================================================================
+# CÓMO FUNCIONA NODEPORT:
+# ====================================================================
+#
+# 1. Kubernetes abre el MISMO puerto en TODOS los nodos
+#    Ejemplo: 30080
+#
+# 2. También crea ClusterIP interno
+#    Ejemplo: 10.96.0.15
+#
+# 3. Tráfico fluye:
+#
+#    Cliente externo
+#        ↓
+#    http://NODE_IP:30080
+#        ↓
+#    kube-proxy en el nodo
+#        ↓
+#    DNAT a ClusterIP:80
+#        ↓
+#    Balanceo entre Pods (cualquier nodo)
+#        ↓
+#    Pod backend (containerPort 8080)
+#
+# IMPORTANTE: Puedes acceder vía CUALQUIER IP de nodo
+#   http://node1:30080 → Puede redirigir a Pod en node2
+#   http://node2:30080 → Puede redirigir a Pod en node3
+#   http://node3:30080 → Puede redirigir a Pod en node1
+#
+# ====================================================================
+#
+# OBTENER EL NODEPORT ASIGNADO:
+# ====================================================================
+#
+# kubectl get service webapp-nodeport
+#
+# Output:
+# NAME              TYPE       CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+# webapp-nodeport   NodePort   10.96.0.15    <none>        80:31234/TCP   5m
+#                                                             ↑
+#                                                          NodePort
+#
+# Obtener solo el NodePort:
+# kubectl get service webapp-nodeport -o jsonpath='{.spec.ports[0].nodePort}'
+#
+# ====================================================================
+#
+# OBTENER IPS DE LOS NODOS:
+# ====================================================================
+#
+# kubectl get nodes -o wide
+#
+# Output:
+# NAME    STATUS   ROLES    AGE   VERSION   INTERNAL-IP    EXTERNAL-IP
+# node1   Ready    master   10d   v1.28.0   192.168.1.10   203.0.113.10
+# node2   Ready    worker   10d   v1.28.0   192.168.1.11   203.0.113.11
+# node3   Ready    worker   10d   v1.28.0   192.168.1.12   203.0.113.12
+#
+# Usar EXTERNAL-IP si está disponible, sino INTERNAL-IP
+#
+# ====================================================================
+#
+# ACCEDER AL SERVICE:
+# ====================================================================
+#
+# Desde fuera del cluster:
+# curl http://203.0.113.10:31234
+# curl http://203.0.113.11:31234
+# curl http://203.0.113.12:31234
+# ↑ Cualquier IP de nodo funciona
+#
+# Desde dentro del cluster (por ClusterIP):
+# curl http://webapp-nodeport:80
+# curl http://10.96.0.15:80
+#
+# ====================================================================
+#
+# VERIFICACIÓN:
+# ====================================================================
+#
+# Ver Service completo:
+# kubectl describe service webapp-nodeport
+#
+# Output esperado:
+# Name:                     webapp-nodeport
+# Type:                     NodePort
+# IP:                       10.96.0.15
+# Port:                     http  80/TCP
+# TargetPort:               8080/TCP
+# NodePort:                 http  31234/TCP
+# Endpoints:                10.1.2.3:8080,10.1.2.4:8080,10.1.2.5:8080
+#
+# Test desde nodo:
+# ssh user@node1
+# curl http://localhost:31234
+#
+# ====================================================================
+#
+# FIREWALL / SECURITY GROUPS:
+# ====================================================================
+#
+# En producción, asegúrate de:
+#
+# 1. AWS Security Groups:
+# Permitir tráfico entrante al NodePort (31234) en todos los nodos
+#
+# 2. GCP Firewall Rules:
+# gcloud compute firewall-rules create allow-nodeport \
+#   --allow tcp:30000-32767 \
+#   --source-ranges 0.0.0.0/0
+#
+# 3. Azure NSG:
+# Regla entrante permitiendo TCP 30000-32767
+#
+# 4. On-premise firewall:
+# iptables -A INPUT -p tcp --dport 30000:32767 -j ACCEPT
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ Desarrollo/Testing:
+#    - Acceso rápido sin configurar LoadBalancer
+#    - Minikube, kind, k3s
+#
+# ✅ Bare-metal clusters:
+#    - Sin cloud provider
+#    - Sin soporte para LoadBalancer
+#
+# ✅ Detrás de LoadBalancer externo:
+#    - HAProxy, nginx apuntando a NodePort
+#    - Ingress controller con NodePort
+#
+# ❌ NO recomendado para:
+#    - Producción pública directa
+#    - Múltiples servicios (range limitado 30000-32767)
+#    - Cuando hay LoadBalancer disponible
+#
+# ====================================================================
+#
+# LIMITACIONES:
+# ====================================================================
+#
+# 1. Solo un servicio por puerto:
+#    - Range 30000-32767 = máximo 2768 services
+#
+# 2. Puertos no estándar:
+#    - http://example.com:30080 (usuarios deben recordar puerto)
+#
+# 3. Sin balanceo externo:
+#    - Debes usar LoadBalancer externo o DNS round-robin
+#
+# 4. Cambios de IP de nodo:
+#    - Si nodos cambian IP, hay que actualizar clientes
+#
+# 5. Firewall complexity:
+#    - Debes abrir range completo o puerto específico
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: No puedo acceder desde fuera
+# ---------------------------------------
+# 1. Verificar NodePort asignado:
+#    kubectl get svc webapp-nodeport
+#
+# 2. Verificar Endpoints (Pods running):
+#    kubectl get endpoints webapp-nodeport
+#
+# 3. Verificar firewall del nodo:
+#    sudo iptables -L -n | grep 31234
+#
+# 4. Verificar puerto está escuchando:
+#    sudo netstat -tlnp | grep 31234
+#
+# 5. Test desde dentro del nodo:
+#    curl http://localhost:31234
+#
+# 6. Verificar kube-proxy:
+#    kubectl -n kube-system logs -l k8s-app=kube-proxy
+#
+# ====================================================================

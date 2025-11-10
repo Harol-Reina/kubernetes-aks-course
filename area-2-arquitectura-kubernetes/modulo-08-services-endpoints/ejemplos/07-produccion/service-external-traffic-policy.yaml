@@ -1,0 +1,408 @@
+# ====================================================================
+# EXTERNAL TRAFFIC POLICY - Cluster vs Local
+# ====================================================================
+# Descripción:
+#   Comparación práctica entre externalTrafficPolicy: Cluster y Local
+#   Demuestra diferencias en preservación de IP y balanceo
+#
+# Conceptos:
+#   - externalTrafficPolicy: Cluster (default)
+#   - externalTrafficPolicy: Local
+#   - Source IP preservation
+#   - Load balancing trade-offs
+#
+# Uso:
+#   kubectl apply -f service-external-traffic-policy.yaml
+#   Comparar comportamiento de ambos Services
+# ====================================================================
+
+# ====================================================================
+# SERVICE CON externalTrafficPolicy: Cluster (DEFAULT)
+# ====================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-cluster-policy
+  labels:
+    app: webapp
+    policy: cluster
+spec:
+  type: NodePort
+  
+  selector:
+    app: webapp
+  
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30080
+  
+  # CLUSTER (default): Pierde IP origen, balanceo uniforme
+  externalTrafficPolicy: Cluster
+
+---
+# ====================================================================
+# SERVICE CON externalTrafficPolicy: Local
+# ====================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-local-policy
+  labels:
+    app: webapp
+    policy: local
+spec:
+  type: NodePort
+  
+  selector:
+    app: webapp
+  
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30081
+  
+  # LOCAL: Preserva IP origen, solo Pods locales
+  externalTrafficPolicy: Local
+
+---
+# ====================================================================
+# DEPLOYMENT CON IP LOGGING
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-ip-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        
+        ports:
+        - name: http
+          containerPort: 8080
+        
+        # Script para loguear IP origen
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cat > /etc/nginx/nginx.conf <<'EOF'
+          events {}
+          http {
+              log_format detailed '$remote_addr - $remote_user [$time_local] '
+                                '"$request" $status $body_bytes_sent '
+                                '"$http_referer" "$http_user_agent" '
+                                'pod=$hostname node=$server_addr';
+              
+              server {
+                  listen 8080;
+                  access_log /var/log/nginx/access.log detailed;
+                  
+                  location / {
+                      return 200 "Source IP: $remote_addr\nPod: $hostname\nNode IP: $server_addr\n";
+                      add_header Content-Type text/plain;
+                  }
+                  
+                  location /ip {
+                      return 200 "$remote_addr\n";
+                      add_header Content-Type text/plain;
+                  }
+              }
+          }
+          EOF
+          exec nginx -g 'daemon off;'
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+# ====================================================================
+# COMPARACIÓN: Cluster vs Local
+# ====================================================================
+#
+# externalTrafficPolicy: Cluster (DEFAULT)
+# =========================================
+#
+# CARACTERÍSTICAS:
+# ----------------
+# ✅ Balanceo uniforme entre TODOS los Pods
+# ✅ Funciona incluso si nodo no tiene Pods
+# ✅ No requiere health check port
+# ❌ Pierde IP origen del cliente (SNAT)
+# ❌ Hop extra si Pod está en otro nodo
+# ❌ Logs muestran IP del nodo, no del cliente
+#
+# FLUJO DE TRÁFICO:
+# -----------------
+# Cliente (IP: 203.0.113.10)
+#     ↓
+# NodePort en Node-A (192.168.1.10:30080)
+#     ↓
+# kube-proxy (Node-A)
+#     ↓
+# SNAT: IP origen → 192.168.1.10 (IP del nodo)
+#     ↓
+# Puede ir a cualquier Pod:
+#   - Pod-1 en Node-A ✅
+#   - Pod-2 en Node-B ✅ (hop extra)
+#   - Pod-3 en Node-C ✅ (hop extra)
+#     ↓
+# Pod ve IP origen: 192.168.1.10 ❌ (IP del nodo, no del cliente)
+#
+# -------------------------------------------------------------------
+#
+# externalTrafficPolicy: Local
+# ============================
+#
+# CARACTERÍSTICAS:
+# ----------------
+# ✅ Preserva IP origen del cliente (NO SNAT)
+# ✅ Sin hop extra (siempre local)
+# ✅ Logs muestran IP real del cliente
+# ✅ Health check automático por nodo
+# ❌ Balanceo desigual (solo Pods locales)
+# ❌ Si nodo sin Pods, tráfico se pierde
+# ❌ Requiere LoadBalancer inteligente
+#
+# FLUJO DE TRÁFICO:
+# -----------------
+# Cliente (IP: 203.0.113.10)
+#     ↓
+# NodePort en Node-B (192.168.1.11:30081)
+#     ↓
+# kube-proxy (Node-B)
+#     ↓
+# NO SNAT (IP origen preservada)
+#     ↓
+# Solo Pods en Node-B:
+#   - Pod-1 en Node-A ❌ (ignorado)
+#   - Pod-2 en Node-B ✅
+#   - Pod-3 en Node-C ❌ (ignorado)
+#     ↓
+# Pod ve IP origen: 203.0.113.10 ✅ (IP real del cliente)
+#
+# ====================================================================
+#
+# TESTING - CLUSTER POLICY:
+# ====================================================================
+#
+# Obtener IP del nodo:
+# kubectl get nodes -o wide
+# NODE_IP=<external-ip-del-nodo>
+#
+# Test desde fuera:
+# curl http://$NODE_IP:30080
+#
+# Output:
+# Source IP: 192.168.1.10  ← IP del NODO, no del cliente
+# Pod: webapp-ip-demo-abc123
+# Node IP: 192.168.1.10
+#
+# Verificar logs del Pod:
+# POD=$(kubectl get pod -l app=webapp -o jsonpath='{.items[0].metadata.name}')
+# kubectl logs $POD
+#
+# Logs muestran:
+# 192.168.1.10 - - [date] "GET / HTTP/1.1" 200 ...
+# ↑ IP del nodo, NO del cliente externo
+#
+# ====================================================================
+#
+# TESTING - LOCAL POLICY:
+# ====================================================================
+#
+# Test desde fuera:
+# curl http://$NODE_IP:30081
+#
+# Output:
+# Source IP: 203.0.113.10  ← IP REAL del cliente ✅
+# Pod: webapp-ip-demo-xyz789
+# Node IP: 192.168.1.11
+#
+# Verificar logs del Pod:
+# POD=$(kubectl get pod -l app=webapp -o jsonpath='{.items[0].metadata.name}')
+# kubectl logs $POD
+#
+# Logs muestran:
+# 203.0.113.10 - - [date] "GET / HTTP/1.1" 200 ...
+# ↑ IP REAL del cliente externo ✅
+#
+# ====================================================================
+#
+# VERIFICAR HEALTH CHECK (solo con Local):
+# ====================================================================
+#
+# externalTrafficPolicy: Local crea health check automático
+#
+# kubectl get service webapp-local-policy -o yaml | grep healthCheckNodePort
+#
+# Output:
+# healthCheckNodePort: 32456  ← Puerto asignado automáticamente
+#
+# Test health check:
+# curl http://$NODE_IP:32456/healthz
+#
+# Respuestas:
+# - 200 OK si nodo tiene Pods saludables
+# - 503 Service Unavailable si nodo SIN Pods
+#
+# LoadBalancers externos usan esto para evitar nodos sin Pods
+#
+# ====================================================================
+#
+# BALANCEO DESIGUAL CON LOCAL:
+# ====================================================================
+#
+# Escenario: 3 nodos, 3 Pods, distribución desigual
+#
+# Node-A: 2 Pods
+# Node-B: 1 Pod
+# Node-C: 0 Pods
+#
+# Con externalTrafficPolicy: Cluster:
+# -----------------------------------
+# LoadBalancer envía tráfico igualmente a todos los nodos:
+#   Node-A: 33% → balancea entre 3 Pods (11% cada Pod)
+#   Node-B: 33% → balancea entre 3 Pods (11% cada Pod)
+#   Node-C: 33% → balancea entre 3 Pods (11% cada Pod)
+# Resultado: Cada Pod recibe ~11% ✅ Uniforme
+#
+# Con externalTrafficPolicy: Local:
+# ---------------------------------
+# LoadBalancer envía tráfico solo a nodos con Pods:
+#   Node-A: 50% → solo Pods locales (25% cada Pod)
+#   Node-B: 50% → solo Pods locales (50% único Pod)
+#   Node-C: 0%  → health check falla, no recibe tráfico
+# Resultado: Pods en Node-A (25%), Pod en Node-B (50%) ❌ Desigual
+#
+# ====================================================================
+#
+# CUÁNDO USAR CADA POLICY:
+# ====================================================================
+#
+# externalTrafficPolicy: Cluster (DEFAULT)
+# ========================================
+#
+# ✅ USAR CUANDO:
+# - No necesitas IP origen del cliente
+# - Quieres balanceo uniforme garantizado
+# - Pods no están en todos los nodos
+# - Performance no es crítica (hop extra ok)
+#
+# ❌ NO USAR CUANDO:
+# - Necesitas rate limiting por IP
+# - Necesitas geolocation
+# - Necesitas auditoría de IPs reales
+# - Baja latencia es crítica
+#
+# -------------------------------------------------------------------
+#
+# externalTrafficPolicy: Local
+# ============================
+#
+# ✅ USAR CUANDO:
+# - Necesitas IP origen del cliente (crítico)
+# - Rate limiting por IP cliente
+# - Geolocation services
+# - Compliance/auditoría requiere IPs reales
+# - Baja latencia es prioritaria
+# - DaemonSet (Pod en cada nodo)
+#
+# ❌ NO USAR CUANDO:
+# - Pods no están distribuidos uniformemente
+# - replicas < número de nodos
+# - Balanceo uniforme es crítico
+# - Cloud LoadBalancer no soporta health checks
+#
+# ====================================================================
+#
+# EJEMPLO PRÁCTICO - Rate Limiting:
+# ====================================================================
+#
+# CON externalTrafficPolicy: Cluster:
+# -----------------------------------
+# # Pod ve IP del nodo
+# if request.remote_ip == "192.168.1.10":  # IP del nodo
+#     rate_limit_check()
+#
+# ❌ Problema: TODOS los clientes aparecen con IP del nodo
+# → Rate limit se aplica a TODOS juntos
+#
+# CON externalTrafficPolicy: Local:
+# ---------------------------------
+# # Pod ve IP real del cliente
+# if request.remote_ip == "203.0.113.10":  # IP del cliente
+#     rate_limit_check()
+#
+# ✅ Correcto: Cada cliente tiene su IP única
+# → Rate limit se aplica por cliente
+#
+# ====================================================================
+#
+# CLOUD PROVIDER SPECIFICS:
+# ====================================================================
+#
+# AWS (ELB/NLB):
+# -------------
+# - NLB soporta externalTrafficPolicy: Local nativamente
+# - Usa health checks del Service
+# - Classic ELB puede tener problemas
+#
+# GCP (Cloud Load Balancer):
+# --------------------------
+# - Soporta ambos modos
+# - Health checks automáticos con Local
+# - Balanceo inteligente
+#
+# Azure (Load Balancer):
+# ---------------------
+# - Soporta ambos modos
+# - Usa health probes para Local policy
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: Tráfico se pierde con Local
+# --------------------------------------
+# 1. Verificar distribución de Pods:
+#    kubectl get pods -o wide -l app=webapp
+#
+# 2. ¿Hay nodos sin Pods?
+#    - Aumentar replicas
+#    - Usar DaemonSet
+#    - Cambiar a externalTrafficPolicy: Cluster
+#
+# 3. Verificar health check:
+#    curl http://<node-sin-pods>:<healthCheckNodePort>/healthz
+#    # Debe retornar 503
+#
+# Problema: No veo IP origen con Local
+# -------------------------------------
+# 1. Verificar configuración:
+#    kubectl get svc webapp-local-policy -o yaml | grep externalTrafficPolicy
+#
+# 2. Verificar proxy/NAT entre cliente y cluster
+#    - X-Forwarded-For headers
+#    - Proxy Protocol (AWS NLB)
+#
+# 3. Verificar app logea $remote_addr correcto
+#
+# ====================================================================

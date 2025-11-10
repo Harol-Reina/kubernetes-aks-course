@@ -1,0 +1,377 @@
+# ====================================================================
+# SERVICE LOADBALANCER CON ANNOTATIONS
+# ====================================================================
+# Descripción:
+#   LoadBalancer con annotations específicas del cloud provider
+#   AWS: ELB/ALB/NLB configuration
+#   GCP: Cloud Load Balancer options
+#   Azure: Load Balancer settings
+#
+# Conceptos:
+#   - Annotations cloud-specific
+#   - Internal LoadBalancer
+#   - SSL termination
+#   - Health checks personalizados
+#
+# Uso:
+#   kubectl apply -f service-loadbalancer-annotations.yaml
+# ====================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-lb-advanced
+  labels:
+    app: webapp
+    type: loadbalancer-advanced
+  
+  # ═══════════════════════════════════════════════════════════
+  # ANNOTATIONS - AWS (EKS)
+  # ═══════════════════════════════════════════════════════════
+  annotations:
+    # Tipo de LoadBalancer
+    # "classic" (ELB), "nlb" (Network LB), "nlb-ip" (NLB IP mode)
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    
+    # LoadBalancer INTERNO (solo VPC)
+    service.beta.kubernetes.io/aws-load-balancer-internal: "false"
+    
+    # SSL Certificate (ACM ARN)
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+    
+    # SSL Ports
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+    
+    # Backend protocol
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    
+    # Cross-zone load balancing
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    
+    # Health check
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "5"
+    
+    # Connection draining
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-timeout: "60"
+    
+    # Subnets (para internal LB)
+    # service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-abc123,subnet-def456"
+    
+    # EIP allocation IDs (para NLB)
+    # service.beta.kubernetes.io/aws-load-balancer-eip-allocations: "eipalloc-abc123,eipalloc-def456"
+    
+    # Proxy protocol v2
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+    
+    # Access logs (S3 bucket)
+    # service.beta.kubernetes.io/aws-load-balancer-access-log-enabled: "true"
+    # service.beta.kubernetes.io/aws-load-balancer-access-log-s3-bucket-name: "my-lb-logs"
+    # service.beta.kubernetes.io/aws-load-balancer-access-log-s3-bucket-prefix: "webapp"
+    
+    # Security groups (adicionales)
+    # service.beta.kubernetes.io/aws-load-balancer-extra-security-groups: "sg-abc123,sg-def456"
+    
+  # ═══════════════════════════════════════════════════════════
+  # ANNOTATIONS - GCP (GKE)
+  # ═══════════════════════════════════════════════════════════
+  # Descomentar para GCP:
+  #
+  # # LoadBalancer INTERNO
+  # cloud.google.com/load-balancer-type: "Internal"
+  #
+  # # Firewall source ranges
+  # cloud.google.com/load-balancer-firewall-rules: "true"
+  #
+  # # Backend service timeout
+  # cloud.google.com/backend-service-timeout: "30"
+  #
+  # # NEG (Network Endpoint Groups)
+  # cloud.google.com/neg: '{"ingress": true}'
+  #
+  # # Subnetwork (para internal LB)
+  # cloud.google.com/load-balancer-subnet: "my-subnet"
+  
+  # ═══════════════════════════════════════════════════════════
+  # ANNOTATIONS - AZURE (AKS)
+  # ═══════════════════════════════════════════════════════════
+  # Descomentar para Azure:
+  #
+  # # LoadBalancer INTERNO
+  # service.beta.kubernetes.io/azure-load-balancer-internal: "false"
+  #
+  # # Resource group del LB
+  # service.beta.kubernetes.io/azure-load-balancer-resource-group: "my-rg"
+  #
+  # # IP estática
+  # service.beta.kubernetes.io/azure-load-balancer-ipv4: "20.30.40.50"
+  #
+  # # Subnet (para internal LB)
+  # service.beta.kubernetes.io/azure-load-balancer-internal-subnet: "my-subnet"
+  #
+  # # Health probe interval
+  # service.beta.kubernetes.io/azure-load-balancer-health-probe-interval: "5"
+  #
+  # # Health probe threshold
+  # service.beta.kubernetes.io/azure-load-balancer-health-probe-num-of-probe: "2"
+
+spec:
+  type: LoadBalancer
+  
+  selector:
+    app: webapp
+    tier: frontend
+  
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+    
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8443
+  
+  # Preservar IP origen del cliente
+  externalTrafficPolicy: Local
+  
+  # Source IP ranges permitidas
+  loadBalancerSourceRanges:
+    - "0.0.0.0/0"  # TODO: Restringir en producción
+
+---
+# ====================================================================
+# DEPLOYMENT DE EJEMPLO
+# ====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: https
+          containerPort: 8443
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+# ====================================================================
+# AWS - TIPOS DE LOADBALANCER:
+# ====================================================================
+#
+# CLASSIC ELB (default):
+# ---------------------
+# service.beta.kubernetes.io/aws-load-balancer-type: no especificar
+#
+# Características:
+# - Layer 4 (TCP) y Layer 7 (HTTP)
+# - Antiguo, no recomendado
+# - Health checks básicos
+#
+# NETWORK LB (NLB):
+# ----------------
+# service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+#
+# Características:
+# ✅ Ultra-high performance (millones de requests/sec)
+# ✅ Static IP (via EIP)
+# ✅ Preserve source IP
+# ✅ Lowest latency
+# ❌ No SSL termination nativo
+# ❌ Layer 4 solamente
+#
+# Precio: ~$20/mes + $0.006/LCU-hour
+#
+# NLB IP MODE:
+# -----------
+# service.beta.kubernetes.io/aws-load-balancer-type: "nlb-ip"
+#
+# Características:
+# - Targets son IPs de Pods (no NodePort)
+# - Mejor integración con Fargate
+# - Health checks directos a Pods
+#
+# ====================================================================
+#
+# AWS - LOADBALANCER INTERNO:
+# ====================================================================
+#
+# annotations:
+#   service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+#
+# - Solo accesible desde VPC
+# - No asigna IP pública
+# - Ideal para servicios backend
+# - Puede especificar subnets privadas:
+#
+#   service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-private1,subnet-private2"
+#
+# Uso:
+# - Microservicios internos
+# - APIs privadas
+# - Databases
+#
+# ====================================================================
+#
+# AWS - SSL/TLS TERMINATION:
+# ====================================================================
+#
+# 1. Crear certificado en ACM:
+# aws acm request-certificate \
+#   --domain-name myapp.example.com \
+#   --validation-method DNS
+#
+# 2. Anotar ARN del certificado
+#
+# 3. Configurar en Service:
+# annotations:
+#   service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "arn:aws:acm:..."
+#   service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+#   service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+#
+# Flujo:
+# Cliente HTTPS → LB termina SSL → HTTP a Pods
+#
+# ====================================================================
+#
+# GCP - LOADBALANCER INTERNO:
+# ====================================================================
+#
+# annotations:
+#   cloud.google.com/load-balancer-type: "Internal"
+#
+# - Solo accesible desde VPC
+# - Regional (no global)
+# - Puede especificar subnet:
+#
+#   cloud.google.com/load-balancer-subnet: "my-private-subnet"
+#
+# ====================================================================
+#
+# AZURE - LOADBALANCER INTERNO:
+# ====================================================================
+#
+# annotations:
+#   service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+#
+# - Solo accesible desde VNet
+# - Puede especificar subnet:
+#
+#   service.beta.kubernetes.io/azure-load-balancer-internal-subnet: "my-subnet"
+#
+# - IP estática interna:
+#
+#   service.beta.kubernetes.io/azure-load-balancer-ipv4: "10.0.1.50"
+#
+# ====================================================================
+#
+# HEALTH CHECKS PERSONALIZADOS:
+# ====================================================================
+#
+# AWS:
+# ----
+# annotations:
+#   # Umbral saludable (checks consecutivos exitosos)
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold: "2"
+#   
+#   # Umbral no saludable
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold: "2"
+#   
+#   # Intervalo entre checks (segundos)
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
+#   
+#   # Timeout del check
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "5"
+#   
+#   # Path (para HTTP/HTTPS)
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/health"
+#   
+#   # Protocolo
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "HTTP"
+#   
+#   # Puerto
+#   service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "8080"
+#
+# ====================================================================
+#
+# VERIFICAR ANNOTATIONS:
+# ====================================================================
+#
+# kubectl get service webapp-lb-advanced -o yaml | grep -A 50 annotations
+#
+# Ver LoadBalancer en AWS:
+# aws elbv2 describe-load-balancers \
+#   --query "LoadBalancers[?contains(LoadBalancerName, 'webapp')]"
+#
+# Ver target groups:
+# aws elbv2 describe-target-groups \
+#   --load-balancer-arn <arn>
+#
+# Ver health:
+# aws elbv2 describe-target-health \
+#   --target-group-arn <arn>
+#
+# ====================================================================
+#
+# TROUBLESHOOTING:
+# ====================================================================
+#
+# Problema: Annotation no aplicada
+# ---------------------------------
+# 1. Verificar typos en annotation name
+# 2. Algunas annotations solo funcionan en creación:
+#    kubectl delete svc webapp-lb-advanced
+#    kubectl apply -f service-loadbalancer-annotations.yaml
+#
+# Problema: Health checks failing
+# --------------------------------
+# 1. Verificar path existe: /health
+# 2. Verificar puerto correcto: 8080
+# 3. Ver logs del Pod:
+#    kubectl logs -l app=webapp
+# 4. Ver target health en cloud console
+#
+# ====================================================================
