@@ -1,0 +1,362 @@
+# =============================================================================
+# Ejemplo 02: Quality of Service (QoS) Classes
+# =============================================================================
+#
+# Kubernetes asigna automáticamente una QoS Class a cada Pod basándose en
+# cómo defines requests y limits. Esto determina la prioridad de eviction
+# cuando el nodo tiene presión de recursos.
+#
+# Orden de eviction (primero → último):
+# 1. BestEffort  (sin requests/limits)
+# 2. Burstable   (request < limit o solo algunos recursos definidos)
+# 3. Guaranteed  (request == limit para todos los recursos)
+# =============================================================================
+
+---
+# =============================================================================
+# QoS Class: GUARANTEED
+# =============================================================================
+#
+# Condiciones para Guaranteed:
+# 1. TODOS los contenedores tienen requests Y limits para CPU y Memory
+# 2. Para CADA contenedor: requests.cpu == limits.cpu
+# 3. Para CADA contenedor: requests.memory == limits.memory
+#
+# Características:
+# - 🛡️ Última en ser evicted (máxima protección)
+# - 📊 Recursos 100% predecibles
+# - 💰 Puede resultar en over-provisioning
+# - 🎯 Uso: Bases de datos, aplicaciones críticas
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-guaranteed
+  labels:
+    qos-class: guaranteed
+    example: qos-demo
+  annotations:
+    description: "QoS: Guaranteed - request == limit"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"      # ✅ Igual a request
+        memory: "256Mi"  # ✅ Igual a request
+    ports:
+    - containerPort: 80
+
+---
+# =============================================================================
+# QoS Class: BURSTABLE
+# =============================================================================
+#
+# Condiciones para Burstable:
+# 1. No califica para Guaranteed
+# 2. Al menos UN contenedor tiene request o limit para CPU o Memory
+#
+# Características:
+# - ⚖️ Prioridad media de eviction
+# - 📈 Puede usar más recursos si están disponibles
+# - ⚠️ Puede sufrir throttling o OOMKill
+# - 🎯 Uso: Aplicaciones web, servicios stateless
+#
+# Ejemplo 1: request < limit
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable-flexible
+  labels:
+    qos-class: burstable
+    example: qos-demo
+  annotations:
+    description: "QoS: Burstable - request < limit"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+      limits:
+        cpu: "1"        # ← Mayor que request (permite bursts)
+        memory: "512Mi" # ← Mayor que request
+    ports:
+    - containerPort: 80
+
+---
+# =============================================================================
+# QoS Class: BURSTABLE
+# Ejemplo 2: Solo requests (sin limits)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable-request-only
+  labels:
+    qos-class: burstable
+    example: qos-demo
+  annotations:
+    description: "QoS: Burstable - solo requests"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+      # Sin limits → puede usar todos los recursos disponibles
+
+---
+# =============================================================================
+# QoS Class: BURSTABLE
+# Ejemplo 3: Múltiples contenedores con diferentes configuraciones
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable-mixed
+  labels:
+    qos-class: burstable
+    example: qos-demo
+  annotations:
+    description: "QoS: Burstable - contenedores con diferentes configs"
+spec:
+  containers:
+  
+  # Contenedor 1: request == limit
+  - name: web
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "128Mi"
+    ports:
+    - containerPort: 80
+  
+  # Contenedor 2: request < limit
+  # Esto hace que TODO el Pod sea Burstable
+  - name: sidecar
+    image: busybox:1.36
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "500m"      # ← Diferente a request
+        memory: "256Mi"
+
+---
+# =============================================================================
+# QoS Class: BESTEFFORT
+# =============================================================================
+#
+# Condiciones para BestEffort:
+# - NINGÚN contenedor tiene requests o limits para CPU o Memory
+#
+# Características:
+# - ⚠️ Primera en ser evicted (menor prioridad)
+# - 🎲 Sin garantías de recursos
+# - 💸 Bajo costo (no reserva recursos)
+# - 🎯 Uso: Batch jobs no críticos, testing
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-besteffort
+  labels:
+    qos-class: besteffort
+    example: qos-demo
+  annotations:
+    description: "QoS: BestEffort - sin resources"
+    warning: "Primera en ser evicted bajo presión de recursos"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    # ❌ Sin resources definidos
+    ports:
+    - containerPort: 80
+
+---
+# =============================================================================
+# Deployment: Comparación de QoS Classes
+# =============================================================================
+#
+# Este Deployment crea Pods con diferentes QoS classes para comparar
+# comportamiento bajo presión de recursos
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qos-comparison
+  labels:
+    example: qos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qos-comparison
+  template:
+    metadata:
+      labels:
+        app: qos-comparison
+    spec:
+      containers:
+      
+      # Contenedor Guaranteed
+      - name: guaranteed-container
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+        env:
+        - name: CONTAINER_TYPE
+          value: "guaranteed"
+      
+      # Contenedor Burstable
+      - name: burstable-container
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+        env:
+        - name: CONTAINER_TYPE
+          value: "burstable"
+      
+      # Contenedor BestEffort
+      - name: besteffort-container
+        image: nginx:1.25-alpine
+        # Sin resources
+        env:
+        - name: CONTAINER_TYPE
+          value: "besteffort"
+
+---
+# =============================================================================
+# TESTING Y VERIFICACIÓN
+# =============================================================================
+
+# 1. Crear todos los Pods
+# kubectl apply -f qos-classes.yaml
+
+# 2. Verificar QoS Class de cada Pod
+# kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}'
+# Output: Guaranteed
+
+# kubectl get pod qos-burstable-flexible -o jsonpath='{.status.qosClass}'
+# Output: Burstable
+
+# kubectl get pod qos-besteffort -o jsonpath='{.status.qosClass}'
+# Output: BestEffort
+
+# 3. Ver todas las QoS classes
+# kubectl get pods -l example=qos-demo -o custom-columns=\
+# NAME:.metadata.name,\
+# QoS:.status.qosClass,\
+# CPU_REQUEST:.spec.containers[0].resources.requests.cpu,\
+# CPU_LIMIT:.spec.containers[0].resources.limits.cpu
+
+# 4. Describir cada Pod para ver detalles
+# kubectl describe pod qos-guaranteed | grep -A 10 "QoS Class"
+
+# =============================================================================
+# SIMULACIÓN DE PRESIÓN DE RECURSOS
+# =============================================================================
+
+# Para ver el comportamiento de eviction, necesitarías:
+# 1. Crear un clúster con recursos limitados
+# 2. Crear los 3 tipos de Pods
+# 3. Generar presión de memoria/CPU
+# 4. Observar qué Pods son evicted primero
+
+# Crear stress test (requiere que el clúster permita crearlo)
+# kubectl run stress --image=polinux/stress --restart=Never -- \
+#   stress --vm 1 --vm-bytes 2G --timeout 60s
+
+# Observar evictions
+# kubectl get events --all-namespaces | grep -i evict
+
+# Ver orden de eviction:
+# 1. BestEffort Pods (qos-besteffort)
+# 2. Burstable Pods que exceden request (qos-burstable-*)
+# 3. Guaranteed Pods (qos-guaranteed) - última opción
+
+# =============================================================================
+# COMPARACIÓN DETALLADA
+# =============================================================================
+
+# QoS Class    | Request      | Limit        | Eviction Priority | Uso
+# -------------|--------------|--------------|-------------------|-------------
+# Guaranteed   | == Limit     | == Request   | 🛡️ 3 (última)    | Prod crítica
+# Burstable    | < Limit      | > Request    | ⚠️ 2 (media)      | Web apps
+# BestEffort   | No definido  | No definido  | 🔥 1 (primera)    | Batch jobs
+
+# =============================================================================
+# CÁLCULO DE QoS EN PODS CON MÚLTIPLES CONTENEDORES
+# =============================================================================
+
+# Para que un Pod sea Guaranteed, TODOS los contenedores deben cumplir:
+# - Tener requests Y limits definidos para CPU y Memory
+# - requests == limits para ambos recursos
+
+# Si AL MENOS UN contenedor no cumple → Pod es Burstable
+
+# Ejemplo:
+# Pod con 2 contenedores:
+# - Container 1: request=limit → Individual: Guaranteed
+# - Container 2: request<limit → Individual: Burstable
+# Resultado: Pod completo = Burstable
+
+# =============================================================================
+# VERIFICAR QoS CON KUBECTL
+# =============================================================================
+
+# Ver QoS en formato JSON
+# kubectl get pod qos-guaranteed -o json | jq '.status.qosClass'
+
+# Ver QoS de todos los Pods ordenados
+# kubectl get pods --all-namespaces -o json | \
+#   jq -r '.items[] | "\(.metadata.name): \(.status.qosClass)"' | \
+#   sort -k2
+
+# Contar Pods por QoS class
+# kubectl get pods --all-namespaces -o json | \
+#   jq -r '.items[].status.qosClass' | sort | uniq -c
+
+# Ejemplo output:
+#    15 BestEffort
+#    42 Burstable
+#     8 Guaranteed
+
+# =============================================================================
+# LIMPIAR
+# =============================================================================
+
+# kubectl delete -f qos-classes.yaml

@@ -1,0 +1,486 @@
+# =============================================================================
+# Ejemplo 03: Ephemeral Storage Management
+# =============================================================================
+#
+# Almacenamiento efímero en Kubernetes incluye:
+# 1. emptyDir volumes (excepto tmpfs)
+# 2. Logs de contenedor (/var/log)
+# 3. Writable container layers (imágenes)
+#
+# ⚠️ Si excede el límite → Pod EVICTION (no OOMKill, no restart automático)
+#
+# Configuraciones del nodo:
+# - Single filesystem: Todo en un filesystem (típico)
+# - Two filesystems: Separar kubelet data y container runtime
+# =============================================================================
+
+---
+# =============================================================================
+# Ejemplo 1: emptyDir con sizeLimit
+# =============================================================================
+#
+# ✅ BEST PRACTICE: Siempre define sizeLimit en emptyDir
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-with-sizelimit
+  labels:
+    example: ephemeral-storage
+    type: emptydir-safe
+spec:
+  containers:
+  - name: writer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Writing to cache directory..."
+        for i in $(seq 1 100); do
+          echo "Data chunk $i" >> /cache/data-$i.txt
+          sleep 1
+        done
+        echo "Listing cache contents:"
+        ls -lh /cache/
+        echo "Cache size:"
+        du -sh /cache/
+        sleep infinity
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+        ephemeral-storage: "500Mi"  # Request de storage
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+        ephemeral-storage: "1Gi"    # Limit de storage
+  
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: "500Mi"  # ✅ Límite explícito del volumen
+
+---
+# =============================================================================
+# Ejemplo 2: emptyDir SIN sizeLimit (⚠️ PELIGROSO)
+# =============================================================================
+#
+# Sin sizeLimit, el emptyDir puede consumir hasta el memory limit del Pod
+# Esto puede causar:
+# - OOM si el volumen se llena
+# - Denial of service en el nodo
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-no-sizelimit
+  labels:
+    example: ephemeral-storage
+    type: emptydir-unsafe
+  annotations:
+    warning: "Sin sizeLimit - puede consumir memoria ilimitada"
+spec:
+  containers:
+  - name: writer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "WARNING: Writing without size limit..."
+        echo "This can fill up the node's disk!"
+        sleep infinity
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      limits:
+        memory: "256Mi"
+  
+  volumes:
+  - name: cache
+    emptyDir: {}  # ⚠️ Sin sizeLimit - PELIGROSO
+
+---
+# =============================================================================
+# Ejemplo 3: tmpfs emptyDir (Memory-backed)
+# =============================================================================
+#
+# ⚠️ IMPORTANTE: tmpfs NO cuenta como ephemeral-storage
+# Cuenta como USO DE MEMORIA del contenedor
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-tmpfs
+  labels:
+    example: ephemeral-storage
+    type: tmpfs
+  annotations:
+    note: "tmpfs usa RAM, no disco - cuenta como memory usage"
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    volumeMounts:
+    - name: tmpfs-volume
+      mountPath: /tmp
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"       # ← tmpfs consume de aquí
+      limits:
+        cpu: "200m"
+        memory: "256Mi"       # ← Límite incluye tmpfs
+        # ephemeral-storage no aplica para tmpfs
+  
+  volumes:
+  - name: tmpfs-volume
+    emptyDir:
+      medium: Memory  # ← Almacena en RAM (tmpfs)
+      sizeLimit: "64Mi"
+
+---
+# =============================================================================
+# Ejemplo 4: Múltiples emptyDir con Resource Limits
+# =============================================================================
+#
+# Pod con varios volúmenes emptyDir, todos con límites apropiados
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multiple-emptydir
+  labels:
+    example: ephemeral-storage
+    type: multiple-volumes
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    - name: tmp
+      mountPath: /tmp-data
+    - name: logs
+      mountPath: /var/log/app
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "128Mi"
+        ephemeral-storage: "2Gi"  # Suma de todos los volúmenes
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+        ephemeral-storage: "4Gi"
+  
+  volumes:
+  # Cache directory - mayor tamaño
+  - name: cache
+    emptyDir:
+      sizeLimit: "2Gi"
+  
+  # Temporary files
+  - name: tmp
+    emptyDir:
+      sizeLimit: "1Gi"
+  
+  # Application logs
+  - name: logs
+    emptyDir:
+      sizeLimit: "500Mi"
+
+---
+# =============================================================================
+# Ejemplo 5: Monitoreo de Ephemeral Storage
+# =============================================================================
+#
+# Pod con script que monitorea el uso de almacenamiento efímero
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-monitor
+  labels:
+    example: ephemeral-storage
+    type: monitoring
+spec:
+  containers:
+  - name: monitor
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Ephemeral Storage Monitor ==="
+        while true; do
+          echo ""
+          echo "$(date): Storage usage report"
+          echo "--------------------------------"
+          df -h /cache
+          echo ""
+          echo "Cache directory contents:"
+          du -sh /cache/*
+          echo "--------------------------------"
+          sleep 30
+        done
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+    
+    resources:
+      requests:
+        ephemeral-storage: "500Mi"
+      limits:
+        ephemeral-storage: "1Gi"
+  
+  - name: writer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Writing files to cache..."
+        for i in $(seq 1 1000); do
+          # Escribe archivos de 1MB cada uno
+          dd if=/dev/zero of=/cache/file-$i.dat bs=1M count=1 2>/dev/null
+          echo "Written file $i"
+          sleep 2
+        done
+    
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+  
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: "500Mi"
+
+---
+# =============================================================================
+# Ejemplo 6: Eviction por Exceso de Ephemeral Storage
+# =============================================================================
+#
+# Este Pod INTENCIONALMENTE excede su límite de storage para demostrar eviction
+# ⚠️ NO usar en producción - solo para testing
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ephemeral-eviction-demo
+  labels:
+    example: ephemeral-storage
+    type: eviction-demo
+  annotations:
+    warning: "Este Pod será evicted intencionalmente"
+spec:
+  restartPolicy: Never  # No reiniciar tras eviction
+  
+  containers:
+  - name: filler
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Filling storage to trigger eviction..."
+        echo "Current storage status:"
+        df -h /data
+        
+        echo ""
+        echo "Writing 2GB of data (exceeds 1GB limit)..."
+        dd if=/dev/zero of=/data/bigfile.dat bs=1M count=2048
+        
+        echo "If you see this, eviction didn't happen yet"
+        df -h /data
+    
+    volumeMounts:
+    - name: data
+      mountPath: /data
+    
+    resources:
+      limits:
+        ephemeral-storage: "1Gi"  # ← Límite de 1GB
+  
+  volumes:
+  - name: data
+    emptyDir:
+      sizeLimit: "1Gi"
+
+---
+# =============================================================================
+# Deployment con Ephemeral Storage Best Practices
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-with-storage
+  labels:
+    example: ephemeral-storage
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        volumeMounts:
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+        
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "128Mi"
+            ephemeral-storage: "1Gi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+            ephemeral-storage: "2Gi"
+      
+      volumes:
+      - name: cache
+        emptyDir:
+          sizeLimit: "1Gi"  # ✅ Cache directory limitado
+      
+      - name: run
+        emptyDir:
+          sizeLimit: "100Mi"  # ✅ Runtime files
+
+---
+# =============================================================================
+# COMANDOS DE TESTING Y VERIFICACIÓN
+# =============================================================================
+
+# 1. Aplicar los ejemplos
+# kubectl apply -f ephemeral-storage.yaml
+
+# 2. Ver Pods creados
+# kubectl get pods -l example=ephemeral-storage
+
+# 3. Monitorear el Pod de monitoreo
+# kubectl logs -f ephemeral-monitor -c monitor
+
+# 4. Ver uso de storage en un Pod (requiere exec)
+# kubectl exec -it emptydir-with-sizelimit -- df -h /cache
+
+# 5. Ver eventos de eviction
+# kubectl get events --field-selector reason=Evicted
+
+# Ejemplo de evento de eviction:
+# Type     Reason   Message
+# Warning  Evicted  Pod ephemeral local storage usage exceeds the total limit of containers 1Gi
+
+# 6. Ver el Pod evicted (permanece en estado Failed)
+# kubectl get pod ephemeral-eviction-demo
+# NAME                        READY   STATUS    RESTARTS   AGE
+# ephemeral-eviction-demo     0/1     Evicted   0          2m
+
+# 7. Describir Pod evicted para ver detalles
+# kubectl describe pod ephemeral-eviction-demo
+
+# Buscar:
+# Status:  Failed
+# Reason:  Evicted
+# Message: Pod ephemeral local storage usage exceeds the total limit of containers
+
+# 8. Ver uso de ephemeral storage en nodos
+# kubectl describe node <node-name> | grep -A 5 "Allocated resources"
+
+# 9. Verificar configuración de kubelet (en el nodo)
+# ssh to node
+# cat /var/lib/kubelet/config.yaml | grep -A 3 eviction
+
+# Ejemplo:
+# evictionHard:
+#   imagefs.available: 15%
+#   memory.available: 100Mi
+#   nodefs.available: 10%
+
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+
+# Problema: Pod evicted por ephemeral storage
+# kubectl describe pod <pod-name>
+# Status: Failed
+# Reason: Evicted
+
+# Solución 1: Aumentar límite de ephemeral-storage
+# resources:
+#   limits:
+#     ephemeral-storage: "5Gi"  # Aumentado
+
+# Solución 2: Limpiar cache periódicamente
+# Usar un CronJob o script de limpieza
+
+# Solución 3: Usar Persistent Volume en lugar de emptyDir
+# Para datos que deben persistir
+
+# =============================================================================
+# COMPARACIÓN: emptyDir vs emptyDir{medium: Memory}
+# =============================================================================
+
+# emptyDir (disco):
+# - Cuenta como ephemeral-storage
+# - Persiste mientras el Pod existe
+# - Más lento que RAM
+# - Mayor capacidad disponible
+
+# emptyDir{medium: Memory} (tmpfs):
+# - Cuenta como memory usage del contenedor
+# - Más rápido (RAM)
+# - Menor capacidad
+# - Se pierde en restart del contenedor
+
+# =============================================================================
+# MONITOREO CON PROMETHEUS
+# =============================================================================
+
+# Métricas relevantes:
+# container_fs_usage_bytes - Uso de filesystem
+# container_fs_limit_bytes - Límite de filesystem
+# kubelet_volume_stats_used_bytes - Uso de volúmenes
+# kubelet_volume_stats_capacity_bytes - Capacidad de volúmenes
+
+# Alerta ejemplo:
+# - alert: EphemeralStorageNearLimit
+#   expr: |
+#     (container_fs_usage_bytes / container_fs_limit_bytes) > 0.85
+#   for: 5m
+#   annotations:
+#     summary: "Ephemeral storage >85% in {{ $labels.pod }}"
+
+# =============================================================================
+# LIMPIAR RECURSOS
+# =============================================================================
+
+# kubectl delete -f ephemeral-storage.yaml

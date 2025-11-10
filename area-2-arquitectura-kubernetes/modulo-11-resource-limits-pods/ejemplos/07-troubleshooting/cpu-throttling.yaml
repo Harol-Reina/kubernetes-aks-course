@@ -1,0 +1,155 @@
+# =============================================================================
+# Ejemplo 07: CPU Throttling Simulation
+# =============================================================================
+#
+# Simula carga de CPU para demostrar throttling
+# ⚠️ SOLO PARA TESTING
+# =============================================================================
+
+---
+# Ejemplo 1: CPU Stress con Límite Bajo
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-throttling-demo
+  labels:
+    example: troubleshooting
+    type: cpu-throttling
+spec:
+  containers:
+  - name: cpu-stress
+    image: polinux/stress
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"       # Intenta usar 2 CPUs
+    - "--timeout"
+    - "120s"
+    
+    resources:
+      limits:
+        cpu: "500m"  # ← Solo 0.5 CPU permitido
+      requests:
+        cpu: "250m"
+
+# Comportamiento:
+# - Intenta usar 2 CPUs
+# - Límite: 0.5 CPU
+# - Kernel throttles el proceso
+# - Aplicación se vuelve lenta
+# - NO se termina (diferente a OOMKill)
+
+---
+# Ejemplo 2: Comparación Con y Sin Throttling
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-comparison
+  labels:
+    example: troubleshooting
+    type: comparison
+spec:
+  containers:
+  
+  # Contenedor 1: Con límite bajo (será throttled)
+  - name: throttled
+    image: polinux/stress
+    command: ["stress", "--cpu", "2", "--timeout", "300s"]
+    resources:
+      limits:
+        cpu: "500m"
+    env:
+    - name: CONTAINER_TYPE
+      value: "throttled"
+  
+  # Contenedor 2: Con límite alto (no throttling)
+  - name: not-throttled
+    image: polinux/stress
+    command: ["stress", "--cpu", "2", "--timeout", "300s"]
+    resources:
+      limits:
+        cpu: "2"
+    env:
+    - name: CONTAINER_TYPE
+      value: "not-throttled"
+
+---
+# Deployment con HPA (Horizontal Pod Autoscaler)
+# Alternativa al aumento de CPU limit
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-app
+  labels:
+    example: troubleshooting
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cpu-app
+  template:
+    metadata:
+      labels:
+        app: cpu-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale cuando CPU > 70%
+
+---
+# TESTING THROTTLING
+
+# 1. Aplicar
+# kubectl apply -f cpu-throttling.yaml
+
+# 2. Monitorear CPU usage
+# kubectl top pod cpu-throttling-demo
+
+# Verás CPU stuck en ~500m (el límite)
+
+# 3. Ver throttling stats (requiere acceso al contenedor)
+# kubectl exec -it cpu-throttling-demo -- cat /sys/fs/cgroup/cpu/cpu.stat
+# nr_periods 1000
+# nr_throttled 800    # ← 80% del tiempo throttled!
+# throttled_time 400000000000
+
+# 4. Comparar ambos contenedores
+# kubectl top pod cpu-comparison --containers
+
+# 5. Ver con Prometheus (si está instalado)
+# rate(container_cpu_cfs_throttled_seconds_total{pod="cpu-throttling-demo"}[5m])
+
+# 6. Limpiar
+# kubectl delete -f cpu-throttling.yaml
