@@ -1,0 +1,61 @@
+# Pod que importa TODAS las claves de un Secret como variables de entorno usando envFrom
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-config-secret
+type: Opaque
+stringData:
+  API_KEY: "sk_live_abc123xyz789"
+  API_SECRET: "secret_xyz789abc123"
+  STRIPE_KEY: "pk_live_stripe_key_example"
+  JWT_SECRET: "super-secret-jwt-key-do-not-share"
+  ENCRYPTION_KEY: "aes256-encryption-key-32chars"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-env-all
+  labels:
+    app: demo
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== All Environment Variables from Secret ==="
+      env | grep -E 'API_|STRIPE|JWT|ENCRYPTION' | sort
+      echo ""
+      echo "Sleeping for inspection..."
+      sleep 3600
+    
+    # Importar TODAS las claves del Secret como variables de entorno
+    envFrom:
+    - secretRef:
+        name: app-config-secret
+    
+    # También puedes combinar con variables individuales
+    env:
+    - name: APP_NAME
+      value: "MyApp"
+    - name: ENVIRONMENT
+      value: "production"
+
+  restartPolicy: Never
+
+---
+# Comandos de verificación:
+# kubectl apply -f pod-env-all.yaml
+# kubectl logs app-env-all
+# kubectl exec app-env-all -- env | sort
+# 
+# Verificar que todas las claves del Secret están disponibles:
+# kubectl exec app-env-all -- sh -c 'echo "API_KEY=$API_KEY"'
+# kubectl exec app-env-all -- sh -c 'echo "JWT_SECRET=$JWT_SECRET"'
+#
+# Limpiar:
+# kubectl delete pod app-env-all
+# kubectl delete secret app-config-secret

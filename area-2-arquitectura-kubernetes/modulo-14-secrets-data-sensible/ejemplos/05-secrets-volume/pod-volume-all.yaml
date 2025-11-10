@@ -1,0 +1,67 @@
+# Pod que monta un Secret completo como volumen
+# Cada clave del Secret se convierte en un archivo en el directorio de montaje
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-credentials
+type: Opaque
+stringData:
+  username: "appuser"
+  password: "SecurePassword123!"
+  api-key: "sk_live_api_key_abc123"
+  database-url: "postgresql://appuser:SecurePassword123!@postgres:5432/mydb"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-volume-all
+  labels:
+    app: demo
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Listing mounted Secret files ==="
+      ls -la /etc/secrets/
+      echo ""
+      echo "=== Reading Secret files ==="
+      echo "Username: $(cat /etc/secrets/username)"
+      echo "Password: $(cat /etc/secrets/password)"
+      echo "API Key: $(cat /etc/secrets/api-key)"
+      echo "Database URL: $(cat /etc/secrets/database-url)"
+      echo ""
+      echo "Sleeping for inspection..."
+      sleep 3600
+    
+    volumeMounts:
+    - name: secret-volume
+      mountPath: /etc/secrets
+      readOnly: true  # Siempre montar como solo lectura
+  
+  volumes:
+  - name: secret-volume
+    secret:
+      secretName: app-credentials
+      defaultMode: 0400  # r-------- (solo lectura para owner)
+
+  restartPolicy: Never
+
+---
+# Comandos de verificación:
+# kubectl apply -f pod-volume-all.yaml
+# kubectl logs app-volume-all
+# kubectl exec app-volume-all -- ls -la /etc/secrets/
+# kubectl exec app-volume-all -- cat /etc/secrets/username
+# kubectl exec app-volume-all -- cat /etc/secrets/password
+#
+# Ver estructura de enlaces simbólicos:
+# kubectl exec app-volume-all -- ls -la /etc/secrets/..data/
+#
+# Limpiar:
+# kubectl delete pod app-volume-all
+# kubectl delete secret app-credentials

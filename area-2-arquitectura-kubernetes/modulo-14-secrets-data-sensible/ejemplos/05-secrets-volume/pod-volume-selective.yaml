@@ -1,0 +1,92 @@
+# Pod que monta solo claves específicas de un Secret como archivos
+# Usando el campo 'items' para seleccionar y renombrar archivos
+apiVersion: v1
+kind: Secret
+metadata:
+  name: selective-secret
+type: Opaque
+stringData:
+  db-username: "dbadmin"
+  db-password: "SuperSecretDBPass!"
+  api-key: "api_key_abc123"
+  api-secret: "api_secret_xyz789"
+  cache-password: "redis_password_123"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-volume-selective
+  labels:
+    app: demo
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Mounted files (only selected keys) ==="
+      ls -la /etc/db-creds/
+      ls -la /etc/api-creds/
+      echo ""
+      echo "=== Database Credentials ==="
+      echo "Username: $(cat /etc/db-creds/user.txt)"
+      echo "Password: $(cat /etc/db-creds/pass.txt)"
+      echo ""
+      echo "=== API Credentials ==="
+      echo "API Key: $(cat /etc/api-creds/credentials/key.txt)"
+      echo ""
+      echo "Sleeping..."
+      sleep 3600
+    
+    volumeMounts:
+    # Primer volumen: credenciales de BD
+    - name: db-credentials
+      mountPath: /etc/db-creds
+      readOnly: true
+    
+    # Segundo volumen: credenciales de API
+    - name: api-credentials
+      mountPath: /etc/api-creds
+      readOnly: true
+  
+  volumes:
+  # Volumen con claves selectivas de BD
+  - name: db-credentials
+    secret:
+      secretName: selective-secret
+      defaultMode: 0400
+      items:
+      - key: db-username
+        path: user.txt        # Renombrar archivo
+      - key: db-password
+        path: pass.txt        # Renombrar archivo
+  
+  # Volumen con claves selectivas de API (con subdirectorio)
+  - name: api-credentials
+    secret:
+      secretName: selective-secret
+      defaultMode: 0400
+      items:
+      - key: api-key
+        path: credentials/key.txt  # Con subdirectorio
+
+  restartPolicy: Never
+
+---
+# Comandos de verificación:
+# kubectl apply -f pod-volume-selective.yaml
+# kubectl logs app-volume-selective
+# kubectl exec app-volume-selective -- ls -la /etc/db-creds/
+# kubectl exec app-volume-selective -- cat /etc/db-creds/user.txt
+# kubectl exec app-volume-selective -- cat /etc/api-creds/credentials/key.txt
+#
+# Verificar que otras claves NO están montadas:
+# kubectl exec app-volume-selective -- ls -la /etc/db-creds/ | grep cache
+# (no debería encontrar 'cache-password')
+#
+# Limpiar:
+# kubectl delete pod app-volume-selective
+# kubectl delete secret selective-secret
