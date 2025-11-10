@@ -1,0 +1,66 @@
+# =============================================================================
+# EJEMPLO: Ingress con TLS (Multi-Host)
+# =============================================================================
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: multi-host-tls
+type: kubernetes.io/tls
+data:
+  # Certificado wildcard: *.example.com
+  # O certificado con múltiples SANs (Subject Alternative Names)
+  tls.crt: LS0tLS1CRUdJTi...  # Reemplazar
+  tls.key: LS0tLS1CRUdJTi...  # Reemplazar
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-multi-host-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  
+  # TLS para múltiples hosts
+  tls:
+  - hosts:
+    - app1.example.com
+    - app2.example.com
+    - api.example.com
+    secretName: multi-host-tls  # Certificado debe incluir todos los hosts
+  
+  rules:
+  - host: app1.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+  
+  - host: app2.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080
+
+# GENERAR CERTIFICADO WILDCARD (desarrollo):
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#   -keyout multi.key -out multi.crt \
+#   -subj "/CN=*.example.com/O=MyOrg" \
+#   -addext "subjectAltName=DNS:*.example.com,DNS:example.com"
+
+# VERIFICACIÓN:
+# curl -k https://app1.example.com
+# curl -k https://app2.example.com

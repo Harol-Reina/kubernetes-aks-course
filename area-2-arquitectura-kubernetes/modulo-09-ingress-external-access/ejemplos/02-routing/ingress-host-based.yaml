@@ -1,0 +1,232 @@
+# =============================================================================
+# EJEMPLO: Ingress Host-Based Routing (Enrutamiento por Host)
+# =============================================================================
+# DESCRIPCIÓN:
+#   Configuración de Ingress que enruta tráfico a diferentes servicios
+#   basándose en el HOSTNAME (dominio) de la petición. Este es el patrón
+#   más común en producción para exponer múltiples aplicaciones bajo
+#   diferentes dominios usando un solo LoadBalancer.
+#
+# CONCEPTOS:
+#   - Host-based routing: enrutamiento por hostname/dominio
+#   - Virtual hosting: múltiples sitios en una misma IP
+#   - DNS resolution: relación hostname → IP
+#   - Reglas múltiples en un mismo Ingress
+#
+# CASO DE USO:
+#   Múltiples aplicaciones con diferentes dominios:
+#     app1.example.com  → Aplicación 1
+#     app2.example.com  → Aplicación 2
+#     api.example.com   → API REST
+#
+# ARQUITECTURA:
+#   
+#   Cliente → app1.example.com → Ingress (203.0.113.5) → servicio-app1:8080
+#          → app2.example.com → Ingress (203.0.113.5) → servicio-app2:8080
+#
+# PREREQUISITOS:
+#   - Ingress Controller nginx instalado
+#   - Deployments y Services: deployment-apps-test.yaml aplicado
+#   - DNS configurado (o /etc/hosts para testing)
+#
+# CONFIGURACIÓN DNS (para testing local):
+#   # Linux/Mac: editar /etc/hosts
+#   sudo nano /etc/hosts
+#   # Añadir líneas:
+#   <INGRESS_IP>  app1.example.com
+#   <INGRESS_IP>  app2.example.com
+#
+#   # Windows: editar C:\Windows\System32\drivers\etc\hosts
+#
+# VERIFICACIÓN:
+#   kubectl apply -f ingress-host-based.yaml
+#   kubectl get ingress host-based-ingress
+#   kubectl describe ingress host-based-ingress
+#   
+#   # Probar con curl
+#   curl -H "Host: app1.example.com" http://<INGRESS_IP>
+#   curl -H "Host: app2.example.com" http://<INGRESS_IP>
+#   
+#   # O con DNS configurado:
+#   curl http://app1.example.com
+#   curl http://app2.example.com
+#
+# TROUBLESHOOTING:
+#   - Error 404: El hostname no coincide con ninguna regla
+#   - DNS no resuelve: Verificar /etc/hosts o configuración DNS
+#   - Default backend 404: No hay regla catch-all configurada
+#
+# REFERENCIAS:
+#   - README.md: Sección "Tipos de Routing - Host-based Routing"
+#   - Lab 01: Parte 5 - Ingress por Host
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: host-based-ingress
+  annotations:
+    # Reescribe la URL antes de enviar al backend
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    
+    # Agregar headers personalizados (opcional)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Ingress-Type "host-based" always;
+      add_header X-Served-By "nginx-ingress-controller" always;
+spec:
+  ingressClassName: nginx
+  
+  # Reglas de enrutamiento basadas en HOST
+  rules:
+  
+  # ========================================================================
+  # REGLA 1: app1.example.com → servicio-app1
+  # ========================================================================
+  - host: app1.example.com  # Hostname específico
+    http:
+      paths:
+      # Path raíz (/) → enruta TODO el tráfico de este host
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+  
+  # ========================================================================
+  # REGLA 2: app2.example.com → servicio-app2
+  # ========================================================================
+  - host: app2.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080
+
+# =============================================================================
+# EJEMPLO ALTERNATIVO: Host-based con múltiples paths por host
+# =============================================================================
+# 
+# Puedes combinar host-based + path-based routing:
+# 
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: host-and-path-ingress
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#   # api.example.com con diferentes endpoints
+#   - host: api.example.com
+#     http:
+#       paths:
+#       - path: /v1      # api.example.com/v1 → api-v1
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: api-v1
+#             port:
+#               number: 8080
+#       - path: /v2      # api.example.com/v2 → api-v2
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: api-v2
+#             port:
+#               number: 8080
+# =============================================================================
+
+# =============================================================================
+# TABLA DE COINCIDENCIAS Host-based Routing
+# =============================================================================
+# 
+# Host Configurado     | Request Host        | ¿Coincide? | Backend
+# ---------------------|---------------------|------------|-------------------
+# app1.example.com     | app1.example.com    | ✅ Sí      | servicio-app1
+# app1.example.com     | app2.example.com    | ❌ No      | -
+# app1.example.com     | example.com         | ❌ No      | -
+# app1.example.com     | sub.app1.example.com| ❌ No      | -
+# (sin host)           | cualquier-host      | ✅ Sí      | default backend
+# 
+# =============================================================================
+
+# =============================================================================
+# COMANDOS ÚTILES:
+# =============================================================================
+# 
+# # Aplicar ejemplo
+# kubectl apply -f ../01-basico/deployment-apps-test.yaml
+# kubectl apply -f ingress-host-based.yaml
+# 
+# # Verificar Ingress
+# kubectl get ingress host-based-ingress
+# kubectl describe ingress host-based-ingress
+# 
+# # Ver hosts configurados
+# kubectl get ingress host-based-ingress -o jsonpath='{.spec.rules[*].host}'
+# # Salida: app1.example.com app2.example.com
+# 
+# # Obtener IP del Ingress Controller
+# # NodePort:
+# NODE_PORT=$(kubectl get svc -n ingress-nginx nginx-ingress-controller -o jsonpath='{.spec.ports[0].nodePort}')
+# NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+# 
+# # LoadBalancer:
+# INGRESS_IP=$(kubectl get svc -n ingress-nginx nginx-ingress-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+# 
+# # Configurar /etc/hosts (Linux/Mac)
+# echo "$INGRESS_IP app1.example.com app2.example.com" | sudo tee -a /etc/hosts
+# 
+# # Probar con curl usando header Host (sin modificar /etc/hosts)
+# curl -H "Host: app1.example.com" http://$INGRESS_IP
+# curl -H "Host: app2.example.com" http://$INGRESS_IP
+# 
+# # Probar con DNS configurado
+# curl http://app1.example.com
+# curl http://app2.example.com
+# 
+# # Probar host inexistente (debería retornar 404 o default backend)
+# curl -H "Host: app3.example.com" http://$INGRESS_IP
+# 
+# # Verificar headers personalizados
+# curl -I http://app1.example.com
+# # Buscar: X-Ingress-Type: host-based
+# 
+# # Ver logs filtrando por host
+# kubectl logs -n ingress-nginx deployment/nginx-ingress-controller | grep "app1.example.com"
+# 
+# # Probar con navegador
+# firefox http://app1.example.com
+# firefox http://app2.example.com
+# 
+# # Limpiar /etc/hosts (importante!)
+# sudo sed -i '/app1.example.com/d' /etc/hosts
+# sudo sed -i '/app2.example.com/d' /etc/hosts
+# 
+# # Eliminar Ingress
+# kubectl delete ingress host-based-ingress
+# =============================================================================
+
+# =============================================================================
+# DIAGRAMA DE FLUJO:
+# =============================================================================
+# 
+# 1. Usuario ingresa: http://app1.example.com
+# 2. DNS resuelve: app1.example.com → 203.0.113.5 (IP del Ingress)
+# 3. Request HTTP:
+#    GET / HTTP/1.1
+#    Host: app1.example.com    ← Header importante!
+# 4. Ingress Controller lee header "Host"
+# 5. Coincide con regla: host=app1.example.com
+# 6. Enruta a: servicio-app1:8080
+# 7. Service selecciona Pod con label app=app1
+# 8. Pod procesa y responde
+# 9. Response retorna al usuario
+# 
+# =============================================================================

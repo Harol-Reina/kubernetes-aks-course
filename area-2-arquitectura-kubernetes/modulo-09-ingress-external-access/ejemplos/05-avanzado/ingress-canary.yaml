@@ -1,0 +1,98 @@
+# =============================================================================
+# EJEMPLO: Canary Deployments
+# =============================================================================
+# DESCRIPCIÓN:
+#   Estrategia de despliegue que enruta un porcentaje del tráfico a una
+#   nueva versión (canary) mientras la mayoría va a la versión estable.
+#
+# CASO DE USO:
+#   - Testing de nuevas versiones en producción con tráfico real
+#   - Validación gradual antes de full rollout
+#   - A/B testing
+#
+# ARQUITECTURA:
+#   80% tráfico → app-v1 (versión estable)
+#   20% tráfico → app-v2 (versión canary)
+# =============================================================================
+
+---
+# Ingress PRINCIPAL (versión estable - v1)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: production-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-v1  # Versión estable
+            port:
+              number: 80
+
+---
+# Ingress CANARY (versión nueva - v2)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-ingress
+  annotations:
+    # Habilitar canary
+    nginx.ingress.kubernetes.io/canary: "true"
+    
+    # Opción 1: Por peso (20% del tráfico)
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+    
+    # Opción 2: Por header (comentado)
+    # nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    # nginx.ingress.kubernetes.io/canary-by-header-value: "always"
+    
+    # Opción 3: Por cookie (comentado)
+    # nginx.ingress.kubernetes.io/canary-by-cookie: "canary"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-v2  # Versión canary
+            port:
+              number: 80
+
+# ESTRATEGIAS DE CANARY:
+# 
+# 1. canary-weight: Porcentaje del tráfico
+#    nginx.ingress.kubernetes.io/canary-weight: "20"
+#    → 20% a v2, 80% a v1
+# 
+# 2. canary-by-header: Por header HTTP específico
+#    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+#    → Requests con header "X-Canary: always" van a v2
+# 
+# 3. canary-by-cookie: Por cookie
+#    nginx.ingress.kubernetes.io/canary-by-cookie: "canary"
+#    → Requests con cookie "canary=always" van a v2
+
+# PROGRESIÓN TÍPICA:
+# Fase 1: 10% canary → kubectl patch ingress canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"10"}}}'
+# Fase 2: 25% canary → kubectl patch ingress canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"25"}}}'
+# Fase 3: 50% canary → kubectl patch ingress canary -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
+# Fase 4: 100% v2 → Eliminar canary ingress, actualizar production ingress a v2
+
+# VERIFICACIÓN:
+# # Generar 100 requests y contar distribución
+# for i in {1..100}; do curl -s http://app.example.com | grep -o "v[12]"; done | sort | uniq -c
+# # Debería mostrar ~20 v2 y ~80 v1
+# 
+# # Probar con header (si usas canary-by-header)
+# curl -H "X-Canary: always" http://app.example.com
+# # → Siempre v2

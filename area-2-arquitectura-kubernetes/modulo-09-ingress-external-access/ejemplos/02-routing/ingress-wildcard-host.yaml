@@ -1,0 +1,50 @@
+# =============================================================================
+# EJEMPLO: Ingress con Wildcard Host (Host Comodín)
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wildcard-host-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  # Host específico: foo.bar.com
+  - host: "foo.bar.com"
+    http:
+      paths:
+      - path: /bar
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+  
+  # Wildcard host: *.foo.com
+  # Coincide: test.foo.com, api.foo.com, cualquier.foo.com
+  # NO coincide: sub.test.foo.com (solo 1 nivel), foo.com
+  - host: "*.foo.com"
+    http:
+      paths:
+      - path: /foo
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080
+
+# TABLA DE COINCIDENCIAS:
+# Host Config  | Request Host       | ¿Coincide?
+# -------------|--------------------|-----------
+# *.foo.com    | bar.foo.com        | ✅ Sí
+# *.foo.com    | test.foo.com       | ✅ Sí
+# *.foo.com    | baz.bar.foo.com    | ❌ No (wildcard cubre solo 1 etiqueta DNS)
+# *.foo.com    | foo.com            | ❌ No (wildcard requiere subdomain)
+
+# VERIFICACIÓN:
+# curl -H "Host: bar.foo.com" http://<INGRESS_IP>/foo
+# curl -H "Host: test.foo.com" http://<INGRESS_IP>/foo

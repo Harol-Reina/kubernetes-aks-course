@@ -1,0 +1,323 @@
+# =============================================================================
+# DEPLOYMENTS Y SERVICES DE EJEMPLO PARA TESTING DE INGRESS
+# =============================================================================
+# DESCRIPCIÓN:
+#   Este archivo contiene dos aplicaciones de ejemplo (app1 y app2) que se
+#   usan en los laboratorios y ejemplos de Ingress para demostrar routing
+#   path-based y host-based.
+#
+# CONCEPTOS:
+#   - Deployments con múltiples réplicas para load balancing
+#   - Services de tipo ClusterIP (acceso solo interno)
+#   - Contenedores nginx con páginas HTML personalizadas
+#
+# CASO DE USO:
+#   Crear aplicaciones de prueba para experimentar con diferentes
+#   configuraciones de Ingress (path-based, host-based, TLS, etc.)
+#
+# VERIFICACIÓN:
+#   kubectl apply -f deployment-apps-test.yaml
+#   kubectl get deployments,services,pods
+#   kubectl get endpoints servicio-app1 servicio-app2
+#
+# REFERENCIAS:
+#   - README.md: Sección "Tipos de Routing"
+#   - ejemplos/02-routing/: Ejemplos de uso de estas apps
+# =============================================================================
+
+# =============================================================================
+# APLICACIÓN 1: app1
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app1
+  labels:
+    app: app1
+spec:
+  # 3 réplicas para demostrar load balancing
+  replicas: 3
+  
+  selector:
+    matchLabels:
+      app: app1
+  
+  template:
+    metadata:
+      labels:
+        app: app1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        
+        # Recursos recomendados para producción
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        
+        # Crear página HTML personalizada identificando la app
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            cat > /usr/share/nginx/html/index.html << 'EOF'
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Aplicación 1</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                    }
+                    .container {
+                        text-align: center;
+                        background: rgba(255,255,255,0.1);
+                        padding: 40px;
+                        border-radius: 10px;
+                        backdrop-filter: blur(10px);
+                    }
+                    h1 { font-size: 3em; margin: 0; }
+                    p { font-size: 1.2em; }
+                    .pod { 
+                        background: rgba(255,255,255,0.2);
+                        padding: 10px;
+                        border-radius: 5px;
+                        margin-top: 20px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🚀 Aplicación 1</h1>
+                    <p>¡Soy la primera, la aplicación número 1!</p>
+                    <div class="pod">
+                        <strong>Pod:</strong> $(hostname)<br>
+                        <strong>IP:</strong> $(hostname -i)
+                    </div>
+                </div>
+            </body>
+            </html>
+            EOF
+            nginx -g 'daemon off;'
+        
+        # Health checks (readiness y liveness probes)
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# Service para app1
+apiVersion: v1
+kind: Service
+metadata:
+  name: servicio-app1
+  labels:
+    app: app1
+spec:
+  # ClusterIP: Solo accesible dentro del clúster
+  # El Ingress Controller enrutará tráfico externo a este Service
+  type: ClusterIP
+  
+  selector:
+    app: app1  # Selecciona Pods con label app=app1
+  
+  ports:
+    - name: http
+      port: 8080        # Puerto del Service
+      targetPort: 80    # Puerto del contenedor
+      protocol: TCP
+  
+  # Session affinity para sticky sessions (opcional)
+  # sessionAffinity: ClientIP
+
+---
+# =============================================================================
+# APLICACIÓN 2: app2
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app2
+  labels:
+    app: app2
+spec:
+  replicas: 3
+  
+  selector:
+    matchLabels:
+      app: app2
+  
+  template:
+    metadata:
+      labels:
+        app: app2
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        
+        # Crear página HTML personalizada para app2
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            cat > /usr/share/nginx/html/index.html << 'EOF'
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Aplicación 2</title>
+                <style>
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                        color: white;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                    }
+                    .container {
+                        text-align: center;
+                        background: rgba(255,255,255,0.1);
+                        padding: 40px;
+                        border-radius: 10px;
+                        backdrop-filter: blur(10px);
+                    }
+                    h1 { font-size: 3em; margin: 0; }
+                    p { font-size: 1.2em; }
+                    .pod { 
+                        background: rgba(255,255,255,0.2);
+                        padding: 10px;
+                        border-radius: 5px;
+                        margin-top: 20px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🎯 Aplicación 2</h1>
+                    <p>¡Soy la segunda, la aplicación número 2!</p>
+                    <div class="pod">
+                        <strong>Pod:</strong> $(hostname)<br>
+                        <strong>IP:</strong> $(hostname -i)
+                    </div>
+                </div>
+            </body>
+            </html>
+            EOF
+            nginx -g 'daemon off;'
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# Service para app2
+apiVersion: v1
+kind: Service
+metadata:
+  name: servicio-app2
+  labels:
+    app: app2
+spec:
+  type: ClusterIP
+  
+  selector:
+    app: app2
+  
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 80
+      protocol: TCP
+
+# =============================================================================
+# COMANDOS ÚTILES:
+# =============================================================================
+# 
+# # Aplicar deployments y services
+# kubectl apply -f deployment-apps-test.yaml
+# 
+# # Verificar deployments
+# kubectl get deployments
+# kubectl rollout status deployment/app1
+# kubectl rollout status deployment/app2
+# 
+# # Verificar pods creados
+# kubectl get pods -l app=app1
+# kubectl get pods -l app=app2
+# 
+# # Verificar services
+# kubectl get svc servicio-app1 servicio-app2
+# 
+# # Verificar endpoints (debe mostrar 3 IPs por servicio)
+# kubectl get endpoints servicio-app1
+# kubectl get endpoints servicio-app2
+# 
+# # Probar desde dentro del clúster
+# kubectl run curl-test --image=curlimages/curl -it --rm -- sh
+# # Dentro del pod:
+# curl http://servicio-app1.default.svc.cluster.local:8080
+# curl http://servicio-app2.default.svc.cluster.local:8080
+# 
+# # Ver logs de un pod
+# kubectl logs -l app=app1 --tail=20
+# 
+# # Escalar deployment
+# kubectl scale deployment app1 --replicas=5
+# 
+# # Ver descripción de un pod
+# kubectl describe pod -l app=app1 | head -30
+# 
+# # Eliminar todo
+# kubectl delete -f deployment-apps-test.yaml
+# =============================================================================

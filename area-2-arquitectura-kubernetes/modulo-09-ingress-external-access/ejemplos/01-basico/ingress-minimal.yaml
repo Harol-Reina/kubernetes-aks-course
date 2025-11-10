@@ -1,0 +1,153 @@
+# =============================================================================
+# EJEMPLO: Ingress Mínimo (Básico)
+# =============================================================================
+# DESCRIPCIÓN:
+#   Configuración más simple de un Ingress que enruta TODO el tráfico HTTP
+#   a un único servicio backend. Este es el caso de uso más básico y es útil
+#   para aprender los fundamentos de Ingress.
+#
+# CONCEPTOS:
+#   - Ingress básico sin reglas complejas
+#   - IngressClass para especificar qué controller usar
+#   - defaultBackend para enrutar todo el tráfico
+#   - Anotación rewrite-target para modificar la URL
+#
+# CASO DE USO:
+#   Exponer una aplicación web simple al exterior sin necesidad de
+#   routing complejo por path o host. Útil para desarrollo y testing.
+#
+# PREREQUISITOS:
+#   - Ingress Controller instalado (nginx)
+#   - Service "test" existente en el namespace default
+#
+# VERIFICACIÓN:
+#   kubectl apply -f ingress-minimal.yaml
+#   kubectl get ingress minimal-ingress
+#   kubectl describe ingress minimal-ingress
+#   
+#   # Obtener IP del ingress controller (NodePort o LoadBalancer)
+#   kubectl get svc -n ingress-nginx
+#   
+#   # Acceder con curl
+#   curl http://<INGRESS_IP>/testpath
+#
+# TROUBLESHOOTING:
+#   - Si no obtiene IP: El LoadBalancer puede tardar 1-2 minutos
+#   - Error 404: Verificar que el Service "test" exista
+#   - Error 503: El Service no tiene Pods activos (endpoints vacíos)
+#
+# REFERENCIAS:
+#   - README.md: Sección "Recursos Ingress"
+#   - Lab 01: Fundamentos de Ingress
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minimal-ingress
+  annotations:
+    # Reescribe la URL eliminando el prefijo "/testpath" antes de enviar
+    # al backend. Ejemplo: /testpath/users → /users
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  # IngressClass especifica qué Ingress Controller debe procesar este recurso
+  # "nginx" es el nombre del IngressClass creado por ingress-nginx
+  ingressClassName: nginx
+  
+  # Reglas de enrutamiento
+  rules:
+  # Regla sin host específico → se aplica a CUALQUIER host
+  - http:
+      paths:
+      # Ruta 1: /testpath
+      - path: /testpath
+        # PathType define cómo se compara el path:
+        # - Prefix: Coincide /testpath, /testpath/, /testpath/foo
+        # - Exact: Solo coincide /testpath (case-sensitive)
+        pathType: Prefix
+        
+        # Backend: Servicio de Kubernetes al que se enruta el tráfico
+        backend:
+          service:
+            name: test      # Nombre del Service
+            port:
+              number: 80    # Puerto del Service
+
+---
+# =============================================================================
+# DEPLOYMENT Y SERVICE DE EJEMPLO (para testing del Ingress anterior)
+# =============================================================================
+# Deployment que ejecuta nginx con una página HTML personalizada
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-app
+  labels:
+    app: test
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      labels:
+        app: test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        # Comando para crear una página HTML de prueba
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo '<html><body><h1>Ingress Minimal Test</h1><p>Path: /testpath</p><p>Pod: '$(hostname)'</p></body></html>' > /usr/share/nginx/html/index.html && \
+            nginx -g 'daemon off;'
+
+---
+# Service que expone el Deployment anterior
+apiVersion: v1
+kind: Service
+metadata:
+  name: test
+spec:
+  selector:
+    app: test
+  ports:
+    - port: 80          # Puerto del Service
+      targetPort: 80    # Puerto del contenedor
+  type: ClusterIP       # Solo accesible dentro del clúster (sin IP externa)
+
+# =============================================================================
+# COMANDOS ÚTILES:
+# =============================================================================
+# 
+# # Aplicar todo junto
+# kubectl apply -f ingress-minimal.yaml
+# 
+# # Verificar recursos creados
+# kubectl get deployment,service,ingress
+# 
+# # Ver detalles del Ingress
+# kubectl describe ingress minimal-ingress
+# 
+# # Ver endpoints del Service
+# kubectl get endpoints test
+# 
+# # Probar desde dentro del clúster
+# kubectl run curl-test --image=curlimages/curl -it --rm -- sh
+# curl http://test.default.svc.cluster.local
+# 
+# # Obtener URL del Ingress (NodePort)
+# NODE_PORT=$(kubectl get svc -n ingress-nginx nginx-ingress-controller -o jsonpath='{.spec.ports[0].nodePort}')
+# NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+# curl http://$NODE_IP:$NODE_PORT/testpath
+# 
+# # Ver logs del ingress controller
+# kubectl logs -n ingress-nginx deployment/nginx-ingress-controller -f
+# 
+# # Eliminar recursos
+# kubectl delete -f ingress-minimal.yaml
+# =============================================================================

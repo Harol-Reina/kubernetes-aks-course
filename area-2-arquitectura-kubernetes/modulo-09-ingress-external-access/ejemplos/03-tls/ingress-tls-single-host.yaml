@@ -1,0 +1,78 @@
+# =============================================================================
+# EJEMPLO: Ingress con TLS (Single Host)
+# =============================================================================
+
+# PASO 1: Crear certificado autofirmado (desarrollo)
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#   -keyout tls.key -out tls.crt \
+#   -subj "/CN=app.example.com/O=MyOrg"
+
+# PASO 2: Crear Secret TLS
+# kubectl create secret tls tls-secret \
+#   --cert=tls.crt \
+#   --key=tls.key
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-secret
+type: kubernetes.io/tls
+data:
+  # Base64 encoded certificate and key
+  # Para generar: cat tls.crt | base64 -w 0
+  tls.crt: LS0tLS1CRUdJTi...  # Reemplazar con certificado real
+  tls.key: LS0tLS1CRUdJTi...  # Reemplazar con clave privada real
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-single-host-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # Forzar HTTPS
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  
+  # Configuración TLS
+  tls:
+  - hosts:
+    - app.example.com  # Debe coincidir con CN del certificado
+    secretName: tls-secret  # Secret que contiene tls.crt y tls.key
+  
+  # Reglas HTTP/HTTPS
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+
+# FLUJO TLS:
+# 1. Cliente hace request: https://app.example.com
+# 2. Ingress Controller:
+#    - Lee Secret "tls-secret"
+#    - Sirve certificado tls.crt al cliente
+#    - Descifra TLS usando tls.key
+# 3. Tráfico interno (Ingress → Service) va en HTTP plano
+# 4. Service → Pod (HTTP)
+
+# VERIFICACIÓN:
+# # Probar HTTPS
+# curl --cacert tls.crt https://app.example.com
+# 
+# # Ignorar errores de certificado (desarrollo)
+# curl -k https://app.example.com
+# 
+# # Ver detalles del certificado
+# openssl s_client -connect app.example.com:443 -servername app.example.com
+# 
+# # Verificar redirección HTTP → HTTPS
+# curl -I http://app.example.com
+# # Debe retornar: 308 Permanent Redirect Location: https://app.example.com

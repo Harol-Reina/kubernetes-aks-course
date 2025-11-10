@@ -1,0 +1,48 @@
+# =============================================================================
+# EJEMPLO: IP Whitelist / Blacklist
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whitelist-ingress
+  annotations:
+    # Solo permite acceso desde estas IPs/rangos
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,192.168.1.0/24,203.0.113.5/32"
+    
+    # Mensaje personalizado para IPs bloqueadas (opcional)
+    nginx.ingress.kubernetes.io/default-backend: "custom-403-backend"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: admin.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 8080
+
+# CASOS DE USO:
+# - Panel de administración: solo desde IPs corporativas
+# - API interna: solo desde VPN
+# - Staging environment: solo desde oficina
+
+# COMPORTAMIENTO:
+# - IP permitida: 200 OK
+# - IP bloqueada: 403 Forbidden
+
+# VERIFICACIÓN:
+# # Desde IP permitida
+# curl http://admin.example.com
+# # → 200 OK
+# 
+# # Desde IP no permitida
+# curl http://admin.example.com
+# # → 403 Forbidden
+#
+# # Ver tu IP actual
+# curl https://ifconfig.me

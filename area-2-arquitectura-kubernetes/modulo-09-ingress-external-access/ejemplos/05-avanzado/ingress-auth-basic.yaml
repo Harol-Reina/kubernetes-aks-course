@@ -1,0 +1,60 @@
+# =============================================================================
+# EJEMPLO: Basic Authentication
+# =============================================================================
+
+# PASO 1: Crear archivo htpasswd
+# htpasswd -c auth admin
+# # Ingresa password cuando se solicite
+
+# PASO 2: Crear Secret desde archivo
+# kubectl create secret generic basic-auth --from-file=auth
+
+---
+# Secret con credenciales (alternativa a kubectl create)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth
+type: Opaque
+data:
+  # Contenido de htpasswd file (base64)
+  # Usuario: admin, Password: secretpass
+  # Generar: echo "admin:$(openssl passwd -apr1 secretpass)" | base64 -w0
+  auth: YWRtaW46JGFwcjEkSDY1dnVCb...  # Reemplazar con valor real
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auth-ingress
+  annotations:
+    # Habilitar autenticación básica
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required - Admin Area"
+    
+    # Mensaje personalizado (opcional)
+    nginx.ingress.kubernetes.io/auth-signin: 'https://example.com/login'
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: admin.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 8080
+
+# VERIFICACIÓN:
+# # Sin credenciales → 401 Unauthorized
+# curl http://admin.example.com
+# 
+# # Con credenciales correctas → 200 OK
+# curl -u admin:secretpass http://admin.example.com
+# 
+# # Navegador mostrará popup de login
+# firefox http://admin.example.com

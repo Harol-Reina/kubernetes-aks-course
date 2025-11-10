@@ -1,0 +1,196 @@
+# =============================================================================
+# EJEMPLO: Ingress Path-Based Routing (Enrutamiento por Ruta)
+# =============================================================================
+# DESCRIPCIÓN:
+#   Configuración de Ingress que enruta tráfico a diferentes servicios
+#   basándose en la RUTA (path) de la URL. Todas las peticiones llegan
+#   al mismo host, pero se distribuyen a diferentes backends según el path.
+#
+# CONCEPTOS:
+#   - Path-based routing: enrutamiento por ruta URL
+#   - PathType: Prefix vs Exact matching
+#   - Múltiples paths en una misma regla HTTP
+#   - Rewrite target para modificar URLs
+#
+# CASO DE USO:
+#   Aplicación monolítica expuesta bajo diferentes rutas:
+#     /app1    → Aplicación 1 (frontend)
+#     /app2    → Aplicación 2 (backend API)
+#     /admin   → Panel de administración
+#
+# ARQUITECTURA:
+#   
+#   Cliente → https://myapp.com/app1 → Ingress → servicio-app1:8080
+#          → https://myapp.com/app2 → Ingress → servicio-app2:8080
+#
+# PREREQUISITOS:
+#   - Ingress Controller nginx instalado
+#   - Deployments y Services: deployment-apps-test.yaml aplicado
+#
+# VERIFICACIÓN:
+#   kubectl apply -f ingress-path-based.yaml
+#   kubectl get ingress path-based-ingress
+#   kubectl describe ingress path-based-ingress
+#   
+#   # Probar con curl (usando IP del ingress)
+#   INGRESS_IP=$(kubectl get svc -n ingress-nginx nginx-ingress-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#   curl http://$INGRESS_IP/app1
+#   curl http://$INGRESS_IP/app2
+#
+# TROUBLESHOOTING:
+#   - Error 404 en /app1: Verificar que servicio-app1 existe
+#   - Path no reescrito correctamente: Revisar anotación rewrite-target
+#   - Service sin endpoints: kubectl get endpoints servicio-app1
+#
+# REFERENCIAS:
+#   - README.md: Sección "Tipos de Routing - Path-based Routing"
+#   - Lab 01: Parte 4 - Ingress por Path
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-based-ingress
+  annotations:
+    # REWRITE TARGET: Reescribe la URL eliminando el prefijo antes de
+    # enviar al backend.
+    # 
+    # Ejemplo SIN rewrite:
+    #   Request: http://myapp.com/app1/users
+    #   Enviado a backend: http://servicio-app1:8080/app1/users (ERROR 404)
+    #
+    # Ejemplo CON rewrite-target: /
+    #   Request: http://myapp.com/app1/users
+    #   Enviado a backend: http://servicio-app1:8080/users (OK)
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    
+    # Metadata adicional (opcional)
+    kubernetes.io/ingress.class: nginx  # Alternativa a spec.ingressClassName
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # No forzar HTTPS
+spec:
+  # IngressClass: especifica qué controller procesa este Ingress
+  ingressClassName: nginx
+  
+  # Reglas de enrutamiento
+  rules:
+  # Regla HTTP sin host específico → se aplica a CUALQUIER hostname
+  - http:
+      paths:
+      
+      # =====================================================================
+      # PATH 1: /app1 → servicio-app1
+      # =====================================================================
+      - path: /app1
+        # PathType: Prefix
+        # Coincide con: /app1, /app1/, /app1/users, /app1/api/data
+        # NO coincide con: /app11, /app1x
+        pathType: Prefix
+        
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080  # Puerto del Service
+      
+      # =====================================================================
+      # PATH 2: /app2 → servicio-app2
+      # =====================================================================
+      - path: /app2
+        pathType: Prefix
+        
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080
+
+# =============================================================================
+# EJEMPLO ALTERNATIVO: Path-based con PathType Exact
+# =============================================================================
+# 
+# Si quieres coincidencias EXACTAS (no prefijos), usa PathType: Exact:
+# 
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: path-exact-ingress
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#   - http:
+#       paths:
+#       # Solo coincide /api (NO /api/, NO /api/users)
+#       - path: /api
+#         pathType: Exact
+#         backend:
+#           service:
+#             name: api-service
+#             port:
+#               number: 8080
+# =============================================================================
+
+# =============================================================================
+# TABLA DE COINCIDENCIAS PathType: Prefix
+# =============================================================================
+# 
+# Path Configurado | Request Path       | ¿Coincide? | Reenviado al backend (con rewrite)
+# -----------------|--------------------|-----------|---------------------------------
+# /app1            | /app1              | ✅ Sí     | /
+# /app1            | /app1/             | ✅ Sí     | /
+# /app1            | /app1/users        | ✅ Sí     | /users
+# /app1            | /app1/api/data     | ✅ Sí     | /api/data
+# /app1            | /app11             | ❌ No     | -
+# /app1            | /app1x             | ❌ No     | -
+# /app1            | /application1      | ❌ No     | -
+# 
+# =============================================================================
+
+# =============================================================================
+# COMANDOS ÚTILES:
+# =============================================================================
+# 
+# # Aplicar ejemplo (asegúrate de tener las apps de test)
+# kubectl apply -f ../01-basico/deployment-apps-test.yaml
+# kubectl apply -f ingress-path-based.yaml
+# 
+# # Verificar Ingress creado
+# kubectl get ingress path-based-ingress
+# kubectl describe ingress path-based-ingress
+# 
+# # Ver reglas configuradas
+# kubectl get ingress path-based-ingress -o yaml | grep -A 20 "rules:"
+# 
+# # Obtener IP/Puerto del Ingress Controller
+# # Para NodePort:
+# NODE_PORT=$(kubectl get svc -n ingress-nginx nginx-ingress-controller -o jsonpath='{.spec.ports[0].nodePort}')
+# NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}')
+# echo "Ingress URL: http://$NODE_IP:$NODE_PORT"
+# 
+# # Para LoadBalancer:
+# INGRESS_IP=$(kubectl get svc -n ingress-nginx nginx-ingress-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+# echo "Ingress URL: http://$INGRESS_IP"
+# 
+# # Probar routing a app1
+# curl http://$NODE_IP:$NODE_PORT/app1
+# # Debería mostrar: "¡Soy la primera, la aplicación número 1!"
+# 
+# # Probar routing a app2
+# curl http://$NODE_IP:$NODE_PORT/app2
+# # Debería mostrar: "¡Soy la segunda, la aplicación número 2!"
+# 
+# # Probar path inexistente (debería retornar 404)
+# curl http://$NODE_IP:$NODE_PORT/app3
+# 
+# # Ver configuración nginx generada (avanzado)
+# kubectl exec -n ingress-nginx deployment/nginx-ingress-controller -- cat /etc/nginx/nginx.conf | grep -A 20 "location /app1"
+# 
+# # Ver logs del ingress controller
+# kubectl logs -n ingress-nginx deployment/nginx-ingress-controller -f | grep "path-based-ingress"
+# 
+# # Editar Ingress en tiempo real
+# kubectl edit ingress path-based-ingress
+# 
+# # Eliminar Ingress
+# kubectl delete ingress path-based-ingress
+# =============================================================================

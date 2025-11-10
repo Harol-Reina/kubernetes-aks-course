@@ -1,0 +1,64 @@
+# =============================================================================
+# EJEMPLO: CORS Configuration
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cors-ingress
+  annotations:
+    # Habilitar CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    
+    # Métodos permitidos
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    
+    # Headers permitidos en requests
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    
+    # Headers expuestos en responses
+    nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length,Content-Range"
+    
+    # Orígenes permitidos (usar dominio específico en producción)
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://frontend.example.com"
+    # Para múltiples orígenes:
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "https://app1.com,https://app2.com"
+    # Para desarrollo (NO usar en producción):
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    
+    # Credenciales (cookies, auth headers)
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    
+    # Max age del preflight (segundos)
+    nginx.ingress.kubernetes.io/cors-max-age: "1728000"  # 20 días
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 8080
+
+# HEADERS GENERADOS:
+# Access-Control-Allow-Origin: https://frontend.example.com
+# Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+# Access-Control-Allow-Headers: DNT,User-Agent,...
+# Access-Control-Expose-Headers: Content-Length,Content-Range
+# Access-Control-Allow-Credentials: true
+# Access-Control-Max-Age: 1728000
+
+# VERIFICACIÓN:
+# # Preflight request (OPTIONS)
+# curl -X OPTIONS http://api.example.com \
+#   -H "Origin: https://frontend.example.com" \
+#   -H "Access-Control-Request-Method: POST" \
+#   -i
+# 
+# # Verificar headers CORS
+# curl -H "Origin: https://frontend.example.com" http://api.example.com -I

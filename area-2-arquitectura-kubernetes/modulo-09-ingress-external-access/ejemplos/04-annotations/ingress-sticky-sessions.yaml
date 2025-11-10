@@ -1,0 +1,52 @@
+# =============================================================================
+# EJEMPLO: Sticky Sessions (Session Affinity)
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticky-sessions-ingress
+  annotations:
+    # Habilitar sticky sessions basado en cookies
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    
+    # Nombre de la cookie
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    
+    # Expiración de la cookie (segundos)
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"  # 48 horas
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    
+    # Path de la cookie
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    
+    # Cookie solo HTTPS
+    nginx.ingress.kubernetes.io/session-cookie-secure: "false"
+    
+    # HttpOnly cookie (no accesible desde JavaScript)
+    nginx.ingress.kubernetes.io/session-cookie-httponly: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+
+# FUNCIONAMIENTO:
+# 1. Primera request → Ingress selecciona Pod aleatorio (ej: pod-1)
+# 2. Response incluye cookie: Set-Cookie: route=<hash-of-pod-1>
+# 3. Siguientes requests con esa cookie → siempre al mismo pod-1
+# 4. Si pod-1 se elimina → nueva cookie con otro pod
+
+# VERIFICACIÓN:
+# curl -c cookies.txt -b cookies.txt http://app.example.com
+# curl -c cookies.txt -b cookies.txt http://app.example.com
+# # Ver cookie
+# cat cookies.txt | grep route

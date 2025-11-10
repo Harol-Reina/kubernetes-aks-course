@@ -1,0 +1,43 @@
+# =============================================================================
+# EJEMPLO: Rewrite Target Annotation
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rewrite-ingress
+  annotations:
+    # Captura grupos con regex y usa $2 en rewrite
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      # Regex con grupos de captura: (/|$)(.*) 
+      # Grupo 1: (/|$)  →  / o fin de cadena
+      # Grupo 2: (.*)   →  cualquier cosa después
+      - path: /api(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 8080
+
+# EJEMPLOS DE REESCRITURA:
+# Request                      → Enviado al backend
+# -------                        -------------------
+# /api                         → /
+# /api/                        → /
+# /api/users                   → /users
+# /api/v1/products             → /v1/products
+
+# SIN rewrite-target:
+# /api/users → /api/users (puede causar 404 si el backend no tiene /api)
+
+# VERIFICACIÓN:
+# kubectl apply -f ingress-rewrite.yaml
+# curl http://app.example.com/api/users
