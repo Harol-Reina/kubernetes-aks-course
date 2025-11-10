@@ -1,0 +1,92 @@
+# ====================================================================
+# REPLICASET QUE ADOPTA PODS HUÉRFANOS
+# ====================================================================
+# Descripción:
+#   ReplicaSet que adoptará los Pods creados en pods-huerfanos.yaml
+#   porque tienen el label "app: orphan-demo"
+#
+# Conceptos:
+#   - Adopción de Pods
+#   - Owner references
+#   - Riesgo de configuraciones inconsistentes
+#
+# Uso:
+#   1. PRIMERO: kubectl apply -f pods-huerfanos.yaml
+#   2. kubectl get pods --show-labels
+#   3. LUEGO: kubectl apply -f replicaset-adoption.yaml
+#   4. kubectl get pods --show-labels
+#   5. kubectl describe pod pod-huerfano-1
+#   6. Ver ownerReferences
+# ====================================================================
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: adoption-rs
+  labels:
+    app: orphan-demo
+    demonstration: adoption
+spec:
+  # Pedir 5 réplicas
+  # Ya hay 3 Pods huérfanos con el label correcto
+  # ReplicaSet los adoptará y creará solo 2 nuevos
+  replicas: 5
+  
+  selector:
+    matchLabels:
+      app: orphan-demo  # ← Coincide con los Pods huérfanos
+  
+  template:
+    metadata:
+      labels:
+        app: orphan-demo  # ← Mismo label
+        created-by: replicaset
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.22-alpine  # ← Versión DIFERENTE a los huérfanos
+        ports:
+        - containerPort: 80
+        
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 3
+
+# ====================================================================
+# RESULTADO ESPERADO:
+# ====================================================================
+# kubectl get pods -o custom-columns=\
+# NAME:.metadata.name,\
+# IMAGE:.spec.containers[0].image,\
+# CREATED-BY:.metadata.labels.created-by,\
+# OWNER:.metadata.ownerReferences[0].name
+#
+# NAME                  IMAGE                   CREATED-BY   OWNER
+# pod-huerfano-1        nginx:1.20-alpine       manual       adoption-rs ← ADOPTADO
+# pod-huerfano-2        nginx:1.21-alpine       manual       adoption-rs ← ADOPTADO
+# pod-huerfano-3        nginx:alpine            manual       adoption-rs ← ADOPTADO
+# adoption-rs-abc12     nginx:1.22-alpine       replicaset   adoption-rs ← NUEVO
+# adoption-rs-def34     nginx:1.22-alpine       replicaset   adoption-rs ← NUEVO
+#
+# ⚠️ PROBLEMA: 3 Pods con versiones diferentes (1.20, 1.21, alpine)
+#              2 Pods con versión 1.22
+#              Configuración INCONSISTENTE
+# ====================================================================

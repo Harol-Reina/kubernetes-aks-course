@@ -1,0 +1,120 @@
+# ====================================================================
+# REPLICASET - DEMOSTRACIÓN DE LIMITACIÓN DE UPDATES
+# ====================================================================
+# Descripción:
+#   Demuestra que ReplicaSets NO actualizan Pods existentes
+#   cuando cambias la imagen en el template
+#
+# Conceptos:
+#   - Limitación de ReplicaSets
+#   - No hay rolling updates
+#   - Necesidad de Deployments
+#
+# Demo:
+#   1. kubectl apply -f replicaset-no-update.yaml
+#   2. kubectl get pods -l app=no-update -o wide
+#   3. kubectl get pods -o jsonpath='{.items[*].spec.containers[0].image}'
+#      Output: nginx:1.20-alpine nginx:1.20-alpine nginx:1.20-alpine
+#   
+#   4. EDITAR ESTE ARCHIVO: cambiar image a nginx:1.21-alpine
+#   5. kubectl apply -f replicaset-no-update.yaml
+#   6. kubectl get pods -o jsonpath='{.items[*].spec.containers[0].image}'
+#      Output: nginx:1.20-alpine nginx:1.20-alpine nginx:1.20-alpine ← SIN CAMBIOS
+#   
+#   7. kubectl delete pod <nombre-pod>
+#   8. Esperar que se cree nuevo Pod
+#   9. kubectl get pods -o jsonpath='{.items[*].spec.containers[0].image}'
+#      Output: nginx:1.20-alpine nginx:1.20-alpine nginx:1.21-alpine ← NUEVO con nueva versión
+# ====================================================================
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: no-update-rs
+  labels:
+    app: no-update
+    demonstration: limitation
+spec:
+  replicas: 3
+  
+  selector:
+    matchLabels:
+      app: no-update
+  
+  template:
+    metadata:
+      labels:
+        app: no-update
+        version: "v1"
+    spec:
+      containers:
+      - name: nginx
+        # ⚠️ CAMBIAR ESTA VERSIÓN Y APLICAR DE NUEVO
+        # Paso 1: Usa nginx:1.20-alpine
+        # Paso 2: Cambia a nginx:1.21-alpine y aplica
+        # Paso 3: Observa que los Pods NO se actualizan
+        image: nginx:1.20-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+        
+        # Comando para verificar versión de nginx
+        command:
+        - sh
+        - -c
+        - |
+          echo "Nginx version: $(nginx -v 2>&1)"
+          echo "Pod: $HOSTNAME"
+          nginx -g 'daemon off;'
+        
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 5
+
+# ====================================================================
+# COMANDOS ÚTILES PARA LA DEMO:
+# ====================================================================
+#
+# Ver versión de imagen en cada Pod:
+# kubectl get pods -l app=no-update -o custom-columns=\
+# NAME:.metadata.name,\
+# IMAGE:.spec.containers[0].image,\
+# STATUS:.status.phase
+#
+# Ver logs para verificar versión:
+# for pod in $(kubectl get pods -l app=no-update -o name); do
+#   echo "=== $pod ==="
+#   kubectl logs $pod | grep "Nginx version"
+# done
+#
+# Forzar actualización manual (tedioso):
+# kubectl delete pod no-update-rs-abc12
+# kubectl delete pod no-update-rs-def34
+# kubectl delete pod no-update-rs-ghi56
+#
+# ¿Solución? Usar Deployments en lugar de ReplicaSets
+# ====================================================================

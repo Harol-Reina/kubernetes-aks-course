@@ -1,0 +1,106 @@
+# ====================================================================
+# REPLICASET PARA PRUEBAS DE CARGA
+# ====================================================================
+# Descripción:
+#   ReplicaSet configurado para pruebas de escalado bajo carga
+#   Incluye métricas y configuración optimizada
+#
+# Conceptos:
+#   - Escalado horizontal
+#   - Resource requests/limits apropiados
+#   - Configuración para alta disponibilidad
+#
+# Uso:
+#   1. kubectl apply -f replicaset-load-test.yaml
+#   2. kubectl scale rs nginx-load --replicas=10
+#   3. kubectl get pods -l app=load-test -o wide
+#   4. Generar carga:
+#      kubectl run load-gen --image=busybox --rm -it -- /bin/sh
+#      while true; do wget -q -O- http://<pod-ip>; done
+# ====================================================================
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-load
+  labels:
+    app: load-test
+    purpose: performance
+spec:
+  # Empezar con 3 réplicas, escalar bajo demanda
+  replicas: 3
+  
+  selector:
+    matchLabels:
+      app: load-test
+  
+  template:
+    metadata:
+      labels:
+        app: load-test
+        tier: frontend
+    spec:
+      # Distribuir Pods en diferentes nodos
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - load-test
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        
+        # Resources ajustados para carga
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        # Configuración de nginx optimizada
+        env:
+        - name: NGINX_WORKER_PROCESSES
+          value: "2"
+        - name: NGINX_WORKER_CONNECTIONS
+          value: "1024"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+          timeoutSeconds: 2
+          failureThreshold: 2
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - sleep 5  # Grace period para terminar conexiones
