@@ -1,0 +1,92 @@
+# Deployment con actualización automática de ConfigMap
+# Usa un sidecar con inotify para detectar cambios y recargar nginx
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-auto-reload-config
+data:
+  nginx.conf: |
+    user nginx;
+    worker_processes 1;
+    error_log /var/log/nginx/error.log warn;
+    pid /tmp/nginx.pid;
+
+    events { worker_connections 1024; }
+
+    http {
+        server {
+            listen 8080;
+            location / {
+                return 200 "Version: 1.0\n";
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-auto-reload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-reload
+  template:
+    metadata:
+      labels:
+        app: nginx-reload
+    spec:
+      containers:
+      # Contenedor principal: Nginx
+      - name: nginx
+        image: nginx:1.27-alpine
+        ports:
+        - containerPort: 8080
+        
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        
+        # Nginx necesita permisos para escribir PID
+        - name: run
+          mountPath: /tmp
+      
+      # Sidecar: Monitorea cambios y recarga nginx
+      - name: config-reloader
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          # Instalar inotify
+          apk add --no-cache inotify-tools
+          
+          echo "👀 Monitoreando cambios en /etc/nginx/..."
+          
+          while true; do
+            # Esperar cambios en el directorio
+            inotifywait -e modify,create /etc/nginx/
+            
+            echo "🔄 Cambio detectado! Recargando nginx..."
+            
+            # Enviar señal de reload a nginx
+            kill -HUP 1 2>/dev/null || echo "⚠️ No se pudo recargar nginx"
+            
+            sleep 5
+          done
+        
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx
+          readOnly: true
+      
+      volumes:
+      - name: config
+        configMap:
+          name: nginx-auto-reload-config
+      
+      - name: run
+        emptyDir: {}

@@ -1,0 +1,51 @@
+# Pod consumiendo ConfigMap como variables de entorno individuales
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-from-configmap-individual
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sh", "-c", "env | grep -E '(DATABASE|APP_)' && sleep 3600"]
+    
+    env:
+    # Mapear clave 'database.host' a variable 'DATABASE_HOST'
+    - name: DATABASE_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: database.host
+    
+    # Mapear 'database.port' a 'DATABASE_PORT'
+    - name: DATABASE_PORT
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: database.port
+    
+    # Mapear 'app.environment' a 'APP_ENV'
+    - name: APP_ENV
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: app.environment
+    
+    # Mapear 'app.log.level' a 'LOG_LEVEL'
+    - name: LOG_LEVEL
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: app.log.level
+          optional: true  # No falla si la clave no existe
+---
+# ConfigMap requerido
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  database.host: "postgres.default.svc.cluster.local"
+  database.port: "5432"
+  app.environment: "production"
+  app.log.level: "info"

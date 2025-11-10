@@ -1,0 +1,55 @@
+# Deployment con múltiples ConfigMaps como variables
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-multi-configmaps
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.27-alpine
+        
+        # Importar variables desde MÚLTIPLES ConfigMaps
+        envFrom:
+        # ConfigMap 1: Configuración de app
+        - configMapRef:
+            name: app-config
+          prefix: APP_  # Todas las claves tendrán prefijo APP_
+        
+        # ConfigMap 2: Feature flags
+        - configMapRef:
+            name: feature-flags
+          prefix: FEATURE_
+        
+        # Variables adicionales
+        env:
+        - name: DEPLOYMENT_VERSION
+          value: "2.0.1"
+---
+# ConfigMap 1: App settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  port: "8080"
+  environment: "production"
+  log_level: "info"
+---
+# ConfigMap 2: Feature flags
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags
+data:
+  cache_enabled: "true"
+  analytics_enabled: "true"
+  beta_features: "false"

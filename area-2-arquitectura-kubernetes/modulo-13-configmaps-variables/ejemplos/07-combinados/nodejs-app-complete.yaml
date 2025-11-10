@@ -1,0 +1,146 @@
+# Aplicación Node.js completa con ConfigMaps y Secrets
+
+# 1. ConfigMap para configuración pública
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nodejs-app-config
+  namespace: production
+data:
+  # Variables de entorno
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  
+  # Archivo de configuración JSON
+  app-config.json: |
+    {
+      "database": {
+        "host": "postgres.production.svc.cluster.local",
+        "port": 5432,
+        "name": "myapp",
+        "pool": {
+          "min": 2,
+          "max": 10
+        }
+      },
+      "redis": {
+        "host": "redis.production.svc.cluster.local",
+        "port": 6379
+      },
+      "features": {
+        "enableCache": true,
+        "enableMetrics": true
+      }
+    }
+---
+# 2. Secret para credenciales
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nodejs-app-secrets
+  namespace: production
+type: Opaque
+stringData:
+  DB_PASSWORD: "SuperSecurePassword123!"
+  REDIS_PASSWORD: "AnotherSecret456"
+  API_KEY: "sk-1234567890abcdef"
+---
+# 3. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-app
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nodejs-app
+  template:
+    metadata:
+      labels:
+        app: nodejs-app
+    spec:
+      containers:
+      - name: app
+        image: node:20-alpine
+        ports:
+        - containerPort: 3000
+          name: http
+        
+        # Variables desde ConfigMap
+        envFrom:
+        - configMapRef:
+            name: nodejs-app-config
+        
+        # Secretos como variables individuales
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nodejs-app-secrets
+              key: DB_PASSWORD
+        
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nodejs-app-secrets
+              key: REDIS_PASSWORD
+        
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nodejs-app-secrets
+              key: API_KEY
+        
+        # Montar app-config.json como archivo
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        
+        # Healthchecks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      
+      volumes:
+      - name: config-volume
+        configMap:
+          name: nodejs-app-config
+          items:
+          - key: app-config.json
+            path: app-config.json
+---
+# 4. Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-app
+  namespace: production
+spec:
+  selector:
+    app: nodejs-app
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP

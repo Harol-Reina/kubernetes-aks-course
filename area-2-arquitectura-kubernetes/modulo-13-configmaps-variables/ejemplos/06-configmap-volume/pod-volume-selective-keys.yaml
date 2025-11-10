@@ -1,0 +1,47 @@
+# Pod montando solo claves ESPECÍFICAS del ConfigMap
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-volume-selective
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sh", "-c", "ls -la /etc/config && cat /etc/config/* && sleep 3600"]
+    
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+  
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-files
+      # Seleccionar solo algunas claves
+      items:
+      - key: app.properties
+        path: app.conf  # Renombrar archivo
+      
+      - key: database.yaml
+        path: db/database.yaml  # Colocar en subdirectorio
+---
+# ConfigMap (mismo que el ejemplo anterior)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-files
+data:
+  app.properties: |
+    app.name=MyApp
+    app.version=1.0.0
+    app.port=8080
+  
+  database.yaml: |
+    database:
+      host: postgres.default.svc.cluster.local
+      port: 5432
+  
+  init.sh: |
+    #!/bin/bash
+    echo "Este archivo NO se montará"

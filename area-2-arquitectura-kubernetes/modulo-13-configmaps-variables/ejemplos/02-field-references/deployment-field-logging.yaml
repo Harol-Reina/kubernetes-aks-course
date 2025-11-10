@@ -1,0 +1,45 @@
+# Deployment con Field References para Logging
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-field-logging
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: "2.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.27-alpine
+        
+        env:
+        # Variables para structured logging
+        - name: LOG_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        - name: LOG_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        - name: LOG_NODE
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        - name: LOG_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        # Ejemplo de uso en app:
+        # log.Info($"[{LOG_NAMESPACE}/{LOG_POD_NAME}@{LOG_NODE}] Request processed")
+        # Output: [production/webapp-7d8f6c9b4-x5k2p@node-worker-01] Request processed

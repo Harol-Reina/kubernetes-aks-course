@@ -1,0 +1,70 @@
+# Field References - Metadata y Status
+apiVersion: v1
+kind: Pod
+metadata:
+  name: field-ref-demo
+  namespace: default
+  labels:
+    app: demo
+    version: "1.0"
+    tier: backend
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sh", "-c", "env | grep MY_ && sleep 3600"]
+    
+    env:
+    # === METADATA ===
+    
+    # Nombre del Pod
+    - name: MY_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    
+    # Namespace del Pod
+    - name: MY_POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    
+    # UID único del Pod
+    - name: MY_POD_UID
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.uid
+    
+    # Labels como JSON string
+    - name: MY_POD_LABELS
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels
+    
+    # Annotations como JSON string
+    - name: MY_POD_ANNOTATIONS
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations
+    
+    # === STATUS ===
+    
+    # IP asignada al Pod
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    
+    # === SPEC ===
+    
+    # Nodo donde corre el Pod
+    - name: MY_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    
+    # ServiceAccount del Pod
+    - name: MY_SERVICE_ACCOUNT
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.serviceAccountName

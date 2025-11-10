@@ -1,0 +1,48 @@
+# Pod montando ConfigMap como volumen (TODAS las claves)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-volume-all
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sh", "-c", "ls -la /etc/config && cat /etc/config/* && sleep 3600"]
+    
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+  
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-files
+---
+# ConfigMap con múltiples archivos
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-files
+data:
+  # Archivo 1: Configuración de app
+  app.properties: |
+    app.name=MyApp
+    app.version=1.0.0
+    app.port=8080
+  
+  # Archivo 2: Configuración de base de datos
+  database.yaml: |
+    database:
+      host: postgres.default.svc.cluster.local
+      port: 5432
+      name: myapp_db
+      pool:
+        min: 2
+        max: 10
+  
+  # Archivo 3: Script de inicialización
+  init.sh: |
+    #!/bin/bash
+    echo "Inicializando aplicación..."
+    echo "DATABASE_HOST: ${DATABASE_HOST}"

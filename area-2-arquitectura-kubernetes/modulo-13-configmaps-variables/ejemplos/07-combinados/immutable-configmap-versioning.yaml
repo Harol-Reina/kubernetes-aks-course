@@ -1,0 +1,55 @@
+# ConfigMaps Inmutables con Versionado
+
+# Version 1 del ConfigMap (inmutable)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-v1
+  labels:
+    app: myapp
+    version: "1"
+immutable: true
+data:
+  feature_cache_enabled: "false"
+  feature_analytics_enabled: "true"
+  max_connections: "50"
+---
+# Version 2 del ConfigMap (inmutable)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-v2
+  labels:
+    app: myapp
+    version: "2"
+immutable: true
+data:
+  feature_cache_enabled: "true"  # ← Cambio
+  feature_analytics_enabled: "true"
+  max_connections: "100"  # ← Cambio
+---
+# Deployment usando v1
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  annotations:
+    configmap-version: "v1"  # Documentar versión usada
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["sh", "-c", "env | grep feature && sleep 3600"]
+        
+        envFrom:
+        - configMapRef:
+            name: app-config-v1  # ← Referencia explícita a v1

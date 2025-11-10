@@ -1,0 +1,35 @@
+# Variables de Entorno Básicas - Pod con env estáticas
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-vars-basic
+  labels:
+    app: demo
+    type: env-static
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+    
+    # Variables de entorno estáticas
+    env:
+    - name: DATABASE_HOST
+      value: "db.example.com"
+    
+    - name: DATABASE_PORT
+      value: "5432"
+    
+    - name: DATABASE_NAME
+      value: "myapp_production"
+    
+    - name: APP_ENV
+      value: "production"
+    
+    - name: LOG_LEVEL
+      value: "info"
+    
+    - name: MAX_CONNECTIONS
+      value: "100"
+    
+    ports:
+    - containerPort: 80

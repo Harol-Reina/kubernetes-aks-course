@@ -1,0 +1,119 @@
+# Deployment de Nginx con ConfigMap montado
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-with-configmap
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27-alpine
+        ports:
+        - containerPort: 8080
+        
+        volumeMounts:
+        # Montar nginx.conf en ubicación específica
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf  # ⚠️ Monta solo este archivo (NO se actualiza automáticamente)
+          readOnly: true
+        
+        # Montar index.html
+        - name: nginx-content
+          mountPath: /usr/share/nginx/html
+          readOnly: true
+      
+      volumes:
+      # Volumen para nginx.conf
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+          items:
+          - key: nginx.conf
+            path: nginx.conf
+      
+      # Volumen para contenido HTML
+      - name: nginx-content
+        configMap:
+          name: nginx-config
+          items:
+          - key: index.html
+            path: index.html
+---
+# Service para acceder
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+# ConfigMap con configuración de Nginx
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    user nginx;
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        
+        server {
+            listen 8080;
+            server_name localhost;
+            
+            location / {
+                root /usr/share/nginx/html;
+                index index.html;
+            }
+            
+            location /health {
+                access_log off;
+                return 200 "OK\n";
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+  
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Nginx con ConfigMap</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+                background: #f0f0f0;
+                padding: 50px;
+            }
+            h1 { color: #009639; }
+        </style>
+    </head>
+    <body>
+        <h1>✅ Nginx configurado con ConfigMap</h1>
+        <p>Esta página fue montada desde un ConfigMap en Kubernetes</p>
+    </body>
+    </html>
