@@ -306,12 +306,20 @@ Esta carpeta contiene ejemplos prácticos del patrón Sidecar con diferentes cas
 
 ### **📋 Contenido:**
 
+**Patrones Sidecar:**
 | Archivo | Patrón | Tecnología | Propósito |
 |---------|--------|------------|-----------|
 | `01-sidecar-logging.yaml` | Sidecar | Fluent Bit | Procesamiento de logs |
 | `02-sidecar-monitoring.yaml` | Sidecar | Prometheus Exporter | Exportar métricas |
 | `03-sidecar-service-mesh.yaml` | Sidecar | Envoy Proxy | Service mesh proxy |
 | `sidecar-pod.yaml` | Sidecar | Simple | Demo básica (legacy) |
+
+**Multi-container avanzado:**
+| Archivo | Tipo | Propósito |
+|---------|------|-----------|
+| `web-api-pod.yaml` | Tightly coupled | Web + API en un Pod |
+| `tightly-coupled-pod.yaml` | Tightly coupled | Contenedores interdependientes |
+| `advanced-realtime-processing.yaml` | Multi-container | Real-time processing pipeline |
 
 ---
 
@@ -385,6 +393,67 @@ Esta carpeta contiene ejemplos prácticos del patrón Sidecar con diferentes cas
   kubectl delete pod app-with-proxy
   kubectl delete configmap envoy-config
   kubectl delete service service-mesh-svc
+  ```
+
+---
+
+### **🔗 web-api-pod.yaml**
+- **Propósito**: Web frontend + API backend en un Pod
+- **Demuestra**:
+  - Caso tightly coupled válido
+  - Comunicación localhost ultra-rápida
+  - Shared networking namespace
+- **Uso**:
+  ```bash
+  kubectl apply -f 03-multi-container/web-api-pod.yaml
+  
+  # Acceder al servicio
+  kubectl port-forward pod/web-api-app 8080:80
+  curl localhost:8080
+  
+  # Cleanup
+  kubectl delete pod web-api-app
+  ```
+
+---
+
+### **🔗 tightly-coupled-pod.yaml**
+- **Propósito**: Demostrar cuándo usar multi-container
+- **Demuestra**:
+  - Contenedores con dependencia fuerte
+  - Ciclo de vida compartido
+  - Escalado conjunto
+- **Uso**:
+  ```bash
+  kubectl apply -f 03-multi-container/tightly-coupled-pod.yaml
+  
+  # Ver logs de ambos contenedores
+  kubectl logs tightly-coupled-demo -c frontend
+  kubectl logs tightly-coupled-demo -c backend
+  
+  # Cleanup
+  kubectl delete pod tightly-coupled-demo
+  ```
+
+---
+
+### **⚡ advanced-realtime-processing.yaml**
+- **Propósito**: Pipeline de procesamiento en tiempo real
+- **Demuestra**:
+  - Producer → Processor → Consumer
+  - Shared volumes para buffers
+  - Multi-stage processing
+- **Uso**:
+  ```bash
+  kubectl apply -f 03-multi-container/advanced-realtime-processing.yaml
+  
+  # Monitorear el pipeline
+  kubectl logs realtime-processing -c data-producer
+  kubectl logs realtime-processing -c data-processor -f
+  kubectl logs realtime-processing -c data-consumer -f
+  
+  # Cleanup
+  kubectl delete pod realtime-processing
   ```
 
 📚 **Guía completa:** Ver [`03-multi-container/README.md`](./03-multi-container/README.md)
@@ -654,7 +723,7 @@ Esta carpeta contiene ejemplos de qué NO hacer y cómo hacerlo correctamente.
 
 ---
 
-## �🔄 06-migracion-compose/
+##  05-migracion-compose/
 
 Ejemplos de migración de Docker Compose a Kubernetes.
 
