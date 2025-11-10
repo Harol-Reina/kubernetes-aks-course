@@ -1,0 +1,404 @@
+# =============================================================================
+# EJEMPLO: ResourceQuota Avanzado con Scopes
+# =============================================================================
+# Descripción:
+#   Este ejemplo muestra características avanzadas de ResourceQuota:
+#   - Scopes: Limitar solo ciertos tipos de Pods (BestEffort, NotBestEffort)
+#   - ScopeSelector: Selectores más complejos
+#   - Múltiples ResourceQuotas en un namespace
+#   - Quotas por prioridad de Pod
+#
+# Conceptos:
+#   - QoS Classes: BestEffort, Burstable, Guaranteed
+#   - Scopes: BestEffort, NotBestEffort, Terminating, NotTerminating
+#   - PriorityClass: Alta, Media, Baja prioridad
+#
+# Uso:
+#   kubectl create namespace production
+#   kubectl apply -f resourcequota-advanced.yaml
+# =============================================================================
+
+---
+# =============================================================================
+# QUOTA 1: Limitar Pods BestEffort (sin requests/limits)
+# =============================================================================
+# BestEffort = Pods sin requests ni limits de CPU/memoria
+# Útil para limitar Pods de baja prioridad que no especifican recursos
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: besteffort-quota
+  namespace: production
+spec:
+  hard:
+    pods: "2"  # Max 2 Pods BestEffort en producción
+  
+  scopes:
+  - BestEffort  # Solo aplica a Pods BestEffort
+
+---
+# =============================================================================
+# QUOTA 2: Limitar Pods NotBestEffort (con requests/limits)
+# =============================================================================
+# NotBestEffort = Pods con requests o limits (Burstable + Guaranteed)
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: notbesteffort-quota
+  namespace: production
+spec:
+  hard:
+    # Recursos para Pods con requests/limits
+    requests.cpu: "20"       # 20 cores solicitados
+    requests.memory: 40Gi    # 40 GiB memoria solicitada
+    limits.cpu: "40"         # 40 cores límite
+    limits.memory: 80Gi      # 80 GiB memoria límite
+    
+    # Número de objetos
+    pods: "50"               # Max 50 Pods NotBestEffort
+  
+  scopes:
+  - NotBestEffort  # Solo aplica a Pods con requests/limits
+
+---
+# =============================================================================
+# QUOTA 3: Limitar Pods Terminating (Jobs, CronJobs)
+# =============================================================================
+# Terminating = Pods con restartPolicy: OnFailure o Never (típicamente Jobs)
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: terminating-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "10"       # CPU para Jobs
+    requests.memory: 20Gi    # Memoria para Jobs
+    pods: "20"               # Max 20 Jobs concurrentes
+  
+  scopes:
+  - Terminating  # Solo Jobs/CronJobs
+
+---
+# =============================================================================
+# QUOTA 4: Limitar Pods NotTerminating (Deployments, StatefulSets)
+# =============================================================================
+# NotTerminating = Pods con restartPolicy: Always (long-running)
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: notterminating-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "30"       # CPU para long-running Pods
+    requests.memory: 60Gi    # Memoria para long-running Pods
+    pods: "30"               # Max 30 Pods long-running
+  
+  scopes:
+  - NotTerminating  # Solo Deployments, StatefulSets, etc.
+
+---
+# =============================================================================
+# QUOTA 5: ScopeSelector Avanzado (K8s 1.17+)
+# =============================================================================
+# ScopeSelector permite criterios más complejos con operadores
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: scopeselector-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "15"
+    requests.memory: 30Gi
+  
+  scopeSelector:
+    matchExpressions:
+    # Pods con PriorityClass >= 1000 (alta prioridad)
+    - operator: In
+      scopeName: PriorityClass
+      values:
+      - high-priority
+      - critical-priority
+
+---
+# =============================================================================
+# QUOTA 6: Por Clase de Almacenamiento
+# =============================================================================
+# Limitar PVCs por StorageClass específica
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: storage-fast-quota
+  namespace: production
+spec:
+  hard:
+    # Storage de clase 'fast-ssd'
+    fast-ssd.storageclass.storage.k8s.io/requests.storage: 200Gi
+    fast-ssd.storageclass.storage.k8s.io/persistentvolumeclaims: "10"
+
+---
+# =============================================================================
+# QUOTA 7: Quotas por Tipo de Objeto (Count Quotas)
+# =============================================================================
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: production
+spec:
+  hard:
+    # Contadores de objetos específicos
+    count/deployments.apps: "20"          # Max 20 Deployments
+    count/statefulsets.apps: "10"         # Max 10 StatefulSets
+    count/jobs.batch: "50"                # Max 50 Jobs
+    count/cronjobs.batch: "10"            # Max 10 CronJobs
+    count/ingresses.networking.k8s.io: "5"  # Max 5 Ingress
+    
+    # Servicios por tipo
+    services.loadbalancers: "3"           # Max 3 LoadBalancers
+    services.nodeports: "5"               # Max 5 NodePorts
+
+---
+# =============================================================================
+# PriorityClasses (para usar con scopeSelector)
+# =============================================================================
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical-priority
+value: 10000
+globalDefault: false
+description: "Critical workloads with highest priority"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "High priority workloads"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+value: 500
+globalDefault: true  # Default para Pods sin PriorityClass
+description: "Medium priority workloads"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 100
+globalDefault: false
+description: "Low priority workloads"
+
+---
+# =============================================================================
+# EJEMPLOS DE PODS CON DIFERENTES QoS CLASSES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Pod BestEffort (sin requests/limits)
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: besteffort-pod
+  namespace: production
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+  # Sin resources → QoS: BestEffort
+  # Limitado por besteffort-quota (max 2 pods)
+
+---
+# -----------------------------------------------------------------------------
+# Pod Burstable (requests < limits)
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: burstable-pod
+  namespace: production
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"      # limits > requests
+        memory: "512Mi"
+  # QoS: Burstable
+  # Limitado por notbesteffort-quota
+
+---
+# -----------------------------------------------------------------------------
+# Pod Guaranteed (requests == limits)
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guaranteed-pod
+  namespace: production
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"      # limits == requests
+        memory: "512Mi"
+  # QoS: Guaranteed
+  # Limitado por notbesteffort-quota
+
+---
+# -----------------------------------------------------------------------------
+# Job (Terminating)
+# -----------------------------------------------------------------------------
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-job
+  namespace: production
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure  # Terminating
+      containers:
+      - name: job
+        image: busybox:1.36
+        command: ["sh", "-c", "echo Hello && sleep 30"]
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+  # Limitado por terminating-quota
+
+---
+# -----------------------------------------------------------------------------
+# Deployment con Alta Prioridad
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-app
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: critical
+  template:
+    metadata:
+      labels:
+        app: critical
+    spec:
+      priorityClassName: critical-priority  # PriorityClass alta
+      containers:
+      - name: app
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+  # Limitado por scopeselector-quota (alta prioridad)
+
+# =============================================================================
+# VERIFICACIÓN Y DEBUGGING
+# =============================================================================
+#
+# 1. VER TODAS LAS QUOTAS EN UN NAMESPACE:
+#    kubectl get resourcequota -n production
+#
+# 2. DESCRIBIR QUOTA ESPECÍFICA:
+#    kubectl describe resourcequota besteffort-quota -n production
+#
+# 3. VER QoS CLASS DE UN POD:
+#    kubectl get pod <pod-name> -n production -o jsonpath='{.status.qosClass}'
+#
+# 4. VER PRIORIDAD DE UN POD:
+#    kubectl get pod <pod-name> -n production -o jsonpath='{.spec.priorityClassName}'
+#
+# 5. LISTAR PODS POR QoS CLASS:
+#    kubectl get pods -n production -o json | \
+#      jq -r '.items[] | [.metadata.name, .status.qosClass] | @tsv'
+#
+# 6. CONTAR PODS POR SCOPE:
+#    # BestEffort
+#    kubectl get pods -n production -o json | \
+#      jq '[.items[] | select(.status.qosClass=="BestEffort")] | length'
+#
+#    # Terminating
+#    kubectl get pods -n production -o json | \
+#      jq '[.items[] | select(.spec.restartPolicy!="Always")] | length'
+#
+# =============================================================================
+# SCOPES DISPONIBLES
+# =============================================================================
+#
+# 1. BestEffort:
+#    Pods sin requests ni limits de CPU/memoria
+#
+# 2. NotBestEffort:
+#    Pods con requests o limits (Burstable + Guaranteed)
+#
+# 3. Terminating:
+#    Pods con restartPolicy: OnFailure o Never (Jobs)
+#
+# 4. NotTerminating:
+#    Pods con restartPolicy: Always (long-running)
+#
+# 5. PriorityClass:
+#    Pods con PriorityClass específica (usar con scopeSelector)
+#
+# 6. CrossNamespacePodAffinity:
+#    Pods con podAffinity/podAntiAffinity cross-namespace
+#
+# =============================================================================
+# CASOS DE USO
+# =============================================================================
+#
+# 1. LIMITAR PODS SIN RECURSOS (BestEffort):
+#    Útil para prevenir Pods "olvidados" sin límites en producción.
+#
+# 2. RESERVAR RECURSOS PARA PRIORIDADES:
+#    Usar scopeSelector para garantizar recursos a Pods críticos.
+#
+# 3. LIMITAR JOBS CONCURRENTES:
+#    Usar Terminating scope para controlar carga de batch jobs.
+#
+# 4. SEPARAR QUOTAS POR TIPO:
+#    Diferentes límites para long-running vs batch workloads.
+#
+# 5. CONTROL FINO DE STORAGE:
+#    Quotas por StorageClass para controlar costos (SSD vs HDD).
+#
+# =============================================================================

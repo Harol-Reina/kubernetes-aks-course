@@ -1,0 +1,261 @@
+# =============================================================================
+# EJEMPLO: Namespaces con Labels Avanzados
+# =============================================================================
+# Descripción:
+#   Este ejemplo muestra el uso estratégico de labels para:
+#   - Organización multi-dimensional (entorno, equipo, región)
+#   - Selección y filtrado
+#   - Automatización con herramientas de gestión
+#
+# Casos de uso:
+#   1. Filtrar namespaces por entorno: kubectl get ns -l environment=prod
+#   2. Listar namespaces de un equipo: kubectl get ns -l team=backend
+#   3. Automatizar políticas basadas en labels
+#
+# Uso:
+#   kubectl apply -f namespace-with-labels.yaml
+#   kubectl get ns --show-labels
+#   kubectl get ns -l environment=prod
+#   kubectl get ns -l region=us-east-1
+# =============================================================================
+
+---
+# =============================================================================
+# NAMESPACE: Frontend Team - Development
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: frontend-dev
+  labels:
+    # Dimensión: Entorno
+    environment: dev
+    env-tier: development
+    
+    # Dimensión: Equipo
+    team: frontend
+    squad: web-platform
+    
+    # Dimensión: Aplicación
+    app-domain: customer-facing
+    app-type: web
+    
+    # Dimensión: Organización
+    cost-center: engineering
+    business-unit: product
+    
+    # Dimensión: Técnica
+    region: us-east-1
+    cluster: primary
+    
+    # Dimensión: Compliance
+    data-classification: internal
+    backup-required: "true"
+    
+  annotations:
+    description: "Frontend development environment"
+    owner: "Frontend Team Lead"
+    contact: "frontend-team@example.com"
+    slack-channel: "#frontend-dev"
+    confluence-page: "https://wiki.example.com/frontend-dev"
+
+---
+# =============================================================================
+# NAMESPACE: Backend Team - Production
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backend-prod
+  labels:
+    # Entorno
+    environment: prod
+    env-tier: production
+    
+    # Equipo
+    team: backend
+    squad: api-services
+    
+    # Aplicación
+    app-domain: api
+    app-type: microservices
+    
+    # Organización
+    cost-center: engineering
+    business-unit: product
+    
+    # Técnica
+    region: us-east-1
+    cluster: primary
+    ha-enabled: "true"          # Alta disponibilidad
+    
+    # Compliance
+    data-classification: confidential
+    backup-required: "true"
+    disaster-recovery: "enabled"
+    pci-compliant: "true"       # Cumplimiento PCI-DSS
+    
+    # SLA y Monitoreo
+    sla-tier: critical
+    monitoring-level: advanced
+    alerting: "enabled"
+    
+  annotations:
+    description: "Backend production environment with strict SLA"
+    owner: "Backend Team Lead"
+    sla: "99.95% uptime"
+    on-call: "backend-oncall@example.com"
+    runbook: "https://runbooks.example.com/backend-prod"
+
+---
+# =============================================================================
+# NAMESPACE: Data Team - Analytics
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data-analytics
+  labels:
+    # Entorno
+    environment: prod
+    env-tier: production
+    
+    # Equipo
+    team: data
+    squad: analytics
+    
+    # Aplicación
+    app-domain: data-processing
+    app-type: batch-jobs
+    
+    # Organización
+    cost-center: data-science
+    business-unit: analytics
+    
+    # Técnica
+    region: us-west-2          # Región diferente para data locality
+    cluster: secondary
+    compute-intensive: "true"  # Jobs que requieren mucho CPU
+    
+    # Compliance
+    data-classification: sensitive
+    gdpr-compliant: "true"
+    data-retention: "90-days"
+    
+  annotations:
+    description: "Data analytics and ETL workloads"
+    owner: "Data Team Lead"
+    schedule: "Batch jobs run 00:00 UTC daily"
+    resource-quota: "cpu=50, memory=200Gi"
+
+---
+# =============================================================================
+# NAMESPACE: Multi-Region - EU Production
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eu-production
+  labels:
+    # Entorno
+    environment: prod
+    env-tier: production
+    
+    # Geografía (importante para GDPR)
+    region: eu-west-1
+    geo: europe
+    data-residency: eu
+    
+    # Compliance
+    gdpr-compliant: "true"
+    data-classification: confidential
+    eu-data-only: "true"       # Solo datos de ciudadanos EU
+    
+    # Equipo
+    team: platform
+    
+    # Técnica
+    cluster: eu-primary
+    ha-enabled: "true"
+    
+  annotations:
+    description: "EU production environment with GDPR compliance"
+    data-residency-policy: "All data must remain in EU"
+    regulatory-compliance: "GDPR, ePrivacy"
+
+# =============================================================================
+# COMANDOS ÚTILES PARA LABELS
+# =============================================================================
+#
+# 1. LISTAR POR LABEL:
+#    kubectl get ns -l environment=prod
+#    kubectl get ns -l team=backend
+#    kubectl get ns -l 'environment in (dev,staging)'
+#
+# 2. LISTAR MÚLTIPLES LABELS (AND):
+#    kubectl get ns -l environment=prod,team=backend
+#
+# 3. MOSTRAR LABELS:
+#    kubectl get ns --show-labels
+#    kubectl get ns backend-prod --show-labels
+#
+# 4. AGREGAR LABEL A NAMESPACE EXISTENTE:
+#    kubectl label namespace backend-prod new-label=value
+#
+# 5. MODIFICAR LABEL:
+#    kubectl label namespace backend-prod environment=production --overwrite
+#
+# 6. ELIMINAR LABEL:
+#    kubectl label namespace backend-prod old-label-
+#
+# 7. FILTRAR POR LABEL CON EXPRESIONES:
+#    kubectl get ns -l 'environment!=dev'           # NO dev
+#    kubectl get ns -l 'backup-required'            # Label existe
+#    kubectl get ns -l '!backup-required'           # Label NO existe
+#
+# 8. LISTAR NAMESPACES CRÍTICOS:
+#    kubectl get ns -l sla-tier=critical
+#
+# 9. LISTAR NAMESPACES POR REGIÓN:
+#    kubectl get ns -l region=us-east-1
+#
+# 10. CONTAR NAMESPACES POR LABEL:
+#     kubectl get ns -l environment=prod --no-headers | wc -l
+#
+# =============================================================================
+# ESTRATEGIAS DE LABELING
+# =============================================================================
+#
+# 1. NOMENCLATURA CONSISTENTE:
+#    Usar kebab-case: environment, cost-center, business-unit
+#    Evitar: CamelCase, snake_case
+#
+# 2. LABELS ESTÁNDAR RECOMENDADOS:
+#    app.kubernetes.io/name          - Nombre de la aplicación
+#    app.kubernetes.io/instance      - Instancia única de la app
+#    app.kubernetes.io/version       - Versión actual
+#    app.kubernetes.io/component     - Componente dentro de la arquitectura
+#    app.kubernetes.io/part-of       - Nombre de la aplicación superior
+#    app.kubernetes.io/managed-by    - Herramienta de gestión
+#
+# 3. DIMENSIONES PARA NAMESPACES:
+#    ✓ Entorno: environment, env-tier
+#    ✓ Organización: team, squad, business-unit, cost-center
+#    ✓ Aplicación: app-domain, app-type
+#    ✓ Geografía: region, geo, data-residency
+#    ✓ Compliance: data-classification, gdpr-compliant
+#    ✓ SLA: sla-tier, monitoring-level
+#
+# 4. VALORES PERMITIDOS (establecer convención):
+#    environment: dev, staging, prod
+#    env-tier: development, testing, staging, production
+#    sla-tier: basic, standard, critical
+#    data-classification: public, internal, confidential, sensitive
+#
+# 5. AUTOMATIZACIÓN CON LABELS:
+#    - Aplicar ResourceQuota basado en environment
+#    - Configurar backup basado en backup-required
+#    - Routing de tráfico basado en region
+#    - Políticas de red basado en data-classification
+#
+# =============================================================================

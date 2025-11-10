@@ -1,0 +1,411 @@
+# =============================================================================
+# EJEMPLO: Despliegue Multi-Namespace
+# =============================================================================
+# Descripción:
+#   Este ejemplo despliega la misma aplicación en múltiples namespaces
+#   (development, staging, production) con configuraciones diferenciadas.
+#
+# Conceptos:
+#   - Despliegue por entorno con diferentes réplicas
+#   - Configuración específica por namespace
+#   - DNS cross-namespace
+#   - Promoción de código entre entornos
+#
+# Uso:
+#   # 1. Crear namespaces
+#   kubectl create ns development
+#   kubectl create ns staging
+#   kubectl create ns production
+#
+#   # 2. Aplicar despliegues
+#   kubectl apply -f deployment-multi-namespace.yaml
+#
+#   # 3. Verificar
+#   kubectl get pods -n development
+#   kubectl get pods -n staging
+#   kubectl get pods -n production
+#
+# Limpieza:
+#   kubectl delete -f deployment-multi-namespace.yaml
+#   kubectl delete ns development staging production
+# =============================================================================
+
+---
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: development
+  labels:
+    app: webapp
+    environment: dev
+spec:
+  replicas: 1  # Solo 1 réplica en desarrollo
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        environment: dev
+        version: v1.0.0
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "development"
+        - name: LOG_LEVEL
+          value: "debug"  # Logs detallados en dev
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: development
+  labels:
+    app: webapp
+spec:
+  type: ClusterIP
+  selector:
+    app: webapp
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+
+# DNS: webapp.development.svc.cluster.local
+
+---
+# =============================================================================
+# STAGING ENVIRONMENT
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: staging
+  labels:
+    app: webapp
+    environment: staging
+spec:
+  replicas: 2  # 2 réplicas en staging (HA básica)
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        environment: staging
+        version: v1.0.0
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "staging"
+        - name: LOG_LEVEL
+          value: "info"  # Logs moderados en staging
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "400m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      # Anti-affinity: distribuir Pods en nodos diferentes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: webapp
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: staging
+  labels:
+    app: webapp
+spec:
+  type: ClusterIP
+  selector:
+    app: webapp
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+
+# DNS: webapp.staging.svc.cluster.local
+
+---
+# =============================================================================
+# PRODUCTION ENVIRONMENT
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: production
+  labels:
+    app: webapp
+    environment: prod
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    description: "Production deployment with high availability"
+spec:
+  replicas: 5  # 5 réplicas en producción (HA completa)
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Crear 1 Pod extra durante update
+      maxUnavailable: 0  # No permitir Pods no disponibles
+  
+  selector:
+    matchLabels:
+      app: webapp
+  
+  template:
+    metadata:
+      labels:
+        app: webapp
+        environment: prod
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "warn"  # Solo warnings/errors en producción
+        
+        resources:
+          requests:
+            cpu: "500m"      # Recursos garantizados mayores
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        
+        # Probes más estrictos en producción
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+      
+      # Anti-affinity OBLIGATORIA en producción
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: webapp
+            topologyKey: kubernetes.io/hostname
+      
+      # PodDisruptionBudget se define por separado (ver abajo)
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: production
+  labels:
+    app: webapp
+  annotations:
+    service.kubernetes.io/topology-aware-hints: "auto"
+spec:
+  type: ClusterIP
+  selector:
+    app: webapp
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+  
+  # Session affinity para producción
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 horas
+
+# DNS: webapp.production.svc.cluster.local
+
+---
+# =============================================================================
+# PodDisruptionBudget para Producción
+# =============================================================================
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webapp-pdb
+  namespace: production
+spec:
+  minAvailable: 3  # Mantener al menos 3 Pods disponibles durante disrupciones
+  selector:
+    matchLabels:
+      app: webapp
+
+# =============================================================================
+# COMUNICACIÓN CROSS-NAMESPACE
+# =============================================================================
+#
+# 1. DESDE MISMO NAMESPACE:
+#    # Pod en 'development' → Service en 'development'
+#    curl http://webapp:80
+#    curl http://webapp.development:80
+#
+# 2. DESDE DIFERENTE NAMESPACE:
+#    # Pod en 'development' → Service en 'production'
+#    curl http://webapp.production:80
+#    curl http://webapp.production.svc.cluster.local:80
+#
+# 3. NOMBRES DNS:
+#    development:  webapp.development.svc.cluster.local
+#    staging:      webapp.staging.svc.cluster.local
+#    production:   webapp.production.svc.cluster.local
+#
+# 4. TESTING DNS:
+#    # Ejecutar Pod temporal para pruebas
+#    kubectl run -it --rm debug --image=alpine --restart=Never -n development -- sh
+#    
+#    # Dentro del Pod:
+#    apk add curl bind-tools
+#    nslookup webapp.production.svc.cluster.local
+#    curl http://webapp.production
+#
+# =============================================================================
+# PROMOCIÓN ENTRE ENTORNOS
+# =============================================================================
+#
+# Estrategia típica: dev → staging → production
+#
+# 1. DESARROLLO:
+#    kubectl set image deployment/webapp webapp=myapp:v1.1.0 -n development
+#    kubectl rollout status deployment/webapp -n development
+#
+# 2. PROMOCIÓN A STAGING (después de validar en dev):
+#    kubectl set image deployment/webapp webapp=myapp:v1.1.0 -n staging
+#    kubectl rollout status deployment/webapp -n staging
+#
+# 3. PROMOCIÓN A PRODUCCIÓN (después de validar en staging):
+#    kubectl set image deployment/webapp webapp=myapp:v1.1.0 -n production
+#    kubectl rollout status deployment/webapp -n production
+#
+# 4. ROLLBACK EN CASO DE PROBLEMAS:
+#    kubectl rollout undo deployment/webapp -n production
+#
+# =============================================================================
+# COMPARACIÓN DE CONFIGURACIONES
+# =============================================================================
+#
+# | Aspecto          | Development | Staging | Production |
+# |------------------|-------------|---------|------------|
+# | Réplicas         | 1           | 2       | 5          |
+# | CPU Request      | 100m        | 200m    | 500m       |
+# | Memory Request   | 128Mi       | 256Mi   | 512Mi      |
+# | Log Level        | debug       | info    | warn       |
+# | Anti-affinity    | No          | Preferred| Required  |
+# | PDB              | No          | No      | Sí (min:3) |
+# | Session Affinity | No          | No      | Sí         |
+#
+# =============================================================================
+# VERIFICACIÓN
+# =============================================================================
+#
+# 1. VERIFICAR DESPLIEGUES EN TODOS LOS NAMESPACES:
+#    kubectl get deployments --all-namespaces -l app=webapp
+#
+# 2. VERIFICAR PODS:
+#    kubectl get pods -n development -l app=webapp
+#    kubectl get pods -n staging -l app=webapp
+#    kubectl get pods -n production -l app=webapp
+#
+# 3. VERIFICAR SERVICES:
+#    kubectl get svc --all-namespaces -l app=webapp
+#
+# 4. VERIFICAR RECURSOS CONSUMIDOS:
+#    kubectl top pods -n production -l app=webapp
+#
+# 5. LOGS POR ENTORNO:
+#    kubectl logs -n development -l app=webapp --tail=50
+#    kubectl logs -n production -l app=webapp --tail=50
+#
+# =============================================================================

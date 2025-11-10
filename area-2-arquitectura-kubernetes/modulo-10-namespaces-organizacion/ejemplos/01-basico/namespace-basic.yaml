@@ -1,0 +1,115 @@
+# =============================================================================
+# EJEMPLO: Namespace Básico
+# =============================================================================
+# Descripción:
+#   Este ejemplo muestra la creación más simple de un namespace en Kubernetes.
+#   Los namespaces son contenedores lógicos para organizar recursos del clúster.
+#
+# Conceptos:
+#   - Namespace: Partición virtual del clúster
+#   - Labels: Metadatos para organización y selección
+#   - Annotations: Información adicional no selectora
+#
+# Uso:
+#   kubectl apply -f namespace-basic.yaml
+#   kubectl get namespaces
+#   kubectl describe namespace development
+#
+# Limpieza:
+#   kubectl delete namespace development
+#   ⚠️ ATENCIÓN: Elimina TODOS los recursos dentro del namespace
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  
+  # Labels para organización
+  labels:
+    environment: dev           # Entorno de desarrollo
+    team: platform             # Equipo responsable
+    cost-center: engineering   # Centro de costos para billing
+  
+  # Annotations para metadatos adicionales
+  annotations:
+    description: "Namespace para desarrollo de aplicaciones"
+    owner: "Platform Team"
+    contact: "platform@example.com"
+    created-by: "kubernetes-admin"
+
+---
+# =============================================================================
+# EJEMPLO: Namespace para Staging
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    environment: staging
+    team: platform
+    cost-center: engineering
+  annotations:
+    description: "Namespace para pruebas pre-producción"
+    owner: "Platform Team"
+    sla: "business-hours"  # SLA menos estricto que producción
+
+---
+# =============================================================================
+# EJEMPLO: Namespace para Producción
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    team: platform
+    cost-center: engineering
+    critical: "true"      # Marca namespaces críticos
+  annotations:
+    description: "Namespace para aplicaciones en producción"
+    owner: "Platform Team"
+    sla: "24x7"           # Disponibilidad 24/7
+    backup: "enabled"     # Indica que se requieren backups
+    monitoring: "critical"  # Nivel de monitoreo
+
+# =============================================================================
+# NOTAS IMPORTANTES
+# =============================================================================
+#
+# 1. NOMBRES DE NAMESPACES:
+#    - Deben ser DNS-compliant (lowercase, alphanumeric, -)
+#    - No pueden contener mayúsculas ni caracteres especiales
+#    - Longitud máxima: 63 caracteres
+#
+# 2. NAMESPACES DEL SISTEMA:
+#    NO crear recursos en estos namespaces:
+#    - default: Namespace por defecto (usar con precaución)
+#    - kube-system: Componentes del sistema de Kubernetes
+#    - kube-public: Recursos públicamente accesibles
+#    - kube-node-lease: Leases de nodos (heartbeat)
+#
+# 3. LABELS RECOMENDADOS:
+#    - environment: dev/staging/prod
+#    - team: equipo responsable
+#    - cost-center: para billing/chargeback
+#    - app: aplicación principal
+#
+# 4. ELIMINACIÓN:
+#    Al eliminar un namespace:
+#    ✓ Se eliminan TODOS los recursos dentro (Pods, Services, etc.)
+#    ✓ No se puede deshacer fácilmente
+#    ✓ El namespace entra en estado "Terminating" hasta que todos los recursos
+#      con finalizers se eliminen
+#
+# 5. BUENAS PRÁCTICAS:
+#    ✓ NO usar 'default' en producción
+#    ✓ Usar labels consistentes para organización
+#    ✓ Documentar propósito en annotations
+#    ✓ Aplicar ResourceQuota y LimitRange (ver ejemplos 03-quotas/, 04-limits/)
+#
+# =============================================================================

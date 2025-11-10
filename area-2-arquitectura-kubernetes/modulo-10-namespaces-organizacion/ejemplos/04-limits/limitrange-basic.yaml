@@ -1,0 +1,340 @@
+# =============================================================================
+# EJEMPLO: LimitRange Básico
+# =============================================================================
+# Descripción:
+#   LimitRange define valores por defecto y rangos permitidos para recursos
+#   INDIVIDUALES (Pods, Containers, PVCs) en un namespace.
+#
+# Diferencia con ResourceQuota:
+#   - ResourceQuota: Límites AGREGADOS (total del namespace)
+#   - LimitRange: Límites POR OBJETO (cada Pod/Container)
+#
+# Funcionalidad:
+#   1. Valores por defecto (default): Si no se especifican limits
+#   2. Valores por defecto para requests (defaultRequest)
+#   3. Mínimo permitido (min)
+#   4. Máximo permitido (max)
+#   5. Ratio máximo (maxLimitRequestRatio)
+#
+# Uso:
+#   kubectl create namespace development
+#   kubectl apply -f limitrange-basic.yaml
+#   kubectl describe limitrange -n development
+# =============================================================================
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: compute-limits
+  namespace: development
+spec:
+  limits:
+  
+  # ===========================================================================
+  # LÍMITES PARA PODS (suma de todos los containers)
+  # ===========================================================================
+  - type: Pod
+    max:
+      cpu: "2"         # Pod no puede solicitar más de 2 cores
+      memory: "4Gi"    # Pod no puede solicitar más de 4 GiB
+    min:
+      cpu: "50m"       # Pod debe solicitar al menos 50 millicores
+      memory: "64Mi"   # Pod debe solicitar al menos 64 MiB
+  
+  # ===========================================================================
+  # LÍMITES PARA CONTAINERS INDIVIDUALES
+  # ===========================================================================
+  - type: Container
+    
+    # Máximo permitido para un container
+    max:
+      cpu: "1"         # Container no puede usar más de 1 core
+      memory: "2Gi"    # Container no puede usar más de 2 GiB
+    
+    # Mínimo requerido para un container
+    min:
+      cpu: "10m"       # Container debe solicitar al menos 10 millicores
+      memory: "16Mi"   # Container debe solicitar al menos 16 MiB
+    
+    # Valores por defecto para LIMITS (si no se especifican)
+    default:
+      cpu: "500m"      # Si no especificas limit, se usa 500m
+      memory: "512Mi"  # Si no especificas limit, se usa 512Mi
+    
+    # Valores por defecto para REQUESTS (si no se especifican)
+    defaultRequest:
+      cpu: "100m"      # Si no especificas request, se usa 100m
+      memory: "128Mi"  # Si no especificas request, se usa 128Mi
+    
+    # Ratio máximo entre limit y request
+    maxLimitRequestRatio:
+      cpu: "4"         # limit puede ser hasta 4× el request
+      memory: "4"      # limit puede ser hasta 4× el request
+  
+  # ===========================================================================
+  # LÍMITES PARA PersistentVolumeClaims
+  # ===========================================================================
+  - type: PersistentVolumeClaim
+    max:
+      storage: "10Gi"  # PVC no puede solicitar más de 10 GiB
+    min:
+      storage: "1Gi"   # PVC debe solicitar al menos 1 GiB
+
+---
+# =============================================================================
+# EJEMPLO 1: Pod sin resources (se aplican defaults)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-defaults
+  namespace: development
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    # NO especificamos resources
+
+# Resultado después de aplicar LimitRange:
+# resources:
+#   requests:
+#     cpu: "100m"      ← defaultRequest
+#     memory: "128Mi"  ← defaultRequest
+#   limits:
+#     cpu: "500m"      ← default
+#     memory: "512Mi"  ← default
+
+---
+# =============================================================================
+# EJEMPLO 2: Pod con resources parciales (se completan defaults)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-partial-resources
+  namespace: development
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "200m"      # Especificamos solo requests
+        memory: "256Mi"
+
+# Resultado después de aplicar LimitRange:
+# resources:
+#   requests:
+#     cpu: "200m"      ← valor especificado
+#     memory: "256Mi"  ← valor especificado
+#   limits:
+#     cpu: "500m"      ← default (no especificado)
+#     memory: "512Mi"  ← default (no especificado)
+
+---
+# =============================================================================
+# EJEMPLO 3: Pod válido dentro de rangos
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: valid-pod
+  namespace: development
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "250m"      # Entre min (10m) y max (1000m)
+        memory: "256Mi"  # Entre min (16Mi) y max (2Gi)
+      limits:
+        cpu: "750m"      # limit ≤ 4× request (250m × 4 = 1000m) ✓
+        memory: "768Mi"  # limit ≤ 4× request (256Mi × 4 = 1024Mi) ✓
+
+# ✅ VÁLIDO: Cumple todos los rangos y ratios
+
+---
+# =============================================================================
+# EJEMPLO 4: Pod INVÁLIDO - Excede máximo
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: invalid-pod-max
+  namespace: development
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "1500m"     # ❌ Excede max (1000m)
+        memory: "1Gi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+
+# ❌ ERROR al crear:
+# Error: Container "nginx" is invalid: 
+# spec.containers[0].resources.requests.cpu: Invalid value: "1500m": 
+# must be less than or equal to cpu limit of 1
+
+---
+# =============================================================================
+# EJEMPLO 5: Pod INVÁLIDO - Ratio excedido
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: invalid-pod-ratio
+  namespace: development
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"      # Ratio: 500/100 = 5 ❌ (max: 4)
+        memory: "512Mi"  # Ratio: 512/128 = 4 ✓
+
+# ❌ ERROR al crear:
+# Error: spec.containers[0].resources.limits.cpu: Invalid value: "500m":
+# must be less than or equal to cpu request multiplied by maxLimitRequestRatio of 4
+
+---
+# =============================================================================
+# EJEMPLO 6: Pod multi-container (límites aplican POR CONTAINER)
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+  namespace: development
+spec:
+  containers:
+  
+  # Container 1: Nginx (usa defaults)
+  - name: nginx
+    image: nginx:1.25-alpine
+    # Sin resources → se aplican defaults
+  
+  # Container 2: App (resources custom)
+  - name: app
+    image: myapp:1.0
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "400m"      # Ratio: 2 (dentro de max: 4)
+        memory: "512Mi"
+
+# Resultado:
+# Pod total resources:
+#   requests: 100m + 200m = 300m CPU, 128Mi + 256Mi = 384Mi RAM
+#   limits: 500m + 400m = 900m CPU, 512Mi + 512Mi = 1024Mi RAM
+#
+# Validación con LimitRange type: Pod:
+#   Total requests: 300m CPU, 384Mi RAM ✓ (min: 50m, 64Mi)
+#   Total limits: 900m CPU, 1024Mi RAM ✓ (max: 2, 4Gi)
+
+# =============================================================================
+# VERIFICACIÓN
+# =============================================================================
+#
+# 1. VER LIMITRANGE:
+#    kubectl get limitrange -n development
+#    kubectl describe limitrange compute-limits -n development
+#
+# Salida ejemplo:
+# Name:       compute-limits
+# Namespace:  development
+# Type        Resource  Min   Max   Default Request  Default Limit  Max Limit/Request Ratio
+# ----        --------  ---   ---   ---------------  -------------  -----------------------
+# Pod         cpu       50m   2     -                -              -
+# Pod         memory    64Mi  4Gi   -                -              -
+# Container   cpu       10m   1     100m             500m           4
+# Container   memory    16Mi  2Gi   128Mi            512Mi          4
+# PersistentVolumeClaim storage 1Gi 10Gi  -          -              -
+#
+# 2. CREAR POD Y VER RECURSOS APLICADOS:
+#    kubectl apply -f limitrange-basic.yaml
+#    kubectl run test --image=nginx -n development
+#    kubectl get pod test -n development -o yaml | grep -A 8 resources:
+#
+# 3. TESTING DE LÍMITES:
+#    # Intentar crear Pod que excede max
+#    kubectl run big --image=nginx -n development \
+#      --requests='cpu=2000m,memory=1Gi' \
+#      --limits='cpu=3000m,memory=2Gi'
+#    # Debe fallar
+#
+# =============================================================================
+# ERRORES COMUNES
+# =============================================================================
+#
+# 1. EXCEDER MÁXIMO:
+# Error: Pod "big-pod" is forbidden: maximum cpu usage per Container is 1, but limit is 2
+#
+# 2. POR DEBAJO DE MÍNIMO:
+# Error: Pod "tiny-pod" is forbidden: minimum memory usage per Container is 16Mi, but request is 8Mi
+#
+# 3. RATIO EXCEDIDO:
+# Error: Pod "ratio-pod" is forbidden: cpu max limit to request ratio per Container is 4, but provided ratio is 10
+#
+# 4. POD EXCEDE LÍMITE TOTAL:
+# Error: Pod "multi-pod" is forbidden: maximum cpu usage per Pod is 2, but limit is 3
+#
+# =============================================================================
+# MEJORES PRÁCTICAS
+# =============================================================================
+#
+# 1. APLICAR LIMITRANGE EN TODOS LOS NAMESPACES:
+#    Asegura que todos los Pods tienen límites razonables.
+#
+# 2. DEFAULTS RAZONABLES:
+#    default/defaultRequest deben ser apropiados para la mayoría de workloads.
+#    Valores típicos:
+#    - default: cpu: 500m, memory: 512Mi
+#    - defaultRequest: cpu: 100m, memory: 128Mi
+#
+# 3. RATIO LIMITREQUESTS:
+#    maxLimitRequestRatio: 2-4 es razonable
+#    Permite bursting sin exceso.
+#
+# 4. COORDINAR CON RESOURCEQUOTA:
+#    LimitRange + ResourceQuota trabajan juntos:
+#    - LimitRange: límites por objeto
+#    - ResourceQuota: límites agregados
+#
+# 5. DOCUMENTAR:
+#    Usar annotations para explicar por qué se establecieron ciertos límites.
+#
+# =============================================================================
+# COMPORTAMIENTO IMPORTANTE
+# =============================================================================
+#
+# 1. ORDEN DE APLICACIÓN:
+#    LimitRange se aplica AL CREAR el Pod (no retroactivo).
+#    Pods existentes NO se modifican al cambiar LimitRange.
+#
+# 2. DEFAULTS vs ESPECIFICADOS:
+#    - Si especificas requests y NO limits → se aplican defaults de limits
+#    - Si especificas limits y NO requests → se copian limits a requests
+#    - Si no especificas nada → se aplican defaultRequest y default
+#
+# 3. VALIDACIÓN:
+#    LimitRange valida en admission control (antes de crear el Pod).
+#    Si falla validación, el Pod NO se crea.
+#
+# =============================================================================

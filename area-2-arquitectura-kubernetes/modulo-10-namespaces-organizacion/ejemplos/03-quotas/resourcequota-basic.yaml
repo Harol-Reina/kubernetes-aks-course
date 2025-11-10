@@ -1,0 +1,276 @@
+# =============================================================================
+# EJEMPLO: ResourceQuota Básico
+# =============================================================================
+# Descripción:
+#   ResourceQuota limita el consumo AGREGADO de recursos en un namespace.
+#   Este ejemplo muestra límites básicos de CPU, memoria y número de objetos.
+#
+# Conceptos:
+#   - requests: Recursos garantizados (usados para scheduling)
+#   - limits: Máximo recursos consumibles
+#   - Contadores de objetos (pods, services, etc.)
+#
+# ⚠️ IMPORTANTE:
+#   Si un namespace tiene ResourceQuota, TODOS los Pods deben especificar
+#   requests y limits de CPU/memoria, o la creación fallará.
+#
+# Uso:
+#   kubectl create namespace development
+#   kubectl apply -f resourcequota-basic.yaml
+#   kubectl describe resourcequota -n development
+#
+# Testing:
+#   # Ver ejemplos al final del archivo
+# =============================================================================
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: development
+spec:
+  hard:
+    # =========================================================================
+    # LÍMITES DE CPU Y MEMORIA
+    # =========================================================================
+    
+    # CPU solicitada total (requests)
+    requests.cpu: "4"          # Max 4 CPU cores solicitados
+    
+    # Memoria solicitada total (requests)
+    requests.memory: 8Gi       # Max 8 GiB memoria solicitada
+    
+    # CPU límite total (limits)
+    limits.cpu: "8"            # Max 8 CPU cores límite
+    
+    # Memoria límite total (limits)
+    limits.memory: 16Gi        # Max 16 GiB memoria límite
+    
+    # =========================================================================
+    # NÚMERO DE OBJETOS
+    # =========================================================================
+    
+    # Pods
+    pods: "10"                 # Max 10 Pods en el namespace
+    
+    # Services
+    services: "5"              # Max 5 Services
+    
+    # LoadBalancer Services (costosos en cloud)
+    services.loadbalancers: "2"  # Max 2 LoadBalancers
+    
+    # NodePort Services
+    services.nodeports: "3"    # Max 3 NodePort Services
+    
+    # ConfigMaps
+    configmaps: "10"           # Max 10 ConfigMaps
+    
+    # Secrets
+    secrets: "10"              # Max 10 Secrets
+    
+    # PersistentVolumeClaims
+    persistentvolumeclaims: "4"  # Max 4 PVCs
+    
+    # =========================================================================
+    # STORAGE
+    # =========================================================================
+    
+    # Storage total solicitado (todos los PVCs)
+    requests.storage: 100Gi    # Max 100 GiB storage total
+
+---
+# =============================================================================
+# EJEMPLO: Pod que CUMPLE con la Quota
+# =============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: valid-pod
+  namespace: development
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "100m"      # 0.1 cores
+        memory: "128Mi"  # 128 MiB
+      limits:
+        cpu: "200m"      # 0.2 cores
+        memory: "256Mi"  # 256 MiB
+
+# Este Pod consume:
+# - requests.cpu: 0.1 cores (quedan 3.9/4)
+# - requests.memory: 128Mi (quedan ~7.87Gi/8Gi)
+# - limits.cpu: 0.2 cores (quedan 7.8/8)
+# - limits.memory: 256Mi (quedan ~15.75Gi/16Gi)
+# - pods: 1 (quedan 9/10)
+
+---
+# =============================================================================
+# EJEMPLO: Deployment que cumple con la Quota
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: development
+spec:
+  replicas: 3  # 3 Pods
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "200m"      # 0.2 cores por Pod
+            memory: "256Mi"  # 256 MiB por Pod
+          limits:
+            cpu: "500m"      # 0.5 cores por Pod
+            memory: "512Mi"  # 512 MiB por Pod
+
+# Total consumido por este Deployment:
+# - requests.cpu: 0.6 cores (3 Pods × 0.2)
+# - requests.memory: 768Mi (3 Pods × 256Mi)
+# - limits.cpu: 1.5 cores (3 Pods × 0.5)
+# - limits.memory: 1.5Gi (3 Pods × 512Mi)
+# - pods: 3
+
+# =============================================================================
+# VERIFICAR USO DE LA QUOTA
+# =============================================================================
+#
+# 1. VER QUOTA Y USO ACTUAL:
+#    kubectl describe resourcequota compute-quota -n development
+#
+# Salida ejemplo:
+# Name:            compute-quota
+# Namespace:       development
+# Resource         Used   Hard
+# --------         ----   ----
+# configmaps       1      10
+# limits.cpu       1700m  8
+# limits.memory    1536Mi 16Gi
+# persistentvolumeclaims  0   4
+# pods             3      10
+# requests.cpu     600m   4
+# requests.memory  768Mi  8Gi
+# requests.storage 0      100Gi
+# secrets          1      10
+# services         0      5
+#
+# 2. VER QUOTA EN NAMESPACE:
+#    kubectl get resourcequota -n development
+#
+# 3. VER DETALLES DEL NAMESPACE (incluye quota):
+#    kubectl describe namespace development
+#
+# =============================================================================
+# ERRORES COMUNES
+# =============================================================================
+#
+# 1. POD SIN REQUESTS/LIMITS (con ResourceQuota activa):
+#
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: bad-pod
+#   namespace: development
+# spec:
+#   containers:
+#   - name: nginx
+#     image: nginx
+#     # ❌ FALTA resources.requests y resources.limits
+#
+# Error:
+# Error from server (Forbidden): error when creating "pod.yaml":
+# pods "bad-pod" is forbidden: failed quota: compute-quota:
+# must specify limits.cpu,limits.memory,requests.cpu,requests.memory
+#
+# 2. EXCEDER LÍMITE DE PODS:
+#
+# kubectl scale deployment webapp --replicas=15 -n development
+#
+# Error:
+# Error: pods "webapp-xxx" is forbidden: exceeded quota: compute-quota,
+# requested: pods=1, used: pods=10, limited: pods=10
+#
+# 3. EXCEDER LÍMITE DE CPU/MEMORIA:
+#
+# # Crear Pod que excede límites
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: big-pod
+#   namespace: development
+# spec:
+#   containers:
+#   - name: app
+#     image: nginx
+#     resources:
+#       requests:
+#         cpu: "5"      # ❌ Excede requests.cpu: "4"
+#         memory: 1Gi
+#
+# Error:
+# Error: pods "big-pod" is forbidden: exceeded quota: compute-quota,
+# requested: requests.cpu=5, used: requests.cpu=600m, limited: requests.cpu=4
+#
+# =============================================================================
+# TESTING DE LÍMITES
+# =============================================================================
+#
+# 1. CREAR NAMESPACE Y APLICAR QUOTA:
+#    kubectl create namespace development
+#    kubectl apply -f resourcequota-basic.yaml
+#
+# 2. CREAR PODS HASTA ALCANZAR LÍMITE:
+#    for i in {1..10}; do
+#      kubectl run test-$i --image=nginx -n development \
+#        --requests='cpu=100m,memory=128Mi' \
+#        --limits='cpu=200m,memory=256Mi'
+#    done
+#
+# 3. INTENTAR CREAR POD #11 (debe fallar):
+#    kubectl run test-11 --image=nginx -n development \
+#      --requests='cpu=100m,memory=128Mi' \
+#      --limits='cpu=200m,memory=256Mi'
+#    # Error: exceeded quota: compute-quota, requested: pods=1
+#
+# 4. VERIFICAR USO:
+#    kubectl describe resourcequota compute-quota -n development
+#
+# 5. ELIMINAR PODS PARA LIBERAR QUOTA:
+#    kubectl delete pod test-1 -n development
+#    # Ahora puedes crear test-11
+#
+# =============================================================================
+# MEJORES PRÁCTICAS
+# =============================================================================
+#
+# 1. SIEMPRE APLICAR RESOURCEQUOTA EN NAMESPACES COMPARTIDOS:
+#    Previene que un equipo/app consuma todos los recursos del clúster.
+#
+# 2. REQUESTS < LIMITS:
+#    requests.cpu: "4"   (garantizado)
+#    limits.cpu: "8"     (permitir bursting)
+#
+# 3. MONITOREAR USO:
+#    Configurar alertas cuando uso > 80% de la quota.
+#
+# 4. AJUSTAR SEGÚN NECESIDAD:
+#    Revisar y ajustar quotas trimestralmente basado en uso real.
+#
+# 5. DOCUMENTAR QUOTAS:
+#    Usar annotations para explicar por qué se establecieron ciertos límites.
+#
+# =============================================================================

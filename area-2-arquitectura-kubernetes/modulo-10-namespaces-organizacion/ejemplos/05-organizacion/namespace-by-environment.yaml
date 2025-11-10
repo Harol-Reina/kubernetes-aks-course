@@ -1,0 +1,480 @@
+# =============================================================================
+# EJEMPLO: Namespaces por Entorno (Environment-based Organization)
+# =============================================================================
+# Descripción:
+#   Estructura de organización típica separando entornos: dev, staging, prod.
+#   Cada entorno tiene su propio namespace con configuraciones diferenciadas.
+#
+# Ventajas:
+#   ✅ Separación clara de entornos
+#   ✅ Diferentes quotas y límites por entorno
+#   ✅ Fácil promoción de código entre entornos
+#   ✅ Aislamiento de permisos (RBAC por namespace)
+#
+# Desventajas:
+#   ❌ Duplicación de manifiestos
+#   ❌ Requiere sincronización de configuraciones
+#
+# Uso:
+#   kubectl apply -f namespace-by-environment.yaml
+# =============================================================================
+
+---
+# =============================================================================
+# NAMESPACE: Development
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  labels:
+    environment: dev
+    tier: development
+    team: platform
+    cost-center: engineering
+  annotations:
+    description: "Development environment for testing and experimentation"
+    owner: "Development Team"
+    sla: "best-effort"
+    backup: "disabled"
+
+---
+# ResourceQuota para Development (límites relajados)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: development
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "5"
+    requests.storage: 50Gi
+
+---
+# LimitRange para Development
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: development
+spec:
+  limits:
+  - type: Container
+    max:
+      cpu: "1"
+      memory: "2Gi"
+    min:
+      cpu: "10m"
+      memory: "16Mi"
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    maxLimitRequestRatio:
+      cpu: "10"       # Ratio relajado en dev para experimentación
+      memory: "10"
+
+---
+# =============================================================================
+# NAMESPACE: Staging
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    environment: staging
+    tier: pre-production
+    team: platform
+    cost-center: engineering
+  annotations:
+    description: "Staging environment for pre-production testing"
+    owner: "Platform Team"
+    sla: "business-hours"
+    backup: "daily"
+
+---
+# ResourceQuota para Staging (intermedio)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: staging-quota
+  namespace: staging
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    pods: "30"
+    services: "15"
+    persistentvolumeclaims: "10"
+    requests.storage: 100Gi
+    services.loadbalancers: "2"
+
+---
+# LimitRange para Staging
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: staging-limits
+  namespace: staging
+spec:
+  limits:
+  - type: Container
+    max:
+      cpu: "2"
+      memory: "4Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    maxLimitRequestRatio:
+      cpu: "4"
+      memory: "4"
+  - type: Pod
+    max:
+      cpu: "4"
+      memory: "8Gi"
+
+---
+# =============================================================================
+# NAMESPACE: Production
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    tier: production
+    team: platform
+    cost-center: engineering
+    critical: "true"
+  annotations:
+    description: "Production environment with strict SLA"
+    owner: "Platform Team"
+    sla: "99.9% uptime, 24x7 support"
+    backup: "continuous"
+    monitoring: "critical"
+    disaster-recovery: "enabled"
+
+---
+# ResourceQuota para Production (límites estrictos)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "40"
+    requests.memory: 80Gi
+    limits.cpu: "80"
+    limits.memory: 160Gi
+    pods: "100"
+    services: "50"
+    persistentvolumeclaims: "20"
+    requests.storage: 500Gi
+    services.loadbalancers: "5"
+    services.nodeports: "10"
+
+---
+# LimitRange para Production (estricto)
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: prod-limits
+  namespace: production
+spec:
+  limits:
+  - type: Container
+    max:
+      cpu: "4"
+      memory: "8Gi"
+    min:
+      cpu: "100m"      # Mínimos más altos en producción
+      memory: "128Mi"
+    default:
+      cpu: "1000m"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "500m"
+      memory: "512Mi"
+    maxLimitRequestRatio:
+      cpu: "2"         # Ratio estricto en producción
+      memory: "2"
+  - type: Pod
+    max:
+      cpu: "8"
+      memory: "16Gi"
+  - type: PersistentVolumeClaim
+    max:
+      storage: "100Gi"
+    min:
+      storage: "1Gi"
+
+---
+# Quota de objetos en Production
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-object-quota
+  namespace: production
+spec:
+  hard:
+    count/deployments.apps: "50"
+    count/statefulsets.apps: "20"
+    count/jobs.batch: "100"
+    count/cronjobs.batch: "20"
+    count/ingresses.networking.k8s.io: "20"
+
+# =============================================================================
+# EJEMPLO DE APLICACIÓN EN MÚLTIPLES ENTORNOS
+# =============================================================================
+
+---
+# Development: webapp (1 réplica, recursos mínimos)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: development
+  labels:
+    app: webapp
+    environment: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        environment: dev
+    spec:
+      containers:
+      - name: webapp
+        image: myapp:latest  # 'latest' en dev
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: "development"
+        - name: LOG_LEVEL
+          value: "debug"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+
+---
+# Staging: webapp (2 réplicas, recursos medios)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: staging
+  labels:
+    app: webapp
+    environment: staging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        environment: staging
+    spec:
+      containers:
+      - name: webapp
+        image: myapp:v1.2.0  # Versión específica
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: "staging"
+        - name: LOG_LEVEL
+          value: "info"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+---
+# Production: webapp (5 réplicas, recursos altos, HA)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: production
+  labels:
+    app: webapp
+    environment: prod
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        environment: prod
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: webapp
+        image: myapp:v1.2.0  # Misma versión que staging (validada)
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "warn"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: webapp
+            topologyKey: kubernetes.io/hostname
+
+---
+# PodDisruptionBudget solo en producción
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webapp-pdb
+  namespace: production
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: webapp
+
+# =============================================================================
+# TABLA COMPARATIVA
+# =============================================================================
+#
+# | Aspecto             | Development | Staging  | Production |
+# |---------------------|-------------|----------|------------|
+# | CPU Quota           | 4 cores     | 8 cores  | 40 cores   |
+# | Memory Quota        | 8 Gi        | 16 Gi    | 80 Gi      |
+# | Max Pods            | 20          | 30       | 100        |
+# | Réplicas webapp     | 1           | 2        | 5          |
+# | Image Tag           | latest      | v1.2.0   | v1.2.0     |
+# | Log Level           | debug       | info     | warn       |
+# | Health Probes       | No          | Sí       | Sí         |
+# | Anti-affinity       | No          | No       | Sí         |
+# | PDB                 | No          | No       | Sí         |
+# | Backup              | No          | Daily    | Continuous |
+# | SLA                 | Best-effort | Business | 99.9% 24x7 |
+#
+# =============================================================================
+# COMANDOS ÚTILES
+# =============================================================================
+#
+# 1. COMPARAR RECURSOS ENTRE ENTORNOS:
+#    for ns in development staging production; do
+#      echo "=== $ns ==="
+#      kubectl describe ns $ns | grep -A 10 "Resource Quotas"
+#    done
+#
+# 2. VERIFICAR PODS POR ENTORNO:
+#    kubectl get pods --all-namespaces -l app=webapp
+#
+# 3. COMPARAR RÉPLICAS:
+#    kubectl get deployments -A -l app=webapp \
+#      -o custom-columns=NAMESPACE:.metadata.namespace,REPLICAS:.spec.replicas
+#
+# 4. VERIFICAR USO DE RECURSOS:
+#    kubectl top pods -n production -l app=webapp
+#
+# 5. PROMOCIÓN DE CÓDIGO (dev → staging → prod):
+#    # 1. Actualizar imagen en dev
+#    kubectl set image deployment/webapp webapp=myapp:v1.3.0 -n development
+#    
+#    # 2. Validar en dev
+#    kubectl rollout status deployment/webapp -n development
+#    
+#    # 3. Promover a staging
+#    kubectl set image deployment/webapp webapp=myapp:v1.3.0 -n staging
+#    kubectl rollout status deployment/webapp -n staging
+#    
+#    # 4. Validar en staging (testing, smoke tests, etc.)
+#    
+#    # 5. Promover a producción
+#    kubectl set image deployment/webapp webapp=myapp:v1.3.0 -n production
+#    kubectl rollout status deployment/webapp -n production
+#
+# =============================================================================
