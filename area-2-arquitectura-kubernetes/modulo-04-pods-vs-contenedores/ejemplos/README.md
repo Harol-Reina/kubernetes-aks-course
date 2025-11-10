@@ -8,8 +8,9 @@ Esta carpeta contiene ejemplos prácticos organizados por concepto.
 ejemplos/
 ├── 01-evolucion/          # Evolución LXC → Docker → Kubernetes
 ├── 02-namespaces/         # Exploración de namespace sharing
-├── 03-multi-container/    # Patrones multi-contenedor
+├── 03-multi-container/    # Patrones multi-contenedor: Sidecar
 ├── 04-init-containers/    # Init containers para setup
+├── 05-ambassador/         # Patrón Ambassador (proxy/intermediario)
 └── 05-migracion-compose/  # Migración de Docker Compose
 ```
 
@@ -296,65 +297,289 @@ kubectl delete -f .
 
 ---
 
-## 🧩 03-multi-container/
+## 🎨 03-multi-container/
 
-Implementa el patrón Sidecar para procesamiento de logs.
+**Implementa el patrón Sidecar para extender funcionalidad sin modificar la app.**
 
-### `sidecar-pod.yaml`
-- **Propósito**: Aplicación web + Log processor sidecar
+Esta carpeta contiene ejemplos prácticos del patrón Sidecar con diferentes casos de uso.
+
+### **📋 Contenido:**
+
+| Archivo | Patrón | Tecnología | Propósito |
+|---------|--------|------------|-----------|
+| `01-sidecar-logging.yaml` | Sidecar | Fluent Bit | Procesamiento de logs |
+| `02-sidecar-monitoring.yaml` | Sidecar | Prometheus Exporter | Exportar métricas |
+| `03-sidecar-service-mesh.yaml` | Sidecar | Envoy Proxy | Service mesh proxy |
+| `sidecar-pod.yaml` | Sidecar | Simple | Demo básica (legacy) |
+
+---
+
+### **📊 01-sidecar-logging.yaml**
+- **Propósito**: Procesar logs de Nginx con Fluent Bit
+- **Demuestra**:
+  - Shared volumes entre contenedores
+  - Procesamiento de logs sin modificar la app
+  - Configuración de Fluent Bit con ConfigMap
 - **Uso**:
   ```bash
-  kubectl apply -f 03-multi-container/sidecar-pod.yaml
-  kubectl wait --for=condition=Ready pod/webapp-sidecar
-  
-  # Generar tráfico
-  kubectl port-forward pod/webapp-sidecar 8080:5000 &
-  curl http://localhost:8080/
+  kubectl apply -f 03-multi-container/01-sidecar-logging.yaml
   
   # Ver logs procesados
-  kubectl logs webapp-sidecar -c log-processor -f
-  kubectl logs webapp-sidecar -c webapp
+  kubectl logs web-with-logging -c log-processor
+  
+  # Generar tráfico
+  kubectl exec web-with-logging -c web-app -- curl localhost
+  
+  # Cleanup
+  kubectl delete pod web-with-logging
+  kubectl delete configmap fluent-config
+  kubectl delete service web-logging-svc
   ```
 
 ---
 
-## 🔧 04-init-containers/
-
-Demuestra el uso de init containers para setup de aplicaciones.
-
-### `postgres-pod.yaml`
-- **Propósito**: Base de datos PostgreSQL para la demo
+### **📈 02-sidecar-monitoring.yaml**
+- **Propósito**: Exportar métricas de Nginx para Prometheus
+- **Demuestra**:
+  - Comunicación localhost entre contenedores
+  - Prometheus exporter pattern
+  - Annotations para Prometheus scraping
 - **Uso**:
   ```bash
-  kubectl apply -f 04-init-containers/postgres-pod.yaml
-  kubectl wait --for=condition=Ready pod/db
-  ```
-
-### `init-pod.yaml`
-- **Propósito**: App con 3 init containers (wait-db, migrations, config)
-- **Uso**:
-  ```bash
-  # Primero desplegar la base de datos
-  kubectl apply -f 04-init-containers/postgres-pod.yaml
+  kubectl apply -f 03-multi-container/02-sidecar-monitoring.yaml
   
-  # Luego la app con init containers
-  kubectl apply -f 04-init-containers/init-pod.yaml
+  # Port forward para métricas
+  kubectl port-forward pod/app-with-monitoring 9113:9113
   
-  # Observar la secuencia de inicialización
-  kubectl get pods app-with-init --watch
+  # Ver métricas
+  curl localhost:9113/metrics
   
-  # Ver logs de cada init container
-  kubectl logs app-with-init -c wait-for-db
-  kubectl logs app-with-init -c db-migration
-  kubectl logs app-with-init -c config-setup
-  
-  # Ver logs del contenedor principal
-  kubectl logs app-with-init -c app
+  # Cleanup
+  kubectl delete pod app-with-monitoring
+  kubectl delete configmap nginx-monitoring-config
+  kubectl delete service app-monitoring-svc
   ```
 
 ---
 
-## 🔄 05-migracion-compose/
+### **🌐 03-sidecar-service-mesh.yaml**
+- **Propósito**: Proxy transparente con Envoy
+- **Demuestra**:
+  - Service mesh pattern
+  - Traffic routing y observability
+  - Envoy admin interface
+- **Uso**:
+  ```bash
+  kubectl apply -f 03-multi-container/03-sidecar-service-mesh.yaml
+  
+  # Acceder a la app vía proxy
+  kubectl port-forward pod/app-with-proxy 8080:10000
+  curl localhost:8080
+  
+  # Ver admin interface de Envoy
+  kubectl port-forward pod/app-with-proxy 9901:9901
+  curl localhost:9901/stats
+  
+  # Cleanup
+  kubectl delete pod app-with-proxy
+  kubectl delete configmap envoy-config
+  kubectl delete service service-mesh-svc
+  ```
+
+📚 **Guía completa:** Ver [`03-multi-container/README.md`](./03-multi-container/README.md)
+
+---
+
+## � 04-init-containers/
+
+**Demuestra el uso de init containers para setup antes de iniciar la app.**
+
+Esta carpeta contiene ejemplos prácticos de Init Containers con diferentes estrategias de preparación.
+
+### **📋 Contenido:**
+
+| Archivo | Propósito | Init Containers |
+|---------|-----------|-----------------|
+| `01-init-db-migration.yaml` | Migraciones DB | wait-for-db, database-migration |
+| `02-init-wait-for-deps.yaml` | Wait for dependencies | wait-for-redis, wait-for-db, wait-for-api |
+| `03-init-config-setup.yaml` | Setup completo | generate-config, download-assets, setup-permissions |
+| `init-pod.yaml` | Demo básica | wait-for-db, db-migration, config-setup (legacy) |
+| `postgres-pod.yaml` | Database | - (para testing) |
+
+---
+
+### **🗄️ 01-init-db-migration.yaml**
+- **Propósito**: Ejecutar migraciones SQL antes de iniciar la app
+- **Demuestra**:
+  - Ejecución secuencial de init containers
+  - Wait for database pattern
+  - SQL migrations desde ConfigMap
+- **Uso**:
+  ```bash
+  kubectl apply -f 04-init-containers/01-init-db-migration.yaml
+  
+  # Ver progreso
+  kubectl get pods -w
+  
+  # Ver logs de cada init
+  kubectl logs web-with-init -c wait-for-db
+  kubectl logs web-with-init -c database-migration
+  
+  # Cleanup
+  kubectl delete pod web-with-init
+  kubectl delete configmap db-migrations
+  kubectl delete secret db-credentials
+  ```
+
+---
+
+### **⏳ 02-init-wait-for-deps.yaml**
+- **Propósito**: Esperar múltiples servicios externos
+- **Demuestra**:
+  - TCP check con netcat
+  - PostgreSQL check con pg_isready
+  - HTTP check con curl y retry logic
+- **Uso**:
+  ```bash
+  kubectl apply -f 04-init-containers/02-init-wait-for-deps.yaml
+  
+  # Ver logs de cada wait
+  kubectl logs app-wait-deps -c wait-for-redis
+  kubectl logs app-wait-deps -c wait-for-db
+  kubectl logs app-wait-deps -c wait-for-api
+  
+  # Cleanup
+  kubectl delete pod app-wait-deps
+  kubectl delete service app-wait-deps-svc
+  ```
+
+---
+
+### **🔧 03-init-config-setup.yaml**
+- **Propósito**: Setup completo de ambiente
+- **Demuestra**:
+  - Template rendering dinámico
+  - Download de assets externos
+  - Setup de permisos y directorios
+- **Uso**:
+  ```bash
+  kubectl apply -f 04-init-containers/03-init-config-setup.yaml
+  
+  # Ver configuración generada
+  kubectl exec app-config-setup -- cat /app/config/app.conf
+  
+  # Ver assets descargados
+  kubectl exec app-config-setup -- ls -la /app/assets/
+  
+  # Cleanup
+  kubectl delete pod app-config-setup
+  kubectl delete configmap config-template assets-list
+  kubectl delete service app-config-svc
+  ```
+
+📚 **Guía completa:** Ver [`04-init-containers/README.md`](./04-init-containers/README.md)
+
+---
+
+## 🔗 05-ambassador/
+
+**Implementa el patrón Ambassador para actuar como proxy/intermediario.**
+
+Esta carpeta contiene ejemplos prácticos del patrón Ambassador con diferentes casos de uso.
+
+### **📋 Contenido:**
+
+| Archivo | Tecnología | Propósito |
+|---------|------------|-----------|
+| `01-ambassador-db-pool.yaml` | PgBouncer | Connection pooling a PostgreSQL |
+| `02-ambassador-loadbalancer.yaml` | HAProxy | Load balancing entre réplicas |
+| `03-ambassador-ssl.yaml` | Nginx | SSL/TLS termination |
+
+---
+
+### **🗄️ 01-ambassador-db-pool.yaml**
+- **Propósito**: Connection pooling transparente con PgBouncer
+- **Demuestra**:
+  - Connection pooling automático
+  - App conecta a localhost:5432
+  - Reducción de overhead de conexiones
+- **Uso**:
+  ```bash
+  kubectl apply -f 05-ambassador/01-ambassador-db-pool.yaml
+  
+  # Ver logs de PgBouncer
+  kubectl logs app-with-pooling -c db-ambassador
+  
+  # Ver consultas de la app
+  kubectl logs app-with-pooling -c app
+  
+  # Cleanup
+  kubectl delete pod app-with-pooling
+  kubectl delete configmap pgbouncer-config
+  ```
+
+**Nota:** Requiere un PostgreSQL service (ver comentarios en el YAML).
+
+---
+
+### **🔄 02-ambassador-loadbalancer.yaml**
+- **Propósito**: Load balancing con HAProxy
+- **Demuestra**:
+  - Round-robin load balancing
+  - Health checking automático
+  - Circuit breaking
+  - Stats en tiempo real
+- **Uso**:
+  ```bash
+  kubectl apply -f 05-ambassador/02-ambassador-loadbalancer.yaml
+  
+  # Ver stats de HAProxy
+  kubectl port-forward pod/app-with-lb 8404:8404
+  # http://localhost:8404/stats
+  
+  # Ver distribución de carga
+  kubectl logs app-with-lb -c haproxy-ambassador
+  
+  # Cleanup
+  kubectl delete pod app-with-lb
+  kubectl delete configmap haproxy-config
+  kubectl delete service app-lb-svc
+  ```
+
+**Nota:** Ver comentarios en el YAML para crear réplicas de PostgreSQL.
+
+---
+
+### **🔐 03-ambassador-ssl.yaml**
+- **Propósito**: SSL/TLS termination con Nginx
+- **Demuestra**:
+  - Encryption/decryption transparente
+  - App usa HTTP simple
+  - Centralización de certificados
+  - Security headers
+- **Uso**:
+  ```bash
+  kubectl apply -f 05-ambassador/03-ambassador-ssl.yaml
+  
+  # Acceder vía HTTPS
+  kubectl port-forward pod/app-with-ssl 8443:443
+  curl -k https://localhost:8443
+  
+  # Ver health endpoint
+  curl -k https://localhost:8443/health
+  
+  # Cleanup
+  kubectl delete pod app-with-ssl
+  kubectl delete configmap nginx-ssl-config
+  kubectl delete secret tls-cert
+  kubectl delete service app-ssl-svc
+  ```
+
+📚 **Guía completa:** Ver [`05-ambassador/README.md`](./05-ambassador/README.md)
+
+---
+
+## 🔄 06-migracion-compose/
 
 Ejemplos de migración de Docker Compose a Kubernetes.
 

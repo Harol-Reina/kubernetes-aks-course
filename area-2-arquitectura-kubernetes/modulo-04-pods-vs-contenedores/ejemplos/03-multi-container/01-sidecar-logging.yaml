@@ -1,0 +1,125 @@
+# ============================================================
+# Patrón Sidecar: Logging
+# ============================================================
+# Demuestra cómo un contenedor sidecar puede procesar logs
+# de la aplicación principal sin modificar su código.
+#
+# Arquitectura:
+#   - Main Container: Nginx (genera logs)
+#   - Sidecar: Fluent Bit (procesa y envía logs)
+#   - Shared: Volume para logs
+#
+# Uso:
+#   kubectl apply -f 01-sidecar-logging.yaml
+#   kubectl wait --for=condition=Ready pod/web-with-logging
+#   kubectl logs web-with-logging -c log-processor
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-config
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        5
+        Daemon       Off
+        Log_Level    info
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/nginx/access.log
+        Parser            nginx
+        Tag               nginx.access
+        Refresh_Interval  5
+
+    [OUTPUT]
+        Name   stdout
+        Match  *
+        Format json_lines
+
+  parsers.conf: |
+    [PARSER]
+        Name   nginx
+        Format regex
+        Regex  ^(?<remote>[^ ]*) - (?<user>[^ ]*) \[(?<time>[^\]]*)\] "(?<method>\S+)(?: +(?<path>[^\"]*?)(?: +\S*)?)?" (?<code>[^ ]*) (?<size>[^ ]*)(?: "(?<referer>[^\"]*)" "(?<agent>[^\"]*)")?$
+        Time_Key time
+        Time_Format %d/%b/%Y:%H:%M:%S %z
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-with-logging
+  labels:
+    app: web
+    pattern: sidecar
+spec:
+  containers:
+  # ============================================================
+  # 🌐 Main Container: Web Application
+  # ============================================================
+  - name: web-app
+    image: nginx:1.20
+    ports:
+    - containerPort: 80
+      name: http
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log/nginx
+    # La app escribe logs normalmente en /var/log/nginx/
+    # No necesita saber que hay un sidecar procesándolos
+  
+  # ============================================================
+  # 📊 Sidecar Container: Log Processor
+  # ============================================================
+  - name: log-processor
+    image: fluent/fluent-bit:1.8
+    volumeMounts:
+    - name: shared-logs
+      mountPath: /var/log/nginx
+      readOnly: true  # Solo necesita leer, no escribir
+    - name: fluent-config
+      mountPath: /fluent-bit/etc
+    # El sidecar:
+    # 1. Lee los logs del volumen compartido
+    # 2. Los parsea usando regex (formato Nginx)
+    # 3. Los formatea como JSON
+    # 4. Los envía a stdout (en producción: Elasticsearch, etc.)
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: shared-logs
+    emptyDir: {}
+    # emptyDir = directorio temporal compartido entre contenedores
+    # Se crea cuando el Pod inicia y se elimina cuando termina
+  
+  - name: fluent-config
+    configMap:
+      name: fluent-config
+      # Configuración de Fluent Bit desde ConfigMap
+
+---
+# ============================================================
+# Service para exponer el Pod (opcional, para pruebas)
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-logging-svc
+spec:
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP

@@ -1,0 +1,182 @@
+# ============================================================
+# Patrón Ambassador: Database Connection Pooling
+# ============================================================
+# Demuestra cómo un contenedor ambassador puede manejar
+# connection pooling a PostgreSQL usando PgBouncer.
+#
+# Arquitectura:
+#   - Main Container: App (conecta a localhost:5432)
+#   - Ambassador: PgBouncer (proxy con connection pooling)
+#   - External: PostgreSQL server
+#
+# Beneficios:
+#   - Connection pooling automático
+#   - Reduce overhead de conexiones
+#   - La app no necesita implementar pooling
+#   - Transparente para la aplicación
+#
+# Uso:
+#   kubectl apply -f 01-ambassador-db-pool.yaml
+#   kubectl wait --for=condition=Ready pod/app-with-pooling
+#   kubectl logs app-with-pooling -c db-ambassador
+# ============================================================
+
+---
+# ============================================================
+# ConfigMap: PgBouncer Configuration
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+data:
+  pgbouncer.ini: |
+    [databases]
+    myapp = host=postgres-service port=5432 dbname=myapp
+    
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 5432
+    auth_type = md5
+    auth_file = /etc/pgbouncer/userlist.txt
+    
+    # Connection pooling settings
+    pool_mode = transaction
+    max_client_conn = 100
+    default_pool_size = 20
+    min_pool_size = 5
+    reserve_pool_size = 5
+    reserve_pool_timeout = 3
+    
+    # Logging
+    log_connections = 1
+    log_disconnections = 1
+    log_pooler_errors = 1
+    
+    # Security
+    ignore_startup_parameters = extra_float_digits
+  
+  userlist.txt: |
+    "postgres" "md5d8578edf8458ce06fbc5bb76a58c5ca4"
+
+---
+# ============================================================
+# Pod with Ambassador Pattern
+# ============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-pooling
+  labels:
+    app: pooling-demo
+    pattern: ambassador
+spec:
+  containers:
+  # ============================================================
+  # 🌐 Main Container: Application
+  # ============================================================
+  - name: app
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "🚀 Application starting..."
+        echo "Connecting to database via localhost:5432 (PgBouncer)"
+        
+        # Simular conexiones a la DB
+        for i in $(seq 1 10); do
+          echo "  Connection $i: Executing query..."
+          PGPASSWORD=mysecretpassword psql -h localhost -U postgres -d myapp -c "SELECT NOW() as current_time, version();"
+          sleep 2
+        done
+        
+        echo "✅ All queries executed successfully!"
+        echo "Check PgBouncer logs to see connection pooling in action"
+        
+        # Mantener el contenedor vivo
+        tail -f /dev/null
+    env:
+    - name: PGPASSWORD
+      value: "mysecretpassword"
+    # La app se conecta a localhost:5432
+    # Piensa que es PostgreSQL directo
+    # En realidad es PgBouncer (ambassador)
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # ============================================================
+  # 🔀 Ambassador Container: PgBouncer
+  # ============================================================
+  - name: db-ambassador
+    image: edoburu/pgbouncer:1.16.0
+    ports:
+    - containerPort: 5432
+      name: pgbouncer
+    volumeMounts:
+    - name: pgbouncer-config
+      mountPath: /etc/pgbouncer
+    # PgBouncer maneja:
+    # 1. Recibe conexiones de la app en localhost:5432
+    # 2. Mantiene pool de conexiones a PostgreSQL real
+    # 3. Reutiliza conexiones (pool_mode = transaction)
+    # 4. Reduce latencia y overhead
+    # 5. Logging de estadísticas
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+    livenessProbe:
+      tcpSocket:
+        port: 5432
+      initialDelaySeconds: 10
+      periodSeconds: 10
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: pgbouncer-config
+    configMap:
+      name: pgbouncer-config
+
+---
+# ============================================================
+# Nota: Este ejemplo requiere un PostgreSQL service
+# Para testing, puedes crear uno simple:
+# ============================================================
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: postgres-service
+# spec:
+#   selector:
+#     app: postgres
+#   ports:
+#   - port: 5432
+#     targetPort: 5432
+# ---
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: postgres
+#   labels:
+#     app: postgres
+# spec:
+#   containers:
+#   - name: postgres
+#     image: postgres:13
+#     env:
+#     - name: POSTGRES_DB
+#       value: "myapp"
+#     - name: POSTGRES_PASSWORD
+#       value: "mysecretpassword"
+#     ports:
+#     - containerPort: 5432

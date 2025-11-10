@@ -1,0 +1,237 @@
+# ============================================================
+# Patrón Ambassador: SSL/TLS Termination
+# ============================================================
+# Demuestra cómo un contenedor ambassador puede manejar
+# encryption/decryption, permitiendo que la app use HTTP simple.
+#
+# Arquitectura:
+#   - Main Container: App HTTP simple (puerto 8080)
+#   - Ambassador: Nginx SSL termination (puerto 443)
+#   - External: Clientes HTTPS
+#
+# Beneficios:
+#   - La app no maneja certificados SSL
+#   - Centraliza gestión de certificados
+#   - Simplifica código de aplicación
+#   - Fácil rotación de certificados
+#
+# Uso:
+#   kubectl apply -f 03-ambassador-ssl.yaml
+#   kubectl port-forward pod/app-with-ssl 8443:443
+#   curl -k https://localhost:8443
+# ============================================================
+
+---
+# ============================================================
+# Secret: SSL/TLS Certificate (self-signed para demo)
+# ============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-cert
+type: kubernetes.io/tls
+stringData:
+  # Self-signed certificate (NO usar en producción)
+  # Generado con: openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  #   -keyout tls.key -out tls.crt -subj "/CN=localhost"
+  tls.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIDXTCCAkWgAwIBAgIJAKL0UG+mRzKhMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV
+    BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
+    aWRnaXRzIFB0eSBMdGQwHhcNMjMwMTAxMDAwMDAwWhcNMjQwMTAxMDAwMDAwWjBF
+    MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
+    ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
+    CgKCAQEA0123456789abcdefghijklmnopqrstuvwxyz123456789ABCDEFGHIJK
+    LMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz123456789ABC
+    DEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz1234
+    56789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuv
+    wxyz123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ012345678901234567890123
+    4567890123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789AB
+    CDEFGHIJKLMNOPQRSTUVWXYZ0123456789
+    -----END CERTIFICATE-----
+  tls.key: |
+    -----BEGIN PRIVATE KEY-----
+    MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDT0123456789ab
+    cdefghijklmnopqrstuvwxyz123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ01234
+    56789abcdefghijklmnopqrstuvwxyz123456789ABCDEFGHIJKLMNOPQRSTUVWX
+    YZ0123456789abcdefghijklmnopqrstuvwxyz123456789ABCDEFGHIJKLMNOPQ
+    RSTUVWXYZ0123456789
+    -----END PRIVATE KEY-----
+
+---
+# ============================================================
+# ConfigMap: Nginx SSL Configuration
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-ssl-config
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    http {
+        # Logging
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+        
+        # Upstream: App backend (HTTP simple)
+        upstream app_backend {
+            server localhost:8080;
+        }
+        
+        # Server: HTTPS frontend
+        server {
+            listen 443 ssl http2;
+            server_name _;
+            
+            # SSL Configuration
+            ssl_certificate /etc/nginx/ssl/tls.crt;
+            ssl_certificate_key /etc/nginx/ssl/tls.key;
+            
+            # SSL Settings (modern configuration)
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers HIGH:!aNULL:!MD5;
+            ssl_prefer_server_ciphers on;
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+            
+            # Security headers
+            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+            add_header X-Frame-Options "SAMEORIGIN" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            
+            location / {
+                # Proxy to HTTP backend (app)
+                proxy_pass http://app_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # Logging
+                access_log /var/log/nginx/app_access.log;
+            }
+            
+            # Health check endpoint
+            location /health {
+                access_log off;
+                return 200 "Healthy\n";
+                add_header Content-Type text/plain;
+            }
+        }
+        
+        # Server: HTTP → HTTPS redirect (optional)
+        server {
+            listen 80;
+            server_name _;
+            return 301 https://$host$request_uri;
+        }
+    }
+
+---
+# ============================================================
+# Pod with Ambassador Pattern
+# ============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-ssl
+  labels:
+    app: ssl-demo
+    pattern: ambassador
+spec:
+  containers:
+  # ============================================================
+  # 🌐 Main Container: Simple HTTP Application
+  # ============================================================
+  - name: app
+    image: hashicorp/http-echo:0.2.3
+    args:
+      - "-text=Hello from HTTP app (behind SSL ambassador)!"
+      - "-listen=:8080"
+    ports:
+    - containerPort: 8080
+      name: http
+    # La app solo habla HTTP en localhost:8080
+    # NO maneja SSL/TLS
+    # NO conoce certificados
+    # El ambassador maneja todo el encryption
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # ============================================================
+  # 🔐 Ambassador Container: SSL/TLS Termination
+  # ============================================================
+  - name: ssl-ambassador
+    image: nginx:1.20
+    ports:
+    - containerPort: 443
+      name: https
+    - containerPort: 80
+      name: http-redirect
+    volumeMounts:
+    - name: nginx-ssl-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+    - name: tls-cert
+      mountPath: /etc/nginx/ssl
+      readOnly: true
+    # Nginx ambassador maneja:
+    # 1. Recibe tráfico HTTPS en puerto 443
+    # 2. Termina SSL/TLS (decryption)
+    # 3. Proxy a app HTTP en localhost:8080
+    # 4. Encripta respuesta (encryption)
+    # 5. Responde al cliente vía HTTPS
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 443
+        scheme: HTTPS
+      initialDelaySeconds: 5
+      periodSeconds: 10
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: nginx-ssl-config
+    configMap:
+      name: nginx-ssl-config
+  - name: tls-cert
+    secret:
+      secretName: tls-cert
+
+---
+# ============================================================
+# Service
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-ssl-svc
+spec:
+  selector:
+    app: ssl-demo
+  ports:
+  - port: 443
+    targetPort: 443
+    name: https
+  - port: 80
+    targetPort: 80
+    name: http
+  type: ClusterIP

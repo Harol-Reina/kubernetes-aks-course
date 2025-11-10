@@ -1,0 +1,172 @@
+# ============================================================
+# Patrón Sidecar: Service Mesh Proxy (Envoy)
+# ============================================================
+# Demuestra cómo un sidecar proxy puede manejar todo el
+# tráfico de red sin que la aplicación lo sepa.
+#
+# Arquitectura:
+#   - Main Container: App simple
+#   - Sidecar: Envoy proxy (maneja networking)
+#   - Traffic flow: External → Envoy → App
+#
+# Características:
+#   - Traffic routing
+#   - Load balancing
+#   - Observability (métricas, logs, tracing)
+#   - Security (mTLS)
+#
+# Uso:
+#   kubectl apply -f 03-sidecar-service-mesh.yaml
+#   kubectl wait --for=condition=Ready pod/app-with-proxy
+#   kubectl port-forward pod/app-with-proxy 8080:10000
+#   curl localhost:8080
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+data:
+  envoy.yaml: |
+    admin:
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 9901
+    
+    static_resources:
+      listeners:
+      - name: main_listener
+        address:
+          socket_address:
+            address: 0.0.0.0
+            port_value: 10000  # Puerto expuesto externamente
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_http
+              codec_type: AUTO
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: backend
+                  domains: ["*"]
+                  routes:
+                  - match:
+                      prefix: "/"
+                    route:
+                      cluster: local_app  # Rutea a la app local
+              http_filters:
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+      
+      clusters:
+      - name: local_app
+        connect_timeout: 0.25s
+        type: STATIC
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: local_app
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: 127.0.0.1  # App en localhost
+                    port_value: 8080
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-proxy
+  labels:
+    app: service-mesh-demo
+    pattern: sidecar
+spec:
+  containers:
+  # ============================================================
+  # 🌐 Main Container: Simple Web App
+  # ============================================================
+  - name: app
+    image: hashicorp/http-echo:0.2.3
+    args:
+      - "-text=Hello from app behind Envoy proxy!"
+      - "-listen=:8080"
+    ports:
+    - containerPort: 8080
+      name: app-port
+    # La app solo escucha en localhost:8080
+    # NO está expuesta directamente al exterior
+    # Todo el tráfico pasa por el sidecar Envoy
+  
+  # ============================================================
+  # 🔀 Sidecar Container: Envoy Proxy
+  # ============================================================
+  - name: envoy-proxy
+    image: envoyproxy/envoy:v1.22.0
+    command:
+      - /usr/local/bin/envoy
+      - --config-path
+      - /etc/envoy/envoy.yaml
+      - --log-level
+      - info
+    ports:
+    - containerPort: 10000
+      name: proxy-port
+      # Puerto que recibe tráfico externo
+    - containerPort: 9901
+      name: admin
+      # Admin interface de Envoy (métricas, config, etc.)
+    volumeMounts:
+    - name: envoy-config
+      mountPath: /etc/envoy
+    # Envoy maneja:
+    # 1. Recibe tráfico en :10000
+    # 2. Lo rutea a localhost:8080 (app)
+    # 3. Genera métricas y logs automáticamente
+    # 4. Puede hacer: rate limiting, circuit breaking, retry logic
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+    livenessProbe:
+      httpGet:
+        path: /ready
+        port: 9901
+      initialDelaySeconds: 5
+      periodSeconds: 10
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: envoy-config
+    configMap:
+      name: envoy-config
+
+---
+# ============================================================
+# Service para exponer el proxy
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-mesh-svc
+spec:
+  selector:
+    app: service-mesh-demo
+  ports:
+  - port: 80
+    targetPort: 10000  # Apunta al puerto de Envoy
+    name: http
+  - port: 9901
+    targetPort: 9901
+    name: admin
+  type: ClusterIP

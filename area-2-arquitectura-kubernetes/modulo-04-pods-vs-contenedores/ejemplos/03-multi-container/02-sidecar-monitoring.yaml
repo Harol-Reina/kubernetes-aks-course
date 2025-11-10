@@ -1,0 +1,135 @@
+# ============================================================
+# Patrón Sidecar: Monitoring
+# ============================================================
+# Demuestra cómo un contenedor sidecar puede exportar métricas
+# de la aplicación principal sin modificar su código.
+#
+# Arquitectura:
+#   - Main Container: Web app (genera métricas)
+#   - Sidecar: Prometheus exporter (expone métricas)
+#   - Shared: Network namespace (localhost)
+#
+# Uso:
+#   kubectl apply -f 02-sidecar-monitoring.yaml
+#   kubectl wait --for=condition=Ready pod/app-with-monitoring
+#   kubectl port-forward pod/app-with-monitoring 9113:9113
+#   curl localhost:9113/metrics
+# ============================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-monitoring
+  labels:
+    app: myapp
+    pattern: sidecar
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9113"
+    prometheus.io/path: "/metrics"
+spec:
+  containers:
+  # ============================================================
+  # 🌐 Main Container: Web Application
+  # ============================================================
+  - name: web-app
+    image: nginx:1.20
+    ports:
+    - containerPort: 80
+      name: http
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /etc/nginx/conf.d
+    # Nginx configurado con stub_status para métricas básicas
+    # El sidecar leerá estas métricas vía localhost:8080/stub_status
+  
+  # ============================================================
+  # 📈 Sidecar Container: Prometheus Exporter
+  # ============================================================
+  - name: metrics-exporter
+    image: nginx/nginx-prometheus-exporter:0.10.0
+    args:
+      - -nginx.scrape-uri=http://localhost:8080/stub_status
+      # ↑ Lee métricas de Nginx vía localhost (mismo network namespace)
+    ports:
+    - containerPort: 9113
+      name: metrics
+    # El exporter:
+    # 1. Conecta a Nginx via localhost:8080/stub_status
+    # 2. Parsea las métricas de Nginx
+    # 3. Las expone en formato Prometheus en :9113/metrics
+    # 4. Prometheus scrapeará este endpoint
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: nginx-config
+    configMap:
+      name: nginx-monitoring-config
+
+---
+# ============================================================
+# ConfigMap: Nginx configuration with stub_status
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-monitoring-config
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        
+        location / {
+            return 200 "Hello from Nginx with Monitoring!\n";
+            add_header Content-Type text/plain;
+        }
+        
+        # Endpoint para métricas (solo accesible desde localhost)
+        location /stub_status {
+            stub_status;
+            allow 127.0.0.1;  # Solo localhost puede acceder
+            deny all;
+        }
+    }
+    
+    # Server adicional en puerto 8080 solo para métricas
+    server {
+        listen 8080;
+        server_name _;
+        
+        location /stub_status {
+            stub_status;
+        }
+    }
+
+---
+# ============================================================
+# Service para exponer métricas a Prometheus
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-monitoring-svc
+  labels:
+    app: myapp
+spec:
+  selector:
+    app: myapp
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+  - port: 9113
+    targetPort: 9113
+    name: metrics
+  type: ClusterIP

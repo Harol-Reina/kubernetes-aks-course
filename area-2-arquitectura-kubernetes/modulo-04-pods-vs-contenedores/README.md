@@ -823,92 +823,41 @@ spec:
 | Sincronizar configs | ✅ Sí | El sidecar actualiza configs sin reiniciar la app |
 | Lógica de negocio | ❌ No | Debe estar en el contenedor principal |
 
-#### **📋 Ejemplo Completo: Logging Sidecar**
+#### **📋 Ejemplos Prácticos**
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-with-logging
-spec:
-  containers:
-  # 🌐 Main application container
-  - name: web-app
-    image: nginx:1.20
-    ports:
-    - containerPort: 80
-    volumeMounts:
-    - name: shared-logs
-      mountPath: /var/log/nginx
-    # ↑ Nginx escribe logs aquí
-  
-  # 📊 Sidecar for log processing
-  - name: log-processor
-    image: fluent/fluent-bit:1.8
-    volumeMounts:
-    - name: shared-logs
-      mountPath: /var/log/nginx
-      readOnly: true  # Solo lectura
-    - name: fluent-config
-      mountPath: /fluent-bit/etc
-    # ↑ Fluent Bit lee los logs, los procesa y envía a destino
-  
-  volumes:
-  - name: shared-logs
-    emptyDir: {}  # Volumen compartido para logs
-  - name: fluent-config
-    configMap:
-      name: fluent-config
-```
+Los siguientes ejemplos demuestran diferentes usos del patrón Sidecar:
 
-**Flujo de trabajo:**
+**1. 📊 Logging Sidecar** - Procesamiento de logs con Fluent Bit
+```bash
+kubectl apply -f ejemplos/03-multi-container/01-sidecar-logging.yaml
+kubectl logs web-with-logging -c log-processor
 ```
-1. Nginx (main) → Escribe logs → /var/log/nginx/access.log
-2. Fluent Bit (sidecar) → Lee logs → /var/log/nginx/access.log
-3. Fluent Bit → Procesa logs (filtra, enriquece, formatea)
-4. Fluent Bit → Envía logs → Elasticsearch / CloudWatch / etc.
-```
+👉 Ver archivo completo: [`01-sidecar-logging.yaml`](./ejemplos/03-multi-container/01-sidecar-logging.yaml)
 
-#### **🚀 Casos de Uso Reales del Patrón Sidecar:**
-
-##### **1. 📊 Logging Sidecar**
-```yaml
-# Main: Aplicación
-# Sidecar: Fluentd, Logstash, Filebeat
-# Propósito: Centralizar logs sin modificar la app
+**2. 📈 Monitoring Sidecar** - Exportar métricas con Prometheus
+```bash
+kubectl apply -f ejemplos/03-multi-container/02-sidecar-monitoring.yaml
+kubectl port-forward pod/app-with-monitoring 9113:9113
+curl localhost:9113/metrics
 ```
+👉 Ver archivo completo: [`02-sidecar-monitoring.yaml`](./ejemplos/03-multi-container/02-sidecar-monitoring.yaml)
 
-##### **2. 📈 Monitoring Sidecar**
-```yaml
-# Main: Aplicación
-# Sidecar: Prometheus exporter
-# Propósito: Exportar métricas custom de la app
+**3. 🌐 Service Mesh Sidecar** - Proxy con Envoy
+```bash
+kubectl apply -f ejemplos/03-multi-container/03-sidecar-service-mesh.yaml
+kubectl port-forward pod/app-with-proxy 8080:10000
 ```
+👉 Ver archivo completo: [`03-sidecar-service-mesh.yaml`](./ejemplos/03-multi-container/03-sidecar-service-mesh.yaml)
 
-##### **3. 🔐 Security Sidecar**
-```yaml
-# Main: Aplicación
-# Sidecar: OAuth2 Proxy, Vault Agent
-# Propósito: Autenticación/autorización transparente
-```
+📚 **Guía completa:** Ver [`ejemplos/03-multi-container/README.md`](./ejemplos/03-multi-container/README.md)
 
-##### **4. 🌐 Service Mesh Sidecar (Istio/Linkerd)**
-```yaml
-# Main: Aplicación
-# Sidecar: Envoy Proxy
-# Propósito: 
-#   - Mutual TLS automático
-#   - Traffic routing
-#   - Observability
-#   - Circuit breaking
-```
+#### **🚀 Casos de Uso Comunes del Patrón Sidecar:**
 
-##### **5. 🔄 Configuration Sync Sidecar**
-```yaml
-# Main: Aplicación
-# Sidecar: Config syncer
-# Propósito: Actualizar configs sin reiniciar la app
-```
+- **📊 Logging:** Fluentd, Logstash, Filebeat - Centralizar logs sin modificar la app
+- **📈 Monitoring:** Prometheus exporter - Exportar métricas custom
+- **🔐 Security:** OAuth2 Proxy, Vault Agent - Autenticación/autorización transparente
+- **🌐 Service Mesh:** Envoy Proxy (Istio/Linkerd) - mTLS, traffic routing, observability
+- **🔄 Config Sync:** Config syncer - Actualizar configs sin reiniciar
 
 #### **✅ Ventajas del Patrón Sidecar:**
 
@@ -976,144 +925,32 @@ Ciclo de Vida del Pod:
 | Procesar logs en tiempo real | ❌ No | Usar Sidecar |
 | Lógica de negocio | ❌ No | Usar Main Container |
 
-#### **📋 Ejemplo Completo: Setup Completo con Init Containers**
+#### **📋 Ejemplos Prácticos**
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-with-init
-spec:
-  # 🛠️ Init containers run BEFORE main containers (sequentially)
-  initContainers:
-  
-  # Init 1: Wait for database to be ready
-  - name: wait-for-db
-    image: postgres:13
-    command: ['sh', '-c']
-    args:
-      - |
-        until pg_isready -h db-service -p 5432; do
-          echo "Waiting for database..."
-          sleep 2
-        done
-        echo "✅ Database is ready!"
-    # ↑ Espera hasta que la DB esté lista
-  
-  # Init 2: Run database migrations (only runs after Init 1 completes)
-  - name: database-migration
-    image: migrate/migrate:v4.15.1
-    command: ['migrate', '-path', '/migrations', '-database', 'postgres://...', 'up']
-    volumeMounts:
-    - name: migrations
-      mountPath: /migrations
-    # ↑ Actualiza el schema de la DB
-  
-  # Init 3: Download configuration (only runs after Init 2 completes)
-  - name: config-setup
-    image: busybox:1.35
-    command: ['sh', '-c', 'echo "Preparing config..." && cp /tmp/config/* /app/config/']
-    volumeMounts:
-    - name: config-source
-      mountPath: /tmp/config
-    - name: app-config
-      mountPath: /app/config
-    # ↑ Prepara configuración necesaria
-  
-  # 🌐 Main application starts AFTER all init containers complete successfully
-  containers:
-  - name: web-app
-    image: my-app:v1.0
-    ports:
-    - containerPort: 8080
-    volumeMounts:
-    - name: app-config
-      mountPath: /app/config
-    # ↑ La app ya tiene todo listo: DB migrada, configs descargadas
-  
-  volumes:
-  - name: migrations
-    configMap:
-      name: db-migrations
-  - name: config-source
-    secret:
-      secretName: app-secrets
-  - name: app-config
-    emptyDir: {}
-```
+Los siguientes ejemplos demuestran diferentes usos de Init Containers:
 
-**Flujo de ejecución:**
+**1. 🗄️ Database Migrations** - Ejecutar migraciones SQL antes de iniciar
+```bash
+kubectl apply -f ejemplos/04-init-containers/01-init-db-migration.yaml
+kubectl logs web-with-init -c database-migration
 ```
-┌────────────────────────────────────────────────┐
-│ Pod Lifecycle con Init Containers             │
-├────────────────────────────────────────────────┤
-│                                                │
-│ 1. wait-for-db                                 │
-│    ├─ Intenta conectar a database             │
-│    ├─ Espera hasta que responda               │
-│    └─ ✅ Completa                              │
-│                                                │
-│ 2. database-migration (solo si #1 exitoso)    │
-│    ├─ Ejecuta migraciones SQL                 │
-│    ├─ Actualiza schema                        │
-│    └─ ✅ Completa                              │
-│                                                │
-│ 3. config-setup (solo si #2 exitoso)          │
-│    ├─ Descarga configuración                  │
-│    ├─ Prepara archivos                        │
-│    └─ ✅ Completa                              │
-│                                                │
-│ 4. web-app (solo si TODOS los init exitosos)  │
-│    └─ 🚀 Inicia con ambiente completamente     │
-│       preparado                                │
-│                                                │
-└────────────────────────────────────────────────┘
-```
+👉 Ver archivo completo: [`01-init-db-migration.yaml`](./ejemplos/04-init-containers/01-init-db-migration.yaml)
 
-#### **🚀 Casos de Uso Reales de Init Containers:**
-
-##### **1. 🗄️ Database Migrations**
-```yaml
-initContainers:
-- name: migrate
-  image: flyway:latest
-  # Ejecuta migraciones antes de que la app inicie
-  # Garantiza que el schema esté actualizado
+**2. ⏳ Wait for Dependencies** - Esperar múltiples servicios externos
+```bash
+kubectl apply -f ejemplos/04-init-containers/02-init-wait-for-deps.yaml
+kubectl logs app-wait-deps -c wait-for-redis
 ```
+👉 Ver archivo completo: [`02-init-wait-for-deps.yaml`](./ejemplos/04-init-containers/02-init-wait-for-deps.yaml)
 
-##### **2. ⏳ Wait for Dependencies**
-```yaml
-initContainers:
-- name: wait-for-redis
-  image: busybox
-  command: ['sh', '-c', 'until nc -z redis 6379; do sleep 1; done']
-  # Espera a que Redis esté disponible
+**3. 🔧 Configuration Setup** - Generar configs, descargar assets, setup permisos
+```bash
+kubectl apply -f ejemplos/04-init-containers/03-init-config-setup.yaml
+kubectl exec app-config-setup -- cat /app/config/app.conf
 ```
+👉 Ver archivo completo: [`03-init-config-setup.yaml`](./ejemplos/04-init-containers/03-init-config-setup.yaml)
 
-##### **3. ⬇️ Download Assets/Dependencies**
-```yaml
-initContainers:
-- name: download-data
-  image: alpine/curl
-  command: ['curl', '-o', '/data/model.pkl', 'https://cdn.com/model.pkl']
-  # Descarga modelo ML antes de que la app inicie
-```
-
-##### **4. 🔧 Configuration Generation**
-```yaml
-initContainers:
-- name: generate-config
-  image: my-config-generator
-  # Genera configuración dinámica basada en el ambiente
-```
-
-##### **5. 🔐 Certificate Setup**
-```yaml
-initContainers:
-- name: cert-setup
-  image: vault:latest
-  # Obtiene certificados de Vault antes de iniciar
-```
+📚 **Guía completa:** Ver [`ejemplos/04-init-containers/README.md`](./ejemplos/04-init-containers/README.md)
 
 #### **✅ Ventajas de Init Containers:**
 
@@ -1175,138 +1012,34 @@ initContainers:
 | Service mesh simple | ✅ Sí | Alternativa ligera a Istio |
 | Conexión directa simple | ❌ No | Overhead innecesario |
 
-#### **📋 Ejemplo Completo: Database Ambassador**
+#### **📋 Ejemplos Prácticos**
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-with-ambassador
-spec:
-  containers:
-  # 🌐 Main application
-  - name: app
-    image: my-app:v1.0
-    ports:
-    - containerPort: 8080
-    env:
-    - name: DATABASE_URL
-      value: "localhost:5432"  # ← Apunta al ambassador (localhost!)
-    # ↑ La app piensa que se conecta a una DB local
-  
-  # 🔀 Ambassador proxy
-  - name: db-ambassador
-    image: haproxy:2.4
-    ports:
-    - containerPort: 5432  # Puerto que escucha localmente
-    volumeMounts:
-    - name: ambassador-config
-      mountPath: /usr/local/etc/haproxy
-    # ↑ Ambassador intercepta conexiones y las enruta
-    
-    # Ambassador maneja:
-    # - Connection pooling (reutiliza conexiones)
-    # - Load balancing (distribuye entre réplicas)
-    # - Health checks (verifica disponibilidad)
-    # - Circuit breaking (evita réplicas caídas)
-    # - SSL termination (maneja encryption)
-  
-  volumes:
-  - name: ambassador-config
-    configMap:
-      name: haproxy-config
-      # Configuración de HAProxy para load balancing
-```
+Los siguientes ejemplos demuestran diferentes usos del patrón Ambassador:
 
-**Configuración del Ambassador (HAProxy):**
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: haproxy-config
-data:
-  haproxy.cfg: |
-    global
-      maxconn 256
-    
-    defaults
-      mode tcp
-      timeout connect 5000ms
-      timeout client 50000ms
-      timeout server 50000ms
-    
-    frontend db-frontend
-      bind *:5432
-      default_backend db-backend
-    
-    backend db-backend
-      balance roundrobin
-      option tcp-check
-      # Load balance entre 3 réplicas de DB
-      server db1 db-replica-1:5432 check
-      server db2 db-replica-2:5432 check
-      server db3 db-replica-3:5432 check
+**1. 🗄️ Database Connection Pooling** - PgBouncer para pooling transparente
+```bash
+kubectl apply -f ejemplos/05-ambassador/01-ambassador-db-pool.yaml
+kubectl logs app-with-pooling -c db-ambassador
 ```
+👉 Ver archivo completo: [`01-ambassador-db-pool.yaml`](./ejemplos/05-ambassador/01-ambassador-db-pool.yaml)
 
-**Flujo de conexión:**
+**2. 🔄 Load Balancing** - HAProxy para distribuir carga entre réplicas
+```bash
+kubectl apply -f ejemplos/05-ambassador/02-ambassador-loadbalancer.yaml
+kubectl port-forward pod/app-with-lb 8404:8404
+# Ver stats en: http://localhost:8404/stats
 ```
-1. App → localhost:5432 (cree que es DB local)
-   ↓
-2. Ambassador intercepta → Recibe conexión en puerto 5432
-   ↓
-3. Ambassador → Health check a réplicas
-   ├─ db-replica-1: ✅ UP
-   ├─ db-replica-2: ✅ UP
-   └─ db-replica-3: ❌ DOWN (circuito abierto)
-   ↓
-4. Ambassador → Round-robin entre réplicas UP
-   └─ Conexión actual → db-replica-1
-   ↓
-5. Ambassador → Mantiene connection pool
-   └─ Reutiliza conexiones para mejor performance
-```
+👉 Ver archivo completo: [`02-ambassador-loadbalancer.yaml`](./ejemplos/05-ambassador/02-ambassador-loadbalancer.yaml)
 
-#### **🚀 Casos de Uso Reales de Ambassador:**
-
-##### **1. 🗄️ Database Connection Pooling**
-```yaml
-# Ambassador: PgBouncer
-# Propósito: 
-#   - Connection pooling para PostgreSQL
-#   - Reduce overhead de conexiones
+**3. 🔐 SSL/TLS Termination** - Nginx para manejar encryption/decryption
+```bash
+kubectl apply -f ejemplos/05-ambassador/03-ambassador-ssl.yaml
+kubectl port-forward pod/app-with-ssl 8443:443
+curl -k https://localhost:8443
 ```
+� Ver archivo completo: [`03-ambassador-ssl.yaml`](./ejemplos/05-ambassador/03-ambassador-ssl.yaml)
 
-##### **2. 🔐 SSL/TLS Termination**
-```yaml
-# Ambassador: Nginx/Envoy
-# Propósito:
-#   - Maneja encryption/decryption
-#   - La app usa HTTP simple
-```
-
-##### **3. 🔄 Load Balancing**
-```yaml
-# Ambassador: HAProxy
-# Propósito:
-#   - Distribuye carga entre backends
-#   - Health checking automático
-```
-
-##### **4. 🛡️ Circuit Breaking & Retry**
-```yaml
-# Ambassador: Envoy
-# Propósito:
-#   - Evita cascading failures
-#   - Retry automático con backoff
-```
-
-##### **5. 📊 Observability Proxy**
-```yaml
-# Ambassador: Envoy
-# Propósito:
-#   - Métricas de latencia/throughput
-#   - Distributed tracing
-```
+📚 **Guía completa:** Ver [`ejemplos/05-ambassador/README.md`](./ejemplos/05-ambassador/README.md)
 
 #### **✅ Ventajas del Patrón Ambassador:**
 

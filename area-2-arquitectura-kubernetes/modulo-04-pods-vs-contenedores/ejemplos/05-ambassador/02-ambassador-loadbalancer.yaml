@@ -1,0 +1,248 @@
+# ============================================================
+# Patrón Ambassador: Load Balancing con HAProxy
+# ============================================================
+# Demuestra cómo un contenedor ambassador puede distribuir
+# carga entre múltiples backends usando HAProxy.
+#
+# Arquitectura:
+#   - Main Container: App (conecta a localhost:5432)
+#   - Ambassador: HAProxy (load balancer)
+#   - External: 3 réplicas de PostgreSQL
+#
+# Características:
+#   - Round-robin load balancing
+#   - Health checking automático
+#   - Circuit breaking (evita réplicas caídas)
+#   - Estadísticas en tiempo real
+#
+# Uso:
+#   kubectl apply -f 02-ambassador-loadbalancer.yaml
+#   kubectl port-forward pod/app-with-lb 8404:8404
+#   # Ver stats en: http://localhost:8404/stats
+# ============================================================
+
+---
+# ============================================================
+# ConfigMap: HAProxy Configuration
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+data:
+  haproxy.cfg: |
+    global
+        maxconn 256
+        log stdout format raw local0
+        stats socket /var/run/haproxy.sock mode 600 level admin
+        stats timeout 2m
+    
+    defaults
+        mode tcp
+        log global
+        option tcplog
+        option dontlognull
+        timeout connect 5000ms
+        timeout client 50000ms
+        timeout server 50000ms
+        retries 3
+    
+    # Frontend: Escucha conexiones de la app
+    frontend db-frontend
+        bind *:5432
+        default_backend db-backend
+        log-format "%ci:%cp -> %fi:%fp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq"
+    
+    # Backend: Pool de réplicas de DB
+    backend db-backend
+        balance roundrobin  # Load balancing algorithm
+        option tcp-check
+        
+        # Health check configuration
+        tcp-check connect
+        tcp-check send-binary 00000000  # PostgreSQL startup message
+        tcp-check expect binary 52  # PostgreSQL auth request
+        
+        # Database replicas (3 réplicas)
+        server db1 postgres-replica-1:5432 check inter 5s fall 3 rise 2
+        server db2 postgres-replica-2:5432 check inter 5s fall 3 rise 2
+        server db3 postgres-replica-3:5432 check inter 5s fall 3 rise 2
+        
+        # Parámetros:
+        # - check: Enable health checks
+        # - inter 5s: Check every 5 seconds
+        # - fall 3: Mark down after 3 failed checks
+        # - rise 2: Mark up after 2 successful checks
+    
+    # Stats interface
+    frontend stats
+        mode http
+        bind *:8404
+        stats enable
+        stats uri /stats
+        stats refresh 10s
+        stats admin if TRUE
+        # Ver stats en: http://localhost:8404/stats
+
+---
+# ============================================================
+# Pod with Ambassador Pattern
+# ============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-lb
+  labels:
+    app: lb-demo
+    pattern: ambassador
+spec:
+  containers:
+  # ============================================================
+  # 🌐 Main Container: Application
+  # ============================================================
+  - name: app
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "🚀 Application starting with load-balanced DB access..."
+        echo "HAProxy stats available at: http://localhost:8404/stats"
+        echo ""
+        
+        # Simular múltiples conexiones para ver load balancing
+        for round in $(seq 1 3); do
+          echo "==== Round $round ===="
+          for i in $(seq 1 5); do
+            echo "  Query $i:"
+            PGPASSWORD=postgres psql -h localhost -U postgres -d myapp -c \
+              "SELECT inet_server_addr() as server, NOW() as timestamp;" 2>&1 | \
+              grep -E "server|timestamp" || echo "    Connection failed (DB might be down)"
+            sleep 1
+          done
+          echo ""
+          sleep 3
+        done
+        
+        echo "✅ Test completed!"
+        echo "Check HAProxy stats to see distribution across backends"
+        
+        # Mantener vivo
+        tail -f /dev/null
+    env:
+    - name: PGPASSWORD
+      value: "postgres"
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # ============================================================
+  # 🔀 Ambassador Container: HAProxy Load Balancer
+  # ============================================================
+  - name: haproxy-ambassador
+    image: haproxy:2.4
+    ports:
+    - containerPort: 5432
+      name: postgres
+    - containerPort: 8404
+      name: stats
+    volumeMounts:
+    - name: haproxy-config
+      mountPath: /usr/local/etc/haproxy
+    # HAProxy maneja:
+    # 1. Load balancing round-robin
+    # 2. Health checking (detecta réplicas caídas)
+    # 3. Circuit breaking (no envía a réplicas down)
+    # 4. Logging detallado
+    # 5. Estadísticas en tiempo real
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+    livenessProbe:
+      httpGet:
+        path: /stats
+        port: 8404
+      initialDelaySeconds: 10
+      periodSeconds: 10
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: haproxy-config
+    configMap:
+      name: haproxy-config
+
+---
+# ============================================================
+# Service para acceder al Pod
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-lb-svc
+spec:
+  selector:
+    app: lb-demo
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  - port: 8404
+    targetPort: 8404
+    name: stats
+  type: ClusterIP
+
+---
+# ============================================================
+# Nota: Este ejemplo requiere 3 réplicas de PostgreSQL
+# Para testing, puedes simularlas con un StatefulSet:
+# ============================================================
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: postgres-replica
+# spec:
+#   clusterIP: None  # Headless service
+#   selector:
+#     app: postgres-replica
+#   ports:
+#   - port: 5432
+# ---
+# apiVersion: apps/v1
+# kind: StatefulSet
+# metadata:
+#   name: postgres-replica
+# spec:
+#   serviceName: postgres-replica
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: postgres-replica
+#   template:
+#     metadata:
+#       labels:
+#         app: postgres-replica
+#     spec:
+#       containers:
+#       - name: postgres
+#         image: postgres:13
+#         env:
+#         - name: POSTGRES_DB
+#           value: "myapp"
+#         - name: POSTGRES_PASSWORD
+#           value: "postgres"
+#         ports:
+#         - containerPort: 5432
+# 
+# Esto creará:
+# - postgres-replica-0.postgres-replica:5432
+# - postgres-replica-1.postgres-replica:5432
+# - postgres-replica-2.postgres-replica:5432

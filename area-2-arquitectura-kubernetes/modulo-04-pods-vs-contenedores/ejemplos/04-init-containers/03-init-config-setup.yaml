@@ -1,0 +1,257 @@
+# ============================================================
+# Patrón Init Container: Configuration Setup
+# ============================================================
+# Demuestra cómo usar init containers para:
+#   1. Generar configuración dinámica
+#   2. Descargar assets externos
+#   3. Setup de permisos y estructura de directorios
+#
+# Arquitectura:
+#   - Init Container 1: Generar config basado en ambiente
+#   - Init Container 2: Descargar assets/dependencies
+#   - Init Container 3: Setup de permisos
+#   - Main Container: Aplicación
+#
+# Uso:
+#   kubectl apply -f 03-init-config-setup.yaml
+#   kubectl get pods -w
+#   kubectl logs app-config-setup -c generate-config
+#   kubectl exec app-config-setup -- cat /app/config/app.conf
+# ============================================================
+
+---
+# ============================================================
+# ConfigMap: Template de configuración
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-template
+data:
+  app.conf.template: |
+    # Application Configuration
+    # Generated on: {{TIMESTAMP}}
+    # Environment: {{ENVIRONMENT}}
+    
+    [server]
+    port = 8080
+    host = 0.0.0.0
+    workers = 4
+    
+    [database]
+    host = {{DB_HOST}}
+    port = {{DB_PORT}}
+    name = {{DB_NAME}}
+    pool_size = 10
+    
+    [cache]
+    enabled = {{CACHE_ENABLED}}
+    host = {{CACHE_HOST}}
+    ttl = 3600
+    
+    [logging]
+    level = {{LOG_LEVEL}}
+    format = json
+
+---
+# ============================================================
+# ConfigMap: Lista de assets a descargar
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assets-list
+data:
+  assets.txt: |
+    https://via.placeholder.com/150|/app/assets/logo.png
+    https://via.placeholder.com/300|/app/assets/banner.png
+
+---
+# ============================================================
+# Pod with Init Containers for Config Setup
+# ============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-config-setup
+  labels:
+    app: configured-app
+    pattern: init-container
+spec:
+  # ============================================================
+  # 🛠️ Init Containers
+  # ============================================================
+  initContainers:
+  
+  # Init 1: Generate dynamic configuration
+  - name: generate-config
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "🔧 Generating configuration..."
+        
+        # Leer template
+        TEMPLATE=$(cat /templates/app.conf.template)
+        
+        # Reemplazar variables
+        echo "$TEMPLATE" | \
+          sed "s|{{TIMESTAMP}}|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" | \
+          sed "s|{{ENVIRONMENT}}|$ENVIRONMENT|g" | \
+          sed "s|{{DB_HOST}}|$DB_HOST|g" | \
+          sed "s|{{DB_PORT}}|$DB_PORT|g" | \
+          sed "s|{{DB_NAME}}|$DB_NAME|g" | \
+          sed "s|{{CACHE_ENABLED}}|$CACHE_ENABLED|g" | \
+          sed "s|{{CACHE_HOST}}|$CACHE_HOST|g" | \
+          sed "s|{{LOG_LEVEL}}|$LOG_LEVEL|g" \
+          > /app/config/app.conf
+        
+        echo "✅ Configuration generated:"
+        cat /app/config/app.conf
+    env:
+    - name: ENVIRONMENT
+      value: "production"
+    - name: DB_HOST
+      value: "postgres-service"
+    - name: DB_PORT
+      value: "5432"
+    - name: DB_NAME
+      value: "myapp"
+    - name: CACHE_ENABLED
+      value: "true"
+    - name: CACHE_HOST
+      value: "redis-service"
+    - name: LOG_LEVEL
+      value: "info"
+    volumeMounts:
+    - name: config-template
+      mountPath: /templates
+    - name: app-config
+      mountPath: /app/config
+  
+  # Init 2: Download assets (solo corre después de Init 1)
+  - name: download-assets
+    image: curlimages/curl:7.85.0
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "⬇️  Downloading assets..."
+        
+        # Crear directorios
+        mkdir -p /app/assets
+        
+        # Leer lista de assets y descargar cada uno
+        while IFS='|' read -r url destination; do
+          if [ -n "$url" ]; then
+            echo "  Downloading: $url → $destination"
+            curl -s -L "$url" -o "$destination"
+            if [ $? -eq 0 ]; then
+              echo "  ✅ Downloaded: $(basename $destination)"
+            else
+              echo "  ❌ Failed: $(basename $destination)"
+            fi
+          fi
+        done < /assets-list/assets.txt
+        
+        echo "✅ All assets downloaded!"
+        ls -lh /app/assets/
+    volumeMounts:
+    - name: assets-list
+      mountPath: /assets-list
+    - name: app-data
+      mountPath: /app
+  
+  # Init 3: Setup permissions (solo corre después de Init 2)
+  - name: setup-permissions
+    image: busybox:1.35
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "🔐 Setting up permissions..."
+        
+        # Crear estructura de directorios
+        mkdir -p /app/logs
+        mkdir -p /app/tmp
+        mkdir -p /app/cache
+        
+        # Configurar permisos
+        chmod 755 /app/config
+        chmod 644 /app/config/*
+        chmod 755 /app/assets
+        chmod 644 /app/assets/*
+        chmod 777 /app/logs
+        chmod 777 /app/tmp
+        chmod 777 /app/cache
+        
+        echo "✅ Permissions configured!"
+        echo "Directory structure:"
+        ls -la /app/
+    volumeMounts:
+    - name: app-config
+      mountPath: /app/config
+    - name: app-data
+      mountPath: /app
+  
+  # ============================================================
+  # 🌐 Main Container
+  # ============================================================
+  containers:
+  - name: app
+    image: nginx:1.20
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: app-config
+      mountPath: /etc/nginx/conf.d/app.conf
+      subPath: app.conf
+      readOnly: true
+    - name: app-data
+      mountPath: /usr/share/nginx/html
+    # La app tiene:
+    # 1. Configuración generada dinámicamente
+    # 2. Assets descargados
+    # 3. Permisos correctos
+    # 4. Estructura de directorios lista
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 3
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: config-template
+    configMap:
+      name: config-template
+  - name: assets-list
+    configMap:
+      name: assets-list
+  - name: app-config
+    emptyDir: {}
+  - name: app-data
+    emptyDir: {}
+
+---
+# ============================================================
+# Service
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-config-svc
+spec:
+  selector:
+    app: configured-app
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP

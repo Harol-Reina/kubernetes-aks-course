@@ -1,0 +1,219 @@
+# ============================================================
+# Patrón Init Container: Database Migrations
+# ============================================================
+# Demuestra cómo usar init containers para ejecutar
+# migraciones de base de datos ANTES de iniciar la app.
+#
+# Arquitectura:
+#   - Init Container 1: Esperar que DB esté lista
+#   - Init Container 2: Ejecutar migraciones
+#   - Main Container: Aplicación
+#
+# Flujo:
+#   1. wait-for-db espera conexión a PostgreSQL
+#   2. migrate ejecuta migraciones SQL
+#   3. app inicia solo si los anteriores fueron exitosos
+#
+# Uso:
+#   kubectl apply -f 01-init-db-migration.yaml
+#   kubectl get pods -w
+#   kubectl logs web-with-init -c wait-for-db
+#   kubectl logs web-with-init -c database-migration
+# ============================================================
+
+---
+# ============================================================
+# ConfigMap: Database Migration Scripts
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-migrations
+data:
+  001_create_users_table.sql: |
+    -- Migration 001: Create users table
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        email VARCHAR(100) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  
+  002_create_posts_table.sql: |
+    -- Migration 002: Create posts table
+    CREATE TABLE IF NOT EXISTS posts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(200) NOT NULL,
+        content TEXT,
+        published BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published);
+  
+  003_seed_data.sql: |
+    -- Migration 003: Seed initial data
+    INSERT INTO users (username, email) 
+    VALUES 
+        ('admin', 'admin@example.com'),
+        ('demo', 'demo@example.com')
+    ON CONFLICT (username) DO NOTHING;
+
+---
+# ============================================================
+# Secret: Database Credentials
+# ============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+type: Opaque
+stringData:
+  DB_HOST: "postgres-service"  # En producción usar Service real
+  DB_PORT: "5432"
+  DB_NAME: "myapp"
+  DB_USER: "postgres"
+  DB_PASSWORD: "mysecretpassword"
+
+---
+# ============================================================
+# Pod with Init Containers for DB Migration
+# ============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-with-init
+  labels:
+    app: web
+    pattern: init-container
+spec:
+  # ============================================================
+  # 🛠️ Init Containers (ejecutan ANTES, secuencialmente)
+  # ============================================================
+  initContainers:
+  
+  # Init 1: Wait for database to be ready
+  - name: wait-for-db
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "⏳ Waiting for PostgreSQL to be ready..."
+        until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+          echo "  Database is not ready yet, waiting 2 seconds..."
+          sleep 2
+        done
+        echo "✅ Database is ready!"
+    env:
+    - name: DB_HOST
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_HOST
+    - name: DB_PORT
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_PORT
+    - name: DB_USER
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_USER
+    - name: PGPASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_PASSWORD
+  
+  # Init 2: Run database migrations (solo corre si wait-for-db fue exitoso)
+  - name: database-migration
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "🔧 Running database migrations..."
+        
+        # Ejecutar cada archivo de migración en orden
+        for migration in /migrations/*.sql; do
+          echo "  Executing: $(basename $migration)"
+          psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f $migration
+          if [ $? -eq 0 ]; then
+            echo "  ✅ $(basename $migration) completed successfully"
+          else
+            echo "  ❌ $(basename $migration) failed"
+            exit 1
+          fi
+        done
+        
+        echo "✅ All migrations completed successfully!"
+    env:
+    - name: DB_HOST
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_HOST
+    - name: DB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_NAME
+    - name: DB_USER
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_USER
+    - name: PGPASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_PASSWORD
+    volumeMounts:
+    - name: migrations
+      mountPath: /migrations
+      readOnly: true
+  
+  # ============================================================
+  # 🌐 Main Container (solo inicia si TODOS los init exitosos)
+  # ============================================================
+  containers:
+  - name: web-app
+    image: nginx:1.20
+    ports:
+    - containerPort: 80
+    env:
+    - name: DB_HOST
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_HOST
+    - name: DB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: DB_NAME
+    # La app puede asumir que:
+    # 1. La DB está disponible
+    # 2. El schema está actualizado
+    # 3. Los datos iniciales están cargados
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  # ============================================================
+  # 💾 Volumes
+  # ============================================================
+  volumes:
+  - name: migrations
+    configMap:
+      name: db-migrations
