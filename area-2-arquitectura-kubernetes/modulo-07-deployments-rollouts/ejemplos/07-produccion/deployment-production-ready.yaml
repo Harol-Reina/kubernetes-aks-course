@@ -1,0 +1,306 @@
+# ====================================================================
+# DEPLOYMENT PRODUCTION-READY - CONFIGURACIÓN COMPLETA
+# ====================================================================
+# Descripción:
+#   Deployment con TODAS las best practices para producción
+#   Configuración completa y robusta
+#
+# Conceptos:
+#   - Production-ready configuration
+#   - Alta disponibilidad
+#   - Security best practices
+#   - Monitoring y health checks
+#   - Resource management
+#
+# Uso:
+#   kubectl apply -f deployment-production-ready.yaml
+#   kubectl get deploy production-app
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: production-app
+  namespace: default  # ✅ Usar namespace apropiado en producción
+  labels:
+    app: production-app
+    tier: frontend
+    environment: production
+    version: "v1.0.0"
+  annotations:
+    kubernetes.io/change-cause: "v1.0.0 - Production release inicial"
+    description: "Aplicación web production-ready con todas las best practices"
+spec:
+  # ✅ Réplicas apropiadas para HA
+  replicas: 5
+  
+  # ✅ Estrategia para zero downtime
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1           # Permitir 1 Pod extra
+      maxUnavailable: 0     # NUNCA bajar disponibilidad
+  
+  # ✅ Límite razonable de historial
+  revisionHistoryLimit: 10
+  
+  # ✅ Timeout para rollout (10 minutos)
+  progressDeadlineSeconds: 600
+  
+  # ✅ Selector específico y único
+  selector:
+    matchLabels:
+      app: production-app
+      tier: frontend
+  
+  template:
+    metadata:
+      labels:
+        app: production-app
+        tier: frontend
+        version: "v1.0.0"
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"      # Monitoring
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # ✅ Security context a nivel Pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # ✅ Service account específico
+      serviceAccountName: production-app-sa
+      
+      # ✅ Distribución en nodos diferentes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - production-app
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+      - name: app
+        # ✅ Tag específico (NO :latest)
+        image: nginx:1.23-alpine
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        
+        # ✅ Variables de entorno
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        # ✅ Resources SIEMPRE definidos
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        
+        # ✅ Security context a nivel contenedor
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        
+        # ✅ Liveness probe configurado
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # ✅ Readiness probe configurado
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # ✅ Startup probe (para apps con inicio lento)
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30  # 5 minutos máximo para startup
+        
+        # ✅ Lifecycle hooks
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - sh
+              - -c
+              - echo "Container started at $(date)" >> /tmp/lifecycle.log
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - |
+                echo "Shutting down gracefully..."
+                sleep 15  # Esperar conexiones activas
+        
+        # ✅ VolumeMounts
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+      
+      # ✅ Volúmenes (para readOnlyRootFilesystem)
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+      
+      # ✅ Termination grace period
+      terminationGracePeriodSeconds: 30
+      
+      # ✅ DNS policy
+      dnsPolicy: ClusterFirst
+      
+      # ✅ Restart policy
+      restartPolicy: Always
+
+# ====================================================================
+# CHECKLIST PRODUCTION-READY:
+# ====================================================================
+#
+# DEPLOYMENT:
+# ✅ replicas: 3+ (alta disponibilidad)
+# ✅ strategy: RollingUpdate con maxUnavailable: 0
+# ✅ revisionHistoryLimit: 5-10
+# ✅ progressDeadlineSeconds: definido
+# ✅ annotations: change-cause incluida
+#
+# CONTAINER:
+# ✅ image: tag específico (NO :latest)
+# ✅ imagePullPolicy: IfNotPresent
+# ✅ resources: requests y limits definidos
+# ✅ securityContext: runAsNonRoot, readOnlyRootFilesystem
+# ✅ livenessProbe: configurado
+# ✅ readinessProbe: configurado
+# ✅ startupProbe: si startup lento
+# ✅ lifecycle: preStop hook
+#
+# SEGURIDAD:
+# ✅ securityContext: a nivel Pod y Container
+# ✅ serviceAccountName: específico (no default)
+# ✅ readOnlyRootFilesystem: true
+# ✅ capabilities: drop ALL
+# ✅ runAsNonRoot: true
+#
+# DISPONIBILIDAD:
+# ✅ affinity: podAntiAffinity configurado
+# ✅ terminationGracePeriodSeconds: 30+
+# ✅ maxUnavailable: 0 (zero downtime)
+#
+# OBSERVABILIDAD:
+# ✅ labels: completos y descriptivos
+# ✅ annotations: prometheus, logging
+# ✅ env: POD_NAME, POD_IP para logs
+#
+# ====================================================================
+#
+# RECURSOS ADICIONALES NECESARIOS:
+# ====================================================================
+#
+# ServiceAccount:
+# ---
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   name: production-app-sa
+#
+# Service:
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: production-app-svc
+# spec:
+#   selector:
+#     app: production-app
+#   ports:
+#   - port: 80
+#     targetPort: 80
+#   type: ClusterIP
+#
+# HorizontalPodAutoscaler:
+# ---
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: production-app-hpa
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: production-app
+#   minReplicas: 5
+#   maxReplicas: 20
+#   metrics:
+#   - type: Resource
+#     resource:
+#       name: cpu
+#       target:
+#         type: Utilization
+#         averageUtilization: 70
+#
+# ====================================================================

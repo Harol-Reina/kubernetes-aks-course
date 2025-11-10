@@ -1,0 +1,84 @@
+# ====================================================================
+# DEPLOYMENT SIMPLE - EJEMPLO BÁSICO
+# ====================================================================
+# Descripción:
+#   Deployment básico con 3 réplicas de nginx:alpine
+#   Demuestra la estructura mínima necesaria de un Deployment
+#
+# Conceptos:
+#   - Estructura básica de Deployment
+#   - Gestión automática de ReplicaSets
+#   - Selector y template
+#   - Rolling updates automáticos
+#
+# Uso:
+#   kubectl apply -f deployment-simple.yaml
+#   kubectl get deploy nginx-deployment
+#   kubectl get rs
+#   kubectl get pods
+#   kubectl delete deploy nginx-deployment
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+    tier: frontend
+    managed-by: deployment
+  annotations:
+    kubernetes.io/change-cause: "Deployment inicial de nginx 1.21-alpine"
+spec:
+  # Número de réplicas deseadas
+  replicas: 3
+  
+  # Selector: define qué Pods gestiona este Deployment
+  selector:
+    matchLabels:
+      app: nginx
+  
+  # Template: plantilla para crear Pods (vía ReplicaSet)
+  template:
+    metadata:
+      labels:
+        app: nginx        # ← DEBE coincidir con selector
+        version: "v1.0"
+        environment: demo
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        
+        # Resources (buena práctica)
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        # Liveness probe
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Readiness probe
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3

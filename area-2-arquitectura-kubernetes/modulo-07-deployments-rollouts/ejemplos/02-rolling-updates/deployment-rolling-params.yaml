@@ -1,0 +1,149 @@
+# ====================================================================
+# DEPLOYMENT CON PARÁMETROS DE ROLLING UPDATE
+# ====================================================================
+# Descripción:
+#   Deployment con control fino de rolling update
+#   Demuestra maxSurge y maxUnavailable
+#
+# Conceptos:
+#   - maxSurge: cuántos Pods extra durante update
+#   - maxUnavailable: cuántos Pods pueden estar down
+#   - Control de velocidad de rollout
+#   - Garantías de disponibilidad
+#
+# Uso:
+#   kubectl apply -f deployment-rolling-params.yaml
+#   # Cambiar image a nginx:1.22-alpine
+#   kubectl apply -f deployment-rolling-params.yaml
+#   kubectl rollout status deployment rolling-demo
+#   kubectl get pods --watch
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-demo
+  labels:
+    app: rolling-demo
+  annotations:
+    kubernetes.io/change-cause: "Deploy con rolling update controlado"
+spec:
+  replicas: 4
+  
+  # Estrategia de actualización
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Máximo 1 Pod adicional durante update (125% del total)
+      maxSurge: 1
+      
+      # Máximo 1 Pod puede estar indisponible (75% mínimo disponible)
+      maxUnavailable: 1
+      
+      # Con 4 réplicas:
+      # - Mínimo disponible: 3 Pods (4 - maxUnavailable)
+      # - Máximo total: 5 Pods (4 + maxSurge)
+  
+  selector:
+    matchLabels:
+      app: rolling-demo
+  
+  template:
+    metadata:
+      labels:
+        app: rolling-demo
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        # CAMBIAR ESTA VERSIÓN PARA VER ROLLING UPDATE
+        # v1: nginx:1.21-alpine
+        # v2: nginx:1.22-alpine
+        # v3: nginx:1.23-alpine
+        image: nginx:1.21-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        # Variables para identificar el Pod
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: VERSION
+          value: "v1.0"
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        # Probes para garantizar health durante rollout
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          # IMPORTANTE: failureThreshold controla cuándo un Pod se marca como "not ready"
+          failureThreshold: 3
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - sleep 10  # Grace period para terminar conexiones
+
+# ====================================================================
+# DEMOSTRACIÓN DE ROLLING UPDATE:
+# ====================================================================
+#
+# Escenario: 4 réplicas, maxSurge=1, maxUnavailable=1
+#
+# Estado inicial: [v1.21] [v1.21] [v1.21] [v1.21]  = 4 Pods
+#
+# Cambiar a nginx:1.22-alpine:
+#
+# Step 1: Crear 1 nuevo (maxSurge)
+#         [v1.21] [v1.21] [v1.21] [v1.21] [v1.22]  = 5 Pods
+#
+# Step 2: Eliminar 1 viejo (maxUnavailable)
+#         [v1.21] [v1.21] [v1.21] [v1.22]          = 4 Pods
+#
+# Step 3: Crear 1 nuevo
+#         [v1.21] [v1.21] [v1.21] [v1.22] [v1.22]  = 5 Pods
+#
+# Step 4: Eliminar 1 viejo
+#         [v1.21] [v1.21] [v1.22] [v1.22]          = 4 Pods
+#
+# Step 5: Crear 1 nuevo
+#         [v1.21] [v1.21] [v1.22] [v1.22] [v1.22]  = 5 Pods
+#
+# Step 6: Eliminar 1 viejo
+#         [v1.21] [v1.22] [v1.22] [v1.22]          = 4 Pods
+#
+# Step 7: Crear 1 nuevo
+#         [v1.21] [v1.22] [v1.22] [v1.22] [v1.22]  = 5 Pods
+#
+# Step 8: Eliminar último viejo
+#         [v1.22] [v1.22] [v1.22] [v1.22]          = 4 Pods ✅
+#
+# GARANTÍAS:
+# - Mínimo 3 Pods disponibles siempre (75%)
+# - Máximo 5 Pods total (125%)
+# - Zero downtime
+# ====================================================================

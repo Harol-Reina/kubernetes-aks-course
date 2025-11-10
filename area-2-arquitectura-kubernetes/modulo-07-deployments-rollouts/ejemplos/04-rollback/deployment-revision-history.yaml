@@ -1,0 +1,156 @@
+# ====================================================================
+# DEPLOYMENT - GESTIÓN DE REVISION HISTORY
+# ====================================================================
+# Descripción:
+#   Deployment configurado para mantener historial de revisiones
+#   Permite rollback a versiones anteriores
+#
+# Conceptos:
+#   - revisionHistoryLimit
+#   - Gestión de ReplicaSets históricos
+#   - Rollback capabilities
+#
+# Uso:
+#   kubectl apply -f deployment-revision-history.yaml
+#   # Hacer múltiples updates
+#   kubectl rollout history deployment history-demo
+#   kubectl rollout undo deployment history-demo --to-revision=2
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: history-demo
+  labels:
+    app: history-demo
+  annotations:
+    kubernetes.io/change-cause: "v1.0.0 - Versión inicial"
+spec:
+  replicas: 3
+  
+  # Mantener últimas 5 revisiones (default: 10)
+  # Cada revisión = 1 ReplicaSet con 0 réplicas
+  revisionHistoryLimit: 5
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  selector:
+    matchLabels:
+      app: history-demo
+  
+  template:
+    metadata:
+      labels:
+        app: history-demo
+        version: "v1.0.0"
+    spec:
+      containers:
+      - name: app
+        # VERSIÓN 1.0.0
+        image: nginx:1.20-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+# ====================================================================
+# SIMULACIÓN DE MÚLTIPLES VERSIONES:
+# ====================================================================
+#
+# VERSIÓN 1.0.0 (actual):
+# - image: nginx:1.20-alpine
+# - annotation: "v1.0.0 - Versión inicial"
+#
+# VERSIÓN 1.1.0:
+# - image: nginx:1.21-alpine
+# - annotation: "v1.1.0 - Actualizar nginx a 1.21"
+# - env: APP_VERSION: "v1.1.0"
+#
+# VERSIÓN 1.2.0:
+# - image: nginx:1.22-alpine
+# - annotation: "v1.2.0 - Actualizar nginx a 1.22"
+# - env: APP_VERSION: "v1.2.0"
+#
+# VERSIÓN 2.0.0:
+# - image: nginx:1.23-alpine
+# - annotation: "v2.0.0 - Major version upgrade"
+# - env: APP_VERSION: "v2.0.0"
+# - resources: memory "128Mi" (aumentado)
+#
+# VERSIÓN 2.1.0:
+# - image: nginx:alpine (latest)
+# - annotation: "v2.1.0 - Use latest alpine"
+# - env: APP_VERSION: "v2.1.0"
+#
+# ====================================================================
+#
+# COMANDOS PARA GESTIÓN DE HISTORIAL:
+# ====================================================================
+#
+# Ver historial completo:
+# kubectl rollout history deployment history-demo
+#
+# Ver detalles de revisión específica:
+# kubectl rollout history deployment history-demo --revision=3
+#
+# Rollback a versión anterior:
+# kubectl rollout undo deployment history-demo
+#
+# Rollback a versión específica:
+# kubectl rollout undo deployment history-demo --to-revision=2
+#
+# Ver ReplicaSets (incluyendo históricos):
+# kubectl get rs -l app=history-demo
+#
+# Ver qué revisión está activa:
+# kubectl get deployment history-demo -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}'
+#
+# ====================================================================
+#
+# LIMPIEZA DE HISTORIAL:
+# ====================================================================
+#
+# Si cambias revisionHistoryLimit a un número menor,
+# Kubernetes eliminará ReplicaSets viejos automáticamente.
+#
+# Ejemplo:
+# 1. Tienes 10 revisiones (ReplicaSets con 0 réplicas)
+# 2. Cambias revisionHistoryLimit: 3
+# 3. kubectl apply -f deployment-revision-history.yaml
+# 4. Kubernetes elimina las 7 revisiones más antiguas
+# 5. Solo quedan 3 ReplicaSets históricos
+#
+# IMPORTANTE:
+# - NO puedes hacer rollback a revisiones eliminadas
+# - Elige un límite razonable (5-10 típico)
+#
+# ====================================================================

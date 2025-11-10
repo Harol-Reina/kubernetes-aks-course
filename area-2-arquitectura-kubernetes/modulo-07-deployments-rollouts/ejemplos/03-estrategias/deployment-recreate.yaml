@@ -1,0 +1,148 @@
+# ====================================================================
+# DEPLOYMENT - ESTRATEGIA RECREATE
+# ====================================================================
+# Descripción:
+#   Deployment con estrategia Recreate
+#   Elimina TODOS los Pods viejos antes de crear nuevos
+#   ⚠️ CAUSA DOWNTIME
+#
+# Conceptos:
+#   - Recreate strategy
+#   - Downtime planificado
+#   - Actualización no gradual
+#   - Uso en migraciones
+#
+# Uso:
+#   kubectl apply -f deployment-recreate.yaml
+#   # Cambiar imagen
+#   kubectl set image deployment/recreate-strategy nginx=nginx:1.22-alpine
+#   kubectl rollout status deployment recreate-strategy
+#   # Observar downtime
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recreate-strategy
+  labels:
+    app: recreate-strategy
+    strategy: recreate
+  annotations:
+    kubernetes.io/change-cause: "Deploy con estrategia Recreate"
+spec:
+  replicas: 4
+  
+  # Estrategia: Recreate
+  strategy:
+    type: Recreate
+    # NO hay parámetros adicionales para Recreate
+    # Simplemente: eliminar todos → crear todos
+  
+  selector:
+    matchLabels:
+      app: recreate-strategy
+  
+  template:
+    metadata:
+      labels:
+        app: recreate-strategy
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        # Variables para identificar versión
+        env:
+        - name: VERSION
+          value: "v1.0"
+        - name: STRATEGY
+          value: "recreate"
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+# ====================================================================
+# PROCESO DE RECREATE:
+# ====================================================================
+#
+# Estado inicial: [v1] [v1] [v1] [v1]  = 4 Pods running
+#
+# Cambiar a nginx:1.22-alpine:
+#
+# Step 1: Eliminar TODOS los Pods viejos
+#         [ ] [ ] [ ] [ ]  ← DOWNTIME (0 Pods)
+#
+# Step 2: Esperar que todos terminen
+#         [ ] [ ] [ ] [ ]  ← DOWNTIME continúa
+#
+# Step 3: Crear TODOS los Pods nuevos
+#         [v2] [v2] [v2] [v2]  ← Todos creándose
+#
+# Step 4: Esperar que estén ready
+#         [v2] [v2] [v2] [v2]  = 4 Pods running ✅
+#
+# RESULTADO:
+# - ❌ DOWNTIME significativo (segundos a minutos)
+# - ✅ NO hay coexistencia de versiones
+# - ✅ Rápido (no gradual)
+#
+# ====================================================================
+#
+# CUÁNDO USAR RECREATE:
+# ====================================================================
+#
+# ✅ Migraciones de base de datos
+#    - Schema changes incompatibles entre versiones
+#
+# ✅ Aplicaciones que NO soportan múltiples versiones
+#    - Problemas de compatibilidad
+#    - Shared state que cambia
+#
+# ✅ Desarrollo/Testing
+#    - Downtime aceptable
+#    - Quieres limpiar estado completamente
+#
+# ✅ Maintenance windows
+#    - Downtime planificado y comunicado
+#
+# ❌ NO USAR en producción (generalmente)
+#    - A menos que sea absolutamente necesario
+#
+# ====================================================================
+#
+# COMPARACIÓN CON ROLLINGUPDATE:
+# ====================================================================
+#
+# | Característica      | RollingUpdate | Recreate    |
+# |---------------------|---------------|-------------|
+# | Downtime            | ❌ No         | ✅ Sí       |
+# | Velocidad           | Gradual       | Rápida      |
+# | Coexistencia v      | ✅ Temporal   | ❌ Nunca    |
+# | Recursos extra      | ✅ Sí (surge) | ❌ No       |
+# | Complejidad         | Mayor         | Menor       |
+# | Producción          | ✅ Recomendado| ❌ Evitar   |
+#
+# ====================================================================

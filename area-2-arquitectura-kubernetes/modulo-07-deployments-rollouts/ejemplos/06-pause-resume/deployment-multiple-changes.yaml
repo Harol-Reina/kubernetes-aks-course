@@ -1,0 +1,250 @@
+# ====================================================================
+# DEPLOYMENT - PAUSE Y RESUME (MÚLTIPLES CAMBIOS)
+# ====================================================================
+# Descripción:
+#   Deployment para demostrar pause/resume
+#   Permite hacer múltiples cambios en un solo rollout
+#
+# Conceptos:
+#   - Pausar deployment
+#   - Hacer múltiples cambios
+#   - Reanudar (todo se aplica junto)
+#   - Control de rollout
+#
+# Uso:
+#   Ver sección DEMO PASO A PASO al final
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pause-resume-demo
+  labels:
+    app: pause-resume-demo
+  annotations:
+    kubernetes.io/change-cause: "Estado inicial antes de cambios múltiples"
+spec:
+  replicas: 4
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  selector:
+    matchLabels:
+      app: pause-resume-demo
+  
+  template:
+    metadata:
+      labels:
+        app: pause-resume-demo
+        version: "v1.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.20-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        env:
+        - name: APP_VERSION
+          value: "v1.0"
+        - name: ENVIRONMENT
+          value: "production"
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+# ====================================================================
+# DEMO PASO A PASO - PAUSE Y RESUME:
+# ====================================================================
+#
+# ESCENARIO:
+# Necesitas hacer 3 cambios:
+# 1. Actualizar imagen nginx:1.20 → 1.23
+# 2. Aumentar recursos 128Mi → 256Mi
+# 3. Escalar de 4 → 6 réplicas
+#
+# OPCIÓN A (SIN PAUSE): 3 rollouts separados
+# - kubectl apply (cambio 1) → rollout 1
+# - kubectl apply (cambio 2) → rollout 2
+# - kubectl apply (cambio 3) → rollout 3
+# ❌ Problema: 3 rollouts = más tiempo, más recursos
+#
+# OPCIÓN B (CON PAUSE): 1 solo rollout
+# - Pausar
+# - Hacer todos los cambios
+# - Reanudar → rollout único
+# ✅ Ventaja: 1 rollout = más eficiente
+#
+# ====================================================================
+#
+# PASO 1: Deploy inicial
+# -----------------------
+# kubectl apply -f deployment-multiple-changes.yaml
+# kubectl get pods -l app=pause-resume-demo
+#
+# Resultado: 4 Pods con nginx:1.20, 128Mi ✅
+#
+#
+# PASO 2: PAUSAR el Deployment
+# -----------------------------
+# kubectl rollout pause deployment pause-resume-demo
+#
+# Output:
+# deployment.apps/pause-resume-demo paused
+#
+# IMPORTANTE: Ahora los cambios NO se aplicarán hasta resume
+#
+#
+# PASO 3: Cambio #1 - Actualizar imagen
+# --------------------------------------
+# kubectl set image deployment/pause-resume-demo \
+#   app=nginx:1.23-alpine
+#
+# kubectl get pods -l app=pause-resume-demo
+# ❌ Pods siguen con nginx:1.20 (pausado)
+#
+#
+# PASO 4: Cambio #2 - Aumentar recursos
+# --------------------------------------
+# kubectl set resources deployment/pause-resume-demo \
+#   -c app \
+#   --requests=cpu=200m,memory=128Mi \
+#   --limits=cpu=500m,memory=256Mi
+#
+# kubectl get pods -l app=pause-resume-demo
+# ❌ Pods siguen con recursos viejos (pausado)
+#
+#
+# PASO 5: Cambio #3 - Escalar réplicas
+# -------------------------------------
+# kubectl scale deployment pause-resume-demo --replicas=6
+#
+# kubectl get pods -l app=pause-resume-demo
+# ❌ Siguen 4 Pods (pausado)
+#
+#
+# PASO 6: Verificar que cambios están pendientes
+# -----------------------------------------------
+# kubectl get deployment pause-resume-demo -o yaml | grep -A 10 spec:
+#
+# Verás:
+# - image: nginx:1.23-alpine  ← Actualizado
+# - replicas: 6               ← Actualizado
+# - resources: 256Mi          ← Actualizado
+#
+# kubectl get pods -l app=pause-resume-demo
+# ❌ PERO los Pods siguen con configuración vieja
+#
+#
+# PASO 7: REANUDAR el Deployment
+# -------------------------------
+# kubectl rollout resume deployment pause-resume-demo
+#
+# Output:
+# deployment.apps/pause-resume-demo resumed
+#
+# ✅ AHORA sí se aplican TODOS los cambios en UN solo rollout
+#
+#
+# PASO 8: Observar el rollout
+# ----------------------------
+# Terminal 1:
+# kubectl rollout status deployment pause-resume-demo
+#
+# Terminal 2:
+# kubectl get pods -l app=pause-resume-demo --watch
+#
+# Verás:
+# - Rolling update de 1.20 → 1.23
+# - Recursos actualizados
+# - Escalado a 6 réplicas
+# - TODO en un solo proceso
+#
+#
+# PASO 9: Verificar resultado final
+# ----------------------------------
+# kubectl get pods -l app=pause-resume-demo
+#
+# Output:
+# NAME                      READY   STATUS    RESTARTS   AGE
+# pause-resume-demo-abc     1/1     Running   0          30s
+# pause-resume-demo-def     1/1     Running   0          30s
+# pause-resume-demo-ghi     1/1     Running   0          30s
+# pause-resume-demo-jkl     1/1     Running   0          30s
+# pause-resume-demo-mno     1/1     Running   0          30s
+# pause-resume-demo-pqr     1/1     Running   0          30s
+# ↑ 6 Pods ✅
+#
+# kubectl get pods -o jsonpath='{.items[0].spec.containers[0].image}'
+# Output: nginx:1.23-alpine ✅
+#
+# kubectl get pods -o jsonpath='{.items[0].spec.containers[0].resources.limits.memory}'
+# Output: 256Mi ✅
+#
+# ====================================================================
+#
+# CUÁNDO USAR PAUSE/RESUME:
+# ====================================================================
+#
+# ✅ Múltiples cambios relacionados
+#    - Quieres que se apliquen juntos
+#    - Evitar rollouts intermedios
+#
+# ✅ Testing de configuración
+#    - Pausar
+#    - Hacer cambios
+#    - Revisar manifesto
+#    - Reanudar si está OK
+#
+# ✅ Cambios programados
+#    - Pausar durante horas de bajo tráfico
+#    - Preparar cambios
+#    - Reanudar en ventana de mantenimiento
+#
+# ✅ Troubleshooting
+#    - Pausar rollout problemático
+#    - Investigar
+#    - Fix o rollback
+#
+# ====================================================================
+#
+# COMANDOS ÚTILES:
+# ====================================================================
+#
+# Pausar:
+# kubectl rollout pause deployment <name>
+#
+# Reanudar:
+# kubectl rollout resume deployment <name>
+#
+# Ver si está pausado:
+# kubectl get deployment <name> -o jsonpath='{.spec.paused}'
+#
+# Ver cambios pendientes:
+# kubectl get deployment <name> -o yaml
+#
+# ====================================================================

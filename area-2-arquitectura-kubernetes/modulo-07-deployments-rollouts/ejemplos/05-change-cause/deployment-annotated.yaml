@@ -1,0 +1,191 @@
+# ====================================================================
+# DEPLOYMENT CON CHANGE-CAUSE ANNOTATION
+# ====================================================================
+# Descripción:
+#   Deployment con anotación kubernetes.io/change-cause
+#   Mantiene historial descriptivo de cambios
+#
+# Conceptos:
+#   - Change-cause annotation
+#   - Historial descriptivo
+#   - Best practice para tracking
+#
+# Uso:
+#   kubectl apply -f deployment-annotated.yaml
+#   kubectl rollout history deployment annotated-demo
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: annotated-demo
+  labels:
+    app: annotated-demo
+    tier: frontend
+  # ✅ IMPORTANTE: Anotación change-cause
+  annotations:
+    kubernetes.io/change-cause: "v1.0.0 - Deploy inicial con nginx 1.21-alpine"
+spec:
+  replicas: 3
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  revisionHistoryLimit: 10
+  
+  selector:
+    matchLabels:
+      app: annotated-demo
+  
+  template:
+    metadata:
+      labels:
+        app: annotated-demo
+        version: "v1.0.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        - name: RELEASE_DATE
+          value: "2025-11-09"
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+# ====================================================================
+# EJEMPLOS DE CHANGE-CAUSE ANNOTATIONS:
+# ====================================================================
+#
+# ✅ BIEN - Descriptivo y versionado:
+# annotations:
+#   kubernetes.io/change-cause: "v1.0.0 - Deploy inicial"
+#
+# ✅ MEJOR - Con contexto adicional:
+# annotations:
+#   kubernetes.io/change-cause: "v1.1.0 - Actualizar nginx, fix CVE-2024-1234"
+#
+# ✅ EXCELENTE - Con ticket/issue:
+# annotations:
+#   kubernetes.io/change-cause: "v1.2.0 - Feature: agregar health checks (JIRA-123)"
+#
+# ❌ MAL - Sin información:
+# annotations:
+#   kubernetes.io/change-cause: "update"
+#
+# ❌ MAL - Muy genérico:
+# annotations:
+#   kubernetes.io/change-cause: "cambios varios"
+#
+# ====================================================================
+#
+# FORMATO RECOMENDADO:
+# ====================================================================
+#
+# kubernetes.io/change-cause: "<VERSION> - <DESCRIPCIÓN> [<TICKET>]"
+#
+# Componentes:
+# - VERSION: Semver (v1.2.3) o fecha (2025-11-09)
+# - DESCRIPCIÓN: Qué cambió y por qué
+# - TICKET: Issue/PR ID (opcional pero recomendado)
+#
+# Ejemplos:
+# "v1.0.0 - Deploy inicial de producción"
+# "v1.1.0 - Fix memory leak en auth service (PROD-456)"
+# "v1.2.0 - Feature: API rate limiting (FEAT-789)"
+# "v1.2.1 - Hotfix: validation error en login (HOTFIX-012)"
+# "v2.0.0 - Major: migración a nueva DB schema (MIGRATION-345)"
+#
+# ====================================================================
+#
+# HISTORIAL DE VERSIONES (PARA DEMO):
+# ====================================================================
+#
+# v1.0.0:
+# - image: nginx:1.21-alpine
+# - annotation: "v1.0.0 - Deploy inicial"
+# - resources: 64Mi/100m
+#
+# v1.1.0:
+# - image: nginx:1.22-alpine
+# - annotation: "v1.1.0 - Actualizar nginx a 1.22"
+# - resources: 64Mi/100m (sin cambios)
+#
+# v1.1.1:
+# - image: nginx:1.22-alpine (sin cambio)
+# - annotation: "v1.1.1 - Aumentar límites de memoria"
+# - resources: 128Mi/200m (aumentado)
+#
+# v1.2.0:
+# - image: nginx:1.23-alpine
+# - annotation: "v1.2.0 - Actualizar nginx + probes mejorados"
+# - resources: 128Mi/200m
+# - readinessProbe: failureThreshold: 2 (mejorado)
+#
+# v2.0.0:
+# - image: nginx:alpine (latest)
+# - annotation: "v2.0.0 - Major version, usar alpine latest"
+# - resources: 256Mi/500m (duplicado para alta carga)
+# - replicas: 5 (escalado)
+#
+# ====================================================================
+#
+# COMANDOS PARA VER HISTORIAL:
+# ====================================================================
+#
+# Ver historial con change-causes:
+# kubectl rollout history deployment annotated-demo
+#
+# Output:
+# REVISION  CHANGE-CAUSE
+# 1         v1.0.0 - Deploy inicial
+# 2         v1.1.0 - Actualizar nginx a 1.22
+# 3         v1.1.1 - Aumentar límites de memoria
+# 4         v1.2.0 - Actualizar nginx + probes mejorados
+# 5         v2.0.0 - Major version, usar alpine latest
+#
+# Ver detalles de revisión específica:
+# kubectl rollout history deployment annotated-demo --revision=3
+#
+# ====================================================================
+#
+# AÑADIR CHANGE-CAUSE IMPERATIVAMENTE:
+# ====================================================================
+#
+# kubectl annotate deployment annotated-demo \
+#   kubernetes.io/change-cause="v1.3.0 - Agregado via kubectl"
+#
+# Luego aplicar cambios:
+# kubectl apply -f deployment-annotated.yaml
+#
+# El historial mostrará el change-cause actualizado
+#
+# ====================================================================

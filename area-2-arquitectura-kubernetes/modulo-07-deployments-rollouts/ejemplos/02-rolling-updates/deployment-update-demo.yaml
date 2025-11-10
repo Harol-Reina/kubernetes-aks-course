@@ -1,0 +1,170 @@
+# ====================================================================
+# DEPLOYMENT - DEMO PASO A PASO DE UPDATE
+# ====================================================================
+# Descripción:
+#   Deployment para demostrar rolling update paso a paso
+#   Incluye comandos para observar el proceso completo
+#
+# Conceptos:
+#   - Rolling update process
+#   - ReplicaSet versioning
+#   - Pod lifecycle durante update
+#
+# Uso:
+#   Ver sección DEMO al final del archivo
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: update-demo
+  labels:
+    app: update-demo
+  annotations:
+    kubernetes.io/change-cause: "Versión inicial - nginx 1.20-alpine"
+spec:
+  replicas: 3
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # NUNCA bajar Pods (alta disponibilidad)
+  
+  selector:
+    matchLabels:
+      app: update-demo
+  
+  template:
+    metadata:
+      labels:
+        app: update-demo
+    spec:
+      containers:
+      - name: nginx
+        # VERSIÓN 1: nginx:1.20-alpine
+        image: nginx:1.20-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        # Comando para mostrar versión de nginx
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== NGINX VERSION INFO ==="
+          nginx -v 2>&1
+          echo "Pod: $HOSTNAME"
+          echo "========================="
+          exec nginx -g 'daemon off;'
+        
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 5
+
+# ====================================================================
+# DEMO PASO A PASO - ROLLING UPDATE
+# ====================================================================
+#
+# PASO 1: Deploy inicial
+# -----------------------
+# kubectl apply -f deployment-update-demo.yaml
+# kubectl get deploy update-demo
+# kubectl get rs -l app=update-demo
+# kubectl get pods -l app=update-demo
+#
+# Resultado:
+# - 1 ReplicaSet creado (nginx:1.20)
+# - 3 Pods running
+#
+#
+# PASO 2: Ver versión actual
+# ---------------------------
+# kubectl get pods -l app=update-demo -o jsonpath='{.items[*].spec.containers[0].image}'
+#
+# Output: nginx:1.20-alpine nginx:1.20-alpine nginx:1.20-alpine
+#
+#
+# PASO 3: Actualizar a nginx:1.21-alpine
+# ---------------------------------------
+# Editar este archivo:
+# - Cambiar: image: nginx:1.21-alpine
+# - Cambiar annotation: "Actualizar a nginx 1.21-alpine"
+#
+# kubectl apply -f deployment-update-demo.yaml
+#
+#
+# PASO 4: Observar rolling update EN TIEMPO REAL
+# -----------------------------------------------
+# Terminal 1:
+# kubectl rollout status deployment update-demo
+#
+# Terminal 2:
+# kubectl get pods -l app=update-demo --watch
+#
+# Terminal 3:
+# kubectl get rs -l app=update-demo --watch
+#
+#
+# PASO 5: Ver lo que pasó
+# ------------------------
+# kubectl get rs -l app=update-demo
+#
+# Output:
+# NAME                    DESIRED   CURRENT   READY   AGE
+# update-demo-5d7f8c9b    0         0         0       5m   ← VIEJO (nginx:1.20)
+# update-demo-7f9d8e6a    3         3         3       1m   ← NUEVO (nginx:1.21)
+#
+# kubectl get pods -l app=update-demo -o jsonpath='{.items[*].spec.containers[0].image}'
+#
+# Output: nginx:1.21-alpine nginx:1.21-alpine nginx:1.21-alpine ✅
+#
+#
+# PASO 6: Ver historial
+# ----------------------
+# kubectl rollout history deployment update-demo
+#
+# Output:
+# REVISION  CHANGE-CAUSE
+# 1         Versión inicial - nginx 1.20-alpine
+# 2         Actualizar a nginx 1.21-alpine
+#
+#
+# PASO 7: Ver eventos del Deployment
+# -----------------------------------
+# kubectl describe deployment update-demo
+#
+# Events:
+# - ScalingReplicaSet: Scaled up replica set update-demo-7f9d8e6a to 1
+# - ScalingReplicaSet: Scaled down replica set update-demo-5d7f8c9b to 2
+# - ScalingReplicaSet: Scaled up replica set update-demo-7f9d8e6a to 2
+# - ScalingReplicaSet: Scaled down replica set update-demo-5d7f8c9b to 1
+# - ScalingReplicaSet: Scaled up replica set update-demo-7f9d8e6a to 3
+# - ScalingReplicaSet: Scaled down replica set update-demo-5d7f8c9b to 0
+#
+# ====================================================================

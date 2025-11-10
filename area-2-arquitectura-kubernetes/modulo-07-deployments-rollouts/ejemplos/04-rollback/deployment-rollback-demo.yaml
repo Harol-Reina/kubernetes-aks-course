@@ -1,0 +1,204 @@
+# ====================================================================
+# DEPLOYMENT - DEMO DE ROLLBACK
+# ====================================================================
+# Descripción:
+#   Deployment para practicar rollback a versiones anteriores
+#   Simula escenario de versión con problemas
+#
+# Conceptos:
+#   - Rollback process
+#   - Revision management
+#   - Recovery de errores
+#
+# Uso:
+#   Ver sección ESCENARIO DE ROLLBACK al final
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollback-demo
+  labels:
+    app: rollback-demo
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Versión estable funcionando bien"
+spec:
+  replicas: 4
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  revisionHistoryLimit: 10
+  
+  selector:
+    matchLabels:
+      app: rollback-demo
+  
+  template:
+    metadata:
+      labels:
+        app: rollback-demo
+        version: "v1.0"
+    spec:
+      containers:
+      - name: app
+        # VERSIÓN ESTABLE: nginx:1.21-alpine
+        image: nginx:1.21-alpine
+        
+        ports:
+        - containerPort: 80
+        
+        env:
+        - name: APP_VERSION
+          value: "v1.0-stable"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3
+
+# ====================================================================
+# ESCENARIO DE ROLLBACK:
+# ====================================================================
+#
+# PASO 1: Deploy versión estable (v1.0)
+# --------------------------------------
+# kubectl apply -f deployment-rollback-demo.yaml
+# kubectl rollout status deployment rollback-demo
+# kubectl get pods -l app=rollback-demo
+#
+# Resultado: 4 Pods con nginx:1.21-alpine funcionando bien ✅
+#
+#
+# PASO 2: Actualizar a v2.0 (con problemas)
+# ------------------------------------------
+# Editar este archivo:
+# - image: nginx:broken-tag  ← Tag que NO existe
+# - annotation: "v2.0 - Nueva versión (tiene problemas)"
+# - env APP_VERSION: "v2.0-broken"
+#
+# kubectl apply -f deployment-rollback-demo.yaml
+#
+#
+# PASO 3: Observar el problema
+# -----------------------------
+# kubectl rollout status deployment rollback-demo
+# # Se quedará esperando porque los Pods no se pueden crear
+#
+# kubectl get pods -l app=rollback-demo
+#
+# Output:
+# NAME                    READY   STATUS             RESTARTS   AGE
+# rollback-demo-v1-abc    1/1     Running            0          5m   ← VIEJO funcionando
+# rollback-demo-v1-def    1/1     Running            0          5m   ← VIEJO funcionando
+# rollback-demo-v1-ghi    1/1     Running            0          5m   ← VIEJO funcionando
+# rollback-demo-v1-jkl    1/1     Running            0          5m   ← VIEJO funcionando
+# rollback-demo-v2-xyz    0/1     ImagePullBackOff   0          30s  ← NUEVO con error
+#
+#
+# PASO 4: Verificar el error
+# ---------------------------
+# kubectl describe pod rollback-demo-v2-xyz
+#
+# Events:
+# - Failed to pull image "nginx:broken-tag": tag does not exist
+# - Back-off pulling image
+#
+#
+# PASO 5: Ver historial
+# ----------------------
+# kubectl rollout history deployment rollback-demo
+#
+# Output:
+# REVISION  CHANGE-CAUSE
+# 1         v1.0 - Versión estable funcionando bien
+# 2         v2.0 - Nueva versión (tiene problemas)  ← Problemática
+#
+#
+# PASO 6: ROLLBACK a versión anterior (v1.0)
+# -------------------------------------------
+# kubectl rollout undo deployment rollback-demo
+#
+# Output:
+# deployment.apps/rollback-demo rolled back
+#
+# kubectl rollout status deployment rollback-demo
+# # Esperar a que complete...
+#
+#
+# PASO 7: Verificar recuperación
+# -------------------------------
+# kubectl get pods -l app=rollback-demo
+#
+# Output:
+# NAME                    READY   STATUS    RESTARTS   AGE
+# rollback-demo-v1-abc    1/1     Running   0          7m   ← De vuelta a v1.0
+# rollback-demo-v1-def    1/1     Running   0          7m   ← Funcionando
+# rollback-demo-v1-ghi    1/1     Running   0          7m   ← Estable
+# rollback-demo-v1-jkl    1/1     Running   0          7m   ← OK ✅
+#
+# kubectl get pods -o jsonpath='{.items[0].spec.containers[0].image}'
+# Output: nginx:1.21-alpine ✅
+#
+#
+# PASO 8: Ver nuevo historial
+# ----------------------------
+# kubectl rollout history deployment rollback-demo
+#
+# Output:
+# REVISION  CHANGE-CAUSE
+# 2         v2.0 - Nueva versión (tiene problemas)
+# 3         v1.0 - Versión estable funcionando bien  ← Activa (rollback)
+#
+# Nota: La revisión 1 desapareció porque se convirtió en revisión 3
+#
+# ====================================================================
+#
+# COMANDOS ÚTILES PARA ROLLBACK:
+# ====================================================================
+#
+# Rollback a versión inmediatamente anterior:
+# kubectl rollout undo deployment rollback-demo
+#
+# Rollback a revisión específica:
+# kubectl rollout undo deployment rollback-demo --to-revision=1
+#
+# Ver qué cambió en una revisión:
+# kubectl rollout history deployment rollback-demo --revision=2
+#
+# Pausar rollout problemático:
+# kubectl rollout pause deployment rollback-demo
+#
+# Reanudar después de investigar:
+# kubectl rollout resume deployment rollback-demo
+#
+# Ver estado actual:
+# kubectl describe deployment rollback-demo
+#
+# ====================================================================

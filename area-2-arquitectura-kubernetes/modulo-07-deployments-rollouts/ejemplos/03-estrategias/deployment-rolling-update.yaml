@@ -1,0 +1,141 @@
+# ====================================================================
+# DEPLOYMENT - ESTRATEGIA ROLLING UPDATE (DEFAULT)
+# ====================================================================
+# Descripción:
+#   Deployment con estrategia RollingUpdate (default)
+#   Zero downtime durante actualizaciones
+#
+# Conceptos:
+#   - RollingUpdate strategy
+#   - Actualización gradual
+#   - Alta disponibilidad
+#   - Configuración para producción
+#
+# Uso:
+#   kubectl apply -f deployment-rolling-update.yaml
+#   # Cambiar imagen
+#   kubectl set image deployment/rolling-strategy nginx=nginx:1.22-alpine
+#   kubectl rollout status deployment rolling-strategy
+# ====================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-strategy
+  labels:
+    app: rolling-strategy
+    strategy: rolling-update
+  annotations:
+    kubernetes.io/change-cause: "Deploy con estrategia RollingUpdate"
+spec:
+  replicas: 5
+  
+  # Estrategia: RollingUpdate (default)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Configuración para ALTA DISPONIBILIDAD
+      maxSurge: 1           # Permitir 1 Pod extra (20%)
+      maxUnavailable: 0     # NUNCA bajar disponibilidad
+      
+      # Con 5 réplicas:
+      # - Mínimo disponible: 5 Pods (100% siempre)
+      # - Máximo total: 6 Pods durante update
+      # - Garantía: ZERO DOWNTIME
+  
+  # Timeout para el rollout (10 minutos)
+  progressDeadlineSeconds: 600
+  
+  # Mantener últimas 10 revisiones
+  revisionHistoryLimit: 10
+  
+  selector:
+    matchLabels:
+      app: rolling-strategy
+  
+  template:
+    metadata:
+      labels:
+        app: rolling-strategy
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        
+        ports:
+        - name: http
+          containerPort: 80
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        
+        # Health checks CRÍTICOS para rolling update
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+        
+        # Lifecycle: terminación graceful
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - sleep 15  # Esperar 15s antes de terminar
+
+# ====================================================================
+# VENTAJAS DE ROLLINGUUPDATE:
+# ====================================================================
+#
+# ✅ ZERO DOWNTIME
+#    - Siempre hay Pods disponibles
+#    - Service nunca se queda sin backends
+#
+# ✅ ACTUALIZACIÓN GRADUAL
+#    - Crea nuevos Pods antes de eliminar viejos
+#    - Verifica health antes de continuar
+#
+# ✅ ROLLBACK FÁCIL
+#    - ReplicaSet viejo disponible
+#    - Un comando para volver: kubectl rollout undo
+#
+# ✅ CONTROL FINO
+#    - maxSurge y maxUnavailable configurables
+#    - Adaptar a necesidades específicas
+#
+# ✅ AUTOMATIC HEALTH CHECKING
+#    - Usa readinessProbe para verificar Pods nuevos
+#    - No elimina viejos hasta que nuevos estén ready
+#
+# ====================================================================
+#
+# CASOS DE USO:
+# ====================================================================
+#
+# ✅ Aplicaciones web (frontend)
+# ✅ APIs REST
+# ✅ Microservicios
+# ✅ Cualquier aplicación stateless
+# ✅ Producción (recomendado)
+#
+# ====================================================================
