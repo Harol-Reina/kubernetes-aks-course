@@ -1354,31 +1354,7 @@ Cada laboratorio incluye:
 
 ---
 
-## 🎓 7. Evaluación y Ejercicios
-    - containerPort: 8080
-    volumeMounts:
-    - name: shared-data
-      mountPath: /app/data
-  
-  # Data processor (tightly coupled)
-  - name: data-processor
-    image: my-processor:v1.0
-    volumeMounts:
-    - name: shared-data
-      mountPath: /processor/input
-    # Estos dos contenedores:
-    # - Comparten archivos constantemente
-    # - Deben escalarse juntos
-    # - Tienen el mismo lifecycle
-  
-  volumes:
-  - name: shared-data
-    emptyDir: {}
-```
-
----
-
-## 🔄 6. Ciclo de Vida de Pods
+## 🔄 7. Ciclo de Vida de Pods
 
 ### **📊 Pod Lifecycle:**
 
@@ -1448,7 +1424,7 @@ spec:
 
 ---
 
-## 🧪 7. Ejemplos Prácticos Disponibles
+## 🧪 8. Ejemplos Prácticos Disponibles
 
 ### **� [Ver Todos los Ejemplos](./ejemplos/README.md)**
 
@@ -1521,7 +1497,7 @@ kubectl exec -it web-with-sidecar -c nginx -- bash
 
 ---
 
-## 🚨 8. Antipatrones y Mejores Prácticas
+## 🚨 9. Antipatrones y Mejores Prácticas
 
 ### **❌ Antipatrones Comunes:**
 
@@ -1653,7 +1629,7 @@ spec:
 
 ---
 
-## 🔧 9. Debugging y Troubleshooting
+## 🔧 10. Debugging y Troubleshooting
 
 ### **🔍 Comandos Esenciales:**
 
