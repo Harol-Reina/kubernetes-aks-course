@@ -864,109 +864,78 @@ metadata:
 
 ### **6.2 Crear Pods con Labels**
 
-**`pods-con-labels.yaml`**:
+📄 **Archivo de ejemplo**: [`ejemplos/basicos/pods-con-labels.yaml`](./ejemplos/basicos/pods-con-labels.yaml)
+
+Este archivo crea 5 Pods con diferentes combinaciones de labels para demostrar selectors:
+
+```bash
+# Crear todos los Pods
+kubectl apply -f ejemplos/basicos/pods-con-labels.yaml
+
+# Ver Pods con sus labels
+kubectl get pods --show-labels
+
+# Ver solo labels específicos como columnas
+kubectl get pods -L app,environment,tier,version
+```
+
+**Salida de `--show-labels`**:
+```
+NAME            READY   STATUS    LABELS
+frontend-prod   1/1     Running   app=frontend,environment=production,tier=web,version=1.0
+frontend-dev    1/1     Running   app=frontend,environment=development,tier=web,version=1.0
+backend-prod    1/1     Running   app=backend,environment=production,tier=api,version=2.0
+backend-dev     1/1     Running   app=backend,environment=development,tier=api,version=2.0
+database-prod   1/1     Running   app=database,environment=production,tier=data,version=1.0
+```
+
+**Estructura de labels en el archivo**:
 ```yaml
+# Ejemplo de uno de los Pods (frontend-prod)
 apiVersion: v1
 kind: Pod
 metadata:
   name: frontend-prod
   labels:
-    app: frontend
-    environment: production
-    tier: web
+    app: frontend           # Aplicación
+    environment: production # Ambiente
+    tier: web              # Capa arquitectónica
+    version: "1.0"         # Versión
 spec:
   containers:
   - name: nginx
     image: nginx:alpine
+# ... (ver archivo completo para los otros 4 Pods)
+```
 
 ---
-apiVersion: v1
-kind: Pod
-metadata:
-  name: frontend-dev
-  labels:
-    app: frontend
-    environment: development
-    tier: web
-spec:
-  containers:
-  - name: nginx
-    image: nginx:alpine
-
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: backend-prod
-  labels:
-    app: backend
-    environment: production
-    tier: api
-spec:
-  containers:
-  - name: python
-    image: python:3.11-alpine
-    command: ['sh', '-c', 'python -m http.server 8080']
-
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: backend-dev
-  labels:
-    app: backend
-    environment: development
-    tier: api
-spec:
-  containers:
-  - name: python
-    image: python:3.11-alpine
-    command: ['sh', '-c', 'python -m http.server 8080']
-```
-
-```bash
-# Crear todos los Pods
-kubectl apply -f pods-con-labels.yaml
-
-# Ver Pods con sus labels
-kubectl get pods --show-labels
-```
-
-**Salida**:
-```
-NAME            READY   STATUS    AGE   LABELS
-frontend-prod   1/1     Running   10s   app=frontend,environment=production,tier=web
-frontend-dev    1/1     Running   10s   app=frontend,environment=development,tier=web
-backend-prod    1/1     Running   10s   app=backend,environment=production,tier=api
-backend-dev     1/1     Running   10s   app=backend,environment=development,tier=api
-```
 
 ### **6.3 Filtrar Pods con Selectors**
+
+Una vez creados los Pods con `ejemplos/basicos/pods-con-labels.yaml`, podemos filtrarlos:
+
+**Selectores simples**:
 
 ```bash
 # Filtrar por app=frontend
 kubectl get pods -l app=frontend
-
-# Salida:
-# NAME            READY   STATUS    AGE
-# frontend-prod   1/1     Running   1m
-# frontend-dev    1/1     Running   1m
+# Muestra: frontend-prod, frontend-dev
 
 # Filtrar por environment=production
 kubectl get pods -l environment=production
-
-# Salida:
-# NAME            READY   STATUS    AGE
-# frontend-prod   1/1     Running   1m
-# backend-prod    1/1     Running   1m
+# Muestra: frontend-prod, backend-prod, database-prod
 
 # Filtrar por tier=api
 kubectl get pods -l tier=api
+# Muestra: backend-prod, backend-dev
 
-# Salida:
-# NAME           READY   STATUS    AGE
-# backend-prod   1/1     Running   1m
-# backend-dev    1/1     Running   1m
+# Filtrar por tier=data
+kubectl get pods -l tier=data
+# Muestra: database-prod
+
+# Filtrar todos los ejemplos
+kubectl get pods -l example=true
+# Muestra: todos los Pods de ejemplo
 ```
 
 **Selectores complejos**:
@@ -974,31 +943,56 @@ kubectl get pods -l tier=api
 ```bash
 # AND: app=frontend Y environment=production
 kubectl get pods -l 'app=frontend,environment=production'
+# Muestra solo: frontend-prod
+
+# AND: tier=api Y environment=production
+kubectl get pods -l 'tier=api,environment=production'
+# Muestra solo: backend-prod
 
 # IN: environment IN (development, staging)
 kubectl get pods -l 'environment in (development,staging)'
+# Muestra: frontend-dev, backend-dev
 
-# NOT IN: environment NOT IN (production)
-kubectl get pods -l 'environment notin (production)'
+# NOT IN: tier NOT IN (web)
+kubectl get pods -l 'tier notin (web)'
+# Muestra: backend-prod, backend-dev, database-prod
 
-# EXISTS: tiene el label "tier"
-kubectl get pods -l tier
+# EXISTS: tiene el label "version"
+kubectl get pods -l version
+# Muestra todos los que tienen label version
 
-# NOT EXISTS: no tiene el label "tier"
-kubectl get pods -l '!tier'
+# NOT EXISTS: no tiene el label "version"
+kubectl get pods -l '!version'
+# Muestra Pods sin label version
+
+# Múltiples condiciones
+kubectl get pods -l 'app in (frontend,backend),environment=production'
+# Muestra: frontend-prod, backend-prod
 ```
+
+**Ver labels como columnas**:
+
+```bash
+# Mostrar labels específicos como columnas
+kubectl get pods -L app,environment,tier,version
+
+# Filtrar Y mostrar labels
+kubectl get pods -l environment=production -L app,tier,version
+```
+
+---
 
 ### **6.4 Gestionar Labels**
 
 ```bash
 # Agregar label a Pod existente
-kubectl label pod frontend-prod version=1.0
+kubectl label pod frontend-prod team=platform
 
 # Sobrescribir label existente
-kubectl label pod frontend-prod version=2.0 --overwrite
+kubectl label pod frontend-prod version=1.1 --overwrite
 
 # Eliminar label
-kubectl label pod frontend-prod version-
+kubectl label pod frontend-prod team-
 
 # Ver labels de un Pod específico
 kubectl get pod frontend-prod --show-labels
@@ -1014,9 +1008,49 @@ frontend-prod   1/1     Running   5m    frontend   production
 frontend-dev    1/1     Running   5m    frontend   development
 backend-prod    1/1     Running   5m    backend    production
 backend-dev     1/1     Running   5m    backend    development
+database-prod   1/1     Running   5m    database   production
 ```
 
-### **6.5 Importancia de Labels**
+---
+
+### **6.5 Casos de Uso Prácticos de Labels**
+
+**1. Deployment de aplicaciones por ambiente**:
+```bash
+# Eliminar solo Pods de desarrollo
+kubectl delete pods -l environment=development
+
+# Escalar solo producción (cuando uses Deployments)
+kubectl scale deployment --replicas=5 -l environment=production
+
+# Ver logs de todos los backends de producción
+kubectl logs -l 'app=backend,environment=production' --tail=20
+```
+
+**2. Mantenimiento y troubleshooting**:
+```bash
+# Drenar un tier específico para mantenimiento
+kubectl delete pods -l tier=web --grace-period=30
+
+# Ver recursos por tier
+kubectl top pods -l tier=api
+
+# Filtrar eventos de Pods específicos
+kubectl get events --field-selector involvedObject.kind=Pod \
+  --selector environment=production
+```
+
+**3. Organización de equipos**:
+```bash
+# Agregar label de equipo responsable
+kubectl label pod frontend-prod team=platform
+kubectl label pod backend-prod team=backend-team
+
+# Ver Pods por equipo
+kubectl get pods -l team=platform
+```
+
+### **6.6 Importancia de Labels**
 
 Los labels son **fundamentales** para que objetos de nivel superior gestionen Pods:
 
@@ -1270,6 +1304,7 @@ Todos los ejemplos están en [`ejemplos/`](./ejemplos/) organizados por categor�
 | `pod-python.yaml` | Pod con Python HTTP server | Demo de aplicaciones custom |
 | `pod-con-env.yaml` | Pod con variables de entorno | Configuración de apps |
 | `pod-volumenes.yaml` | Pod con volúmenes | Persistencia de datos |
+| `pods-con-labels.yaml` | 5 Pods con diferentes labels | Demostración de selectors |
 
 #### **Multi-Contenedor** ([`ejemplos/multi-contenedor/`](./ejemplos/multi-contenedor/))
 | Archivo | Descripción | Patrón |
