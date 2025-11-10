@@ -200,71 +200,134 @@ spec:                       # Especificación del Pod
 
 ### **2.3 Ejemplos Prácticos**
 
-#### **Pod con Alpine y comando personalizado**
+📁 Todos los ejemplos están disponibles en [`ejemplos/basicos/`](./ejemplos/basicos/)
 
-**`pod-alpine.yaml`**:
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: alpine-test
-  labels:
-    app: test
-spec:
-  containers:
-  - name: alpine
-    image: alpine:3.18
-    command: ['sh', '-c']
-    args:
-    - |
-      echo "Hola desde el Pod!" > /tmp/mensaje.txt
-      tail -f /dev/null
-```
+#### **1. Pod con Python HTTP Server**
+
+📄 **Archivo**: [`ejemplos/basicos/pod-python.yaml`](./ejemplos/basicos/pod-python.yaml)
 
 ```bash
 # Crear Pod
-kubectl apply -f pod-alpine.yaml
+kubectl apply -f ejemplos/basicos/pod-python.yaml
 
-# Verificar que está corriendo
-kubectl get pod alpine-test
-
-# Ver el mensaje creado
-kubectl exec alpine-test -- cat /tmp/mensaje.txt
-```
-
-#### **Pod con Python HTTP Server**
-
-**`pod-python-server.yaml`**:
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: python-server
-  labels:
-    app: web
-    language: python
-spec:
-  containers:
-  - name: server
-    image: python:3.11-alpine
-    command: ['sh', '-c']
-    args:
-    - |
-      echo "Servidor Python corriendo" > index.html
-      python -m http.server 8080
-    ports:
-    - containerPort: 8080
-```
-
-```bash
-# Crear Pod
-kubectl apply -f pod-python-server.yaml
+# Verificar estado
+kubectl get pod python-server
 
 # Port-forward para acceder localmente
 kubectl port-forward pod/python-server 8080:8080
 
 # En otra terminal, probar:
 curl http://localhost:8080
+# Verás una página HTML con información del Pod
+```
+
+**Características**:
+- Servidor HTTP simple con Python
+- Puerto 8080
+- Genera contenido HTML dinámico con hostname y fecha
+- Ideal para testing de networking
+
+---
+
+#### **2. Pod con Variables de Entorno**
+
+📄 **Archivo**: [`ejemplos/basicos/pod-con-env.yaml`](./ejemplos/basicos/pod-con-env.yaml)
+
+```bash
+# Crear Pod
+kubectl apply -f ejemplos/basicos/pod-con-env.yaml
+
+# Verificar que está corriendo
+kubectl get pod env-demo
+
+# Ver variables de entorno configuradas
+kubectl exec env-demo -- env | grep -E "ENV|APP_NAME|VERSION|LOG_LEVEL"
+
+# Ver logs con el output
+kubectl logs env-demo
+```
+
+**Características**:
+- Variables de entorno estándar
+- Variables desde metadatos del Pod
+- Útil para configuración de aplicaciones
+
+---
+
+#### **3. Pod con Volúmenes**
+
+📄 **Archivo**: [`ejemplos/basicos/pod-volumenes.yaml`](./ejemplos/basicos/pod-volumenes.yaml)
+
+```bash
+# Crear ConfigMap y Secret primero (están en el YAML)
+kubectl apply -f ejemplos/basicos/pod-volumenes.yaml
+
+# Verificar que está corriendo
+kubectl get pod pod-volumenes
+
+# Explorar volúmenes montados
+kubectl exec -it pod-volumenes -- ls -la /data
+kubectl exec -it pod-volumenes -- cat /config/app.conf
+kubectl exec -it pod-volumenes -- cat /secrets/username
+
+# Ver logs con demostración
+kubectl logs pod-volumenes
+```
+
+**Características**:
+- EmptyDir: almacenamiento temporal
+- ConfigMap: archivos de configuración
+- Secret: credenciales sensibles
+- Demuestra 3 tipos de volúmenes en un solo Pod
+
+---
+
+#### **4. Pod NGINX básico**
+
+📄 **Archivo**: [`ejemplos/basicos/pod-nginx.yaml`](./ejemplos/basicos/pod-nginx.yaml)
+
+```bash
+# Crear Pod
+kubectl apply -f ejemplos/basicos/pod-nginx.yaml
+
+# Verificar estado
+kubectl get pod nginx-simple
+
+# Port-forward
+kubectl port-forward pod/nginx-simple 8080:80
+
+# En otra terminal:
+curl http://localhost:8080
+```
+
+**Características**:
+- NGINX Alpine (imagen ligera)
+- Recursos definidos (requests/limits)
+- Puerto 80
+- Ideal para testing rápido
+
+---
+
+### **💡 Comandos Útiles para Estos Ejemplos**
+
+```bash
+# Aplicar todos los ejemplos básicos
+kubectl apply -f ejemplos/basicos/
+
+# Ver todos los Pods con labels
+kubectl get pods --show-labels
+
+# Filtrar solo ejemplos básicos
+kubectl get pods -l category=basico
+
+# Ver detalles de recursos
+kubectl describe pod python-server
+kubectl describe pod env-demo
+kubectl describe pod pod-volumenes
+kubectl describe pod nginx-simple
+
+# Limpiar todos los ejemplos
+kubectl delete -f ejemplos/basicos/
 ```
 
 ---
