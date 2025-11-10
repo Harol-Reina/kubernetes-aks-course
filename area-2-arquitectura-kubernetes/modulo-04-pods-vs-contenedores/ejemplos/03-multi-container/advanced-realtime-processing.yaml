@@ -1,0 +1,55 @@
+# Ejemplo avanzado de Pod multi-contenedor con procesamiento en tiempo real
+# Muestra un caso de uso válido: procesamiento de datos compartidos
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: realtime-processing-app
+  labels:
+    app: realtime-processor
+spec:
+  containers:
+  # Aplicación web principal
+  - name: web-app
+    image: my-web-app:v1.0
+    ports:
+    - containerPort: 8080
+    volumeMounts:
+    - name: shared-data
+      mountPath: /app/data
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    
+  # Procesador de datos en tiempo real (fuertemente acoplado)
+  - name: data-processor
+    image: data-processor:v1.0
+    volumeMounts:
+    - name: shared-data
+      mountPath: /processor/input
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+    
+  volumes:
+  - name: shared-data
+    emptyDir: {}
+
+# Casos de uso válidos para este patrón:
+# ✅ Procesamiento en tiempo real de datos compartidos
+# ✅ IPC communication entre contenedores
+# ✅ Shared memory patterns
+# ✅ Stream processing con baja latencia
+
+# ⚠️ Solo usar cuando:
+# - Los contenedores DEBEN compartir datos en memoria
+# - La latencia de red no es aceptable
+# - Los contenedores escalan juntos siempre

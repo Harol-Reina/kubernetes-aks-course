@@ -11,7 +11,8 @@ ejemplos/
 ├── 03-multi-container/    # Patrones multi-contenedor: Sidecar
 ├── 04-init-containers/    # Init containers para setup
 ├── 05-ambassador/         # Patrón Ambassador (proxy/intermediario)
-└── 05-migracion-compose/  # Migración de Docker Compose
+├── 05-migracion-compose/  # Migración de Docker Compose
+└── 09-antipatrones/       # Antipatrones comunes y soluciones
 ```
 
 ---
@@ -579,7 +580,81 @@ Esta carpeta contiene ejemplos prácticos del patrón Ambassador con diferentes 
 
 ---
 
-## 🔄 06-migracion-compose/
+## � 09-antipatrones/
+
+**Antipatrones comunes en diseño de Pods y sus soluciones correctas.**
+
+Esta carpeta contiene ejemplos de qué NO hacer y cómo hacerlo correctamente.
+
+### **📋 Contenido:**
+
+| Archivo | Antipatrón | Problema | Solución |
+|---------|-----------|----------|----------|
+| `01-fat-pods.yaml` | Fat Pods | Demasiados contenedores | Separar responsabilidades |
+| `02-singleton-services.yaml` | Singleton | Pod único | Usar Deployments con réplicas |
+| `03-volume-abuse.yaml` | Volume Abuse | Filesystem para comunicación | Usar HTTP/gRPC APIs |
+
+---
+
+### **❌ 01-fat-pods.yaml**
+- **Problema**: Pod con muchos contenedores no relacionados
+- **Consecuencias**: Difícil debugear, alto acoplamiento, no escalable
+- **Solución**: Un Pod por servicio + solo sidecars relacionados
+- **Uso**:
+  ```bash
+  # Ver el antipatrón (primer manifest)
+  kubectl apply -f 09-antipatrones/01-fat-pods.yaml
+  kubectl describe pod fat-pod-antipattern
+  
+  # Aplicar la solución (manifests siguientes)
+  # web-pod y api-pod separados
+  ```
+
+---
+
+### **❌ 02-singleton-services.yaml**
+- **Problema**: Usar un Pod único sin réplicas
+- **Consecuencias**: Single point of failure, no alta disponibilidad
+- **Solución**: Deployment con 3+ réplicas
+- **Uso**:
+  ```bash
+  # Ver el antipatrón
+  kubectl apply -f 09-antipatrones/02-singleton-services.yaml
+  kubectl get pod monolith-pod
+  # Si el Pod muere, todo el servicio cae
+  
+  # Aplicar la solución: Deployment con réplicas
+  kubectl get deployment web-deployment
+  kubectl get pods -l app=web
+  # ✅ 3 réplicas para alta disponibilidad
+  ```
+
+---
+
+### **❌ 03-volume-abuse.yaml**
+- **Problema**: Usar filesystem compartido para comunicación entre servicios
+- **Consecuencias**: Alto acoplamiento, sincronización manual, no escalable
+- **Solución**: HTTP/gRPC para comunicación + volumes solo para logs/archivos
+- **Uso**:
+  ```bash
+  # Ver el antipatrón
+  kubectl apply -f 09-antipatrones/03-volume-abuse.yaml
+  kubectl logs volume-abuse-antipattern -c producer
+  kubectl logs volume-abuse-antipattern -c consumer
+  
+  # Aplicar la solución: HTTP communication
+  kubectl logs http-communication-correct -c producer
+  kubectl logs http-communication-correct -c consumer
+  
+  # Ver excepción válida: log processing
+  kubectl logs valid-shared-volume-use -c log-shipper
+  ```
+
+📚 **Guía completa:** Ver [`09-antipatrones/README.md`](./09-antipatrones/README.md)
+
+---
+
+## �🔄 06-migracion-compose/
 
 Ejemplos de migración de Docker Compose a Kubernetes.
 

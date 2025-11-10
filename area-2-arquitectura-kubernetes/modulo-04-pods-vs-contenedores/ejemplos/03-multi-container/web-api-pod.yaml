@@ -1,0 +1,23 @@
+# Pod con múltiples contenedores: Web + API
+# Demuestra cómo los contenedores en un Pod pueden comunicarse vía localhost
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-api-pod
+  labels:
+    app: web-api
+spec:
+  containers:
+  - name: web
+    image: nginx
+    ports:
+    - containerPort: 80
+  
+  - name: api
+    image: node-app  
+    ports:
+    - containerPort: 3000
+
+# Comunicación: web → localhost:3000 → api (automática)
+# No se requiere configuración de red adicional

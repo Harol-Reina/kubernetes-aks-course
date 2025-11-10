@@ -1,0 +1,77 @@
+# Database Pod para migración de Docker Compose
+# Componente: PostgreSQL database
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-pod
+  labels:
+    app: db
+    tier: database
+spec:
+  containers:
+  - name: postgres
+    image: postgres:13
+    ports:
+    - containerPort: 5432
+    env:
+    - name: POSTGRES_DB
+      value: myapp
+    - name: POSTGRES_USER
+      value: user
+    - name: POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: db-secret
+          key: password
+    volumeMounts:
+    - name: db-storage
+      mountPath: /var/lib/postgresql/data
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+  
+  volumes:
+  - name: db-storage
+    persistentVolumeClaim:
+      claimName: db-pvc
+
+---
+# Service para exponer la base de datos
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+spec:
+  selector:
+    app: db
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+
+---
+# Secret para credenciales de la base de datos
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+stringData:
+  password: pass
+
+---
+# PersistentVolumeClaim para datos de la DB
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

@@ -1,0 +1,96 @@
+# ❌ ANTIPATRÓN 1: "Fat Pods" - Demasiados contenedores
+# Problema: Pod con demasiada responsabilidad y contenedores no relacionados
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fat-pod-antipattern
+  labels:
+    antipattern: fat-pod
+spec:
+  containers:
+  - name: web
+    image: nginx
+  - name: api
+    image: node-app
+  - name: worker
+    image: python-worker  
+  - name: scheduler
+    image: cron-scheduler
+  - name: monitoring
+    image: prometheus-exporter
+  - name: cache
+    image: redis
+  - name: queue
+    image: rabbitmq
+  # ❌ Problemas:
+  # - Demasiados contenedores no relacionados
+  # - Difícil de debugear
+  # - Alto acoplamiento
+  # - No se pueden escalar independientemente
+  # - Punto único de falla
+
+---
+# ✅ SOLUCIÓN CORRECTA: Separar responsabilidades
+
+# web-pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+  labels:
+    app: web
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+  
+  - name: log-processor  # Solo sidecar relacionado
+    image: fluentd
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+
+---
+# api-pod.yaml (separado)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-pod
+  labels:
+    app: api
+spec:
+  containers:
+  - name: api
+    image: node-app
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  
+  - name: metrics-exporter  # Solo sidecar relacionado
+    image: prometheus-exporter
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+
+# Los demás servicios (worker, scheduler, cache, queue) 
+# deben ser Deployments SEPARADOS

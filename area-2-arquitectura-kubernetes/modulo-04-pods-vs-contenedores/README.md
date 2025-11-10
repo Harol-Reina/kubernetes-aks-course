@@ -477,24 +477,21 @@ docker run -d --name db --network app-network postgres
 ```
 
 #### **☸️ Kubernetes Approach (Automático)**
+
+En Kubernetes, los contenedores en el mismo Pod comparten la red automáticamente:
+
+📄 **Ver ejemplo completo**: [`ejemplos/03-multi-container/web-api-pod.yaml`](./ejemplos/03-multi-container/web-api-pod.yaml)
+
 ```yaml
-# Pod automáticamente maneja networking
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-pod
-spec:
-  containers:
+# Snippet simplificado - networking automático
+containers:
   - name: web
     image: nginx
-    ports:
-    - containerPort: 80
+    # Puede comunicarse con api en localhost:3000
   - name: api
-    image: node-app  
+    image: node-app
     ports:
     - containerPort: 3000
-
-# Comunicación: web → localhost:3000 → api (automática)
 ```
 
 ### **🔄 Migration Path: Compose → Kubernetes**
@@ -598,27 +595,21 @@ spec:
 ```
 
 **Option B: Single Pod (Edge cases only)**
+
+📄 **Ver ejemplo completo**: [`ejemplos/03-multi-container/tightly-coupled-pod.yaml`](./ejemplos/03-multi-container/tightly-coupled-pod.yaml)
+
 ```yaml
-# Only if tightly coupled (rare)
-apiVersion: v1
-kind: Pod
-metadata:
-  name: tightly-coupled-app
-spec:
-  containers:
+# Solo si están fuertemente acoplados (raro)
+# Ejemplo: procesamiento de logs en tiempo real
+containers:
   - name: main-app
-    image: my-app
-    ports:
-    - containerPort: 8080
+    volumeMounts:
+    - name: log-volume
+      mountPath: /app/logs
   - name: log-processor
-    image: log-processor
-    # Processes logs from main-app via shared volume
     volumeMounts:
     - name: log-volume
       mountPath: /logs
-  volumes:
-  - name: log-volume
-    emptyDir: {}
 ```
 
 ---
@@ -1100,90 +1091,41 @@ curl -k https://localhost:8443
 └─────────────────────────────────────────────────────┘
 ```
 
-### **🔗 Patrón 3: Ambassador Container**
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-with-ambassador
-spec:
-  containers:
-  # Main application
-  - name: app
-    image: my-app:v1.0
-    ports:
-    - containerPort: 8080
-    env:
-    - name: DATABASE_URL
-      value: "localhost:5432"  # ← Apunta al ambassador
-  
-  # Ambassador proxy
-  - name: db-ambassador
-    image: haproxy:2.4
-    ports:
-    - containerPort: 5432
-    volumeMounts:
-    - name: ambassador-config
-      mountPath: /usr/local/etc/haproxy
-    # Ambassador maneja:
-    # - Connection pooling
-    # - Load balancing to multiple DB replicas
-    # - Circuit breaking
-    # - SSL termination
-  
-  volumes:
-  - name: ambassador-config
-    configMap:
-      name: haproxy-config
-```
-
 ---
 
 ## 🛠️ 5. Migración: Docker Compose → Kubernetes
 
 ### **🐳 Docker Compose Original:**
 
+📄 **Ver archivo completo**: [`ejemplos/05-migracion-compose/docker-compose.yml`](./ejemplos/05-migracion-compose/docker-compose.yml)
+
 ```yaml
-# docker-compose.yml
+# docker-compose.yml - Estructura típica
 version: '3.8'
 services:
   web:
     image: nginx:1.20
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-    depends_on:
-      - api
-  
+    depends_on: [api]
   api:
     image: my-api:v1.0
-    ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgres://user:pass@db:5432/myapp
-    depends_on:
-      - db
-  
+    depends_on: [db]
   db:
     image: postgres:13
-    environment:
-      - POSTGRES_DB=myapp
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
     volumes:
       - db_data:/var/lib/postgresql/data
-
-volumes:
-  db_data:
 ```
 
 ### **☸️ Kubernetes Equivalent:**
 
 #### **Opción 1: Pods Separados (Recomendado)**
 
+📄 **Ver manifests completos**:
+- [`ejemplos/05-migracion-compose/k8s/web-pod.yaml`](./ejemplos/05-migracion-compose/k8s/web-pod.yaml)
+- [`ejemplos/05-migracion-compose/k8s/api-pod.yaml`](./ejemplos/05-migracion-compose/k8s/api-pod.yaml)
+- [`ejemplos/05-migracion-compose/k8s/db-pod.yaml`](./ejemplos/05-migracion-compose/k8s/db-pod.yaml)
+
 ```yaml
+# Estructura: 3 Pods + Services + ConfigMaps + Secrets + PVC
 # web-pod.yaml
 apiVersion: v1
 kind: Pod
@@ -1195,101 +1137,32 @@ spec:
   containers:
   - name: nginx
     image: nginx:1.20
-    ports:
-    - containerPort: 80
-    volumeMounts:
-    - name: nginx-config
-      mountPath: /etc/nginx/nginx.conf
-      subPath: nginx.conf
-  volumes:
-  - name: nginx-config
-    configMap:
-      name: nginx-config
+    # ... (ver archivo completo para detalles)
 
 ---
-# api-pod.yaml  
-apiVersion: v1
-kind: Pod
-metadata:
-  name: api-pod
-  labels:
-    app: api
-spec:
-  containers:
-  - name: api
-    image: my-api:v1.0
-    ports:
-    - containerPort: 3000
-    env:
-    - name: DATABASE_URL
-      value: "postgres://user:pass@db-service:5432/myapp"
-
----
-# db-pod.yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: db-pod
-  labels:
-    app: db
-spec:
-  containers:
-  - name: postgres
-    image: postgres:13
-    ports:
-    - containerPort: 5432
-    env:
-    - name: POSTGRES_DB
-      value: myapp
-    - name: POSTGRES_USER
-      value: user
-    - name: POSTGRES_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: db-secret
-          key: password
-    volumeMounts:
-    - name: db-storage
-      mountPath: /var/lib/postgresql/data
-  volumes:
-  - name: db-storage
-    persistentVolumeClaim:
-      claimName: db-pvc
+# api-pod.yaml + Service
+# db-pod.yaml + Service + PVC + Secret
+# (Ver archivos completos para implementación completa)
 ```
 
 #### **Opción 2: Multi-Container Pod (Casos específicos)**
 
+📄 **Ver ejemplo completo**: [`ejemplos/03-multi-container/advanced-realtime-processing.yaml`](./ejemplos/03-multi-container/advanced-realtime-processing.yaml)
+
 ```yaml
-  # Solo cuando los contenedores están FUERTEMENTE acoplados
-apiVersion: v1
-kind: Pod
-metadata:
-  name: tightly-coupled-app
-spec:
-  containers:
-  # Main web app
+# Solo cuando los contenedores están FUERTEMENTE acoplados
+# Ejemplo: procesamiento en tiempo real de datos compartidos
+containers:
   - name: web-app
-    image: my-web-app:v1.0
-    ports:
-    - containerPort: 8080
     volumeMounts:
     - name: shared-data
       mountPath: /app/data
-    
-  # Real-time data processor (tightly coupled)
+  
   - name: data-processor
-    image: data-processor:v1.0
     volumeMounts:
     - name: shared-data
       mountPath: /processor/input
-    # Nota: Solo cuando necesitas:
-    # - Procesamiento en tiempo real de datos compartidos
-    # - IPC communication
-    # - Shared memory patterns
-    
-  volumes:
-  - name: shared-data
-    emptyDir: {}
+    # Nota: Solo cuando necesitas IPC, shared memory, baja latencia
 ```
 
 ### **🎯 Decisión Matrix: ¿Un Pod o Múltiples Pods?**
@@ -1501,122 +1374,65 @@ kubectl exec -it web-with-sidecar -c nginx -- bash
 
 ### **❌ Antipatrones Comunes:**
 
+📂 **Ver ejemplos completos en**: [`ejemplos/09-antipatrones/`](./ejemplos/09-antipatrones/)
+
 #### **1. "Fat Pods" - Demasiados contenedores**
+
+📄 **Ejemplo completo**: [`ejemplos/09-antipatrones/01-fat-pods.yaml`](./ejemplos/09-antipatrones/01-fat-pods.yaml)
+
 ```yaml
-# ❌ MALO: Pod con demasiada responsabilidad
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
+# ❌ MALO: Demasiados contenedores no relacionados
+containers:
   - name: web
-    image: nginx
   - name: api
-    image: node-app
   - name: worker
-    image: python-worker  
   - name: scheduler
-    image: cron-scheduler
   - name: monitoring
-    image: prometheus-exporter
-  # ↑ Demasiados contenedores no relacionados
-```
+  - name: cache
+  # ❌ Difícil debugear, alto acoplamiento
 
-```yaml
-# ✅ BUENO: Separar responsabilidades
-# web-pod.yaml
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: nginx
-    image: nginx
-  - name: log-processor  # Related sidecar only
-    image: fluentd
-
-# api-pod.yaml  
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: api
-    image: node-app
-  - name: metrics-exporter  # Related sidecar only
-    image: prometheus-exporter
+# ✅ BUENO: Separar en Pods distintos
+# web-pod (nginx + log-processor sidecar)
+# api-pod (api + metrics-exporter sidecar)
+# worker-pod, cache-pod (separados)
 ```
 
 #### **2. "Singleton Services" - Un Pod para todo**
-```yaml
-# ❌ MALO: Una réplica para todo
-apiVersion: v1
-kind: Pod
-metadata:
-  name: monolith-pod  # Single point of failure
-spec:
-  containers:
-  - name: everything
-    image: my-monolith
-```
+
+📄 **Ejemplo completo**: [`ejemplos/09-antipatrones/02-singleton-services.yaml`](./ejemplos/09-antipatrones/02-singleton-services.yaml)
 
 ```yaml
-# ✅ BUENO: Usar Deployments para réplicas
-apiVersion: apps/v1
-kind: Deployment
+# ❌ MALO: Pod único (single point of failure)
+kind: Pod
 metadata:
-  name: web-deployment
+  name: monolith-pod
+
+# ✅ BUENO: Deployment con réplicas
+kind: Deployment
 spec:
-  replicas: 3  # High availability
-  selector:
-    matchLabels:
-      app: web
-  template:
-    metadata:
-      labels:
-        app: web
-    spec:
-      containers:
-      - name: nginx
-        image: nginx
+  replicas: 3  # Alta disponibilidad
 ```
 
 #### **3. "Shared Volumes Abuse" - Volúmenes para comunicación**
-```yaml
-# ❌ MALO: Usar shared volume para API communication
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: producer
-    image: data-producer
-    volumeMounts:
-    - name: shared-data
-      mountPath: /data
-    # ↑ Writes files to communicate
-  
-  - name: consumer
-    image: data-consumer
-    volumeMounts:
-    - name: shared-data
-      mountPath: /data
-    # ↑ Reads files to get data
-```
+
+📄 **Ejemplo completo**: [`ejemplos/09-antipatrones/03-volume-abuse.yaml`](./ejemplos/09-antipatrones/03-volume-abuse.yaml)
 
 ```yaml
-# ✅ BUENO: Usar HTTP/gRPC para comunicación
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
+# ❌ MALO: Usar filesystem para comunicación
+containers:
   - name: producer
-    image: data-producer
-    ports:
-    - containerPort: 8080
-  
+    # Escribe archivos para comunicarse
   - name: consumer
-    image: data-consumer
+    # Lee archivos para obtener datos
+
+# ✅ BUENO: Usar HTTP/gRPC
+containers:
+  - name: producer
+    ports: [8080]
+  - name: consumer
     env:
-    - name: PRODUCER_URL
-      value: "http://localhost:8080"
-    # ↑ HTTP communication via localhost
+      - name: PRODUCER_URL
+        value: "http://localhost:8080"
 ```
 
 ### **✅ Mejores Prácticas:**

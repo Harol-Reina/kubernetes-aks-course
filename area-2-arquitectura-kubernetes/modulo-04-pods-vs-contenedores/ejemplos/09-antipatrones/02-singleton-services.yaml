@@ -1,0 +1,82 @@
+# ❌ ANTIPATRÓN 2: "Singleton Services" - Un Pod único para todo
+# Problema: Single point of failure, no alta disponibilidad
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: monolith-pod  # ❌ Solo una réplica
+  labels:
+    antipattern: singleton
+spec:
+  containers:
+  - name: everything
+    image: my-monolith
+    # ❌ Problemas:
+    # - Single point of failure
+    # - No alta disponibilidad
+    # - No puede escalar
+    # - Si el Pod muere, todo el servicio cae
+
+---
+# ✅ SOLUCIÓN CORRECTA: Usar Deployments con réplicas
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+spec:
+  replicas: 3  # ✅ Alta disponibilidad
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+
+---
+# Service para balancear carga entre réplicas
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  selector:
+    app: web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: LoadBalancer
+
+# ✅ Ventajas del Deployment:
+# - Alta disponibilidad (3 réplicas)
+# - Auto-healing (si un Pod falla, se crea otro)
+# - Rolling updates sin downtime
+# - Load balancing automático
+# - Escalamiento horizontal fácil

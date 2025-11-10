@@ -1,0 +1,34 @@
+# Ejemplo de Pod con contenedores fuertemente acoplados
+# Solo usar cuando los contenedores REALMENTE necesitan compartir recursos
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tightly-coupled-app
+  labels:
+    app: tightly-coupled
+spec:
+  containers:
+  - name: main-app
+    image: my-app
+    ports:
+    - containerPort: 8080
+    volumeMounts:
+    - name: log-volume
+      mountPath: /app/logs
+  
+  - name: log-processor
+    image: log-processor
+    # Procesa logs del contenedor principal vía volumen compartido
+    volumeMounts:
+    - name: log-volume
+      mountPath: /logs
+  
+  volumes:
+  - name: log-volume
+    emptyDir: {}
+
+# Casos de uso válidos:
+# - Procesamiento de logs en tiempo real
+# - Sidecars que necesitan acceso al filesystem
+# - Contenedores que comparten estado temporal

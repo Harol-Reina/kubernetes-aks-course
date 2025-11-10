@@ -1,0 +1,127 @@
+# ❌ ANTIPATRÓN 3: "Shared Volumes Abuse" - Usar volúmenes para comunicación
+# Problema: Usar filesystem compartido en lugar de APIs para comunicación
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-abuse-antipattern
+  labels:
+    antipattern: volume-abuse
+spec:
+  containers:
+  - name: producer
+    image: data-producer
+    volumeMounts:
+    - name: shared-data
+      mountPath: /data
+    # ❌ Escribe archivos para comunicarse
+    command: ["sh", "-c", "while true; do echo 'data' > /data/message.txt; sleep 5; done"]
+  
+  - name: consumer
+    image: data-consumer
+    volumeMounts:
+    - name: shared-data
+      mountPath: /data
+    # ❌ Lee archivos para obtener datos
+    command: ["sh", "-c", "while true; do cat /data/message.txt; sleep 5; done"]
+  
+  volumes:
+  - name: shared-data
+    emptyDir: {}
+
+  # ❌ Problemas:
+  # - Alto acoplamiento
+  # - Sincronización manual necesaria
+  # - No hay validación de datos
+  # - Difícil debugear
+  # - No escalable (file locking issues)
+  # - No hay versioning o retry logic
+
+---
+# ✅ SOLUCIÓN CORRECTA: Usar HTTP/gRPC para comunicación
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: http-communication-correct
+  labels:
+    pattern: http-communication
+spec:
+  containers:
+  - name: producer
+    image: data-producer
+    ports:
+    - containerPort: 8080
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+    # ✅ Expone API HTTP
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8080
+      initialDelaySeconds: 10
+      periodSeconds: 5
+  
+  - name: consumer
+    image: data-consumer
+    env:
+    - name: PRODUCER_URL
+      value: "http://localhost:8080"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+    # ✅ Consume API HTTP vía localhost
+
+# ✅ Ventajas de HTTP/gRPC:
+# - Comunicación estándar y bien definida
+# - Validación de datos automática
+# - Retry logic y circuit breakers
+# - Versionado de API
+# - Fácil monitoring y debugging
+# - Loose coupling
+# - Escalable horizontalmente
+
+---
+# ⚠️ EXCEPCIÓN: Cuándo SÍ usar shared volumes
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: valid-shared-volume-use
+  labels:
+    pattern: valid-volume-sharing
+spec:
+  containers:
+  - name: app
+    image: my-app
+    volumeMounts:
+    - name: app-logs
+      mountPath: /var/log/app
+    # ✅ Escribe logs al filesystem
+  
+  - name: log-shipper
+    image: fluent-bit
+    volumeMounts:
+    - name: app-logs
+      mountPath: /logs
+      readOnly: true
+    # ✅ Lee y procesa logs (sidecar pattern válido)
+  
+  volumes:
+  - name: app-logs
+    emptyDir: {}
+
+# ✅ Casos válidos para shared volumes:
+# - Logs processing (sidecar pattern)
+# - Static assets/configuration files
+# - Temporary scratch space
+# - NO para comunicación entre servicios
