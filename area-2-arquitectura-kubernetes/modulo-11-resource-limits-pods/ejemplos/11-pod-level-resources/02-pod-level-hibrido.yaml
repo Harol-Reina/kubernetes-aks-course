@@ -36,7 +36,7 @@ spec:
   # App principal con límite individual
   # ==========================================
   - name: app
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     
     resources:  # Límite individual
       limits:
@@ -51,7 +51,7 @@ spec:
   # Comparten el presupuesto restante
   # ==========================================
   - name: metrics-collector
-    image: busybox:1.36
+    image: busybox:latest
     command: ["/bin/sh", "-c"]
     args:
       - |
@@ -62,7 +62,7 @@ spec:
     # Sin resources → puede usar hasta (4-2)=2 CPU y (4-2)=2Gi restantes
   
   - name: log-forwarder
-    image: busybox:1.36
+    image: busybox:latest
     command: ["/bin/sh", "-c"]
     args:
       - |

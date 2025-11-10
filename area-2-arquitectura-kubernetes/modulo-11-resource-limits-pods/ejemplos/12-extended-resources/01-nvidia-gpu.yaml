@@ -27,7 +27,9 @@ metadata:
 spec:
   containers:
   - name: cuda-app
-    image: nvidia/cuda:12.3.0-base-ubuntu22.04
+    # NOTA: Para GPU sí mantenemos versión específica de CUDA
+    # ya que debe ser compatible con el driver NVIDIA del nodo
+    image: nvidia/cuda:12.6.0-base-ubuntu22.04
     
     command: ["/bin/bash", "-c"]
     args:
@@ -152,7 +154,7 @@ spec:
 # Output esperado:
 # === NVIDIA GPU Information ===
 # +-----------------------------------------------------------------------------+
-# | NVIDIA-SMI 535.86.05    Driver Version: 535.86.05    CUDA Version: 12.3    |
+# | NVIDIA-SMI 550.x.x      Driver Version: 550.x.x      CUDA Version: 12.6    |
 # |-------------------------------+----------------------+----------------------+
 # | GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
 # | Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |

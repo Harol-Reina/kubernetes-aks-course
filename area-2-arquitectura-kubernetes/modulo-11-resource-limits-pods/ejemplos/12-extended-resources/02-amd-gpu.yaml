@@ -58,9 +58,9 @@ spec:
 # SETUP REQUERIDO
 # =============================================================================
 #
-# 1. Instalar AMD Device Plugin
+# 1. Instalar AMD Device Plugin (verificar última versión en GitHub)
 # ------------------------------
-# kubectl apply -f https://raw.githubusercontent.com/RadeonOpenCompute/k8s-device-plugin/v1.25.2.10/k8s-ds-amdgpu-dp.yaml
+# kubectl apply -f https://raw.githubusercontent.com/RadeonOpenCompute/k8s-device-plugin/master/k8s-ds-amdgpu-dp.yaml
 #
 # Este plugin:
 # - Detecta GPUs AMD en nodos

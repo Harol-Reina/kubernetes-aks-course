@@ -27,7 +27,7 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     resources:
       # Requests: Lo que el Pod GARANTIZA que tendrá disponible
       # El scheduler usa estos valores para decidir en qué nodo colocar el Pod

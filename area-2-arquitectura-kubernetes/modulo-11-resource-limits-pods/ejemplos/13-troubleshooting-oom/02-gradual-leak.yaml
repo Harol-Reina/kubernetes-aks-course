@@ -25,7 +25,7 @@ spec:
   
   containers:
   - name: leaker
-    image: busybox:1.36
+    image: busybox:latest
     
     command: ["/bin/sh", "-c"]
     args:
@@ -134,7 +134,7 @@ spec:
 # Verás:
 # LAST SEEN   TYPE      REASON      MESSAGE
 # 0s          Normal    Scheduled   Successfully assigned...
-# 0s          Normal    Pulling     Pulling image "busybox:1.36"
+# 0s          Normal    Pulling     Pulling image "busybox:latest"
 # 0s          Normal    Pulled      Successfully pulled image
 # 0s          Normal    Created     Created container leaker
 # 0s          Normal    Started     Started container leaker

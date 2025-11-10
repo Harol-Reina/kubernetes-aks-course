@@ -41,17 +41,17 @@ spec:
   # ==========================================
   
   - name: web
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     ports:
     - containerPort: 80
     # Sin resources individuales
   
   - name: sidecar1
-    image: busybox:1.36
+    image: busybox:latest
     command: ["sleep", "infinity"]
   
   - name: sidecar2
-    image: busybox:1.36
+    image: busybox:latest
     command: ["sleep", "infinity"]
 
 # Los 3 contenedores comparten:

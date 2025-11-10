@@ -20,7 +20,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     resources:
       requests:
         cpu: "250m"

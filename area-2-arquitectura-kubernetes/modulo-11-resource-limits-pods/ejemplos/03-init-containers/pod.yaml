@@ -28,7 +28,7 @@ spec:
   # Init containers: Se ejecutan ANTES de los containers normales
   initContainers:
   - name: init-setup
-    image: busybox:1.36
+    image: busybox:latest
     command: ["/bin/sh", "-c"]
     args:
       - |
@@ -47,7 +47,7 @@ spec:
   # Containers normales
   containers:
   - name: app
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     resources:
       requests:
         cpu: "250m"      # ← Menor que el init container

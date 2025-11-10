@@ -29,7 +29,7 @@ spec:
   
   containers:
   - name: memory-hog
-    image: polinux/stress:1.0.4
+    image: polinux/stress
     
     command: ["stress"]
     args:

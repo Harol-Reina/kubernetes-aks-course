@@ -47,7 +47,7 @@ spec:
       # 1. Aplicación principal
       # ==========================================
       - name: app
-        image: nginx:1.25-alpine
+        image: nginx:alpine
         ports:
         - containerPort: 80
           name: http
@@ -56,7 +56,8 @@ spec:
       # 2. Prometheus exporter (monitoring)
       # ==========================================
       - name: prometheus-exporter
-        image: nginx/nginx-prometheus-exporter:1.1
+        # Mantiene versión específica por compatibilidad con nginx
+        image: nginx/nginx-prometheus-exporter:1.3
         args:
         - '-nginx.scrape-uri=http://localhost/nginx_status'
         ports:
@@ -67,7 +68,8 @@ spec:
       # 3. Fluentd (logging)
       # ==========================================
       - name: fluentd
-        image: fluent/fluentd:v1.16-1
+        # Mantiene versión específica por compatibilidad de plugins
+        image: fluent/fluentd:v1.17-1
         env:
         - name: FLUENTD_CONF
           value: fluent.conf
@@ -79,7 +81,8 @@ spec:
       # 4. Istio proxy (service mesh)
       # ==========================================
       - name: istio-proxy
-        image: istio/proxyv2:1.20.0
+        # Mantiene versión específica - debe coincidir con control plane
+        image: istio/proxyv2:1.23.0
         args:
         - proxy
         - sidecar

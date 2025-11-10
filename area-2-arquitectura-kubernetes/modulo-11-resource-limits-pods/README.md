@@ -1087,7 +1087,7 @@ metadata:
 spec:
   containers:
   - name: cuda-app
-    image: nvidia/cuda:11.0-base
+    image: nvidia/cuda:latest
     resources:
       limits:
         nvidia.com/gpu: 2  # Solicita 2 GPUs

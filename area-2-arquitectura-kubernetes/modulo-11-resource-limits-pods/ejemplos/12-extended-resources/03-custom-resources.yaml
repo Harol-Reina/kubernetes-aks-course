@@ -28,7 +28,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     
     command: ["/bin/sh", "-c"]
     args:

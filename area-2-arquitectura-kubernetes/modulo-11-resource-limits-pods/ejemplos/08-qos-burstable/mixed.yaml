@@ -22,7 +22,7 @@ spec:
   
   # Contenedor 1: request == limit (individual sería Guaranteed)
   - name: web
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     resources:
       requests:
         cpu: "250m"
@@ -36,7 +36,7 @@ spec:
   # Contenedor 2: request < limit
   # Esto hace que TODO el Pod sea Burstable
   - name: sidecar
-    image: busybox:1.36
+    image: busybox:latest
     command: ["sleep", "infinity"]
     resources:
       requests:

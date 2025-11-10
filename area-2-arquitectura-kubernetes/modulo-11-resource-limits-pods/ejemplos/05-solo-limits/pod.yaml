@@ -22,7 +22,7 @@ metadata:
 spec:
   containers:
   - name: nginx
-    image: nginx:1.25-alpine
+    image: nginx:alpine
     resources:
       # ❌ Sin requests definidos explícitamente
       limits:

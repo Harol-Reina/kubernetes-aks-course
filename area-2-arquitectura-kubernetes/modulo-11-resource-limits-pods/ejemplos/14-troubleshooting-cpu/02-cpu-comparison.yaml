@@ -24,7 +24,7 @@ spec:
   # Contenedor 1: THROTTLED
   # ============================================
   - name: throttled
-    image: polinux/stress:1.0.4
+    image: polinux/stress
     
     command: ["stress"]
     args:
@@ -49,7 +49,7 @@ spec:
   # Contenedor 2: NOT THROTTLED
   # ============================================
   - name: not-throttled
-    image: polinux/stress:1.0.4
+    image: polinux/stress
     
     command: ["stress"]
     args:

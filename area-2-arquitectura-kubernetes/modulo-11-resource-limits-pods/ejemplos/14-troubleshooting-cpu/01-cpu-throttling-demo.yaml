@@ -22,7 +22,7 @@ metadata:
 spec:
   containers:
   - name: cpu-stress
-    image: polinux/stress:1.0.4
+    image: polinux/stress
     
     command: ["stress"]
     args:
