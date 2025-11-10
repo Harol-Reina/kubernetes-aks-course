@@ -1187,7 +1187,10 @@ Ahora que dominas troubleshooting, continúa con:
 
 - **[README Principal](../README.md)**: Documentación completa
 - **[Lab 01: Fundamentos](./lab-01-fundamentos.md)**: Conceptos básicos
-- **[Ejemplos Troubleshooting](../ejemplos/)**: Manifiestos de referencia
+- **[Guía de Ejemplos](../ejemplos/README.md)**: Catálogo completo de 29 ejemplos
+- **[Ejemplos Troubleshooting](../ejemplos/)**:
+  - [13-troubleshooting-oom](../ejemplos/13-troubleshooting-oom/): Problemas de memoria
+  - [14-troubleshooting-cpu](../ejemplos/14-troubleshooting-cpu/): Throttling y CPU
 - **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentación oficial
 
 ---

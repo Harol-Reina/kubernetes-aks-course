@@ -1,522 +1,440 @@
 # Ejemplos Prácticos - Resource Limits en Pods
 
-Este directorio contiene ejemplos completos y bien documentados sobre gestión de recursos en Kubernetes.
+Este directorio contiene **29 ejemplos** organizados en **14 categorías**. Cada ejemplo está en su propio archivo para facilitar aplicación individual y comprensión.
 
-## 📑 Índice de Ejemplos
+## 📁 Estructura del Directorio
 
-| # | Nombre | Archivo | Conceptos | Dificultad |
-|---|--------|---------|-----------|------------|
-| 1 | Requests y Limits Básicos | [01-basico/requests-limits-basic.yaml](./01-basico/requests-limits-basic.yaml) | Requests, Limits, Multi-container, Init containers | ⭐ Básico |
-| 2 | Quality of Service Classes | [02-qos/qos-classes.yaml](./02-qos/qos-classes.yaml) | Guaranteed, Burstable, BestEffort | ⭐⭐ Intermedio |
-| 3 | Ephemeral Storage | [03-ephemeral/ephemeral-storage.yaml](./03-ephemeral/ephemeral-storage.yaml) | emptyDir, sizeLimit, tmpfs, eviction | ⭐⭐ Intermedio |
-| 4 | Pod-level Resources | [04-pod-level/pod-level-resources.yaml](./04-pod-level/pod-level-resources.yaml) | Feature beta K8s 1.34, resource sharing | ⭐⭐⭐ Avanzado |
-| 5 | Extended Resources | [05-extended/extended-resources.yaml](./05-extended/extended-resources.yaml) | GPUs, custom resources | ⭐⭐ Intermedio |
-| 6 | OOMKilled Simulation | [06-troubleshooting/oomkilled-simulation.yaml](./06-troubleshooting/oomkilled-simulation.yaml) | Memory leak, OOMKilled, troubleshooting | ⭐⭐ Intermedio |
-| 7 | CPU Throttling | [07-troubleshooting/cpu-throttling.yaml](./07-troubleshooting/cpu-throttling.yaml) | CPU stress, throttling, HPA | ⭐⭐⭐ Avanzado |
-
----
+```
+ejemplos/
+├── 01-requests-limits-basico/          # Conceptos fundamentales
+│   └── pod.yaml
+├── 02-multi-container/                 # Múltiples contenedores
+│   └── pod.yaml
+├── 03-init-containers/                 # Init containers con max()
+│   └── pod.yaml
+├── 04-solo-requests/                   # Request-only configuration
+│   └── pod.yaml
+├── 05-solo-limits/                     # Limit-only con auto-copy
+│   └── pod.yaml
+├── 06-ephemeral-storage-basico/        # Ephemeral storage básico
+│   └── pod.yaml
+├── 07-qos-guaranteed/                  # QoS: Guaranteed
+│   └── pod.yaml
+├── 08-qos-burstable/                   # QoS: Burstable (3 ejemplos)
+│   ├── flexible.yaml
+│   ├── request-only.yaml
+│   └── mixed.yaml
+├── 09-qos-besteffort/                  # QoS: BestEffort (2 ejemplos)
+│   ├── pod.yaml
+│   └── deployment.yaml
+├── 10-ephemeral-storage/               # Ephemeral storage avanzado (7 ejemplos)
+│   ├── 01-emptydir-con-sizelimit.yaml
+│   ├── 02-emptydir-sin-sizelimit-peligroso.yaml
+│   ├── 03-tmpfs-memory-backed.yaml
+│   ├── 04-multiples-emptydir.yaml
+│   ├── 05-monitoreo.yaml
+│   ├── 06-eviction-demo.yaml
+│   └── 07-deployment-best-practices.yaml
+├── 11-pod-level-resources/             # Pod-level resources K8s 1.34+ (3 ejemplos)
+│   ├── 01-pod-level-basico.yaml
+│   ├── 02-pod-level-hibrido.yaml
+│   └── 03-deployment-multi-sidecar.yaml
+├── 12-extended-resources/              # GPUs y recursos custom (3 ejemplos)
+│   ├── 01-nvidia-gpu.yaml
+│   ├── 02-amd-gpu.yaml
+│   └── 03-custom-resources.yaml
+├── 13-troubleshooting-oom/             # OOMKilled troubleshooting (2 ejemplos)
+│   ├── 01-oomkilled-demo.yaml
+│   └── 02-gradual-leak.yaml
+└── 14-troubleshooting-cpu/             # CPU throttling (3 ejemplos)
+    ├── 01-cpu-throttling-demo.yaml
+    ├── 02-cpu-comparison.yaml
+    └── 03-deployment-con-hpa.yaml
+```
 
 ## 🎯 Learning Paths
 
-### Path 1: Fundamentos (Para principiantes)
-Aprende los conceptos básicos de resource management:
+### Path 1: Fundamentos (Principiantes)
+**Tiempo**: ~45 minutos | **Requisitos**: Cluster K8s básico
 
 ```bash
-# 1. Conceptos básicos
-kubectl apply -f 01-basico/requests-limits-basic.yaml
-kubectl get pods -l example=basic-resources
+# 1. Requests y Limits Básicos
+kubectl apply -f 01-requests-limits-basico/pod.yaml
+kubectl get pod requests-limits-basic
 kubectl top pod requests-limits-basic
 
-# 2. Entender QoS Classes
-kubectl apply -f 02-qos/qos-classes.yaml
-kubectl get pods -l example=qos-demo -o custom-columns=\
+# 2. Múltiples Contenedores (suma de recursos)
+kubectl apply -f 02-multi-container/pod.yaml
+kubectl describe pod multi-container-resources
+
+# 3. Init Containers (cálculo max)
+kubectl apply -f 03-init-containers/pod.yaml
+kubectl describe pod init-container-resources
+
+# 4. QoS Classes
+kubectl apply -f 07-qos-guaranteed/pod.yaml
+kubectl apply -f 08-qos-burstable/flexible.yaml
+kubectl apply -f 09-qos-besteffort/pod.yaml
+
+kubectl get pods -o custom-columns=\
 NAME:.metadata.name,\
-QoS:.status.qosClass
-
-# 3. Ver comportamiento
-kubectl describe pod qos-guaranteed
-kubectl describe pod qos-burstable-flexible
-kubectl describe pod qos-besteffort
+QOS:.status.qosClass
 ```
 
-**Tiempo estimado**: 30 minutos  
-**Requisitos**: Cluster Kubernetes básico
-
-### Path 2: Troubleshooting (Para administradores)
-Aprende a diagnosticar y resolver problemas comunes:
-
-```bash
-# 1. Simular OOMKilled
-kubectl apply -f 06-troubleshooting/oomkilled-simulation.yaml
-kubectl get pod oomkilled-demo --watch
-
-# Esperar ~30 segundos y observar
-kubectl describe pod oomkilled-demo | grep -A 10 "Last State"
-
-# 2. Detectar CPU Throttling
-kubectl apply -f 07-troubleshooting/cpu-throttling.yaml
-kubectl top pod cpu-throttling-demo --watch
-
-# 3. Verificar ephemeral storage
-kubectl apply -f 03-ephemeral/ephemeral-storage.yaml
-kubectl logs -f ephemeral-monitor -c monitor
-```
-
-**Tiempo estimado**: 45 minutos  
-**Requisitos**: metrics-server instalado
-
-### Path 3: Producción (Para arquitectos)
-Configuraciones avanzadas para ambientes productivos:
-
-```bash
-# 1. Pod-level resources (K8s 1.34+)
-kubectl apply -f 04-pod-level/pod-level-resources.yaml
-kubectl describe pod pod-level-hybrid | grep -A 20 "Resources"
-
-# 2. Extended resources (requiere device plugins)
-kubectl describe node | grep -i "nvidia.com/gpu"
-kubectl apply -f 05-extended/extended-resources.yaml
-
-# 3. Deployment con best practices
-kubectl apply -f 03-ephemeral/ephemeral-storage.yaml
-kubectl get deployment web-app-with-storage -o yaml
-```
-
-**Tiempo estimado**: 60 minutos  
-**Requisitos**: K8s 1.34+, device plugins (opcional)
+**Conceptos aprendidos**: Requests, Limits, Resource summation, QoS Classes
 
 ---
 
-## 📚 Descripción Detallada de Ejemplos
+### Path 2: QoS Classes en Detalle (Intermedio)
+**Tiempo**: ~30 minutos | **Requisitos**: Completar Path 1
 
-### 1. Requests y Limits Básicos
-**Archivo**: `01-basico/requests-limits-basic.yaml`
-
-**Qué aprenderás**:
-- Diferencia entre requests y limits
-- QoS Class: Burstable
-- Pods con múltiples contenedores
-- Init containers con recursos
-- Solo requests (sin limits)
-- Solo limits (sin requests)
-- Ephemeral storage básico
-
-**Ejemplos incluidos**:
-- ✅ Pod básico con requests/limits
-- ✅ Multi-container resource allocation
-- ✅ Init containers (regla del máximo)
-- ✅ Request-only configuration
-- ✅ Limit-only configuration (auto-copy)
-- ✅ Ephemeral storage demo
-
-**Comandos clave**:
 ```bash
-kubectl apply -f 01-basico/requests-limits-basic.yaml
-kubectl get pods -l example
-kubectl describe pod requests-limits-basic
-kubectl get pod requests-limits-basic -o jsonpath='{.status.qosClass}'
-kubectl top pod requests-limits-basic
+# Guaranteed: request == limit
+kubectl apply -f 07-qos-guaranteed/pod.yaml
+
+# Burstable: request < limit
+kubectl apply -f 08-qos-burstable/flexible.yaml
+kubectl apply -f 08-qos-burstable/request-only.yaml
+kubectl apply -f 08-qos-burstable/mixed.yaml
+
+# BestEffort: sin resources
+kubectl apply -f 09-qos-besteffort/pod.yaml
+kubectl apply -f 09-qos-besteffort/deployment.yaml
+
+# Ver QoS de todos
+kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.qosClass}{"\n"}{end}'
+
+# Ver orden de eviction bajo presión
+kubectl describe nodes | grep -A 5 "Allocated resources"
 ```
+
+**Conceptos aprendidos**: Guaranteed, Burstable, BestEffort, Eviction order
 
 ---
 
-### 2. Quality of Service (QoS) Classes
-**Archivo**: `02-qos/qos-classes.yaml`
+### Path 3: Ephemeral Storage (Intermedio)
+**Tiempo**: ~60 minutos | **Requisitos**: Cluster con metrics-server
 
-**Qué aprenderás**:
-- QoS Class: Guaranteed
-- QoS Class: Burstable (3 variantes)
-- QoS Class: BestEffort
-- Orden de eviction bajo presión de recursos
-- Comparación directa de comportamiento
-
-**Ejemplos incluidos**:
-- ✅ Guaranteed Pod (request == limit)
-- ✅ Burstable flexible (request < limit)
-- ✅ Burstable request-only (sin limits)
-- ✅ Burstable mixed (contenedores mixtos)
-- ✅ BestEffort (sin resources)
-- ✅ Deployment con comparación
-
-**Orden de Eviction**:
-```
-1. BestEffort  ◄── Se eliminan PRIMERO
-2. Burstable   ◄── Prioridad media
-3. Guaranteed  ◄── Se eliminan ÚLTIMO (máxima protección)
-```
-
-**Comandos clave**:
 ```bash
-kubectl apply -f 02-qos/qos-classes.yaml
-kubectl get pods -l example=qos-demo -o custom-columns=\
-NAME:.metadata.name,QoS:.status.qosClass
-```
-
----
-
-### 3. Ephemeral Storage
-**Archivo**: `03-ephemeral/ephemeral-storage.yaml`
-
-**Qué aprenderás**:
-- emptyDir con sizeLimit (✅ best practice)
-- emptyDir sin sizeLimit (⚠️ peligroso)
-- tmpfs (memory-backed)
-- Múltiples emptyDir en un Pod
-- Monitoreo de uso de storage
-- Eviction por exceso de storage
-
-**Ejemplos incluidos**:
-- ✅ emptyDir con sizeLimit seguro
-- ⚠️ emptyDir sin límite (demo)
-- ✅ tmpfs (cuenta como memoria, no storage)
-- ✅ Múltiples volúmenes con límites
-- ✅ Pod de monitoreo de storage
-- 🔥 Demo de eviction intencional
-- ✅ Deployment con best practices
-
-**⚠️ Importante**:
-```yaml
-# tmpfs NO cuenta como ephemeral-storage
-emptyDir:
-  medium: Memory  # ← Usa RAM, cuenta como memory usage
-
-# emptyDir regular SÍ cuenta
-emptyDir:
-  sizeLimit: "1Gi"  # ← Cuenta como ephemeral-storage
-```
-
-**Comandos clave**:
-```bash
-kubectl apply -f 03-ephemeral/ephemeral-storage.yaml
-kubectl logs -f ephemeral-monitor -c monitor
+# 1. emptyDir con sizeLimit (best practice)
+kubectl apply -f 10-ephemeral-storage/01-emptydir-con-sizelimit.yaml
 kubectl exec -it emptydir-with-sizelimit -- df -h /cache
-kubectl get events --field-selector reason=Evicted
+
+# 2. emptyDir sin sizeLimit (peligroso)
+kubectl apply -f 10-ephemeral-storage/02-emptydir-sin-sizelimit-peligroso.yaml
+
+# 3. tmpfs (memory-backed)
+kubectl apply -f 10-ephemeral-storage/03-tmpfs-memory-backed.yaml
+kubectl exec -it emptydir-tmpfs -- mount | grep /tmp
+
+# 4. Múltiples emptyDir
+kubectl apply -f 10-ephemeral-storage/04-multiples-emptydir.yaml
+
+# 5. Monitoreo en tiempo real
+kubectl apply -f 10-ephemeral-storage/05-monitoreo.yaml
+kubectl logs -f ephemeral-monitor -c monitor
+
+# 6. Eviction por storage
+kubectl apply -f 10-ephemeral-storage/06-eviction-demo.yaml
+# Esperar eviction...
+kubectl describe pod ephemeral-eviction-demo | grep -i evict
+
+# 7. Deployment production-ready
+kubectl apply -f 10-ephemeral-storage/07-deployment-best-practices.yaml
 ```
+
+**Conceptos aprendidos**: emptyDir, sizeLimit, tmpfs, storage eviction, best practices
 
 ---
 
-### 4. Pod-level Resources (Beta K8s 1.34+)
-**Archivo**: `04-pod-level/pod-level-resources.yaml`
+### Path 4: Troubleshooting (Avanzado)
+**Tiempo**: ~90 minutos | **Requisitos**: Conocimientos de debugging
 
-**Qué aprenderás**:
-- Feature gate `PodLevelResources`
-- Especificar presupuesto total del Pod
-- Resource sharing entre contenedores
-- Combinación Pod-level + Container-level
-
-**Ejemplos incluidos**:
-- ✅ Solo Pod-level (contenedores comparten)
-- ✅ Híbrido (app con límite + sidecars sin límite)
-- ✅ Deployment multi-sidecar
-
-**⚠️ Requisitos**:
-- Kubernetes 1.34+
-- Feature gate `PodLevelResources=true` (default en 1.34)
-
-**Ventajas**:
-- ✅ Simplifica configuración con muchos sidecars
-- ✅ Mejor utilización de recursos idle
-- ✅ Reduce over-provisioning
-
-**Comandos clave**:
 ```bash
-kubectl apply -f 04-pod-level/pod-level-resources.yaml
-kubectl describe pod pod-level-basic | grep -A 10 "Resources"
-kubectl top pod pod-level-hybrid --containers
-```
+# === OOMKilled Troubleshooting ===
 
----
+# 1. OOMKilled simulation
+kubectl apply -f 13-troubleshooting-oom/01-oomkilled-demo.yaml
 
-### 5. Extended Resources
-**Archivo**: `05-extended/extended-resources.yaml`
-
-**Qué aprenderás**:
-- Solicitar GPUs NVIDIA
-- Solicitar GPUs AMD
-- Custom extended resources
-
-**Ejemplos incluidos**:
-- ✅ NVIDIA GPU request
-- ✅ AMD GPU request
-- ✅ Custom resources (FPGA, dongles)
-
-**⚠️ Requisitos**:
-- Device plugin instalado en el nodo
-- Nodo debe anunciar el recurso
-
-**Instalación NVIDIA GPU Device Plugin**:
-```bash
-kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/main/nvidia-device-plugin.yml
-```
-
-**Verificar recursos disponibles**:
-```bash
-kubectl describe node | grep -i "nvidia.com/gpu"
-```
-
-**Comandos clave**:
-```bash
-kubectl apply -f 05-extended/extended-resources.yaml
-kubectl describe pod gpu-pod-nvidia
-```
-
----
-
-### 6. OOMKilled Simulation
-**Archivo**: `06-troubleshooting/oomkilled-simulation.yaml`
-
-**Qué aprenderás**:
-- Simular memory leak
-- Observar comportamiento de OOMKilled
-- Detectar Exit Code 137
-- Analizar restart count
-- CrashLoopBackOff
-
-**Ejemplos incluidos**:
-- 🔥 Memory leak intencional (stress)
-- 🔥 Memory leak gradual (script)
-
-**Comportamiento esperado**:
-```
-1. Container intenta usar más memoria que el límite
-2. Kernel OOM Killer detecta exceso
-3. Proceso terminado con SIGKILL
-4. Exit Code: 137
-5. Pod reinicia (restartPolicy: Always)
-6. Si falla repetidamente → CrashLoopBackOff
-```
-
-**⚠️ SOLO PARA TESTING** - No usar en producción
-
-**Comandos clave**:
-```bash
-kubectl apply -f 06-troubleshooting/oomkilled-simulation.yaml
+# Ver OOMKilled en acción
 kubectl get pod oomkilled-demo --watch
+# Esperar CrashLoopBackOff...
 
-# Esperar ~30 segundos
+# Ver detalles del crash
 kubectl describe pod oomkilled-demo | grep -A 10 "Last State"
-# Reason: OOMKilled
-# Exit Code: 137
-
-kubectl get pod oomkilled-demo -o jsonpath='{.status.containerStatuses[0].restartCount}'
 kubectl logs oomkilled-demo --previous
-```
 
----
+# 2. Memory leak gradual (más realista)
+kubectl apply -f 13-troubleshooting-oom/02-gradual-leak.yaml
+kubectl logs -f gradual-memory-leak
+# En otra terminal:
+watch kubectl top pod gradual-memory-leak
 
-### 7. CPU Throttling
-**Archivo**: `07-troubleshooting/cpu-throttling.yaml`
+# === CPU Throttling Troubleshooting ===
 
-**Qué aprenderás**:
-- Simular carga de CPU
-- Detectar throttling
-- Comparar con y sin throttling
-- Alternativa: Horizontal Pod Autoscaler
-
-**Ejemplos incluidos**:
-- 🔥 CPU stress con límite bajo (throttled)
-- ✅ Comparación throttled vs not-throttled
-- ✅ Deployment con HPA
-
-**Comportamiento de Throttling**:
-```
-- Intenta usar 2 CPUs
-- Límite: 0.5 CPU
-- Kernel throttles el proceso
-- CPU usage stuck en ~500m
-- Aplicación se vuelve lenta
-- NO se termina (diferente a OOMKill)
-```
-
-**Detectar Throttling**:
-```bash
-# Ver CPU usage (stuck en el límite)
+# 3. CPU throttling demo
+kubectl apply -f 14-troubleshooting-cpu/01-cpu-throttling-demo.yaml
 kubectl top pod cpu-throttling-demo
+# Verás CPU stuck en límite (500m)
 
-# Ver stats de throttling (dentro del contenedor)
+# Ver throttling stats
 kubectl exec -it cpu-throttling-demo -- cat /sys/fs/cgroup/cpu/cpu.stat
-# nr_throttled: 800  # ← 80% del tiempo throttled!
 
-# Con Prometheus
-rate(container_cpu_cfs_throttled_seconds_total{pod="cpu-throttling-demo"}[5m])
-```
-
-**⚠️ SOLO PARA TESTING**
-
-**Comandos clave**:
-```bash
-kubectl apply -f 07-troubleshooting/cpu-throttling.yaml
-kubectl top pod cpu-throttling-demo --watch
+# 4. Comparación lado a lado
+kubectl apply -f 14-troubleshooting-cpu/02-cpu-comparison.yaml
 kubectl top pod cpu-comparison --containers
+
+# 5. Solución con HPA (recomendado)
+kubectl apply -f 14-troubleshooting-cpu/03-deployment-con-hpa.yaml
+
+# Generar carga
+kubectl run load-gen --image=busybox:1.36 --restart=Never -- \
+  /bin/sh -c "while true; do wget -q -O- http://cpu-app; done"
+
+# Ver HPA en acción
+watch kubectl get hpa cpu-app-hpa
 ```
+
+**Conceptos aprendidos**: OOMKilled, Exit Code 137, CrashLoopBackOff, CPU throttling, HPA
 
 ---
 
-## 🛠️ Casos de Uso Prácticos
-
-### Caso 1: Aplicación Web (Burstable)
-**Escenario**: API REST con tráfico variable
-
-```yaml
-# Usar: 01-basico/requests-limits-basic.yaml
-resources:
-  requests:
-    cpu: "250m"
-    memory: "128Mi"
-  limits:
-    cpu: "1"
-    memory: "512Mi"
-```
-
-**Por qué**:
-- Request bajo → scheduler puede colocar más Pods
-- Limit alto → puede manejar picos de tráfico
-- QoS: Burstable (balance costo/flexibilidad)
-
-### Caso 2: Base de Datos (Guaranteed)
-**Escenario**: PostgreSQL en producción
-
-```yaml
-# Usar: 02-qos/qos-classes.yaml (qos-guaranteed)
-resources:
-  requests:
-    cpu: "2"
-    memory: "4Gi"
-  limits:
-    cpu: "2"
-    memory: "4Gi"
-```
-
-**Por qué**:
-- Request == Limit → QoS Guaranteed
-- Máxima protección contra eviction
-- Rendimiento predecible
-
-### Caso 3: Batch Jobs (BestEffort)
-**Escenario**: Procesamiento batch no crítico
-
-```yaml
-# Usar: 02-qos/qos-classes.yaml (qos-besteffort)
-# Sin resources definidos
-```
-
-**Por qué**:
-- No reserva recursos → más Pods en el clúster
-- Puede usar recursos idle
-- Se evicted primero (aceptable para batch jobs)
-
-### Caso 4: Multi-Sidecar App (Pod-level)
-**Escenario**: App con 4+ sidecars (service mesh, logging, etc.)
-
-```yaml
-# Usar: 04-pod-level/pod-level-resources.yaml
-spec:
-  resources:
-    limits:
-      cpu: "3"
-      memory: "3Gi"
-  # Todos los contenedores comparten
-```
-
-**Por qué**:
-- Difícil calcular recursos para cada sidecar
-- Sidecars comparten recursos idle
-- Menos over-provisioning
-
----
-
-## 📊 Comandos Útiles
-
-### Monitoreo
+### Path 5: Extended Resources (Avanzado)
+**Tiempo**: ~45 minutos | **Requisitos**: Nodos con GPUs o configuración manual
 
 ```bash
-# Ver uso de recursos de todos los Pods
-kubectl top pods --all-namespaces
+# ⚠️ Requiere Device Plugins instalados
 
-# Ver uso de recursos de un Pod con contenedores
+# 1. NVIDIA GPUs
+# Instalar NVIDIA Device Plugin:
+kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.0/nvidia-device-plugin.yml
+
+kubectl apply -f 12-extended-resources/01-nvidia-gpu.yaml
+kubectl logs gpu-pod-nvidia
+kubectl exec -it gpu-pod-nvidia -- nvidia-smi
+
+# 2. AMD GPUs
+kubectl apply -f 12-extended-resources/02-amd-gpu.yaml
+kubectl exec -it gpu-pod-amd -- rocm-smi
+
+# 3. Custom resources (FPGAs, dongles, etc.)
+# Primero anuncia el recurso:
+NODE_NAME="your-node"
+kubectl patch node $NODE_NAME --subresource=status --type=json -p='[
+  {"op":"add","path":"/status/capacity/example.com~1fpga","value":"4"}
+]'
+
+kubectl apply -f 12-extended-resources/03-custom-resources.yaml
+```
+
+**Conceptos aprendidos**: NVIDIA GPUs, AMD GPUs, Custom extended resources, Device Plugins
+
+---
+
+### Path 6: Pod-level Resources (Experimental)
+**Tiempo**: ~30 minutos | **Requisitos**: Kubernetes 1.34+ con PodLevelResources feature gate
+
+```bash
+# ⚠️ Feature Beta en K8s 1.34+
+# Verificar que esté habilitado:
+kubectl version --short
+
+# 1. Pod-level básico
+kubectl apply -f 11-pod-level-resources/01-pod-level-basico.yaml
+kubectl describe pod pod-level-basic
+
+# 2. Híbrido (Pod + Container level)
+kubectl apply -f 11-pod-level-resources/02-pod-level-hibrido.yaml
+kubectl top pod pod-level-hybrid --containers
+
+# 3. Deployment con múltiples sidecars
+kubectl apply -f 11-pod-level-resources/03-deployment-multi-sidecar.yaml
+kubectl get pods -l app=multi-sidecar
+kubectl top pods -l app=multi-sidecar --containers
+```
+
+**Conceptos aprendidos**: Pod-level resources, Resource sharing, Sidecar patterns
+
+---
+
+## 📊 Tabla Comparativa de Ejemplos
+
+| Categoría | # Ejemplos | Dificultad | Requisitos Especiales |
+|-----------|------------|------------|----------------------|
+| Básicos (01-06) | 6 | ⭐ Básico | Ninguno |
+| QoS Classes (07-09) | 6 | ⭐⭐ Intermedio | Ninguno |
+| Ephemeral Storage (10) | 7 | ⭐⭐ Intermedio | metrics-server |
+| Pod-level Resources (11) | 3 | ⭐⭐⭐ Avanzado | K8s 1.34+ |
+| Extended Resources (12) | 3 | ⭐⭐⭐ Avanzado | GPUs o config manual |
+| Troubleshooting OOM (13) | 2 | ⭐⭐ Intermedio | Ninguno |
+| Troubleshooting CPU (14) | 3 | ⭐⭐⭐ Avanzado | metrics-server, HPA |
+
+**Total**: 29 ejemplos
+
+---
+
+## 🚀 Quick Start
+
+### Aplicar un ejemplo individual
+
+```bash
+# Navega al directorio
+cd ejemplos/
+
+# Aplica un ejemplo específico
+kubectl apply -f 01-requests-limits-basico/pod.yaml
+
+# Ver estado
+kubectl get pods
+
+# Ver detalles
+kubectl describe pod requests-limits-basic
+
+# Ver logs
+kubectl logs requests-limits-basic
+
+# Limpiar
+kubectl delete -f 01-requests-limits-basico/pod.yaml
+```
+
+### Aplicar todos los ejemplos de una categoría
+
+```bash
+# Todos los QoS Burstable
+kubectl apply -f 08-qos-burstable/
+
+# Ver todos
+kubectl get pods -l example=qos-demo
+
+# Limpiar todos
+kubectl delete -f 08-qos-burstable/
+```
+
+### Aplicar todos los ejemplos básicos
+
+```bash
+kubectl apply -f 01-requests-limits-basico/
+kubectl apply -f 02-multi-container/
+kubectl apply -f 03-init-containers/
+kubectl apply -f 04-solo-requests/
+kubectl apply -f 05-solo-limits/
+kubectl apply -f 06-ephemeral-storage-basico/
+
+# Ver todos
+kubectl get pods
+```
+
+---
+
+## 🔍 Comandos Útiles
+
+### Ver recursos de Pods
+
+```bash
+# CPU y Memory usage
+kubectl top pod <pod-name>
+
+# CPU y Memory por contenedor
 kubectl top pod <pod-name> --containers
 
-# Ver uso de recursos de nodos
-kubectl top nodes
+# Ver limits y requests
+kubectl describe pod <pod-name> | grep -A 10 "Limits:"
 
-# Ver recursos asignados en un nodo
-kubectl describe node <node-name> | grep -A 10 "Allocated resources"
+# Ver QoS Class
+kubectl get pod <pod-name> -o jsonpath='{.status.qosClass}'
 ```
 
 ### Troubleshooting
 
 ```bash
-# Ver QoS Class de un Pod
-kubectl get pod <pod-name> -o jsonpath='{.status.qosClass}'
+# Ver eventos
+kubectl get events --sort-by='.lastTimestamp'
 
-# Ver eventos de un Pod
-kubectl get events --field-selector involvedObject.name=<pod-name>
-
-# Ver logs del contenedor anterior (tras crash)
+# Ver logs anteriores (tras crash)
 kubectl logs <pod-name> --previous
+
+# Describir Pod
+kubectl describe pod <pod-name>
 
 # Ver restart count
 kubectl get pod <pod-name> -o jsonpath='{.status.containerStatuses[0].restartCount}'
 
-# Ver Pods evicted
-kubectl get pods --field-selector=status.phase=Failed
-
-# Ver eventos de eviction
-kubectl get events --all-namespaces | grep -i evict
-
-# Ver eventos de OOMKilled
-kubectl get events --all-namespaces --field-selector reason=OOMKilled
+# Ver exit code
+kubectl get pod <pod-name> -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'
 ```
 
-### Análisis
+### Monitoreo con Prometheus
 
 ```bash
-# Ver recursos de todos los Pods en formato customizado
-kubectl get pods -o custom-columns=\
-NAME:.metadata.name,\
-CPU_REQ:.spec.containers[0].resources.requests.cpu,\
-CPU_LIM:.spec.containers[0].resources.limits.cpu,\
-MEM_REQ:.spec.containers[0].resources.requests.memory,\
-MEM_LIM:.spec.containers[0].resources.limits.memory,\
-QoS:.status.qosClass
+# CPU usage
+container_cpu_usage_seconds_total{pod="<pod-name>"}
 
-# Contar Pods por QoS class
-kubectl get pods --all-namespaces -o json | \
-  jq -r '.items[].status.qosClass' | sort | uniq -c
+# Memory usage
+container_memory_usage_bytes{pod="<pod-name>"}
 
-# Ver Pods con restart count alto
-kubectl get pods --all-namespaces -o json | \
-  jq -r '.items[] | select(.status.containerStatuses[].restartCount > 5) | 
-  "\(.metadata.namespace)/\(.metadata.name): \(.status.containerStatuses[].restartCount) restarts"'
+# CPU throttling
+rate(container_cpu_cfs_throttled_seconds_total{pod="<pod-name>"}[5m])
+
+# OOMKilled events
+kube_pod_container_status_terminated_reason{reason="OOMKilled"}
 ```
 
 ---
 
-## 🧹 Limpieza
+## 📚 Referencias
 
-```bash
-# Limpiar ejemplos individuales
-kubectl delete -f 01-basico/requests-limits-basic.yaml
-kubectl delete -f 02-qos/qos-classes.yaml
-kubectl delete -f 03-ephemeral/ephemeral-storage.yaml
-kubectl delete -f 04-pod-level/pod-level-resources.yaml
-kubectl delete -f 05-extended/extended-resources.yaml
-kubectl delete -f 06-troubleshooting/oomkilled-simulation.yaml
-kubectl delete -f 07-troubleshooting/cpu-throttling.yaml
-
-# Limpiar TODOS los ejemplos
-kubectl delete pods,deployments -l example
-```
+- [Documentación principal](../README.md)
+- [Laboratorios prácticos](../labs/)
+- [Kubernetes Resource Management](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- [Quality of Service](https://kubernetes.io/docs/tasks/configure-pod-container/quality-service-pod/)
+- [Ephemeral Storage](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#local-ephemeral-storage)
 
 ---
 
-## 📖 Referencias
+## 💡 Tips
 
-- **[README Principal](../README.md)**: Documentación completa del módulo
-- **[Laboratorios](../laboratorios/)**: Ejercicios prácticos guiados
-- **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentación oficial
+1. **Comienza por los fundamentos**: Sigue Path 1 antes de avanzar a ejemplos más complejos
+2. **Un ejemplo a la vez**: Aplica, observa, limpia, luego pasa al siguiente
+3. **Lee los comentarios**: Cada YAML tiene documentación exhaustiva inline
+4. **Usa `kubectl describe`**: Proporciona detalles cruciales de resources
+5. **Monitorea con `kubectl top`**: Verifica uso real vs límites
+6. **Experimenta**: Modifica los YAMLs, observa el comportamiento
+7. **Limpia después**: `kubectl delete -f <file>` para no saturar el cluster
 
 ---
 
-**Última actualización**: Noviembre 2025  
-**Versión**: Kubernetes 1.28+
+## 🛠️ Requisitos
+
+### Mínimos (para ejemplos básicos)
+- Kubernetes 1.20+
+- kubectl configurado
+- Acceso a un cluster
+
+### Recomendados (para ejemplos avanzados)
+- Kubernetes 1.25+
+- metrics-server instalado
+- Prometheus (opcional, para métricas)
+- Nodos con GPUs (solo para ejemplos 12-*)
+
+### Experimentales
+- Kubernetes 1.34+ (para pod-level resources)
+- NVIDIA/AMD Device Plugins (para GPUs)
+
+---
+
+## ❓ FAQ
+
+**P: ¿Por qué cada ejemplo está en su propio archivo?**  
+R: Facilita aplicar ejemplos individuales con `kubectl apply -f` sin tener que editar o separar manualmente.
+
+**P: ¿Puedo aplicar todos los ejemplos a la vez?**  
+R: Sí, pero no es recomendado. Algunos ejemplos (OOMKilled, eviction) causan problemas intencionalmente. Mejor aplicar por categoría.
+
+**P: ¿Necesito un cluster de producción?**  
+R: No. Minikube, kind, o k3s son suficientes para la mayoría de ejemplos.
+
+**P: ¿Qué ejemplos son seguros para producción?**  
+R: 01-06, 07, 08, 10/01, 10/03, 10/04, 10/07, 11-*, 12-*. Los de troubleshooting (13-*, 14-*) son solo para testing.
+
+**P: ¿Cómo limpio todos los recursos?**  
+R: `kubectl delete pods -l example=<label>` o elimina por archivo individual.

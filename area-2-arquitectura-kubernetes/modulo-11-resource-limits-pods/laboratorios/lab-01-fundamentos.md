@@ -33,17 +33,17 @@ Al completar este laboratorio, serás capaz de:
 ```
 ┌──────────────────────────────────────────────┐
 │                                              │
-│  ┌─────────────────────────────────────┐    │
-│  │         LIMIT (tope máximo)         │    │
-│  │   500m CPU  /  512Mi Memory         │    │
-│  └─────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────┐     │
+│  │         LIMIT (tope máximo)         │     │
+│  │   500m CPU  /  512Mi Memory         │     │
+│  └─────────────────────────────────────┘     │
 │              ▲                               │
 │              │  Puede usar HASTA el límite   │
 │              │                               │
-│  ┌───────────┴────────────────────────┐     │
-│  │   REQUEST (reserva garantizada)    │     │
-│  │   200m CPU  /  256Mi Memory        │     │
-│  └────────────────────────────────────┘     │
+│  ┌───────────┴────────────────────────┐      │
+│  │   REQUEST (reserva garantizada)    │      │
+│  │   200m CPU  /  256Mi Memory        │      │
+│  └────────────────────────────────────┘      │
 │              ▲                               │
 │              │  SIEMPRE disponible           │
 │                                              │
@@ -657,16 +657,16 @@ Deberías ver que los recursos allocated disminuyeron.
 ```
 ┌─────────────────────────────────────────────┐
 │  Guaranteed (request == limit)              │
-│  - Máxima protección contra eviction       │
-│  - Uso: Producción crítica                 │
-│  - Ejemplo: Bases de datos                 │
+│  - Máxima protección contra eviction        │
+│  - Uso: Producción crítica                  │
+│  - Ejemplo: Bases de datos                  │
 └─────────────────────────────────────────────┘
             ▲
             │
 ┌───────────┴─────────────────────────────────┐
 │  Burstable (request < limit)                │
 │  - Balance flexibilidad/protección          │
-│  - Uso: Apps web con tráfico variable      │
+│  - Uso: Apps web con tráfico variable       │
 │  - Ejemplo: APIs REST                       │
 └─────────────────────────────────────────────┘
             ▲
@@ -794,8 +794,15 @@ Ahora que dominas los fundamentos, continúa con:
 ## 📖 Referencias
 
 - **[README Principal](../README.md)**: Documentación completa
-- **[Ejemplos Básicos](../ejemplos/01-basico/)**: Manifiestos de referencia
-- **[Ejemplos QoS](../ejemplos/02-qos/)**: QoS Classes en detalle
+- **[Guía de Ejemplos](../ejemplos/README.md)**: Catálogo completo de 29 ejemplos organizados
+- **[Ejemplos Fundamentos](../ejemplos/)**: 
+  - [01-requests-limits-basico](../ejemplos/01-requests-limits-basico/)
+  - [02-multi-container](../ejemplos/02-multi-container/)
+  - [03-init-containers](../ejemplos/03-init-containers/)
+- **[Ejemplos QoS](../ejemplos/)**: 
+  - [07-qos-guaranteed](../ejemplos/07-qos-guaranteed/)
+  - [08-qos-burstable](../ejemplos/08-qos-burstable/)
+  - [09-qos-besteffort](../ejemplos/09-qos-besteffort/)
 - **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentación oficial
 
 ---

@@ -2028,43 +2028,73 @@ spec:
 
 ## Ejemplos Prácticos
 
-Ver la carpeta [`ejemplos/`](./ejemplos/) para ejemplos completos:
+Ver la carpeta [`ejemplos/`](./ejemplos/) para ejemplos completos y organizados. Consulta el [README de ejemplos](./ejemplos/README.md) para una guía detallada.
 
-1. **[Básico - Requests y Limits](./ejemplos/01-basico/requests-limits-basic.yaml)**
-   - Configuración simple de resources
-   - Múltiples contenedores
-   - Init containers
+### Fundamentos
 
-2. **[QoS Classes](./ejemplos/02-qos/qos-classes.yaml)**
-   - Guaranteed
-   - Burstable
-   - BestEffort
-   - Comparación de comportamiento
+1. **[Requests y Limits Básico](./ejemplos/01-requests-limits-basico/pod.yaml)**
+   - Configuración simple de CPU y memoria
+   - Ejemplo base para aprendizaje
 
-3. **[Ephemeral Storage](./ejemplos/03-ephemeral/ephemeral-storage.yaml)**
-   - emptyDir con sizeLimit
-   - Limits de ephemeral-storage
-   - Monitoreo de uso
+2. **[Multi-Container con Resources](./ejemplos/02-multi-container/pod.yaml)**
+   - Múltiples contenedores con diferentes límites
+   - Gestión independiente de recursos
 
-4. **[Pod-level Resources](./ejemplos/04-pod-level/pod-level-resources.yaml)**
-   - Feature beta K8s 1.34
-   - Presupuesto total del Pod
-   - Sharing entre contenedores
+3. **[Init Containers](./ejemplos/03-init-containers/pod.yaml)**
+   - Resources para init containers
+   - Impacto en scheduling
 
-5. **[Extended Resources](./ejemplos/05-extended/extended-resources.yaml)**
-   - GPU requests
-   - Custom resources
-   - Device plugins
+4. **[Solo Requests](./ejemplos/04-solo-requests/pod.yaml)**
+   - Definir solo requests sin limits
+   - Comportamiento de QoS Burstable
 
-6. **[Simulación OOMKilled](./ejemplos/06-troubleshooting/oomkilled-simulation.yaml)**
-   - Memory leak intencional
-   - Observar restart count
-   - Ajustar límites
+5. **[Solo Limits](./ejemplos/05-solo-limits/pod.yaml)**
+   - Definir solo limits (requests = limits)
+   - Comportamiento implícito
 
-7. **[CPU Throttling](./ejemplos/07-troubleshooting/cpu-throttling.yaml)**
-   - Stress test de CPU
-   - Detectar throttling
-   - Optimizar límites
+### QoS Classes
+
+6. **[QoS Guaranteed](./ejemplos/07-qos-guaranteed/pod.yaml)**
+   - Requests = Limits
+   - Máxima prioridad de eviction
+
+7. **[QoS Burstable](./ejemplos/08-qos-burstable/)**
+   - [Flexible](./ejemplos/08-qos-burstable/flexible.yaml): Requests < Limits
+   - [Solo Requests](./ejemplos/08-qos-burstable/request-only.yaml): Sin limits
+   - [Mixed](./ejemplos/08-qos-burstable/mixed.yaml): Combinaciones
+
+8. **[QoS BestEffort](./ejemplos/09-qos-besteffort/)**
+   - [Pod sin recursos](./ejemplos/09-qos-besteffort/pod.yaml): Sin requests ni limits
+   - [Deployment](./ejemplos/09-qos-besteffort/deployment.yaml): Aplicación práctica
+
+### Ephemeral Storage
+
+9. **[Ephemeral Storage](./ejemplos/10-ephemeral-storage/)**
+   - Gestión de almacenamiento efímero
+   - 7 ejemplos desde básico hasta avanzado
+
+### Features Avanzados
+
+10. **[Pod-level Resources](./ejemplos/11-pod-level-resources/)**
+    - Feature beta K8s 1.34+
+    - Presupuesto total del Pod
+    - 3 ejemplos de configuración
+
+11. **[Extended Resources](./ejemplos/12-extended-resources/)**
+    - GPU y recursos personalizados
+    - Device plugins
+    - 3 ejemplos prácticos
+
+### Troubleshooting
+
+12. **[OOMKilled](./ejemplos/13-troubleshooting-oom/)**
+    - [Memory stress](./ejemplos/13-troubleshooting-oom/01-memory-stress.yaml): Simulación OOM
+    - [Leak detection](./ejemplos/13-troubleshooting-oom/02-memory-leak.yaml): Detectar leaks
+
+13. **[CPU Throttling](./ejemplos/14-troubleshooting-cpu/)**
+    - [CPU stress](./ejemplos/14-troubleshooting-cpu/01-cpu-stress.yaml): Detectar throttling
+    - [Monitoring](./ejemplos/14-troubleshooting-cpu/02-cpu-monitoring.yaml): Observar métricas
+    - [Tuning](./ejemplos/14-troubleshooting-cpu/03-cpu-tuning.yaml): Optimizar límites
 
 ---
 
