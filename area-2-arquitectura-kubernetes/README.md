@@ -74,11 +74,11 @@ Al completar esta área, serás capaz de:
 
 | Módulo | Título | Duración | Conceptos Clave |
 |--------|--------|----------|-----------------|
-| **[M14](./modulo-14-health-checks-probes/)** | **Health Checks y Probes** | 30 min | Liveness, readiness, startup probes |
-| **[M15](./modulo-15-configmaps-variables/)** | **ConfigMaps y Variables** | 30 min | Configuración externa, env vars |
-| **[M16](./modulo-16-secrets-data-sensible/)** | **Secrets y Datos Sensibles** | 30 min | Credenciales, TLS, encriptación |
-| **[M17](./modulo-17-volumes-conceptos/)** | **Volumes - Conceptos** | 15 min | Persistencia, tipos, casos de uso |
-| **[M18](./modulo-18-volumes-tipos-storage/)** | **Volumes - Implementación** | 15 min | EmptyDir, HostPath, PV, PVC, SC |
+| **[M12](./modulo-12-health-checks-probes/)** | **Health Checks y Probes** | 30 min | Liveness, readiness, startup probes |
+| **[M13](./modulo-13-configmaps-variables/)** | **ConfigMaps y Variables** | 30 min | Configuración externa, env vars |
+| **[M14](./modulo-14-secrets-data-sensible/)** | **Secrets y Datos Sensibles** | 30 min | Credenciales, TLS, encriptación |
+| **[M15](./modulo-15-volumes-conceptos/)** | **Volumes - Conceptos** | 15 min | Persistencia, tipos, casos de uso |
+| **[M16](./modulo-16-volumes-tipos-storage/)** | **Volumes - Implementación** | 15 min | EmptyDir, HostPath, PV, PVC, SC |
 
 **🎯 Resultado**: Gestionar configuración, secretos y persistencia de datos de forma profesional.
 
@@ -88,8 +88,8 @@ Al completar esta área, serás capaz de:
 
 | Módulo | Título | Duración | Conceptos Clave |
 |--------|--------|----------|-----------------|
-| **[M19](./modulo-19-rbac-users-groups/)** | **RBAC: Users & Groups** | 45 min | Roles, ClusterRoles, RoleBindings |
-| **[M20](./modulo-20-rbac-serviceaccounts/)** | **RBAC: ServiceAccounts** | 45 min | Service accounts, tokens, automatización |
+| **[M17](./modulo-17-rbac-users-groups/)** | **RBAC: Users & Groups** | 45 min | Roles, ClusterRoles, RoleBindings |
+| **[M18](./modulo-18-rbac-serviceaccounts/)** | **RBAC: ServiceAccounts** | 45 min | Service accounts, tokens, automatización |
 
 **🎯 Resultado**: Implementar control de acceso granular y seguridad en Kubernetes.
 
@@ -125,8 +125,8 @@ Al completar esta área, serás capaz de:
 | **M07** | **[Rolling Updates & Rollbacks](./modulo-07-deployments-rollouts/laboratorios/)** | 60 min |
 | **M08** | **[Service Discovery Demo](./modulo-08-services-endpoints/laboratorios/)** | 45 min |
 | **M09** | **[Ingress con NGINX](./modulo-09-ingress-external-access/laboratorios/)** | 60 min |
-| **M16** | **[Secrets Management](./modulo-16-secrets-data-sensible/laboratorios/)** | 30 min |
-| **M19** | **[RBAC Implementation](./modulo-19-rbac-users-groups/laboratorios/)** | 60 min |
+| **M14** | **[Secrets Management](./modulo-14-secrets-data-sensible/laboratorios/)** | 30 min |
+| **M17** | **[RBAC Implementation](./modulo-17-rbac-users-groups/laboratorios/)** | 60 min |
 
 ---
 

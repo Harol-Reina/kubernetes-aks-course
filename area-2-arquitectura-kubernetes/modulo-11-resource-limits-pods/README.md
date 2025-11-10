@@ -806,7 +806,7 @@ spec:
     type: Container
 ```
 
-**Ver referencia completa**: [Módulo 12 - LimitRange](../modulo-12-limitrange/)
+**Ver referencia completa**: [Módulo 10 - Namespaces y Organización (Sección LimitRange)](../modulo-10-namespaces-organizacion/#limitrange)
 
 ---
 
@@ -1669,7 +1669,7 @@ spec:
     pods: "50"
 ```
 
-**Ver referencia**: [Módulo 13 - ResourceQuota](../modulo-13-resourcequota/)
+**Ver referencia**: [Módulo 10 - Namespaces y Organización (Sección ResourceQuota)](../modulo-10-namespaces-organizacion/#resourcequota)
 
 ### 7. Monitorea Throttling y OOMKilled
 
@@ -2181,10 +2181,9 @@ spec:
 
 ### Módulos Relacionados
 
-- **[Módulo 10 - Namespaces y Organización](../modulo-10-namespaces-organizacion/)**: Organización de recursos
-- **[Módulo 12 - LimitRange](../modulo-12-limitrange/)**: Defaults y restricciones por namespace
-- **[Módulo 13 - ResourceQuota](../modulo-13-resourcequota/)**: Límites agregados por namespace
-- **[Módulo 19 - Monitoring](../modulo-19-monitoring/)**: Monitoreo avanzado con Prometheus
+- **[Módulo 10 - Namespaces y Organización](../modulo-10-namespaces-organizacion/)**: Organización de recursos, ResourceQuota y LimitRange
+- **[Módulo 12 - Health Checks y Probes](../modulo-12-health-checks-probes/)**: Liveness y Readiness probes
+- **[Módulo 13 - ConfigMaps y Variables](../modulo-13-configmaps-variables/)**: Configuración externa para Pods
 
 ### Herramientas
 
