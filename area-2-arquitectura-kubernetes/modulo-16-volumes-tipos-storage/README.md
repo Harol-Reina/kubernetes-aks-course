@@ -40,7 +40,7 @@ En este módulo pondrás en práctica:
 
 ```
 ┌────────────────────────────────────────────────────┐
-│  Módulo 15: Conceptos                             │
+│  Módulo 15: Conceptos                              │
 │  - ¿Qué son los volúmenes?                         │
 │  - Tipos de volúmenes (teoría)                     │
 │  - PV/PVC (abstracción)                            │
@@ -49,7 +49,7 @@ En este módulo pondrás en práctica:
 └────────────────────────────────────────────────────┘
                     ↓
 ┌────────────────────────────────────────────────────┐
-│  Módulo 16: Implementación Práctica               │
+│  Módulo 16: Implementación Práctica                │
 │  - CÓMO crear volúmenes                            │
 │  - YAMLs completos                                 │
 │  - Comandos kubectl detallados                     │
