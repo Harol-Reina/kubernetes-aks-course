@@ -1,0 +1,200 @@
+# PV/PVC con Node Affinity
+# Control de en qué nodos se puede usar el volumen
+
+# PV con Node Affinity para zona específica
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-zone-specific
+  labels:
+    type: azure-disk
+    zone: westus2-1
+spec:
+  capacity:
+    storage: 100Gi
+  
+  accessModes:
+    - ReadWriteOnce
+  
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  
+  # CSI: Azure Disk en zona específica
+  csi:
+    driver: disk.csi.azure.com
+    volumeHandle: /subscriptions/SUB_ID/resourceGroups/MC_RG/providers/Microsoft.Compute/disks/disk-zone-1
+    volumeAttributes:
+      fsType: ext4
+      skuname: Premium_LRS
+  
+  # ⚠️ Node Affinity: Restricción de nodos
+  # Este volumen SOLO puede ser usado por Pods en nodos de westus2-1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        # Restricción por zona de disponibilidad
+        - key: topology.disk.csi.azure.com/zone
+          operator: In
+          values:
+          - westus2-1  # ← Azure Disk debe estar en esta zona
+        
+        # Restricción adicional: solo nodos tipo Standard_D4s_v3
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+          - Standard_D4s_v3
+          - Standard_D8s_v3
+
+---
+# PVC que usará el PV con affinity
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-zone-aware
+  labels:
+    app: zone-specific-app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      storage: 80Gi
+  
+  storageClassName: ""
+  
+  selector:
+    matchLabels:
+      type: azure-disk
+      zone: westus2-1
+
+---
+# Pod que usa el PVC
+# El scheduler de Kubernetes automáticamente:
+# 1. Ve que el Pod usa pvc-zone-aware
+# 2. Verifica que pvc-zone-aware está vinculado a pv-zone-specific
+# 3. Lee nodeAffinity de pv-zone-specific
+# 4. Programa el Pod SOLO en nodos que cumplan las restricciones
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-zone-affinity
+  labels:
+    app: zone-specific-app
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Pod con Node Affinity ==="
+      echo ""
+      echo "Este Pod está programado en un nodo específico"
+      echo "según las restricciones del PV"
+      echo ""
+      
+      # Información del nodo
+      echo "Nodo: $NODE_NAME"
+      echo "Zona: $ZONE"
+      echo "Tipo de instancia: $INSTANCE_TYPE"
+      echo ""
+      
+      echo "=== Información del volumen ==="
+      df -h /data
+      
+      echo ""
+      echo "Escribiendo datos..."
+      echo "Timestamp: $(date)" > /data/zone-data.txt
+      echo "Node: $NODE_NAME" >> /data/zone-data.txt
+      
+      sleep 3600
+    
+    env:
+    # Inyectar información del nodo vía Downward API
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: ZONE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['topology.disk.csi.azure.com/zone']
+    - name: INSTANCE_TYPE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['node.kubernetes.io/instance-type']
+    
+    volumeMounts:
+    - name: zone-storage
+      mountPath: /data
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  volumes:
+  - name: zone-storage
+    persistentVolumeClaim:
+      claimName: pvc-zone-aware
+
+# ¿Por qué usar Node Affinity en PV?
+# 
+# ✅ Azure Disk es zonal: debe estar en misma zona que el nodo
+# ✅ Optimización de latencia: datos cerca del compute
+# ✅ Compliance: datos deben estar en región/zona específica
+# ✅ Costo: evitar transferencia entre zonas
+# 
+# Kubernetes scheduler automáticamente:
+# 1. Lee nodeAffinity del PV
+# 2. Programa Pod solo en nodos compatibles
+# 3. Evita "FailedAttachVolume" por zona incorrecta
+
+# Escenario común en Azure AKS multi-zona:
+# 
+# Cluster AKS con 3 zonas:
+#   - Nodos en westus2-1, westus2-2, westus2-3
+# 
+# Azure Disk creado en westus2-1:
+#   - Solo puede montarse en nodos de westus2-1
+#   - nodeAffinity garantiza que Pod va a zona correcta
+# 
+# Sin nodeAffinity:
+#   - Pod podría ir a westus2-2 ❌
+#   - Error: FailedAttachVolume (zona incorrecta)
+
+# Para probar (requiere cluster multi-zona):
+#
+# Ver zonas de los nodos:
+# kubectl get nodes -o custom-columns=NAME:.metadata.name,ZONE:.metadata.labels.topology\\.disk\\.csi\\.azure\\.com/zone
+#
+# Aplicar recursos:
+# kubectl apply -f pv-pvc-nodeaffinity.yaml
+#
+# Verificar binding:
+# kubectl get pvc pvc-zone-aware
+# kubectl describe pvc pvc-zone-aware
+#
+# Ver en qué nodo se programó el Pod:
+# kubectl get pod pod-zone-affinity -o wide
+# # Debe estar en un nodo de westus2-1
+#
+# Verificar labels del nodo:
+# NODE=$(kubectl get pod pod-zone-affinity -o jsonpath='{.spec.nodeName}')
+# kubectl get node $NODE --show-labels | grep topology
+#
+# Ver logs:
+# kubectl logs pod-zone-affinity
+#
+# Intentar programar en zona incorrecta (debería fallar):
+# # Editar nodeAffinity para poner zona que no existe
+# # El Pod quedará Pending: "No nodes available with required topology"
+#
+# Limpiar:
+# kubectl delete -f pv-pvc-nodeaffinity.yaml

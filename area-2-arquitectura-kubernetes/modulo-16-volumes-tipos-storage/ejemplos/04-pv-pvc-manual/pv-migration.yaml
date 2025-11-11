@@ -1,0 +1,248 @@
+# Migración de disco Azure existente a Kubernetes PV
+# Escenario: Tienes un disco Azure con datos que quieres usar en Kubernetes
+
+# PASO 1: Identificar el disco Azure existente
+# 
+# Listar discos en el resource group del cluster:
+# RESOURCE_GROUP=$(az aks show --name MI-CLUSTER --resource-group MI-RG --query nodeResourceGroup -o tsv)
+# az disk list --resource-group $RESOURCE_GROUP --output table
+#
+# O usar disco en otro resource group:
+# az disk list --resource-group MI-RG-CUSTOM --output table
+
+# PASO 2: Obtener información del disco
+#
+# az disk show --name mi-disco-existente --resource-group $RESOURCE_GROUP --output json
+#
+# Información necesaria:
+# - id: URI completo del disco
+# - diskSizeGb: Tamaño en GiB
+# - sku.name: StandardSSD_LRS, Premium_LRS, etc.
+# - location: westus2, eastus, etc.
+# - zones: [1], [2], [3] o null
+
+# PASO 3: Crear PV apuntando al disco existente
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-migrated-disk
+  labels:
+    migrated: "true"
+    original-app: legacy-application
+spec:
+  capacity:
+    # ⚠️ Debe coincidir con el tamaño real del disco
+    storage: 100Gi  # Ajustar según az disk show
+  
+  accessModes:
+    - ReadWriteOnce
+  
+  # ⚠️ IMPORTANTE: Usar Retain para proteger datos existentes
+  persistentVolumeReclaimPolicy: Retain
+  
+  storageClassName: ""  # Binding manual
+  
+  csi:
+    driver: disk.csi.azure.com
+    
+    # ⚠️ volumeHandle: Copiar desde 'az disk show --query id'
+    volumeHandle: /subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/MC_mi-rg_mi-cluster_westus2/providers/Microsoft.Compute/disks/mi-disco-existente
+    
+    volumeAttributes:
+      # Sistema de archivos existente en el disco
+      # ⚠️ NO se reformatea, se monta tal cual
+      fsType: ext4  # o xfs, según lo que tenga el disco
+      
+      # SKU del disco (verificar con az disk show --query sku.name)
+      skuname: Premium_LRS  # StandardSSD_LRS, Premium_LRS, etc.
+  
+  # Node Affinity según zona del disco
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: topology.disk.csi.azure.com/zone
+          operator: In
+          values:
+          - westus2-1  # ⚠️ Ajustar según 'az disk show --query zones'
+          # Si el disco NO tiene zona (zonal: false), eliminar esta sección
+
+---
+# PASO 4: Crear PVC para reclamar el PV
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-migrated
+  labels:
+    app: migrated-app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  resources:
+    requests:
+      # Mismo tamaño que el PV
+      storage: 100Gi
+  
+  storageClassName: ""
+  
+  # Selector para vincular al PV específico
+  selector:
+    matchLabels:
+      migrated: "true"
+      original-app: legacy-application
+
+---
+# PASO 5: Pod que monta los datos migrados
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-migrated-data
+  labels:
+    app: migrated-app
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Pod con disco migrado ==="
+      echo ""
+      echo "Montando disco Azure existente con datos previos"
+      echo ""
+      
+      # Verificar datos existentes
+      echo "=== Contenido del disco migrado ==="
+      ls -lh /data/
+      echo ""
+      
+      # Mostrar archivos importantes si existen
+      if [ -f /data/app.conf ]; then
+        echo "=== Configuración existente ==="
+        cat /data/app.conf
+        echo ""
+      fi
+      
+      if [ -d /data/database ]; then
+        echo "=== Base de datos existente ==="
+        ls -lh /data/database/
+        echo ""
+      fi
+      
+      # Información del sistema de archivos
+      echo "=== Información del volumen ==="
+      df -h /data
+      echo ""
+      du -sh /data/*
+      echo ""
+      
+      # Añadir marca de migración
+      echo "Migrado a Kubernetes: $(date)" >> /data/migration.log
+      
+      echo "Disco migrado exitosamente"
+      echo "Aplicación puede acceder a datos previos"
+      
+      sleep 3600
+    
+    volumeMounts:
+    - name: migrated-storage
+      mountPath: /data
+      # ⚠️ readOnly: false permite lectura/escritura
+      # ⚠️ Si solo quieres leer datos sin modificar, usar readOnly: true
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  volumes:
+  - name: migrated-storage
+    persistentVolumeClaim:
+      claimName: pvc-migrated
+
+# Checklist de migración:
+# 
+# ✅ 1. Verificar que el disco NO está en uso
+#    az disk show --name DISCO --resource-group RG --query diskState
+#    # Debe ser: "Unattached"
+#    # Si está "Attached", desmontar de la VM primero
+#
+# ✅ 2. Hacer backup del disco (recomendado)
+#    az snapshot create \
+#      --name snapshot-backup-$(date +%Y%m%d) \
+#      --resource-group RG \
+#      --source DISCO
+#
+# ✅ 3. Verificar zona del disco
+#    az disk show --name DISCO --resource-group RG --query zones
+#    # Si es zonal, ajustar nodeAffinity
+#
+# ✅ 4. Verificar sistema de archivos
+#    # Montar disco temporalmente en VM para verificar fsType
+#    # ext4, xfs, etc.
+#
+# ✅ 5. Usar Retain policy
+#    # Protege datos si eliminas el PVC por error
+#
+# ✅ 6. Probar en dev antes de migrar producción
+
+# Para probar migración completa:
+#
+# 1. Obtener URI del disco:
+# DISK_URI=$(az disk show --name mi-disco-existente --resource-group $RG --query id -o tsv)
+# echo $DISK_URI
+#
+# 2. Verificar zona:
+# ZONE=$(az disk show --name mi-disco-existente --resource-group $RG --query zones[0] -o tsv)
+# echo "Zona: $ZONE"
+#
+# 3. Editar pv-migration.yaml:
+# - Reemplazar volumeHandle con $DISK_URI
+# - Ajustar zona en nodeAffinity (si aplica)
+# - Ajustar storage según tamaño real del disco
+#
+# 4. Aplicar:
+# kubectl apply -f pv-migration.yaml
+#
+# 5. Verificar binding:
+# kubectl get pv pv-migrated-disk
+# kubectl get pvc pvc-migrated
+# # Ambos: STATUS Bound
+#
+# 6. Ver logs del Pod:
+# kubectl logs pod-migrated-data
+# # Debe mostrar contenido del disco existente
+#
+# 7. Verificar datos:
+# kubectl exec pod-migrated-data -- ls -lh /data/
+# # ✅ Archivos existentes visibles
+#
+# 8. Limpiar (sin eliminar disco):
+# kubectl delete pod pod-migrated-data
+# kubectl delete pvc pvc-migrated
+# kubectl get pv pv-migrated-disk
+# # STATUS: Released (disco protegido por Retain)
+# kubectl delete pv pv-migrated-disk
+# # El disco Azure sigue existiendo intacto
+
+# Casos de uso comunes:
+# 
+# 1. Migrar aplicación de VM a Kubernetes
+#    - Aplicación corre en VM Azure
+#    - Datos en Azure Disk montado en VM
+#    - Migrar: Desmontar disco, crear PV, montar en Pod
+#
+# 2. Recuperación de desastres
+#    - Cluster anterior eliminado
+#    - Discos con datos intactos
+#    - Crear PVs apuntando a discos existentes
+#
+# 3. Compartir datos entre clusters
+#    - Desarrollo: datos de prueba en disco
+#    - Staging: montar mismo disco (uno a la vez)
+#    - Producción: clonar disco primero

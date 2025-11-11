@@ -1,0 +1,136 @@
+# Deployment de PostgreSQL con PVC
+# Base de datos con almacenamiento persistente en Azure Disk
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    app: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce  # Solo una réplica puede escribir
+  storageClassName: managed-csi  # Azure Disk Standard SSD
+  resources:
+    requests:
+      storage: 20Gi  # 20 GiB para la base de datos
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1  # Solo 1 réplica (ReadWriteOnce)
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        
+        env:
+        # Configuración de PostgreSQL
+        - name: POSTGRES_DB
+          value: "myapp"
+        - name: POSTGRES_USER
+          value: "admin"
+        - name: POSTGRES_PASSWORD
+          value: "mysecretpassword"  # ⚠️ En producción usar Secrets
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"  # Subdirectorio para evitar problemas
+        
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - admin
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - admin
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc  # ← Usa el PVC
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: postgres
+
+# Para probar:
+# kubectl apply -f deployment-postgres-pvc.yaml
+#
+# Verificar PVC y PV:
+# kubectl get pvc postgres-pvc
+# kubectl get pv
+#
+# Verificar Deployment:
+# kubectl get deployment postgres
+# kubectl get pods -l app=postgres
+#
+# Ver logs:
+# kubectl logs -l app=postgres
+#
+# Conectar a PostgreSQL desde otro Pod:
+# kubectl run psql-client --rm -it --image=postgres:alpine -- psql -h postgres -U admin -d myapp
+# # Password: mysecretpassword
+# # \dt  -- Listar tablas
+# # CREATE TABLE test (id serial, data text);
+# # INSERT INTO test (data) VALUES ('Datos persistentes');
+# # SELECT * FROM test;
+# # \q
+#
+# Probar persistencia:
+# kubectl delete pod -l app=postgres  # Eliminar Pod
+# kubectl get pods -l app=postgres    # Esperar a que se recree
+# kubectl run psql-client --rm -it --image=postgres:alpine -- psql -h postgres -U admin -d myapp
+# # SELECT * FROM test;  -- ✅ Los datos siguen ahí
+#
+# Limpiar:
+# kubectl delete -f deployment-postgres-pvc.yaml

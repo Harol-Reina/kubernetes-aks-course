@@ -1,0 +1,233 @@
+# Reclaim Policy: Retain
+# Proteger datos al eliminar PVC - Volumen NO se elimina automáticamente
+
+# StorageClass con política Retain
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azure-disk-retain
+  labels:
+    policy: retain
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: StandardSSD_LRS
+  kind: Managed
+reclaimPolicy: Retain  # ← Proteger datos
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# PVC usando StorageClass con Retain
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-important-data
+  labels:
+    criticality: high
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: azure-disk-retain
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# Pod que escribe datos importantes
+apiVersion: v1
+kind: Pod
+metadata:
+  name: data-producer
+  labels:
+    app: important-app
+spec:
+  containers:
+  - name: producer
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Escribiendo datos importantes con Retain policy ==="
+      echo ""
+      
+      # Simular datos críticos
+      echo "=== Datos de producción ===" > /data/production-data.txt
+      echo "Timestamp inicio: $(date)" >> /data/production-data.txt
+      
+      # Base de datos simulada
+      mkdir -p /data/database
+      for i in $(seq 1 1000); do
+        echo "Transaction $i: $(date +%s) - Amount: $((RANDOM % 10000))" >> /data/database/transactions.log
+      done
+      
+      # Archivos de configuración
+      cat > /data/config.ini <<EOF
+      [production]
+      database_host=db.example.com
+      database_name=proddb
+      api_key=super-secret-key-12345
+      EOF
+      
+      echo ""
+      echo "=== Datos escritos ==="
+      ls -lh /data/
+      echo ""
+      echo "Tamaño total:"
+      du -sh /data
+      
+      echo ""
+      echo "✅ Datos críticos almacenados"
+      echo "⚠️  Con política Retain, estos datos NO se eliminarán al borrar el PVC"
+      
+      sleep 3600
+    
+    volumeMounts:
+    - name: important-storage
+      mountPath: /data
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  volumes:
+  - name: important-storage
+    persistentVolumeClaim:
+      claimName: pvc-important-data
+
+# Flujo con Retain Policy:
+#
+# 1. Crear PVC → Kubernetes crea PV automáticamente
+# 2. Pod escribe datos en el volumen
+# 3. Eliminar Pod (datos siguen en PV)
+# 4. Eliminar PVC → PV pasa a estado "Released" (NO se elimina)
+# 5. Disco de Azure sigue existiendo con todos los datos
+#
+# Estado del PV después de eliminar PVC:
+# - Status: Released (ya no está Bound)
+# - Datos: Intactos en el disco de Azure
+# - No puede ser reclamado automáticamente por otro PVC
+#
+# ¿Cómo recuperar los datos?
+# 1. Obtener URI del disco Azure del PV
+# 2. Crear nuevo PV apuntando al mismo disco
+# 3. Crear nuevo PVC que se vincule al PV
+# 4. Montar en Pod → datos recuperados
+
+# Para probar el ciclo completo:
+#
+# 1. Crear recursos:
+# kubectl apply -f retain-policy.yaml
+#
+# 2. Verificar PVC y PV creados:
+# kubectl get pvc pvc-important-data
+# # STATUS: Bound
+# PV_NAME=$(kubectl get pvc pvc-important-data -o jsonpath='{.spec.volumeName}')
+# echo "PV creado: $PV_NAME"
+# kubectl get pv $PV_NAME
+# # RECLAIM POLICY: Retain ✅
+#
+# 3. Ver logs del Pod:
+# kubectl logs data-producer
+# # Debe mostrar "Datos críticos almacenados"
+#
+# 4. Verificar datos escritos:
+# kubectl exec data-producer -- ls -lh /data/
+# kubectl exec data-producer -- cat /data/production-data.txt
+#
+# 5. Eliminar Pod (datos siguen en PV):
+# kubectl delete pod data-producer
+# kubectl get pv $PV_NAME
+# # STATUS: Bound (PVC sigue existiendo)
+#
+# 6. ⚠️ PASO CRÍTICO: Eliminar PVC
+# kubectl delete pvc pvc-important-data
+# kubectl get pv $PV_NAME
+# # STATUS: Released ← PV sigue existiendo
+# # RECLAIM POLICY: Retain
+#
+# 7. Verificar que el disco de Azure NO se eliminó:
+# kubectl describe pv $PV_NAME | grep "VolumeHandle"
+# # Copiar el URI del disco
+#
+# 8. Intentar crear nuevo PVC (NO se vinculará automáticamente):
+# kubectl apply -f - <<EOF
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: pvc-recover-data
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   storageClassName: azure-disk-retain
+#   resources:
+#     requests:
+#       storage: 20Gi
+# EOF
+# kubectl get pvc pvc-recover-data
+# # STATUS: Pending ← No puede vincular al PV Released
+#
+# 9. Recuperar datos manualmente:
+# # Opción A: Limpiar claimRef del PV
+# kubectl patch pv $PV_NAME -p '{"spec":{"claimRef":null}}'
+# kubectl get pv $PV_NAME
+# # STATUS: Available ← Ahora puede ser reclamado
+# kubectl get pvc pvc-recover-data
+# # STATUS: Bound ← Se vincula automáticamente
+#
+# # Opción B: Crear nuevo PV apuntando al mismo disco
+# # (Ver ejemplo en pv-migration.yaml)
+#
+# 10. Crear Pod para verificar datos recuperados:
+# kubectl run data-recovery --image=busybox --rm -it --restart=Never \
+#   --overrides='
+# {
+#   "spec": {
+#     "containers": [{
+#       "name": "recovery",
+#       "image": "busybox",
+#       "command": ["sh", "-c", "ls -lh /data/ && cat /data/production-data.txt && cat /data/config.ini"],
+#       "volumeMounts": [{
+#         "name": "recovered-storage",
+#         "mountPath": "/data"
+#       }]
+#     }],
+#     "volumes": [{
+#       "name": "recovered-storage",
+#       "persistentVolumeClaim": {
+#         "claimName": "pvc-recover-data"
+#       }
+#     }]
+#   }
+# }'
+# # ✅ Debe mostrar todos los datos originales
+#
+# 11. Limpiar completamente:
+# kubectl delete pvc pvc-recover-data
+# kubectl delete pv $PV_NAME
+# kubectl delete storageclass azure-disk-retain
+# # El disco de Azure debe eliminarse manualmente si es necesario
+
+# Ventajas de Retain:
+# ✅ Protección contra eliminación accidental
+# ✅ Recuperación de desastres
+# ✅ Auditoría y cumplimiento (datos persisten)
+# ✅ Migración de datos entre clusters
+#
+# Desventajas:
+# ❌ Requiere gestión manual de recursos
+# ❌ PV queda en estado Released (no reutilizable automáticamente)
+# ❌ Discos "huérfanos" si no se limpian
+# 💰 Costos: discos siguen facturándose
+
+# ¿Cuándo usar Retain?
+# ✅ Bases de datos de producción
+# ✅ Datos críticos de negocio
+# ✅ Entornos regulados (compliance)
+# ✅ Datos que requieren respaldo manual
+# ❌ Entornos de desarrollo/testing
+# ❌ Datos temporales o fácilmente reconstruibles

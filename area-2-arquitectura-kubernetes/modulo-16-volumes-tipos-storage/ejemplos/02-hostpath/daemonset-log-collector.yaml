@@ -1,0 +1,106 @@
+# DaemonSet con hostPath para recopilación de logs
+# Caso legítimo de uso: un Pod por nodo recopilando logs del nodo
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-collector
+  labels:
+    app: log-collector
+spec:
+  selector:
+    matchLabels:
+      app: log-collector
+  template:
+    metadata:
+      labels:
+        app: log-collector
+    spec:
+      # Tolerar nodos master/control-plane si es necesario
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      
+      containers:
+      - name: collector
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== Log Collector iniciado ==="
+          echo "Nodo: $(cat /etc/hostname)"
+          echo "Recopilando logs desde /var/log del nodo..."
+          echo ""
+          
+          while true; do
+            echo "--- $(date) ---"
+            
+            # Mostrar últimos logs del sistema
+            if [ -d /host-logs ]; then
+              echo "Archivos de log disponibles:"
+              ls -lh /host-logs/ | head -10
+              
+              # Buscar logs de Kubernetes
+              if [ -d /host-logs/pods ]; then
+                echo ""
+                echo "Logs de Pods en este nodo:"
+                find /host-logs/pods -name "*.log" 2>/dev/null | head -5
+              fi
+            else
+              echo "Directorio /host-logs no disponible"
+            fi
+            
+            echo ""
+            sleep 30
+          done
+        
+        volumeMounts:
+        - name: node-logs
+          mountPath: /host-logs
+          readOnly: true  # Solo lectura por seguridad
+        
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+        
+        securityContext:
+          # Permisos mínimos necesarios
+          runAsNonRoot: false
+          readOnlyRootFilesystem: true
+      
+      volumes:
+      - name: node-logs
+        hostPath:
+          # Directorio de logs del nodo
+          path: /var/log
+          type: Directory  # Debe existir
+
+# Este patrón funciona porque:
+# ✅ DaemonSet asegura 1 Pod por nodo
+# ✅ Cada Pod accede a los logs de SU PROPIO nodo
+# ✅ No importa que esté atado al nodo (es su propósito)
+
+# Para probar:
+# kubectl apply -f daemonset-log-collector.yaml
+# kubectl get daemonset log-collector
+# kubectl get pods -l app=log-collector -o wide  # Ver en qué nodos están
+#
+# Ver logs de un collector:
+# kubectl logs -l app=log-collector --tail=50
+#
+# Ver logs de collector en nodo específico:
+# NODE_NAME="<nombre-del-nodo>"
+# POD=$(kubectl get pod -l app=log-collector --field-selector spec.nodeName=$NODE_NAME -o jsonpath='{.items[0].metadata.name}')
+# kubectl logs $POD
+#
+# Limpiar:
+# kubectl delete daemonset log-collector

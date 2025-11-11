@@ -1,0 +1,67 @@
+# Ejemplo de emptyDir en memoria RAM
+# Útil para caches de alto rendimiento que no necesitan persistir
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-emptydir-memory
+  labels:
+    app: emptydir-memory-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: ram-cache
+      mountPath: /cache  # Cache en RAM
+    - name: tmp-storage
+      mountPath: /tmp    # Temporal en RAM
+    
+    # Comando para escribir en cache y verificar
+    command:
+    - sh
+    - -c
+    - |
+      echo "Iniciando nginx con cache en RAM..."
+      # Escribir datos de prueba en cache
+      echo "Cache data: $(date)" > /cache/test.txt
+      echo "Temp data: $(date)" > /tmp/test.txt
+      # Iniciar nginx en background
+      nginx -g 'daemon off;' &
+      # Mostrar información del volumen
+      sleep 2
+      echo "=== Información de montajes ==="
+      df -h /cache /tmp
+      echo "=== Contenido de /cache ==="
+      ls -lh /cache/
+      cat /cache/test.txt
+      # Mantener contenedor corriendo
+      wait
+  
+  volumes:
+  # Volumen en memoria RAM
+  - name: ram-cache
+    emptyDir:
+      medium: Memory      # ← Usar RAM en lugar de disco
+      sizeLimit: 128Mi    # Límite de 128 MiB
+  
+  # Volumen temporal en memoria
+  - name: tmp-storage
+    emptyDir:
+      medium: Memory
+      sizeLimit: 64Mi
+
+# ⚠️ Importante:
+# - Los datos en RAM son aún más volátiles que en disco
+# - Consume memoria del nodo (cuenta hacia límites del Pod)
+# - Útil para caches de alta velocidad
+# - Si el Pod supera sizeLimit, será evicted
+
+# Para probar:
+# kubectl apply -f pod-emptydir-memory.yaml
+# kubectl logs pod-emptydir-memory
+# kubectl exec pod-emptydir-memory -- df -h /cache /tmp
+# kubectl exec pod-emptydir-memory -- cat /cache/test.txt
+# kubectl delete pod pod-emptydir-memory

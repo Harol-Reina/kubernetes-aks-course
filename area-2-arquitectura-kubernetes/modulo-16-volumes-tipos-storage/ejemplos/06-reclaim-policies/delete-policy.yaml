@@ -1,0 +1,296 @@
+# Reclaim Policy: Delete
+# Eliminar automáticamente volumen y disco al eliminar PVC
+
+# StorageClass con política Delete (comportamiento por defecto en Azure)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azure-disk-delete
+  labels:
+    policy: delete
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: StandardSSD_LRS
+  kind: Managed
+reclaimPolicy: Delete  # ← Eliminar automáticamente
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+# PVC usando StorageClass con Delete
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-temporary-data
+  labels:
+    lifecycle: ephemeral
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: azure-disk-delete
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Pod que genera datos temporales
+apiVersion: v1
+kind: Pod
+metadata:
+  name: temp-data-processor
+  labels:
+    app: temporary-app
+spec:
+  containers:
+  - name: processor
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Procesando datos temporales con Delete policy ==="
+      echo ""
+      
+      # Datos de procesamiento temporal
+      echo "Inicio de procesamiento: $(date)" > /data/process.log
+      
+      # Simular procesamiento de lotes
+      mkdir -p /data/temp
+      for i in $(seq 1 100); do
+        echo "Batch $i procesado: $(date +%s)" >> /data/temp/batch-$i.txt
+      done
+      
+      # Archivos de caché
+      mkdir -p /data/cache
+      echo "Cache data: $(date)" > /data/cache/cache.dat
+      
+      echo ""
+      echo "=== Datos temporales creados ==="
+      ls -lh /data/
+      echo ""
+      du -sh /data
+      
+      echo ""
+      echo "⚠️  Con política Delete, estos datos se ELIMINARÁN al borrar el PVC"
+      echo "✅ Ideal para datos temporales, caché, o fácilmente reconstruibles"
+      
+      sleep 3600
+    
+    volumeMounts:
+    - name: temp-storage
+      mountPath: /data
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  volumes:
+  - name: temp-storage
+    persistentVolumeClaim:
+      claimName: pvc-temporary-data
+
+---
+# Job que procesa datos y se autolimpia
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processor
+  labels:
+    type: temporary
+spec:
+  ttlSecondsAfterFinished: 300  # Eliminar Job 5 min después de completar
+  template:
+    metadata:
+      labels:
+        app: batch-job
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: processor
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== Job de procesamiento por lotes ==="
+          echo "Inicio: $(date)"
+          
+          # Procesar datos
+          mkdir -p /workspace/input /workspace/output
+          
+          # Simular entrada
+          for i in $(seq 1 50); do
+            echo "Input record $i" > /workspace/input/record-$i.txt
+          done
+          
+          # Procesar
+          for file in /workspace/input/*.txt; do
+            cat "$file" | tr 'a-z' 'A-Z' > /workspace/output/$(basename "$file")
+          done
+          
+          echo ""
+          echo "Procesamiento completado: $(date)"
+          echo "Archivos de entrada: $(ls -1 /workspace/input | wc -l)"
+          echo "Archivos de salida: $(ls -1 /workspace/output | wc -l)"
+          
+          echo ""
+          echo "✅ Job completo"
+          echo "⚠️  PVC con Delete policy se eliminará automáticamente"
+        
+        volumeMounts:
+        - name: work-volume
+          mountPath: /workspace
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "200m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+      
+      volumes:
+      - name: work-volume
+        persistentVolumeClaim:
+          claimName: pvc-job-workspace
+
+---
+# PVC para el Job
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-job-workspace
+  labels:
+    lifecycle: ephemeral
+    job: batch-processor
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: azure-disk-delete
+  resources:
+    requests:
+      storage: 5Gi
+
+# Flujo con Delete Policy:
+#
+# 1. Crear PVC → Kubernetes crea PV y disco Azure
+# 2. Pod/Job escribe datos en el volumen
+# 3. Eliminar Pod/Job (datos siguen en PV)
+# 4. Eliminar PVC → PV se elimina automáticamente
+# 5. Disco de Azure se elimina automáticamente
+# 6. ✅ Limpieza completa, sin recursos huérfanos
+
+# Para probar el ciclo completo:
+#
+# 1. Crear recursos:
+# kubectl apply -f delete-policy.yaml
+#
+# 2. Verificar PVC y PV:
+# kubectl get pvc pvc-temporary-data
+# PV_NAME=$(kubectl get pvc pvc-temporary-data -o jsonpath='{.spec.volumeName}')
+# echo "PV: $PV_NAME"
+# kubectl get pv $PV_NAME
+# # RECLAIM POLICY: Delete ✅
+#
+# 3. Obtener URI del disco Azure:
+# DISK_URI=$(kubectl get pv $PV_NAME -o jsonpath='{.spec.csi.volumeHandle}')
+# echo "Disco Azure: $DISK_URI"
+#
+# 4. Verificar disco en Azure (opcional):
+# # Extraer nombre del disco del URI
+# DISK_NAME=$(echo $DISK_URI | awk -F'/' '{print $NF}')
+# RESOURCE_GROUP=$(echo $DISK_URI | awk -F'/' '{print $5}')
+# az disk show --name $DISK_NAME --resource-group $RESOURCE_GROUP
+# # Debe mostrar el disco
+#
+# 5. Ver logs del Pod:
+# kubectl logs temp-data-processor
+#
+# 6. Verificar datos:
+# kubectl exec temp-data-processor -- ls -lh /data/
+#
+# 7. Eliminar Pod (datos siguen en PV):
+# kubectl delete pod temp-data-processor
+# kubectl get pv $PV_NAME
+# # STATUS: Bound
+#
+# 8. ⚠️ PASO CRÍTICO: Eliminar PVC
+# kubectl delete pvc pvc-temporary-data
+#
+# 9. Verificar que PV se eliminó automáticamente:
+# kubectl get pv $PV_NAME
+# # Error: Not found ✅ (PV eliminado)
+#
+# 10. Verificar que disco de Azure se eliminó:
+# az disk show --name $DISK_NAME --resource-group $RESOURCE_GROUP
+# # Error: ResourceNotFound ✅ (disco eliminado)
+#
+# 11. Probar con Job:
+# kubectl get job batch-processor
+# kubectl wait --for=condition=complete job/batch-processor --timeout=120s
+# kubectl logs job/batch-processor
+#
+# 12. Verificar PVC del Job:
+# kubectl get pvc pvc-job-workspace
+# PV_JOB=$(kubectl get pvc pvc-job-workspace -o jsonpath='{.spec.volumeName}')
+#
+# 13. Eliminar Job (PVC sigue):
+# kubectl delete job batch-processor
+# kubectl get pvc pvc-job-workspace
+# # PVC sigue existiendo
+#
+# 14. Eliminar PVC del Job:
+# kubectl delete pvc pvc-job-workspace
+# kubectl get pv $PV_JOB
+# # Error: Not found ✅ (PV y disco eliminados)
+#
+# 15. Limpiar StorageClass:
+# kubectl delete storageclass azure-disk-delete
+
+# Ventajas de Delete:
+# ✅ Limpieza automática de recursos
+# ✅ No deja discos huérfanos
+# ✅ Reduce costos (no se factura disco eliminado)
+# ✅ Ideal para entornos dinámicos (dev/test)
+# ✅ Simplifica gestión de almacenamiento
+#
+# Desventajas:
+# ❌ Datos se pierden permanentemente al eliminar PVC
+# ❌ Riesgo de eliminación accidental
+# ❌ No hay recuperación post-eliminación (sin backup)
+
+# ¿Cuándo usar Delete?
+# ✅ Datos temporales (caché, procesamiento por lotes)
+# ✅ Datos fácilmente reconstruibles
+# ✅ Entornos de desarrollo/testing
+# ✅ CI/CD pipelines (workspaces temporales)
+# ✅ Datos respaldados externamente
+# ❌ Bases de datos de producción
+# ❌ Datos críticos sin respaldo
+# ❌ Entornos regulados (compliance)
+
+# Comparación Delete vs Retain:
+#
+# Delete:
+# - PVC eliminado → PV eliminado → Disco eliminado
+# - Limpieza automática
+# - Sin recuperación
+# - Bajo costo operativo
+#
+# Retain:
+# - PVC eliminado → PV queda Released → Disco intacto
+# - Requiere limpieza manual
+# - Recuperación posible
+# - Gestión manual necesaria
+
+# Nota sobre StorageClasses predefinidas en AKS:
+# managed-csi:          reclaimPolicy: Delete ✅
+# managed-csi-premium:  reclaimPolicy: Delete ✅
+# azurefile-csi:        reclaimPolicy: Delete ✅
+# azurefile-csi-premium: reclaimPolicy: Delete ✅
+#
+# Para usar Retain, crear StorageClass personalizada

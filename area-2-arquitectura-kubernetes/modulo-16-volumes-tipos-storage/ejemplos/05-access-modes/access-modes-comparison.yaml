@@ -1,0 +1,233 @@
+# Comparación de Access Modes en Azure AKS
+# Tabla de compatibilidad: StorageClass vs Access Mode
+
+# ┌─────────────────────────┬─────────────────┬────────────────┬─────────────────┐
+# │ StorageClass            │ ReadWriteOnce   │ ReadOnlyMany   │ ReadWriteMany   │
+# ├─────────────────────────┼─────────────────┼────────────────┼─────────────────┤
+# │ managed-csi             │ ✅ Sí           │ ❌ No          │ ❌ No           │
+# │ (Azure Disk Standard)   │                 │                │                 │
+# ├─────────────────────────┼─────────────────┼────────────────┼─────────────────┤
+# │ managed-csi-premium     │ ✅ Sí           │ ❌ No          │ ❌ No           │
+# │ (Azure Disk Premium)    │                 │                │                 │
+# ├─────────────────────────┼─────────────────┼────────────────┼─────────────────┤
+# │ azurefile-csi           │ ✅ Sí           │ ✅ Sí          │ ✅ Sí           │
+# │ (Azure Files Standard)  │                 │                │                 │
+# ├─────────────────────────┼─────────────────┼────────────────┼─────────────────┤
+# │ azurefile-csi-premium   │ ✅ Sí           │ ✅ Sí          │ ✅ Sí           │
+# │ (Azure Files Premium)   │                 │                │                 │
+# └─────────────────────────┴─────────────────┴────────────────┴─────────────────┘
+
+# Test Suite: Probar todos los modos
+
+---
+# Test 1: RWO con Azure Disk (managed-csi) - ✅ Debe funcionar
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-rwo-disk
+  labels:
+    test: access-modes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-csi
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Test 2: RWX con Azure Disk - ❌ Debe FALLAR
+# Azure Disk NO soporta ReadWriteMany
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-rwx-disk-fail
+  labels:
+    test: access-modes
+spec:
+  accessModes:
+    - ReadWriteMany  # ❌ No soportado por Azure Disk
+  storageClassName: managed-csi
+  resources:
+    requests:
+      storage: 5Gi
+# Resultado esperado: PVC queda en Pending
+# Error: "storageclass.storage.k8s.io 'managed-csi' not found or does not support ReadWriteMany"
+
+---
+# Test 3: RWX con Azure Files - ✅ Debe funcionar
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-rwx-files
+  labels:
+    test: access-modes
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Test 4: ROX con Azure Files - ✅ Debe funcionar
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-rox-files
+  labels:
+    test: access-modes
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Pod de prueba para RWO
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-rwo
+  labels:
+    test: access-modes
+spec:
+  containers:
+  - name: tester
+    image: busybox
+    command: ["sh", "-c", "echo 'RWO Test: Writing' > /data/test.txt && sleep 3600"]
+    volumeMounts:
+    - name: storage
+      mountPath: /data
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: test-rwo-disk
+
+---
+# Deployment de prueba para RWX (múltiples Pods)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment-rwx
+  labels:
+    test: access-modes
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: test-rwx
+  template:
+    metadata:
+      labels:
+        app: test-rwx
+    spec:
+      containers:
+      - name: tester
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "Pod $(hostname) escribiendo en RWX"
+          echo "Pod: $(hostname) - Timestamp: $(date)" >> /data/test-rwx.txt
+          sleep 3600
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: shared-storage
+        persistentVolumeClaim:
+          claimName: test-rwx-files
+
+# Matriz de decisión: ¿Qué Access Mode usar?
+#
+# ┌────────────────────────────────────────┬─────────────────────────────┐
+# │ Caso de Uso                            │ Access Mode Recomendado     │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ Base de datos (PostgreSQL, MySQL)      │ RWO (managed-csi)           │
+# │ - Una sola instancia                   │                             │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ Aplicación stateful (1 réplica)        │ RWO (managed-csi)           │
+# │ - GitLab, Jenkins, etc.                │                             │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ WordPress con múltiples réplicas       │ RWX (azurefile-csi)         │
+# │ - Compartir directorio uploads/        │                             │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ CMS con media compartido               │ RWX (azurefile-csi)         │
+# │ - Drupal, Joomla                       │                             │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ Procesamiento de archivos distribuido │ RWX (azurefile-csi)         │
+# │ - Múltiples workers                    │                             │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ Configuraciones estáticas              │ ROX (azurefile-csi)         │
+# │ - Datos de referencia                  │ o ConfigMap/Secret          │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ Machine Learning: modelos entrenados   │ ROX (azurefile-csi)         │
+# │ - Distribuir a inference pods          │                             │
+# ├────────────────────────────────────────┼─────────────────────────────┤
+# │ Logs centralizados escritos por todos │ RWX (azurefile-csi)         │
+# │ - Múltiples Pods escribiendo           │                             │
+# └────────────────────────────────────────┴─────────────────────────────┘
+
+# Consideraciones de rendimiento:
+#
+# Azure Disk (RWO):
+# ✅ Alto rendimiento (hasta 20,000 IOPS Premium)
+# ✅ Baja latencia
+# ✅ Ideal para bases de datos
+# ❌ Solo un nodo puede montar
+# 💰 Costo moderado
+#
+# Azure Files (RWX/ROX):
+# ✅ Múltiples nodos pueden montar
+# ✅ Flexible para aplicaciones distribuidas
+# ⚠️  Rendimiento moderado (hasta 100,000 IOPS Premium)
+# ⚠️  Mayor latencia que Disk
+# 💰 Costo más alto
+
+# Para probar la suite completa:
+#
+# Aplicar todos los tests:
+# kubectl apply -f access-modes-comparison.yaml
+#
+# Ver estado de PVCs:
+# kubectl get pvc -l test=access-modes
+# # test-rwo-disk:        ✅ Bound
+# # test-rwx-disk-fail:   ❌ Pending (esperado)
+# # test-rwx-files:       ✅ Bound
+# # test-rox-files:       ✅ Bound
+#
+# Ver error del PVC que debe fallar:
+# kubectl describe pvc test-rwx-disk-fail
+# # Events: "storageclass does not support ReadWriteMany"
+#
+# Ver Pod RWO:
+# kubectl get pod test-pod-rwo
+# kubectl exec test-pod-rwo -- cat /data/test.txt
+#
+# Ver Deployment RWX:
+# kubectl get pods -l app=test-rwx -o wide
+# # 3 Pods, posiblemente en diferentes nodos
+# kubectl exec -l app=test-rwx -- cat /data/test-rwx.txt
+# # Debe mostrar entradas de los 3 Pods
+#
+# Limpiar:
+# kubectl delete -f access-modes-comparison.yaml

@@ -1,0 +1,60 @@
+# Ejemplo básico de emptyDir
+# Un volumen emptyDir se crea vacío cuando el Pod es asignado a un nodo
+# y existe mientras el Pod esté ejecutándose en ese nodo
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-emptydir-basic
+  labels:
+    app: emptydir-demo
+spec:
+  containers:
+  # Contenedor que escribe datos
+  - name: writer
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "Contenedor writer iniciado"
+      echo "Escribiendo datos cada 5 segundos..."
+      while true; do
+        echo "$(date): Datos escritos por writer" >> /cache/data.txt
+        echo "Contenido actual del archivo:"
+        cat /cache/data.txt
+        echo "---"
+        sleep 5
+      done
+    volumeMounts:
+    - name: cache-volume
+      mountPath: /cache  # Ruta donde se monta el volumen
+  
+  # Contenedor que lee datos
+  - name: reader
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "Contenedor reader iniciado"
+      echo "Esperando 10 segundos para que writer escriba datos..."
+      sleep 10
+      echo "Leyendo datos del volumen compartido:"
+      tail -f /shared/data.txt
+    volumeMounts:
+    - name: cache-volume
+      mountPath: /shared  # Puede montarse en una ruta diferente
+  
+  # Definición del volumen emptyDir
+  volumes:
+  - name: cache-volume
+    emptyDir: {}  # Directorio vacío por defecto
+    
+# Para probar:
+# kubectl apply -f pod-emptydir-basic.yaml
+# kubectl logs pod-emptydir-basic -c writer
+# kubectl logs pod-emptydir-basic -c reader
+# kubectl exec pod-emptydir-basic -c writer -- ls -lh /cache
+# kubectl exec pod-emptydir-basic -c reader -- ls -lh /shared
+# kubectl delete pod pod-emptydir-basic

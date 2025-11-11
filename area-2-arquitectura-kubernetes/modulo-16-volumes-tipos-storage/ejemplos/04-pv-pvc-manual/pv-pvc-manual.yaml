@@ -1,0 +1,200 @@
+# PersistentVolume (PV) y PersistentVolumeClaim (PVC) - Binding Manual
+# Ejemplo de aprovisionamiento manual en Azure
+
+# PASO 1: Crear el PersistentVolume (PV)
+# El administrador crea el PV apuntando a un Azure Disk existente
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-manual-azure-disk
+  labels:
+    type: azure-disk
+    environment: dev
+spec:
+  capacity:
+    storage: 50Gi  # Capacidad total del volumen
+  
+  accessModes:
+    - ReadWriteOnce  # Solo un nodo puede montar
+  
+  persistentVolumeReclaimPolicy: Retain  # Proteger datos al eliminar PVC
+  
+  storageClassName: ""  # ← Vacío para binding manual (sin StorageClass)
+  
+  # CSI: Azure Disk
+  csi:
+    driver: disk.csi.azure.com
+    volumeHandle: /subscriptions/SUBSCRIPTION_ID/resourceGroups/MC_RESOURCE_GROUP/providers/Microsoft.Compute/disks/DISK_NAME
+    # ⚠️ Reemplazar con el URI real del Azure Disk
+    # Obtener con: az disk show --name DISK_NAME --resource-group MC_RESOURCE_GROUP --query id -o tsv
+    
+    volumeAttributes:
+      fsType: ext4  # Sistema de archivos
+      cachingMode: ReadOnly
+      skuname: StandardSSD_LRS
+  
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: topology.disk.csi.azure.com/zone
+          operator: In
+          values:
+          - westus2-1  # ⚠️ Debe coincidir con la zona del disco
+
+---
+# PASO 2: Crear el PersistentVolumeClaim (PVC)
+# El usuario solicita almacenamiento que coincida con el PV
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-manual-bind
+  labels:
+    app: manual-storage
+spec:
+  accessModes:
+    - ReadWriteOnce  # ← Debe coincidir con el PV
+  
+  resources:
+    requests:
+      storage: 50Gi  # ← Debe ser <= capacidad del PV
+  
+  storageClassName: ""  # ← Vacío para binding manual
+  
+  # Selector para vincular a PV específico
+  selector:
+    matchLabels:
+      type: azure-disk       # ← Debe coincidir con labels del PV
+      environment: dev
+
+---
+# PASO 3: Pod usando el PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-manual-pv
+  labels:
+    app: manual-storage
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Pod con PV/PVC manual ==="
+      echo ""
+      echo "Este volumen fue aprovisionado manualmente"
+      echo "El administrador creó el PV apuntando a un disco existente"
+      echo ""
+      
+      # Verificar si hay datos previos
+      if [ -f /data/previous-data.txt ]; then
+        echo "=== Datos previos encontrados ==="
+        cat /data/previous-data.txt
+      else
+        echo "No hay datos previos (primera vez)"
+      fi
+      
+      # Escribir nuevos datos
+      echo ""
+      echo "Escribiendo nuevos datos..."
+      echo "Timestamp: $(date)" >> /data/previous-data.txt
+      echo "Pod: $(hostname)" >> /data/previous-data.txt
+      echo ""
+      
+      echo "=== Información del volumen ==="
+      df -h /data
+      
+      echo ""
+      echo "=== Contenido de /data ==="
+      ls -lh /data/
+      
+      sleep 3600
+    
+    volumeMounts:
+    - name: manual-storage
+      mountPath: /data
+    
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: manual-storage
+    persistentVolumeClaim:
+      claimName: pvc-manual-bind
+
+# Flujo de binding manual:
+# 1. Administrador crea el PV apuntando a recurso existente
+# 2. Usuario crea el PVC con selector matchLabels
+# 3. Kubernetes vincula PVC → PV si coinciden:
+#    ✅ accessModes compatible
+#    ✅ storage solicitado <= capacidad PV
+#    ✅ storageClassName coincide (ambos "")
+#    ✅ selector matchLabels coincide
+# 4. Pod monta el PVC
+
+# ¿Cuándo usar binding manual?
+# ✅ Migrar volúmenes existentes a Kubernetes
+# ✅ Usar discos pre-aprovisionados con datos
+# ✅ Control total sobre el recurso de almacenamiento
+# ✅ Compliance o requisitos de seguridad específicos
+# ⚠️  Más complejo que provisioning dinámico
+
+# Para probar (REQUIERE DISCO AZURE EXISTENTE):
+#
+# 1. Crear disco en Azure (si no existe):
+# RESOURCE_GROUP=$(az aks show --name CLUSTER_NAME --resource-group RG_NAME --query nodeResourceGroup -o tsv)
+# az disk create \
+#   --resource-group $RESOURCE_GROUP \
+#   --name manual-pv-disk \
+#   --size-gb 50 \
+#   --sku StandardSSD_LRS \
+#   --location westus2 \
+#   --zone 1
+#
+# 2. Obtener URI del disco:
+# DISK_URI=$(az disk show --name manual-pv-disk --resource-group $RESOURCE_GROUP --query id -o tsv)
+# echo $DISK_URI
+#
+# 3. Editar pv-pvc-manual.yaml:
+# - Reemplazar volumeHandle con $DISK_URI
+# - Ajustar zona en nodeAffinity
+#
+# 4. Aplicar:
+# kubectl apply -f pv-pvc-manual.yaml
+#
+# 5. Verificar binding:
+# kubectl get pv pv-manual-azure-disk
+# kubectl get pvc pvc-manual-bind
+# # Ambos deben mostrar STATUS: Bound
+#
+# 6. Ver logs:
+# kubectl logs pod-manual-pv
+#
+# 7. Verificar datos:
+# kubectl exec pod-manual-pv -- cat /data/previous-data.txt
+#
+# 8. Probar persistencia:
+# kubectl delete pod pod-manual-pv
+# # Recrear Pod
+# kubectl apply -f pv-pvc-manual.yaml
+# kubectl exec pod-manual-pv -- cat /data/previous-data.txt
+# # ✅ Datos siguen ahí
+#
+# 9. Eliminar PVC (datos se retienen):
+# kubectl delete pvc pvc-manual-bind
+# kubectl get pv pv-manual-azure-disk
+# # STATUS: Released (no se elimina por Retain policy)
+#
+# 10. Limpiar:
+# kubectl delete -f pv-pvc-manual.yaml
+# kubectl delete pv pv-manual-azure-disk
+# # Eliminar disco en Azure si es necesario:
+# # az disk delete --name manual-pv-disk --resource-group $RESOURCE_GROUP

@@ -1,0 +1,108 @@
+# PVC básico con provisioning dinámico en Azure
+# Usa Azure Disk con StorageClass por defecto (managed-csi)
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-dynamic-azure
+  labels:
+    app: demo-storage
+spec:
+  # Modo de acceso: ReadWriteOnce (solo un nodo puede montar)
+  accessModes:
+    - ReadWriteOnce
+  
+  # StorageClass: managed-csi (Azure Disk Standard SSD)
+  storageClassName: managed-csi
+  
+  # Recursos solicitados
+  resources:
+    requests:
+      storage: 10Gi  # 10 GiB
+
+---
+# Pod que usa el PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-pvc
+  labels:
+    app: demo-storage
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Pod con PVC iniciado ==="
+      echo "Escribiendo datos en volumen persistente..."
+      
+      # Crear archivo con datos
+      echo "Datos persistentes: $(date)" > /data/persistent-data.txt
+      echo "Hostname: $(hostname)" >> /data/persistent-data.txt
+      
+      # Mostrar información del volumen
+      echo ""
+      echo "=== Información del volumen ==="
+      df -h /data
+      
+      echo ""
+      echo "=== Contenido de /data ==="
+      ls -lh /data/
+      cat /data/persistent-data.txt
+      
+      echo ""
+      echo "Manteniendo pod activo..."
+      sleep 3600
+    
+    volumeMounts:
+    - name: persistent-storage
+      mountPath: /data  # Ruta donde se monta el PVC
+    
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  - name: persistent-storage
+    persistentVolumeClaim:
+      claimName: pvc-dynamic-azure  # ← Referencia al PVC
+
+# Flujo de provisioning dinámico:
+# 1. Se crea el PVC
+# 2. StorageClass "managed-csi" detecta el PVC
+# 3. Se crea automáticamente un Azure Managed Disk de 10Gi
+# 4. Se crea automáticamente un PV que apunta al disco
+# 5. El PVC se vincula (Bound) al PV
+# 6. El Pod monta el PVC
+
+# Para probar:
+# kubectl apply -f pvc-dynamic-azure.yaml
+#
+# Verificar PVC:
+# kubectl get pvc pvc-dynamic-azure
+# kubectl describe pvc pvc-dynamic-azure
+#
+# Verificar PV creado automáticamente:
+# kubectl get pv
+#
+# Ver logs del Pod:
+# kubectl logs pod-with-pvc
+#
+# Verificar datos en el volumen:
+# kubectl exec pod-with-pvc -- cat /data/persistent-data.txt
+#
+# Probar persistencia:
+# kubectl delete pod pod-with-pvc
+# kubectl apply -f pod-with-pvc.yaml  # Recrear solo el Pod
+# kubectl exec pod-with-pvc -- cat /data/persistent-data.txt  # ✅ Datos siguen ahí
+#
+# Limpiar:
+# kubectl delete -f pvc-dynamic-azure.yaml
+# # El PV y el disco de Azure se eliminan automáticamente (reclaimPolicy: Delete)

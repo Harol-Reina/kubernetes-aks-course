@@ -1,0 +1,211 @@
+# Access Mode: ReadWriteOnce (RWO)
+# Un solo nodo puede montar el volumen en modo lectura-escritura
+
+# PVC con Azure Disk - Solo soporta ReadWriteOnce
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-rwo-disk
+  labels:
+    access-mode: rwo
+spec:
+  accessModes:
+    - ReadWriteOnce  # ← Solo un nodo puede montar
+  
+  storageClassName: managed-csi  # Azure Disk
+  
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Deployment con 1 réplica - ✅ Funciona con RWO
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-rwo-single
+  labels:
+    demo: rwo
+spec:
+  replicas: 1  # ← Una sola réplica
+  selector:
+    matchLabels:
+      app: rwo-demo
+      instance: single
+  template:
+    metadata:
+      labels:
+        app: rwo-demo
+        instance: single
+    spec:
+      containers:
+      - name: writer
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== Deployment con RWO (1 réplica) ==="
+          echo "Pod: $(hostname)"
+          echo "Nodo: $NODE_NAME"
+          echo ""
+          
+          # Escribir datos continuamente
+          while true; do
+            echo "$(date): Escribiendo desde $(hostname) en nodo $NODE_NAME" >> /data/log.txt
+            tail -5 /data/log.txt
+            sleep 5
+          done
+        
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        volumeMounts:
+        - name: storage
+          mountPath: /data
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: pvc-rwo-disk
+
+---
+# Deployment con 3 réplicas - ⚠️ Problema potencial con RWO
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-rwo-multi
+  labels:
+    demo: rwo
+spec:
+  replicas: 3  # ← Múltiples réplicas
+  selector:
+    matchLabels:
+      app: rwo-demo
+      instance: multi
+  template:
+    metadata:
+      labels:
+        app: rwo-demo
+        instance: multi
+    spec:
+      containers:
+      - name: reader
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== Deployment RWO con 3 réplicas ==="
+          echo "Pod: $(hostname)"
+          echo "Nodo: $NODE_NAME"
+          echo ""
+          
+          # Intentar leer datos
+          echo "Leyendo desde volumen compartido..."
+          if [ -f /data/log.txt ]; then
+            tail -10 /data/log.txt
+          else
+            echo "⚠️ No hay datos todavía"
+          fi
+          
+          sleep 3600
+        
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        volumeMounts:
+        - name: storage
+          mountPath: /data
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: pvc-rwo-disk
+
+# Comportamiento esperado con ReadWriteOnce:
+#
+# 1. Deployment con 1 réplica:
+#    ✅ Funciona perfectamente
+#    - El Pod monta el volumen sin problemas
+#
+# 2. Deployment con 3 réplicas en MISMO nodo:
+#    ✅ Funciona (los 3 Pods están en el mismo nodo)
+#    - RWO permite múltiples Pods del mismo nodo
+#    - Kubernetes scheduler intenta co-ubicarlos
+#
+# 3. Deployment con 3 réplicas en DIFERENTES nodos:
+#    ⚠️ Problema potencial
+#    - Solo los Pods en el nodo que tiene el volumen montado funcionarán
+#    - Pods en otros nodos quedarán en estado Pending
+#    - Error: "Multi-Attach error for volume ... Volume is already used by pod(s) ..."
+
+# Para probar:
+# kubectl apply -f rwo-readwriteonce.yaml
+#
+# Ver PVC:
+# kubectl get pvc pvc-rwo-disk
+#
+# Ver Deployment con 1 réplica (debe funcionar):
+# kubectl get pods -l instance=single -o wide
+# # 1 Pod en Running
+# kubectl logs -l instance=single --tail=20
+#
+# Ver Deployment con 3 réplicas:
+# kubectl get pods -l instance=multi -o wide
+# # Observar en qué nodos están los Pods
+#
+# Si todos están en el mismo nodo:
+# # ✅ Los 3 Pods en Running (RWO permite múltiples Pods del mismo nodo)
+#
+# Si están en diferentes nodos:
+# # ⚠️ Solo 1-2 Pods en Running
+# # Los demás en Pending o ContainerCreating
+# kubectl describe pod <pod-pending>
+# # Error: "Multi-Attach error" o "FailedAttachVolume"
+#
+# Verificar en qué nodo está montado el volumen:
+# kubectl get volumeattachment
+#
+# Escalar a más réplicas para forzar multi-nodo:
+# kubectl scale deployment app-rwo-multi --replicas=5
+# kubectl get pods -l instance=multi -o wide
+# # Algunos Pods quedarán Pending si van a nodos diferentes
+#
+# Ver eventos:
+# kubectl get events --sort-by='.lastTimestamp' | grep -i "attach\|volume"
+#
+# Limpiar:
+# kubectl delete -f rwo-readwriteonce.yaml
+
+# Mejores prácticas con ReadWriteOnce:
+#
+# ✅ Usar con Deployments de 1 réplica
+# ✅ Usar con StatefulSets (cada Pod su propio PVC)
+# ✅ Usar con DaemonSets (uno por nodo, cada uno su PVC)
+# ⚠️ EVITAR con Deployments de múltiples réplicas que pueden distribuirse entre nodos
+#
+# Si necesitas múltiples réplicas con volumen compartido:
+# → Usar ReadWriteMany (Azure Files)

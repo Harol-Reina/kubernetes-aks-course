@@ -1,0 +1,158 @@
+# StorageClass personalizada con Azure Disk
+# Ejemplo de cómo crear y usar una StorageClass custom
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd-retain
+  labels:
+    storage-tier: premium
+provisioner: disk.csi.azure.com  # Driver CSI de Azure Disk
+parameters:
+  # Tipo de SKU de Azure Disk
+  skuname: Premium_LRS  # Premium SSD con replicación local
+  
+  # Modo de caché
+  cachingmode: ReadOnly  # Cache de lectura para mejor rendimiento
+  
+  # Tipo de disco
+  kind: Managed  # Disco gestionado por Azure
+  
+# Política de recuperación: Retain (proteger datos)
+reclaimPolicy: Retain  # ← NO eliminar disco al eliminar PVC
+
+# Modo de vinculación
+volumeBindingMode: WaitForFirstConsumer  # Esperar al Pod para crear disco en zona correcta
+
+# Permitir expansión de volumen
+allowVolumeExpansion: true  # Permite aumentar tamaño sin recrear
+
+# Opciones de montaje
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+  - uid=1000
+  - gid=1000
+
+---
+# PVC usando la StorageClass personalizada
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-custom-class
+  labels:
+    app: custom-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  # Usar nuestra StorageClass personalizada
+  storageClassName: fast-ssd-retain  # ← Custom class
+  
+  resources:
+    requests:
+      storage: 128Gi
+
+---
+# Pod usando el PVC custom
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-custom-storage
+  labels:
+    app: custom-storage
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Pod con StorageClass personalizada ==="
+      echo ""
+      echo "StorageClass: fast-ssd-retain"
+      echo "Características:"
+      echo "  - Premium SSD"
+      echo "  - Política Retain (datos protegidos)"
+      echo "  - Cache de lectura habilitado"
+      echo "  - Expansión de volumen permitida"
+      echo ""
+      
+      # Crear datos de prueba
+      echo "Escribiendo datos de prueba..."
+      echo "Datos importantes: $(date)" > /data/important-data.txt
+      
+      echo ""
+      echo "=== Información del volumen ==="
+      df -h /data
+      
+      echo ""
+      echo "=== Archivos ==="
+      ls -lh /data/
+      
+      echo ""
+      echo "Datos protegidos con política Retain"
+      echo "Si eliminas el PVC, el disco no se eliminará"
+      
+      sleep 3600
+    
+    volumeMounts:
+    - name: custom-storage
+      mountPath: /data
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  volumes:
+  - name: custom-storage
+    persistentVolumeClaim:
+      claimName: pvc-custom-class
+
+# Ventajas de StorageClass personalizada:
+# ✅ Control sobre parámetros de rendimiento
+# ✅ Política Retain para proteger datos
+# ✅ Cache de lectura para mejor rendimiento
+# ✅ Expansión de volumen habilitada
+# ✅ Permisos personalizados
+
+# Para probar:
+# kubectl apply -f storageclass-custom.yaml
+#
+# Verificar StorageClass creada:
+# kubectl get storageclass fast-ssd-retain
+# kubectl describe storageclass fast-ssd-retain
+#
+# Verificar PVC:
+# kubectl get pvc pvc-custom-class
+# # Puede estar Pending hasta que el Pod se cree (WaitForFirstConsumer)
+#
+# Ver PV creado:
+# kubectl get pv
+# kubectl describe pv <pv-name>
+# # Buscar: ReclaimPolicy: Retain
+#
+# Ver logs:
+# kubectl logs pod-custom-storage
+#
+# Probar política Retain:
+# kubectl delete pod pod-custom-storage
+# kubectl delete pvc pvc-custom-class
+# kubectl get pv
+# # ✅ El PV sigue existiendo con Status: Released
+# # ✅ El disco de Azure NO se eliminó
+#
+# Recuperar datos (si es necesario):
+# # 1. Crear nuevo PVC apuntando al mismo PV
+# # 2. O eliminar PV y recrearlo apuntando al disco existente
+#
+# Limpiar completamente:
+# kubectl delete -f storageclass-custom.yaml
+# # Eliminar PV manualmente:
+# kubectl delete pv <pv-name>
+# # Eliminar disco en Azure manualmente si es necesario

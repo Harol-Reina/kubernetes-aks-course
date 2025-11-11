@@ -1,0 +1,258 @@
+# PV/PVC con Label Selector avanzado
+# Ejemplo de vinculación selectiva usando múltiples labels
+
+# PV 1: Azure Disk para desarrollo
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-dev-disk
+  labels:
+    type: azure-disk
+    environment: development
+    tier: standard
+    team: backend
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: ""
+  csi:
+    driver: disk.csi.azure.com
+    volumeHandle: /subscriptions/SUB_ID/resourceGroups/MC_RG/providers/Microsoft.Compute/disks/dev-disk-01
+    volumeAttributes:
+      fsType: ext4
+      skuname: StandardSSD_LRS
+
+---
+# PV 2: Azure Files para desarrollo (compartido)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-dev-files
+  labels:
+    type: azure-files
+    environment: development
+    tier: standard
+    team: frontend
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany  # ← Azure Files soporta compartido
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: ""
+  csi:
+    driver: file.csi.azure.com
+    volumeHandle: dev-file-share
+    volumeAttributes:
+      secretName: azure-storage-secret
+      shareName: dev-share
+
+---
+# PV 3: Azure Disk Premium para producción
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-prod-disk
+  labels:
+    type: azure-disk
+    environment: production
+    tier: premium
+    team: backend
+    critical: "true"
+spec:
+  capacity:
+    storage: 256Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain  # ← Producción protegida
+  storageClassName: ""
+  csi:
+    driver: disk.csi.azure.com
+    volumeHandle: /subscriptions/SUB_ID/resourceGroups/MC_RG/providers/Microsoft.Compute/disks/prod-disk-01
+    volumeAttributes:
+      fsType: ext4
+      skuname: Premium_LRS
+      cachingMode: ReadOnly
+
+---
+# PVC 1: Backend dev solicitando disco estándar
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-backend-dev
+  labels:
+    app: backend
+    env: development
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 15Gi  # ← Menor que 20Gi del PV
+  storageClassName: ""
+  
+  # Selector: buscar PV con environment=development Y team=backend
+  selector:
+    matchLabels:
+      environment: development
+      team: backend
+    matchExpressions:
+    - key: type
+      operator: In
+      values:
+      - azure-disk  # ← Solo discos, no files
+
+# ✅ Este PVC se vinculará a: pv-dev-disk
+
+---
+# PVC 2: Frontend dev solicitando almacenamiento compartido
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-frontend-dev
+  labels:
+    app: frontend
+    env: development
+spec:
+  accessModes:
+    - ReadWriteMany  # ← Necesita compartido
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: ""
+  
+  selector:
+    matchLabels:
+      environment: development
+      team: frontend
+      type: azure-files  # ← Solo Azure Files
+
+# ✅ Este PVC se vinculará a: pv-dev-files
+
+---
+# PVC 3: Backend prod solicitando alto rendimiento
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-backend-prod
+  labels:
+    app: backend
+    env: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: ""
+  
+  selector:
+    matchLabels:
+      environment: production
+      tier: premium
+      team: backend
+    matchExpressions:
+    - key: critical
+      operator: Exists  # ← Debe tener label "critical" (cualquier valor)
+
+# ✅ Este PVC se vinculará a: pv-prod-disk
+
+---
+# Pods de prueba
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-dev-pod
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: ["sh", "-c", "echo 'Backend Dev: usando pv-dev-disk' && sleep 3600"]
+    volumeMounts:
+    - name: storage
+      mountPath: /data
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: pvc-backend-dev
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend-dev-pod
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: ["sh", "-c", "echo 'Frontend Dev: usando pv-dev-files (compartido)' && sleep 3600"]
+    volumeMounts:
+    - name: storage
+      mountPath: /data
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: pvc-frontend-dev
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-prod-pod
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: ["sh", "-c", "echo 'Backend Prod: usando pv-prod-disk (Premium)' && sleep 3600"]
+    volumeMounts:
+    - name: storage
+      mountPath: /data
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: pvc-backend-prod
+
+# Reglas de vinculación con selectors:
+# 
+# matchLabels: AND lógico (todos deben coincidir)
+#   environment: development ← Debe coincidir exactamente
+#   team: backend           ← Y este también
+#
+# matchExpressions: Operadores avanzados
+#   In: valor está en lista
+#   NotIn: valor NO está en lista
+#   Exists: label existe (cualquier valor)
+#   DoesNotExist: label NO existe
+
+# ⚠️ NOTA: Este ejemplo es demostrativo
+# Los volumeHandle deben apuntar a recursos Azure reales
+
+# Para probar (concepto):
+# kubectl apply -f pv-pvc-selectors.yaml
+#
+# Ver todos los PV:
+# kubectl get pv
+# # Deberías ver: pv-dev-disk, pv-dev-files, pv-prod-disk
+#
+# Ver todos los PVC y sus bindings:
+# kubectl get pvc
+# # pvc-backend-dev  → Bound to pv-dev-disk
+# # pvc-frontend-dev → Bound to pv-dev-files
+# # pvc-backend-prod → Bound to pv-prod-disk
+#
+# Verificar vinculación correcta:
+# kubectl describe pvc pvc-backend-dev | grep "Volume:"
+# kubectl describe pvc pvc-frontend-dev | grep "Volume:"
+# kubectl describe pvc pvc-backend-prod | grep "Volume:"
+#
+# Ver Pods:
+# kubectl get pods
+# kubectl logs backend-dev-pod
+# kubectl logs frontend-dev-pod
+# kubectl logs backend-prod-pod
+#
+# Limpiar:
+# kubectl delete -f pv-pvc-selectors.yaml

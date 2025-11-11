@@ -1,0 +1,109 @@
+# PVC con Azure Disk Premium (alto rendimiento)
+# Para aplicaciones que requieren IOPS elevados
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-premium-ssd
+  labels:
+    app: high-performance
+spec:
+  accessModes:
+    - ReadWriteOnce
+  
+  # StorageClass Premium: managed-csi-premium
+  storageClassName: managed-csi-premium
+  
+  resources:
+    requests:
+      storage: 128Gi  # Premium requiere mínimo 128 GiB
+
+---
+# Pod usando Premium SSD
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-premium-disk
+  labels:
+    app: high-performance
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Pod con Premium SSD ==="
+      echo "Escribiendo datos de prueba..."
+      
+      # Test de escritura simple
+      for i in $(seq 1 100); do
+        echo "Línea $i: $(date)" >> /data/test-$i.txt
+      done
+      
+      echo ""
+      echo "=== Información del disco ==="
+      df -h /data
+      
+      echo ""
+      echo "=== Archivos creados ==="
+      ls -lh /data/ | head -20
+      
+      echo ""
+      echo "Disco Premium SSD listo para alto rendimiento"
+      echo "IOPS: hasta 20,000"
+      echo "Throughput: hasta 900 MB/s"
+      
+      sleep 3600
+    
+    volumeMounts:
+    - name: premium-storage
+      mountPath: /data
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+  
+  volumes:
+  - name: premium-storage
+    persistentVolumeClaim:
+      claimName: pvc-premium-ssd
+
+# Características de Premium SSD:
+# ✅ Rendimiento: hasta 20,000 IOPS, 900 MB/s
+# ✅ Baja latencia (< 1ms)
+# ✅ Ideal para bases de datos de producción
+# ✅ Respaldado por SSD
+# ⚠️  Costo más elevado que Standard SSD
+# ⚠️  Requiere mínimo 128 GiB
+
+# Comparación con Standard SSD (managed-csi):
+# Standard SSD: hasta 500 IOPS, 60 MB/s, desde 4 GiB
+# Premium SSD: hasta 20,000 IOPS, 900 MB/s, desde 128 GiB
+
+# Para probar:
+# kubectl apply -f pvc-premium-ssd.yaml
+#
+# Verificar PVC con Premium:
+# kubectl get pvc pvc-premium-ssd
+# kubectl describe pvc pvc-premium-ssd
+# # Buscar: StorageClass: managed-csi-premium
+#
+# Ver PV creado:
+# kubectl get pv
+# kubectl describe pv <pv-name>
+# # Buscar: StorageClass: managed-csi-premium
+#
+# Ver logs:
+# kubectl logs pod-premium-disk
+#
+# Verificar rendimiento del disco:
+# kubectl exec pod-premium-disk -- df -h /data
+#
+# Limpiar:
+# kubectl delete -f pvc-premium-ssd.yaml

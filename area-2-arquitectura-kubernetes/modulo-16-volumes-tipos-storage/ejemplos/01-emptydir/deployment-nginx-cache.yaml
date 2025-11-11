@@ -1,0 +1,101 @@
+# Deployment de Nginx con emptyDir para cache
+# Ejemplo práctico: servidor web con cache local compartido entre contenedores
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-with-cache
+  labels:
+    app: nginx-cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-cache
+  template:
+    metadata:
+      labels:
+        app: nginx-cache
+    spec:
+      containers:
+      # Contenedor principal: Nginx
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: cache
+          mountPath: /var/cache/nginx  # Cache de Nginx
+        - name: logs
+          mountPath: /var/log/nginx    # Logs compartidos
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      # Contenedor sidecar: Procesador de logs
+      - name: log-processor
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "Procesador de logs iniciado"
+          while true; do
+            if [ -f /logs/access.log ]; then
+              echo "=== Últimas 5 líneas de access.log ==="
+              tail -5 /logs/access.log
+            else
+              echo "Esperando logs de nginx..."
+            fi
+            sleep 10
+          done
+        volumeMounts:
+        - name: logs
+          mountPath: /logs
+          readOnly: true  # Solo lectura para el sidecar
+      
+      volumes:
+      # Cache de Nginx (emptyDir en disco)
+      - name: cache
+        emptyDir:
+          sizeLimit: 100Mi  # Límite de 100 MiB
+      
+      # Logs compartidos (emptyDir en disco)
+      - name: logs
+        emptyDir: {}
+
+---
+# Service para exponer Nginx
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-cache-service
+spec:
+  selector:
+    app: nginx-cache
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+
+# Para probar:
+# kubectl apply -f deployment-nginx-cache.yaml
+# kubectl get pods -l app=nginx-cache
+# kubectl logs -l app=nginx-cache -c nginx
+# kubectl logs -l app=nginx-cache -c log-processor
+#
+# Generar tráfico:
+# kubectl run curl-test --image=curlimages/curl --rm -it --restart=Never -- curl http://nginx-cache-service
+#
+# Verificar cache y logs:
+# POD=$(kubectl get pod -l app=nginx-cache -o jsonpath='{.items[0].metadata.name}')
+# kubectl exec $POD -c nginx -- ls -lh /var/cache/nginx
+# kubectl exec $POD -c nginx -- ls -lh /var/log/nginx
+#
+# Limpiar:
+# kubectl delete -f deployment-nginx-cache.yaml

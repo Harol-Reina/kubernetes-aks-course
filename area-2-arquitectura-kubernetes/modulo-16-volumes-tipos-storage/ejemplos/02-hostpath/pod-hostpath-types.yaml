@@ -1,0 +1,116 @@
+# Ejemplo de diferentes tipos de hostPath
+# Muestra los distintos valores de 'type' y sus validaciones
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-hostpath-types
+  labels:
+    app: hostpath-types-demo
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command:
+    - sh
+    - -c
+    - |
+      echo "=== Verificando montajes hostPath ==="
+      echo ""
+      
+      echo "1. DirectoryOrCreate - /data-dir"
+      ls -ld /data-dir
+      echo "Escribiendo archivo de prueba..."
+      echo "Test data" > /data-dir/test.txt
+      ls -lh /data-dir/
+      echo ""
+      
+      echo "2. FileOrCreate - /config/app.conf"
+      if [ -f /config/app.conf ]; then
+        echo "Archivo existe:"
+        cat /config/app.conf
+      else
+        echo "Archivo no existe aún"
+      fi
+      echo ""
+      
+      echo "3. Socket - /run/docker.sock (si existe)"
+      if [ -S /docker/docker.sock ]; then
+        ls -lh /docker/docker.sock
+        echo "Socket de Docker disponible"
+      else
+        echo "Socket de Docker no disponible en este cluster"
+      fi
+      echo ""
+      
+      echo "Manteniendo Pod activo..."
+      sleep 3600
+    
+    volumeMounts:
+    # DirectoryOrCreate: Crea directorio si no existe
+    - name: data-directory
+      mountPath: /data-dir
+    
+    # FileOrCreate: Crea archivo vacío si no existe
+    - name: config-file
+      mountPath: /config/app.conf
+      subPath: app.conf
+    
+    # Socket: Socket UNIX (solo si existe)
+    - name: docker-socket
+      mountPath: /docker
+      readOnly: true
+    
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  
+  volumes:
+  # Tipo: DirectoryOrCreate
+  - name: data-directory
+    hostPath:
+      path: /tmp/hostpath-demo/data
+      type: DirectoryOrCreate  # Crea directorio si no existe
+  
+  # Tipo: FileOrCreate  
+  - name: config-file
+    hostPath:
+      path: /tmp/hostpath-demo/app.conf
+      type: FileOrCreate       # Crea archivo vacío si no existe
+  
+  # Tipo: Socket (requiere que el socket exista)
+  - name: docker-socket
+    hostPath:
+      path: /var/run/docker.sock
+      type: Socket             # Debe ser un socket UNIX existente
+
+# Tipos de hostPath disponibles:
+#
+# DirectoryOrCreate - Crea directorio si no existe (recomendado para directorios)
+# Directory         - Debe existir como directorio (falla si no existe)
+# FileOrCreate      - Crea archivo vacío si no existe
+# File              - Debe existir como archivo (falla si no existe)
+# Socket            - Debe ser un socket UNIX (para /var/run/docker.sock, etc.)
+# CharDevice        - Debe ser un dispositivo de caracteres
+# BlockDevice       - Debe ser un dispositivo de bloques
+# ""                - Sin validación (usa lo que sea que exista)
+
+# Para probar:
+# kubectl apply -f pod-hostpath-types.yaml
+# kubectl logs pod-hostpath-types
+# kubectl exec pod-hostpath-types -- ls -lh /data-dir
+# kubectl exec pod-hostpath-types -- cat /data-dir/test.txt
+#
+# Ver en el nodo:
+# NODE=$(kubectl get pod pod-hostpath-types -o jsonpath='{.spec.nodeName}')
+# echo "Pod está en nodo: $NODE"
+# # Conectarse al nodo y verificar:
+# # ls -lh /tmp/hostpath-demo/
+# # cat /tmp/hostpath-demo/data/test.txt
+#
+# Limpiar:
+# kubectl delete pod pod-hostpath-types

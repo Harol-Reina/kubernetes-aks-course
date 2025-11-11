@@ -1,0 +1,67 @@
+# Ejemplo básico de hostPath
+# Monta un directorio del nodo en el Pod
+# ⚠️ ADVERTENCIA: Solo para desarrollo/testing - NO para producción
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-hostpath-basic
+  labels:
+    app: hostpath-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: host-data
+      mountPath: /usr/share/nginx/html  # Directorio web de Nginx
+    - name: host-logs
+      mountPath: /var/log/nginx         # Logs de Nginx
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  
+  volumes:
+  # Montar directorio del nodo para contenido web
+  - name: host-data
+    hostPath:
+      path: /tmp/nginx-data        # ← Ruta en el nodo
+      type: DirectoryOrCreate      # Crear si no existe
+  
+  # Montar directorio del nodo para logs
+  - name: host-logs
+    hostPath:
+      path: /tmp/nginx-logs
+      type: DirectoryOrCreate
+
+# ⚠️ Problema de portabilidad:
+# - Si el Pod se reprograma en otro nodo, verá un directorio diferente
+# - Los datos NO viajan con el Pod entre nodos
+# - Solo útil para datos específicos del nodo (logs, métricas del sistema)
+
+# Para probar:
+# kubectl apply -f pod-hostpath-basic.yaml
+# 
+# Crear archivo HTML en el nodo:
+# kubectl get pod pod-hostpath-basic -o jsonpath='{.spec.nodeName}'  # Ver en qué nodo está
+# # Conectarse al nodo y crear archivo:
+# # echo "<h1>Hola desde hostPath</h1>" > /tmp/nginx-data/index.html
+#
+# Desde el Pod:
+# kubectl exec pod-hostpath-basic -- ls -lh /usr/share/nginx/html
+# kubectl exec pod-hostpath-basic -- cat /usr/share/nginx/html/index.html
+#
+# Generar logs:
+# kubectl exec pod-hostpath-basic -- wget -O- http://localhost
+#
+# Ver logs en el nodo:
+# # cat /tmp/nginx-logs/access.log
+#
+# Limpiar:
+# kubectl delete pod pod-hostpath-basic

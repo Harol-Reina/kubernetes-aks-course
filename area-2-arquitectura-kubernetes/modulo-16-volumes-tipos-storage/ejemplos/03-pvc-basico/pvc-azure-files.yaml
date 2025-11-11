@@ -1,0 +1,144 @@
+# PVC con Azure Files (compartido entre múltiples Pods)
+# Permite ReadWriteMany - múltiples Pods pueden leer/escribir simultáneamente
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-azure-files
+  labels:
+    app: shared-storage
+spec:
+  accessModes:
+    - ReadWriteMany  # ← Múltiples Pods pueden montar simultáneamente
+  
+  # StorageClass: azurefile-csi (Azure Files Standard)
+  storageClassName: azurefile-csi
+  
+  resources:
+    requests:
+      storage: 100Gi  # 100 GiB compartido
+
+---
+# Deployment con 3 réplicas compartiendo el mismo volumen
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-shared-files
+  labels:
+    app: shared-storage
+spec:
+  replicas: 3  # ← Múltiples réplicas pueden compartir Azure Files
+  selector:
+    matchLabels:
+      app: shared-storage
+  template:
+    metadata:
+      labels:
+        app: shared-storage
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        
+        # Script para demostrar escritura compartida
+        command:
+        - sh
+        - -c
+        - |
+          # Crear página HTML con info del Pod
+          cat > /usr/share/nginx/html/index.html <<EOF
+          <html>
+          <head><title>Shared Storage Demo</title></head>
+          <body>
+            <h1>Pod: $(hostname)</h1>
+            <p>Timestamp: $(date)</p>
+            <h2>Archivos compartidos:</h2>
+            <pre>$(ls -lh /shared-data/)</pre>
+          </body>
+          </html>
+          EOF
+          
+          # Escribir archivo único por Pod en volumen compartido
+          echo "Pod $(hostname) escribió esto: $(date)" > /shared-data/$(hostname).txt
+          
+          # Iniciar nginx
+          nginx -g 'daemon off;'
+        
+        volumeMounts:
+        - name: shared-files
+          mountPath: /shared-data  # Volumen compartido entre todos los Pods
+        
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      volumes:
+      - name: shared-files
+        persistentVolumeClaim:
+          claimName: pvc-azure-files  # ← Mismo PVC para todos los Pods
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-shared-files
+  labels:
+    app: shared-storage
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: shared-storage
+
+# ¿Por qué funciona ReadWriteMany?
+# Azure Files es un sistema de archivos compartido (SMB/NFS)
+# Múltiples nodos pueden montar el mismo Azure Files share simultáneamente
+#
+# ⚠️ Azure Disk NO soporta ReadWriteMany (solo ReadWriteOnce)
+
+# Para probar:
+# kubectl apply -f pvc-azure-files.yaml
+#
+# Verificar PVC:
+# kubectl get pvc pvc-azure-files
+# # STATUS debe ser Bound
+#
+# Verificar Deployment:
+# kubectl get deployment web-shared-files
+# kubectl get pods -l app=shared-storage -o wide
+# # Deberías ver 3 Pods, posiblemente en diferentes nodos
+#
+# Ver archivos compartidos desde cada Pod:
+# for pod in $(kubectl get pods -l app=shared-storage -o name); do
+#   echo "=== $pod ==="
+#   kubectl exec $pod -- ls -lh /shared-data/
+#   echo ""
+# done
+# # Todos los Pods ven los mismos archivos
+#
+# Ver contenido de archivos:
+# POD=$(kubectl get pod -l app=shared-storage -o jsonpath='{.items[0].metadata.name}')
+# kubectl exec $POD -- cat /shared-data/*.txt
+#
+# Escribir nuevo archivo desde un Pod:
+# kubectl exec $POD -- sh -c 'echo "Nuevo archivo: $(date)" > /shared-data/test.txt'
+#
+# Verificar que otros Pods lo ven:
+# for pod in $(kubectl get pods -l app=shared-storage -o name); do
+#   kubectl exec $pod -- cat /shared-data/test.txt
+# done
+# # ✅ Todos los Pods ven el mismo archivo
+#
+# Acceder vía Service:
+# kubectl run curl-test --image=curlimages/curl --rm -it --restart=Never -- curl http://web-shared-files
+#
+# Limpiar:
+# kubectl delete -f pvc-azure-files.yaml

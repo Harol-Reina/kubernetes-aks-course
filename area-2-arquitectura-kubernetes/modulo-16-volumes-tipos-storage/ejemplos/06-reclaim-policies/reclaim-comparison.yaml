@@ -1,0 +1,360 @@
+# Comparación de Reclaim Policies: Retain vs Delete
+# Demostración lado a lado
+
+# SCENARIO 1: Base de datos de producción (Retain)
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: prod-database-storage
+  labels:
+    environment: production
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: Premium_LRS  # Premium SSD
+  kind: Managed
+reclaimPolicy: Retain  # ← Proteger datos de producción
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-prod-database
+  labels:
+    app: postgres
+    environment: production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: prod-database-storage
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-prod
+  labels:
+    app: postgres
+    environment: production
+spec:
+  serviceName: postgres-prod
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      environment: production
+  template:
+    metadata:
+      labels:
+        app: postgres
+        environment: production
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:alpine
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "prod-secret-password"
+        - name: POSTGRES_DB
+          value: "production_db"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        volumeMounts:
+        - name: database-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      volumes:
+      - name: database-storage
+        persistentVolumeClaim:
+          claimName: pvc-prod-database
+
+---
+# SCENARIO 2: Caché temporal de desarrollo (Delete)
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dev-cache-storage
+  labels:
+    environment: development
+provisioner: disk.csi.azure.com
+parameters:
+  skuname: StandardSSD_LRS  # Standard SSD
+  kind: Managed
+reclaimPolicy: Delete  # ← Limpieza automática
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-dev-cache
+  labels:
+    app: redis
+    environment: development
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: dev-cache-storage
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-dev-cache
+  labels:
+    app: redis
+    environment: development
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      environment: development
+  template:
+    metadata:
+      labels:
+        app: redis
+        environment: development
+    spec:
+      containers:
+      - name: redis
+        image: redis:alpine
+        command: ["redis-server", "--appendonly", "yes"]
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: cache-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: cache-storage
+        persistentVolumeClaim:
+          claimName: pvc-dev-cache
+
+---
+# SCENARIO 3: Workspace de CI/CD (Delete)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-ci-workspace
+  labels:
+    app: ci-pipeline
+    lifecycle: temporary
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: dev-cache-storage  # Reutilizar StorageClass con Delete
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ci-build-job
+  labels:
+    pipeline: ci-cd
+spec:
+  ttlSecondsAfterFinished: 600  # Auto-eliminar después de 10 min
+  template:
+    metadata:
+      labels:
+        app: ci-pipeline
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: builder
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "=== CI/CD Build Job ==="
+          echo "Clonando repositorio..."
+          mkdir -p /workspace/repo
+          echo "Repository cloned" > /workspace/repo/README.md
+          
+          echo "Compilando..."
+          mkdir -p /workspace/build
+          echo "Compiled binary" > /workspace/build/app
+          
+          echo "Ejecutando tests..."
+          echo "All tests passed" > /workspace/test-results.txt
+          
+          echo ""
+          echo "✅ Build completado"
+          echo "Workspace será eliminado automáticamente (Delete policy)"
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: pvc-ci-workspace
+
+# Test Plan: Comparar comportamiento
+#
+# Para probar diferencias entre Retain y Delete:
+#
+# 1. Aplicar todos los recursos:
+# kubectl apply -f reclaim-comparison.yaml
+#
+# 2. Verificar StorageClasses:
+# kubectl get storageclass prod-database-storage dev-cache-storage
+# kubectl describe storageclass prod-database-storage | grep "ReclaimPolicy"
+# # Retain ✅
+# kubectl describe storageclass dev-cache-storage | grep "ReclaimPolicy"
+# # Delete ✅
+#
+# 3. Verificar todos los PVCs:
+# kubectl get pvc
+# # pvc-prod-database:  Bound (Retain)
+# # pvc-dev-cache:      Bound (Delete)
+# # pvc-ci-workspace:   Bound (Delete)
+#
+# 4. Obtener nombres de PVs:
+# PV_PROD=$(kubectl get pvc pvc-prod-database -o jsonpath='{.spec.volumeName}')
+# PV_DEV=$(kubectl get pvc pvc-dev-cache -o jsonpath='{.spec.volumeName}')
+# PV_CI=$(kubectl get pvc pvc-ci-workspace -o jsonpath='{.spec.volumeName}')
+#
+# echo "PV Producción (Retain): $PV_PROD"
+# echo "PV Desarrollo (Delete): $PV_DEV"
+# echo "PV CI/CD (Delete): $PV_CI"
+#
+# 5. Verificar políticas de reclaim:
+# kubectl get pv $PV_PROD -o custom-columns=NAME:.metadata.name,RECLAIM:.spec.persistentVolumeReclaimPolicy
+# # Retain
+# kubectl get pv $PV_DEV -o custom-columns=NAME:.metadata.name,RECLAIM:.spec.persistentVolumeReclaimPolicy
+# # Delete
+#
+# 6. Esperar a que Job CI/CD complete:
+# kubectl wait --for=condition=complete job/ci-build-job --timeout=120s
+# kubectl logs job/ci-build-job
+#
+# 7. Simular eliminación accidental de PVC dev:
+# kubectl delete pvc pvc-dev-cache
+#
+# 8. Verificar que PV dev se eliminó (Delete):
+# kubectl get pv $PV_DEV
+# # Error: not found ✅ (eliminado automáticamente)
+#
+# 9. Intentar eliminar PVC producción:
+# kubectl delete pvc pvc-prod-database
+#
+# 10. Verificar que PV prod NO se eliminó (Retain):
+# kubectl get pv $PV_PROD
+# # STATUS: Released ✅ (protegido, no eliminado)
+#
+# 11. Ver datos del PV prod:
+# kubectl describe pv $PV_PROD
+# # ClaimRef sigue apuntando al PVC eliminado
+# # VolumeHandle: disco Azure sigue existiendo
+#
+# 12. Recuperar PV prod (limpiar claimRef):
+# kubectl patch pv $PV_PROD -p '{"spec":{"claimRef":null}}'
+# kubectl get pv $PV_PROD
+# # STATUS: Available ✅ (puede ser reclamado)
+#
+# 13. Crear nuevo PVC para recuperar datos:
+# kubectl apply -f - <<EOF
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: pvc-prod-database-recovered
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   storageClassName: prod-database-storage
+#   resources:
+#     requests:
+#       storage: 100Gi
+# EOF
+#
+# kubectl get pvc pvc-prod-database-recovered
+# # STATUS: Bound ← vinculado al PV recuperado
+#
+# 14. Verificar que datos están intactos:
+# kubectl run postgres-test --image=postgres:alpine --rm -it --restart=Never \
+#   --overrides='
+# {
+#   "spec": {
+#     "containers": [{
+#       "name": "postgres",
+#       "image": "postgres:alpine",
+#       "command": ["ls", "-lh", "/var/lib/postgresql/data/"],
+#       "volumeMounts": [{
+#         "name": "db",
+#         "mountPath": "/var/lib/postgresql/data"
+#       }]
+#     }],
+#     "volumes": [{
+#       "name": "db",
+#       "persistentVolumeClaim": {
+#         "claimName": "pvc-prod-database-recovered"
+#       }
+#     }]
+#   }
+# }'
+# # ✅ Debe mostrar archivos de PostgreSQL intactos
+#
+# 15. Limpiar:
+# kubectl delete -f reclaim-comparison.yaml
+# kubectl delete pvc pvc-prod-database-recovered
+# kubectl delete pv $PV_PROD
+
+# Matriz de decisión:
+#
+# ┌──────────────────────────────┬────────────┬──────────────────────┐
+# │ Tipo de Aplicación           │ Política   │ Justificación        │
+# ├──────────────────────────────┼────────────┼──────────────────────┤
+# │ PostgreSQL/MySQL Producción  │ Retain     │ Datos críticos       │
+# │ MongoDB/Redis Producción     │ Retain     │ Protección necesaria │
+# │ Archivos de usuario          │ Retain     │ No recuperable       │
+# │ Logs de auditoría            │ Retain     │ Compliance           │
+# ├──────────────────────────────┼────────────┼──────────────────────┤
+# │ Redis caché desarrollo       │ Delete     │ Reconstruible        │
+# │ CI/CD workspaces             │ Delete     │ Temporal             │
+# │ Datos de prueba              │ Delete     │ No crítico           │
+# │ Build artifacts temporales   │ Delete     │ Limpieza automática  │
+# └──────────────────────────────┴────────────┴──────────────────────┘
+
+# Mejores prácticas:
+#
+# ✅ Producción → Retain + Backups externos
+# ✅ Desarrollo → Delete para reducir costos
+# ✅ Staging → Retain si simula producción, Delete si es efímero
+# ✅ CI/CD → Delete siempre
+# ✅ Documentar política en labels del PVC
+# ✅ Monitorear PVs en estado Released (Retain sin limpiar)
+# ✅ Automatizar limpieza de PVs Released antiguos
