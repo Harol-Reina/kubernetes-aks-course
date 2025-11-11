@@ -1,0 +1,111 @@
+# ========================================================
+# EJEMPLO 02: ClusterRole - Lectura global de Pods
+# ========================================================
+#
+# Diferencias con el Role del ejemplo 01:
+#   - NO tiene campo "namespace"
+#   - Aplica a TODOS los namespaces del cluster
+#   - Puede usarse con ClusterRoleBinding (global) o RoleBinding (por namespace)
+#
+# Este ClusterRole permite:
+#   ✅ Ver pods en cualquier namespace
+#   ✅ Ver nodes (recurso cluster-wide)
+#   ✅ Ver namespaces
+#
+# Uso típico: Monitoreo, auditoría, troubleshooting cross-namespace
+#
+# Aplicar: kubectl apply -f 02-clusterrole-pod-reader.yaml
+# ========================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-pod-reader
+  # ⚠️ NO hay campo "namespace" en ClusterRole
+  annotations:
+    description: "Lectura de pods en todos los namespaces y recursos cluster-wide"
+    use-case: "Equipos de monitoreo y SRE"
+rules:
+# Regla 1: Pods en cualquier namespace
+- apiGroups: [""]
+  resources:
+    - pods
+    - pods/log
+    - pods/status
+  verbs:
+    - get
+    - list
+    - watch
+
+# Regla 2: Recursos cluster-wide (no-namespaced)
+- apiGroups: [""]
+  resources:
+    - nodes                 # Nodos del cluster
+    - namespaces            # Namespaces
+  verbs:
+    - get
+    - list
+
+# ========================================================
+# Dos formas de usar este ClusterRole:
+# ========================================================
+#
+# OPCIÓN A: ClusterRoleBinding (acceso global)
+# -------------------------------------------
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: global-pod-reader
+# subjects:
+# - kind: User
+#   name: monitor-user
+# roleRef:
+#   kind: ClusterRole
+#   name: cluster-pod-reader
+#
+# Resultado: monitor-user puede ver pods en TODOS los namespaces
+#
+# OPCIÓN B: RoleBinding (acceso limitado a UN namespace)
+# -------------------------------------------------------
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: dev-pod-reader
+#   namespace: development
+# subjects:
+# - kind: User
+#   name: dev-user
+# roleRef:
+#   kind: ClusterRole    # ← Nota: referencia a ClusterRole
+#   name: cluster-pod-reader
+#
+# Resultado: dev-user solo puede ver pods en namespace "development"
+#
+# ========================================================
+# Comandos permitidos (con ClusterRoleBinding):
+# ========================================================
+#
+# kubectl get pods --all-namespaces
+# kubectl get pods -n development
+# kubectl get pods -n production
+# kubectl get nodes
+# kubectl get namespaces
+# kubectl logs mi-pod -n cualquier-namespace
+#
+# ========================================================
+# Comandos NO permitidos:
+# ========================================================
+#
+# kubectl delete pod mi-pod -n development
+# kubectl exec -it mi-pod -- bash
+# kubectl get secrets  (no está en las rules)
+#
+# ========================================================
+# Verificar permisos:
+# ========================================================
+#
+# kubectl auth can-i get pods --all-namespaces --as monitor-user
+# kubectl auth can-i get nodes --as monitor-user
+# kubectl auth can-i delete pods --as monitor-user
+#
+# ========================================================

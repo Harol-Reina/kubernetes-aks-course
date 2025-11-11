@@ -1,0 +1,16 @@
+# Ejemplo 08: ClusterRoleBinding cluster-admin
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user-binding
+  annotations:
+    description: "⚠️ Acceso total al cluster - USAR CON PRECAUCIÓN"
+    risk-level: "critical"
+subjects:
+- kind: User
+  name: admin-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

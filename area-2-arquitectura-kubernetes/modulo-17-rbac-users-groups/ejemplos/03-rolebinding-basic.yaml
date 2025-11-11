@@ -1,0 +1,122 @@
+# ========================================================
+# EJEMPLO 03: RoleBinding básico - Usuario individual
+# ========================================================
+#
+# Un RoleBinding conecta:
+#   - Un Role/ClusterRole (QUÉ permisos)
+#   - Con Subjects (QUIÉN los obtiene)
+#   - En un namespace específico (DÓNDE aplican)
+#
+# Este ejemplo asigna el Role "pod-reader" al usuario "maria"
+# en el namespace "development".
+#
+# Aplicar: kubectl apply -f 03-rolebinding-basic.yaml
+# Prerequisito: Role "pod-reader" debe existir (ver ejemplo 01)
+# ========================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: maria-pod-reader
+  namespace: development      # ← El binding aplica SOLO en este namespace
+  annotations:
+    description: "Asigna permisos de lectura de pods a usuario maria"
+    created-by: "admin"
+    created-date: "2024"
+subjects:                      # ← QUIÉN obtiene los permisos
+- kind: User                   # Tipo: User (persona)
+  name: maria                  # Nombre del usuario (del certificado CN)
+  apiGroup: rbac.authorization.k8s.io
+
+roleRef:                       # ← QUÉ permisos obtiene
+  kind: Role                   # Tipo: Role (podría ser ClusterRole)
+  name: pod-reader             # Nombre del Role (del ejemplo 01)
+  apiGroup: rbac.authorization.k8s.io
+
+# ========================================================
+# Resultado:
+# ========================================================
+#
+# El usuario "maria" ahora puede:
+#   ✅ kubectl get pods -n development
+#   ✅ kubectl get pod mi-pod -n development
+#   ✅ kubectl logs mi-pod -n development
+#   ❌ kubectl delete pod mi-pod -n development (Forbidden)
+#   ❌ kubectl get pods -n production (Forbidden - diferente namespace)
+#
+# ========================================================
+# Anatomía de Subjects:
+# ========================================================
+#
+# kind: User
+#   - Usuario humano
+#   - Autenticado vía certificado
+#   - El campo "name" debe coincidir con CN del certificado
+#
+# kind: Group
+#   - Grupo de usuarios
+#   - Del campo O (Organization) del certificado
+#   - Ejemplo: name: developers
+#
+# kind: ServiceAccount
+#   - Identidad para pods (no cubierto en este módulo)
+#   - Ejemplo: name: my-service-account
+#
+# ========================================================
+# Verificar el binding:
+# ========================================================
+#
+# # Ver el RoleBinding
+# kubectl get rolebinding maria-pod-reader -n development
+# kubectl describe rolebinding maria-pod-reader -n development
+#
+# # Probar permisos del usuario
+# kubectl auth can-i get pods --as maria -n development
+#   → yes
+# kubectl auth can-i delete pods --as maria -n development
+#   → no
+# kubectl auth can-i get pods --as maria -n production
+#   → no (diferente namespace)
+#
+# ========================================================
+# Workflow completo:
+# ========================================================
+#
+# 1. Crear namespace:
+#    kubectl create namespace development
+#
+# 2. Aplicar el Role:
+#    kubectl apply -f 01-role-pod-reader.yaml
+#
+# 3. Aplicar el RoleBinding:
+#    kubectl apply -f 03-rolebinding-basic.yaml
+#
+# 4. Crear certificado para usuario "maria":
+#    Ver script: 09-generar-usuario-certificado.sh
+#
+# 5. Configurar kubectl para maria:
+#    Ver script: 11-configurar-kubectl.sh
+#
+# 6. Cambiar a contexto de maria:
+#    kubectl config use-context maria-context
+#
+# 7. Probar:
+#    kubectl get pods  # Debería funcionar
+#
+# ========================================================
+# Múltiples subjects:
+# ========================================================
+#
+# Puedes asignar el mismo Role a múltiples usuarios:
+#
+# subjects:
+# - kind: User
+#   name: maria
+# - kind: User
+#   name: juan
+# - kind: User
+#   name: pedro
+#
+# Todos tendrán los mismos permisos del Role "pod-reader"
+#
+# ========================================================

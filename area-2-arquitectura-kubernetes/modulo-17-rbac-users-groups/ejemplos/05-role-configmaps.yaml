@@ -1,0 +1,15 @@
+# Ejemplo 05: Config Manager Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: config-manager
+  namespace: production
+  annotations:
+    description: "Gestión completa de ConfigMaps y Secrets"
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]

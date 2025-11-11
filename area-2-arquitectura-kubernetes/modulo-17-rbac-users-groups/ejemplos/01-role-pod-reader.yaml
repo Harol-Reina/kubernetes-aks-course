@@ -1,0 +1,69 @@
+# ========================================================
+# EJEMPLO 01: Role básico - Solo lectura de Pods
+# ========================================================
+# 
+# Este Role permite:
+#   ✅ Listar pods (kubectl get pods)
+#   ✅ Ver detalles de un pod (kubectl get pod mi-pod)
+#   ✅ Ver logs (kubectl logs mi-pod)
+#   ❌ Crear, modificar o eliminar pods
+#
+# Scope: Namespace "development"
+# Uso típico: Desarrolladores que solo necesitan consultar el estado
+#
+# Aplicar: kubectl apply -f 01-role-pod-reader.yaml
+# ========================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: development
+  annotations:
+    description: "Solo lectura de pods y logs"
+    use-case: "Desarrolladores consultando estado de aplicaciones"
+rules:
+# Regla 1: Pods principales
+- apiGroups: [""]           # Core API group (pods, services, etc.)
+  resources: 
+    - pods                  # El recurso principal
+    - pods/log              # Subrecurso para ver logs
+  verbs:
+    - get                   # Obtener un pod específico
+    - list                  # Listar todos los pods
+    - watch                 # Observar cambios en tiempo real
+
+# ========================================================
+# Comandos que este Role PERMITE:
+# ========================================================
+#
+# kubectl get pods -n development
+# kubectl get pod mi-pod -n development
+# kubectl describe pod mi-pod -n development
+# kubectl logs mi-pod -n development
+# kubectl logs mi-pod -n development --follow
+#
+# ========================================================
+# Comandos que este Role NO permite (Forbidden):
+# ========================================================
+#
+# kubectl create -f pod.yaml -n development
+# kubectl delete pod mi-pod -n development
+# kubectl exec -it mi-pod -- bash -n development
+# kubectl port-forward mi-pod 8080:80 -n development
+#
+# ========================================================
+# Para usar este Role:
+# ========================================================
+#
+# 1. Aplicar el Role:
+#    kubectl apply -f 01-role-pod-reader.yaml
+#
+# 2. Crear un RoleBinding (ver ejemplo 03):
+#    kubectl apply -f 03-rolebinding-basic.yaml
+#
+# 3. Probar permisos:
+#    kubectl auth can-i get pods --as maria -n development
+#    kubectl auth can-i delete pods --as maria -n development
+#
+# ========================================================

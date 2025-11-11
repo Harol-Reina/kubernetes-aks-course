@@ -1,0 +1,120 @@
+# ========================================================
+# EJEMPLO 04: ClusterRoleBinding - Permisos globales
+# ========================================================
+#
+# Diferencias con RoleBinding:
+#   - NO tiene campo "namespace"
+#   - Los permisos aplican en TODOS los namespaces
+#   - Solo puede referenciar ClusterRoles (no Roles)
+#
+# Este ejemplo da acceso global de lectura al usuario "juan"
+#
+# Aplicar: kubectl apply -f 04-clusterrolebinding-basic.yaml
+# Prerequisito: ClusterRole "cluster-pod-reader" debe existir (ver ejemplo 02)
+# ========================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: juan-global-reader
+  # ⚠️ NO hay campo "namespace" - es global
+  annotations:
+    description: "Acceso de lectura global para usuario juan"
+    risk-level: "medium"
+    created-by: "admin"
+subjects:
+- kind: User
+  name: juan
+  apiGroup: rbac.authorization.k8s.io
+
+roleRef:
+  kind: ClusterRole           # ← DEBE ser ClusterRole
+  name: cluster-pod-reader    # Del ejemplo 02
+  apiGroup: rbac.authorization.k8s.io
+
+# ========================================================
+# Resultado:
+# ========================================================
+#
+# El usuario "juan" ahora puede:
+#   ✅ kubectl get pods --all-namespaces
+#   ✅ kubectl get pods -n development
+#   ✅ kubectl get pods -n production
+#   ✅ kubectl get pods -n kube-system
+#   ✅ kubectl get nodes
+#   ✅ kubectl get namespaces
+#   ❌ kubectl delete pod ... (cualquier namespace) - Forbidden
+#
+# ========================================================
+# ⚠️ Importante: Seguridad
+# ========================================================
+#
+# ClusterRoleBindings son PODEROSOS:
+#   - Dan acceso a TODO el cluster
+#   - Úsalos con precaución
+#   - Prefiere RoleBindings cuando sea posible
+#
+# Casos de uso apropiados:
+#   ✅ Equipos de monitoreo (solo lectura)
+#   ✅ Administradores del cluster
+#   ✅ Herramientas de CI/CD (con permisos limitados)
+#
+# Casos de uso inapropiados:
+#   ❌ Desarrolladores de un solo proyecto
+#   ❌ Usuarios que solo trabajan en un namespace
+#
+# ========================================================
+# Patrón alternativo: ClusterRole + RoleBinding
+# ========================================================
+#
+# Más seguro: usar el ClusterRole pero limitarlo a un namespace:
+#
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding           # ← RoleBinding (no ClusterRoleBinding)
+# metadata:
+#   name: juan-dev-reader
+#   namespace: development    # ← Solo en este namespace
+# subjects:
+# - kind: User
+#   name: juan
+# roleRef:
+#   kind: ClusterRole         # ← Referencia a ClusterRole
+#   name: cluster-pod-reader
+#
+# Resultado: Juan puede leer pods SOLO en "development"
+#            (reutilizando el ClusterRole existente)
+#
+# ========================================================
+# Verificar permisos:
+# ========================================================
+#
+# # Ver el ClusterRoleBinding
+# kubectl get clusterrolebinding juan-global-reader
+# kubectl describe clusterrolebinding juan-global-reader
+#
+# # Probar permisos globales
+# kubectl auth can-i get pods --all-namespaces --as juan
+#   → yes
+# kubectl auth can-i get pods -n development --as juan
+#   → yes
+# kubectl auth can-i get pods -n production --as juan
+#   → yes
+# kubectl auth can-i delete pods --as juan
+#   → no
+#
+# ========================================================
+# ClusterRoleBindings predefinidos importantes:
+# ========================================================
+#
+# # Ver quién tiene cluster-admin (acceso total)
+# kubectl get clusterrolebinding -o json | \
+#   jq -r '.items[] | select(.roleRef.name=="cluster-admin") | 
+#   {name: .metadata.name, subjects: .subjects}'
+#
+# Ejemplos de ClusterRoles predefinidos:
+#   - cluster-admin: Acceso total (⚠️ PELIGROSO)
+#   - admin: Admin de namespace
+#   - edit: Modificar recursos
+#   - view: Solo lectura
+#
+# ========================================================

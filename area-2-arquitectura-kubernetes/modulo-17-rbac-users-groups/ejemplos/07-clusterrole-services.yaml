@@ -1,0 +1,11 @@
+# Ejemplo 07: ClusterRole Services Admin
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: services-admin
+  annotations:
+    description: "Administración global de Services"
+rules:
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
