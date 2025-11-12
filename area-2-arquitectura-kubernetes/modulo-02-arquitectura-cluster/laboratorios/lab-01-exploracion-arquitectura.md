@@ -3,8 +3,8 @@
 ## Objetivos
 
 Al finalizar este laboratorio, serás capaz de:
-- ✓ Identificar todos los componentes del Control Plane
-- ✓ Inspeccionar Worker Nodes y sus componentes
+- ✓ Identificar todos los componentes del Control Plane en Minikube
+- ✓ Inspeccionar el nodo Minikube y sus componentes
 - ✓ Verificar la comunicación entre componentes
 - ✓ Entender el flujo de creación de un recurso
 
@@ -14,31 +14,58 @@ Al finalizar este laboratorio, serás capaz de:
 
 ## Pre-requisitos
 
-- Cluster Kubernetes funcional (minikube, kind, o cluster real)
-- Acceso SSH a nodos (para clusters multi-nodo)
-- `kubectl` configurado
-- Permisos de administrador en el cluster
+- **Minikube instalado** con driver Docker
+- **VM Ubuntu en Azure** funcionando
+- `kubectl` configurado y funcionando
+- Conexión SSH a la VM de Azure
+
+## ⚠️ Nota sobre el Entorno
+
+Este laboratorio está diseñado específicamente para **Minikube con driver Docker**. 
+- Minikube crea un cluster **single-node** donde todos los componentes corren en un solo nodo
+- El nodo se llama `minikube` (no `master-1` o `worker-1`)
+- Todos los componentes del Control Plane corren como **pods** en el namespace `kube-system`
 
 ---
 
-## Parte 1: Inspección del Control Plane (25 minutos)
+## Parte 1: Inspección del Control Plane en Minikube (25 minutos)
 
 ### 📝 Ejercicio 1.1: Identificar Componentes del Sistema
 
-**Paso 1:** Lista todos los pods del sistema
+**Paso 1:** Verifica que Minikube esté corriendo
+
+```bash
+# Verificar status de Minikube
+minikube status
+
+# Deberías ver:
+# minikube
+# type: Control Plane
+# host: Running
+# kubelet: Running
+# apiserver: Running
+```
+
+**Paso 2:** Lista todos los pods del sistema
 
 ```bash
 kubectl get pods -n kube-system
 ```
 
-**Pregunta:** ¿Cuántos pods del `kube-apiserver` existen? ¿Qué significa esto sobre tu cluster?
+**Pregunta:** ¿Cuántos pods del `kube-apiserver` existen? 
 
 <details>
 <summary>💡 Pista</summary>
-Si ves un solo API Server, es un cluster de un solo master. Si ves varios (3+), es un cluster HA.
+En Minikube verás exactamente 1 pod de cada componente del Control Plane:
+- kube-apiserver-minikube
+- etcd-minikube
+- kube-scheduler-minikube
+- kube-controller-manager-minikube
+
+Esto es normal en Minikube. En producción con HA verías 3+ de cada uno.
 </details>
 
-**Paso 2:** Identifica los componentes principales
+**Paso 3:** Identifica los componentes principales
 
 ```bash
 kubectl get pods -n kube-system -o wide | grep -E 'etcd|kube-apiserver|kube-scheduler|kube-controller'
@@ -46,12 +73,12 @@ kubectl get pods -n kube-system -o wide | grep -E 'etcd|kube-apiserver|kube-sche
 
 **Tarea:** Completa la siguiente tabla:
 
-| Componente | Número de Instancias | Nodo(s) |
+| Componente | Número de Instancias | Nodo |
 |------------|---------------------|---------|
-| etcd | | |
-| kube-apiserver | | |
-| kube-scheduler | | |
-| kube-controller-manager | | |
+| etcd-minikube | 1 | minikube |
+| kube-apiserver-minikube | 1 | minikube |
+| kube-scheduler-minikube | 1 | minikube |
+| kube-controller-manager-minikube | 1 | minikube |
 
 ---
 
@@ -60,11 +87,8 @@ kubectl get pods -n kube-system -o wide | grep -E 'etcd|kube-apiserver|kube-sche
 **Paso 1:** Obtén los detalles del pod del API Server
 
 ```bash
-# Obtener nombre exacto del pod
-API_SERVER_POD=$(kubectl get pods -n kube-system -l component=kube-apiserver -o name | head -1)
-
-# Inspeccionar el pod
-kubectl describe -n kube-system $API_SERVER_POD
+# En Minikube el nombre es predecible
+kubectl describe pod kube-apiserver-minikube -n kube-system
 ```
 
 **Preguntas:**

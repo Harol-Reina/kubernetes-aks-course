@@ -31,9 +31,20 @@ Al completar este módulo, serás capaz de:
 
 Para este módulo necesitas:
 - Haber completado el Módulo 01 (Introducción a Kubernetes)
-- Acceso a un cluster de Kubernetes (Minikube, Docker Desktop, o cluster en la nube)
+- **VM de Azure con Minikube instalado** (usando driver Docker)
 - `kubectl` instalado y configurado
 - Conocimientos básicos de redes y sistemas distribuidos
+
+### Entorno de Trabajo
+
+**IMPORTANTE**: En este curso trabajaremos exclusivamente con:
+- ✅ **Minikube** como plataforma de Kubernetes
+- ✅ **Driver Docker** para los contenedores
+- ✅ **VM Ubuntu en Azure** como infraestructura base
+- ❌ **NO** haremos instalación manual de clusters multi-nodo
+- ❌ **NO** usaremos kubeadm o configuraciones bare-metal
+
+**Justificación**: Minikube proporciona un entorno completo de Kubernetes ideal para aprendizaje, permitiéndonos explorar todos los componentes de la arquitectura sin la complejidad operativa de un cluster multi-nodo de producción.
 
 ### Duración Estimada
 
@@ -1479,21 +1490,37 @@ Ventajas:
 
 ---
 
-## 5. Alta Disponibilidad (HA)
+## 5. Alta Disponibilidad y Conceptos de Clustering
 
-La Alta Disponibilidad en Kubernetes garantiza que el cluster continúe operando incluso cuando algunos componentes fallen. Esto es crítico para entornos de producción donde el downtime no es aceptable.
+### 📝 Nota sobre el Entorno del Curso
 
-**Conceptos clave**:
+**IMPORTANTE**: En este módulo exploraremos los conceptos de Alta Disponibilidad (HA) desde una perspectiva **teórica y arquitectónica**. 
+
+- ✅ **Comprenderemos** cómo funcionan los clusters HA en producción
+- ✅ **Analizaremos** la arquitectura de múltiples masters y etcd clustering
+- ✅ **Exploraremos** los componentes del Control Plane en nuestro Minikube
+- ❌ **NO implementaremos** un cluster multi-nodo real (usamos Minikube)
+- ❌ **NO configuraremos** Load Balancers o etcd externo manualmente
+
+**Justificación**: Minikube simula un cluster completo en un solo nodo, pero nos permite inspeccionar y entender todos los componentes que en producción estarían distribuidos. Los conceptos de HA son fundamentales para entender la arquitectura, aunque su implementación práctica queda fuera del alcance de este curso introductorio.
+
+---
+
+### 5.1 Conceptos de Alta Disponibilidad
+
+La Alta Disponibilidad en Kubernetes garantiza que el cluster continúe operando incluso cuando algunos componentes fallen. Estos conceptos son críticos para entornos de producción donde el downtime no es aceptable.
+
+**Conceptos clave que entenderemos**:
 - **Control Plane HA**: Múltiples réplicas de API Server, Scheduler, Controller Manager
 - **etcd HA**: Cluster de etcd con quorum (3, 5, o 7 nodos)
 - **Worker Node redundancy**: Múltiples workers para distribuir carga
 - **Load balancing**: Distribución de tráfico entre componentes replicados
 
-### 5.1 Control Plane en Alta Disponibilidad
+### 5.2 Arquitectura HA en Producción (Conceptual)
 
-Para lograr HA en el Control Plane, necesitas ejecutar múltiples instancias de cada componente crítico.
+Aunque en Minikube todo corre en un solo nodo, es importante entender cómo se ve un cluster de producción con alta disponibilidad.
 
-**Arquitectura HA típica**:
+**Arquitectura HA típica** (referencia conceptual):
 
 ```
                     ┌────────────────────────────────────┐
@@ -1527,10 +1554,12 @@ Para lograr HA en el Control Plane, necesitas ejecutar múltiples instancias de 
                     └────────────────────────┘
 ```
 
-**Ejemplo de configuración HA inline**:
+**Ejemplo conceptual de configuración HA** (referencia - NO para implementar):
 
 ```yaml
-# kubeadm-config.yaml para cluster HA
+# EJEMPLO TEÓRICO: Configuración de cluster HA con kubeadm
+# Este archivo es SOLO para comprensión arquitectónica
+# NO lo usaremos en Minikube
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 kubernetesVersion: v1.28.0
@@ -1559,15 +1588,14 @@ networking:
 2. **Scheduler y Controller Manager**: Leader Election (active-passive)
    
    ```bash
-   # Solo UNA instancia es líder y trabaja activamente
+   # CONCEPTO: Solo UNA instancia es líder y trabaja activamente
    # Las demás están en standby esperando
    
-   # Ver quién es el líder actual:
-   $ kubectl get endpoints kube-scheduler -n kube-system -o yaml
-   
-   holderIdentity: master-2_abc123...
-   leaseDurationSeconds: 15
-   renewTime: "2024-11-11T10:45:30Z"
+   # En un cluster real, verías quién es el líder:
+   # $ kubectl get endpoints kube-scheduler -n kube-system -o yaml
+   # holderIdentity: master-2_abc123...
+   # leaseDurationSeconds: 15
+   # renewTime: "2024-11-11T10:45:30Z"
    ```
 
 3. **etcd**: Cluster con RAFT consensus
@@ -1576,56 +1604,62 @@ networking:
    - 3 nodos: tolera 1 fallo
    - 5 nodos: tolera 2 fallos
 
-**Pasos para crear un cluster HA**:
+**Cómo explorar estos conceptos en Minikube**:
 
 ```bash
-# 1. Configurar Load Balancer (HAProxy ejemplo)
-# /etc/haproxy/haproxy.cfg
-frontend k8s-api
-    bind 192.168.1.100:6443
-    mode tcp
-    default_backend k8s-api-backend
+# Aunque Minikube es single-node, podemos ver cómo están los componentes
 
-backend k8s-api-backend
-    mode tcp
-    balance roundrobin
-    server master-1 192.168.1.10:6443 check
-    server master-2 192.168.1.11:6443 check
-    server master-3 192.168.1.12:6443 check
+# Ver pods del Control Plane
+$ kubectl get pods -n kube-system
 
-# 2. Inicializar primer master
-$ kubeadm init --config=kubeadm-config.yaml --upload-certs
+# En Minikube verás:
+# - etcd-minikube (solo 1 instancia)
+# - kube-apiserver-minikube
+# - kube-controller-manager-minikube
+# - kube-scheduler-minikube
 
-# 3. Unir masters adicionales
-$ kubeadm join 192.168.1.100:6443 \
-    --token <token> \
-    --discovery-token-ca-cert-hash sha256:<hash> \
-    --control-plane \
-    --certificate-key <cert-key>
+# Inspeccionar el API Server
+$ kubectl get pod kube-apiserver-minikube -n kube-system -o yaml
 
-# 4. Verificar control plane HA
-$ kubectl get nodes
-NAME       STATUS   ROLES           AGE   VERSION
-master-1   Ready    control-plane   10m   v1.28.0
-master-2   Ready    control-plane   5m    v1.28.0
-master-3   Ready    control-plane   2m    v1.28.0
+# Ver logs del scheduler
+$ kubectl logs kube-scheduler-minikube -n kube-system
 
-$ kubectl get pods -n kube-system | grep -E 'scheduler|controller'
-kube-scheduler-master-1            1/1  Running  0  10m
-kube-scheduler-master-2            1/1  Running  0  5m
-kube-scheduler-master-3            1/1  Running  0  2m
-kube-controller-manager-master-1   1/1  Running  0  10m
-kube-controller-manager-master-2   1/1  Running  0  5m
-kube-controller-manager-master-3   1/1  Running  0  2m
+# En un cluster HA real tendrías múltiples instancias de cada uno
 ```
 
-**📁 Ver configuración completa de HA:** [`ejemplos/04-alta-disponibilidad/ha-cluster-setup.yaml`](./ejemplos/04-alta-disponibilidad/ha-cluster-setup.yaml)
+**Referencia conceptual**: Pasos que se seguirían en un cluster HA real (SOLO para conocimiento):
 
-### 5.2 etcd en Alta Disponibilidad
+```bash
+# EJEMPLO TEÓRICO - NO EJECUTAR EN MINIKUBE
+# Este es el proceso que usarías con kubeadm en un entorno real
 
-etcd es el componente MÁS CRÍTICO del cluster (almacena TODO el estado). Un etcd cluster HA es fundamental.
+# 1. Configurar Load Balancer (HAProxy/nginx)
+# frontend k8s-api
+#     bind 192.168.1.100:6443
+#     backend: master-1, master-2, master-3
 
-**Topologías de etcd**:
+# 2. Inicializar primer master
+# $ kubeadm init --config=kubeadm-config.yaml --upload-certs
+
+# 3. Unir masters adicionales
+# $ kubeadm join 192.168.1.100:6443 \
+#     --control-plane \
+#     --certificate-key <cert-key>
+
+# 4. Resultado: múltiples masters
+# $ kubectl get nodes
+# master-1   Ready    control-plane   10m
+# master-2   Ready    control-plane   5m
+# master-3   Ready    control-plane   2m
+```
+
+**📁 Ver referencia de configuración HA:** [`ejemplos/04-alta-disponibilidad/ha-cluster-setup.yaml`](./ejemplos/04-alta-disponibilidad/ha-cluster-setup.yaml)
+
+### 5.3 etcd: El Almacén de Estado (Conceptos)
+
+etcd es el componente MÁS CRÍTICO del cluster (almacena TODO el estado). En clusters de producción, etcd puede ejecutarse en HA.
+
+**Topologías de etcd** (referencia conceptual):
 
 1. **Stacked etcd** (mismo nodo que control plane):
    ```
@@ -1642,9 +1676,11 @@ etcd es el componente MÁS CRÍTICO del cluster (almacena TODO el estado). Un et
    ✓ Más simple           │
    ✓ Menos recursos       │
    ✗ Menos resiliente     │
+   
+   (Minikube usa esta topología)
    ```
 
-2. **External etcd** (nodos dedicados):
+2. **External etcd** (nodos dedicados - solo producción):
    ```
    ┌──────────────┐       ┌──────────────┐
    │ Master Node  │       │ etcd Node    │
@@ -1659,32 +1695,48 @@ etcd es el componente MÁS CRÍTICO del cluster (almacena TODO el estado). Un et
    ✗ Más recursos
    ```
 
-**Ejemplo de estado de etcd cluster**:
+**Explorando etcd en Minikube**:
 
 ```bash
-# Ver miembros del cluster etcd
-$ ETCDCTL_API=3 etcdctl \
-  --endpoints=https://192.168.1.10:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/server.crt \
-  --key=/etc/kubernetes/pki/etcd/server.key \
-  member list
+# Acceder al pod de etcd en Minikube
+$ kubectl exec -it etcd-minikube -n kube-system -- sh
 
-a1b2c3d4e5f6g7h8, started, etcd-1, https://192.168.1.10:2380, https://192.168.1.10:2379, false
-h8g7f6e5d4c3b2a1, started, etcd-2, https://192.168.1.11:2380, https://192.168.1.11:2379, false
-1a2b3c4d5e6f7g8h, started, etcd-3, https://192.168.1.12:2380, https://192.168.1.12:2379, true
-                                                                                          ↑
-                                                                                       LEADER
+# Dentro del pod, ver datos almacenados
+$ export ETCDCTL_API=3
+$ etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/var/lib/minikube/certs/etcd/ca.crt \
+  --cert=/var/lib/minikube/certs/etcd/server.crt \
+  --key=/var/lib/minikube/certs/etcd/server.key \
+  get / --prefix --keys-only | head -20
 
-# Ver salud del cluster
-$ ETCDCTL_API=3 etcdctl endpoint health --cluster
+# Verás keys como:
+# /registry/pods/default/my-pod
+# /registry/services/default/kubernetes
+# /registry/deployments/default/my-app
 
-https://192.168.1.10:2379 is healthy: successfully committed proposal: took = 2.5ms
-https://192.168.1.11:2379 is healthy: successfully committed proposal: took = 3.1ms
-https://192.168.1.12:2379 is healthy: successfully committed proposal: took = 2.8ms
+# Ver estadísticas
+$ etcdctl endpoint status --write-out=table
 ```
 
-**Cálculo de quorum**:
+**REFERENCIA: Cómo se vería etcd cluster en producción** (solo conceptual):
+
+```bash
+# EJEMPLO TEÓRICO - Cluster de 3 nodos etcd
+
+# Ver miembros del cluster
+# $ ETCDCTL_API=3 etcdctl member list
+# etcd-1: https://192.168.1.10:2379 (LEADER)
+# etcd-2: https://192.168.1.11:2379 (FOLLOWER)
+# etcd-3: https://192.168.1.12:2379 (FOLLOWER)
+
+# Ver salud
+# $ ETCDCTL_API=3 etcdctl endpoint health --cluster
+# etcd-1 is healthy
+# etcd-2 is healthy
+# etcd-3 is healthy
+```
+
+**Cálculo de quorum** (importante para entender resilencia):
 
 ```
 Quorum = (N + 1) / 2
@@ -1692,10 +1744,10 @@ Quorum = (N + 1) / 2
 ┌───────┬────────┬──────────────┬─────────────────┐
 │ Nodos │ Quorum │ Fallos OK    │ Recomendación   │
 ├───────┼────────┼──────────────┼─────────────────┤
-│   1   │   1    │ 0 (sin HA)   │ Solo dev/test   │
+│   1   │   1    │ 0 (sin HA)   │ Minikube/Dev    │
 │   3   │   2    │ 1 nodo       │ ✓ Producción    │
 │   5   │   3    │ 2 nodos      │ ✓ Alta crítica  │
-│   7   │   4    │ 3 nodos      │ Overkill usual  │
+│   7   │   4    │ 3 nodos      │ Casos extremos  │
 └───────┴────────┴──────────────┴─────────────────┘
 
 ⚠️ IMPORTANTE: Más nodos NO siempre es mejor
@@ -1704,26 +1756,52 @@ Quorum = (N + 1) / 2
 - Número impar SIEMPRE (evitar split-brain)
 ```
 
-**📁 Ver configuración de etcd cluster:** [`ejemplos/04-alta-disponibilidad/etcd-ha-cluster.yaml`](./ejemplos/04-alta-disponibilidad/etcd-ha-cluster.yaml)
+**📁 Ver referencia de etcd cluster:** [`ejemplos/04-alta-disponibilidad/etcd-ha-cluster.yaml`](./ejemplos/04-alta-disponibilidad/etcd-ha-cluster.yaml)
 
-### 5.3 Consideraciones de HA en Producción
+### 5.4 Backup y Restore de etcd en Minikube
 
-**Checklist de HA para producción**:
+Aunque no tenemos un cluster multi-nodo, podemos practicar backup y restore de etcd en Minikube.
+
+```bash
+# Hacer snapshot del etcd de Minikube
+$ minikube ssh
+
+# Dentro de Minikube
+$ docker exec -it $(docker ps -qf "name=etcd") sh
+
+# Crear backup
+$ ETCDCTL_API=3 etcdctl snapshot save /tmp/etcd-backup.db \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/var/lib/minikube/certs/etcd/ca.crt \
+  --cert=/var/lib/minikube/certs/etcd/server.crt \
+  --key=/var/lib/minikube/certs/etcd/server.key
+
+# Verificar snapshot
+$ ETCDCTL_API=3 etcdctl snapshot status /tmp/etcd-backup.db --write-out=table
+```
+
+### 5.5 Conceptos de HA para Producción (Referencia)
+
+**NOTA**: Esta sección es SOLO para referencia conceptual. En producción real con managed Kubernetes (AKS, EKS, GKE), el proveedor de nube gestiona automáticamente la HA del Control Plane.
+
+**Checklist conceptual de HA**:
 
 ```yaml
-# Configuración recomendada para producción
+# REFERENCIA: Configuración típica de producción
+# (NO aplicable a Minikube)
 
 Control Plane:
   masters: 3  # Número impar
   etcd_nodes: 3  # Puede ser external o stacked
-  load_balancer: "HAProxy o Cloud LB"
+  load_balancer: "Cloud LB (Azure LB, AWS ELB, GCP LB)"
   
 Worker Nodes:
-  min_workers: 3
+  min_workers: 3+
   distribution: "Múltiples availability zones"
+  auto_scaling: true
   
 Networking:
-  cni_plugin: "Calico / Cilium (con HA)"
+  cni_plugin: "Calico / Cilium / Azure CNI"
   dns_replicas: 2
   
 Storage:
@@ -2356,7 +2434,7 @@ kubectl run netshoot --rm -it --image=nicolaka/netshoot
 
 ---
 
-### 🚨 Problemas Comunes y Soluciones
+### 🚨 Problemas Comunes y Soluciones (En Minikube)
 
 #### "Pods no arrancan en mi cluster"
 ```bash
@@ -2366,8 +2444,11 @@ kubectl get pods -n kube-system | grep scheduler
 # 2. Ver eventos
 kubectl get events --sort-by='.lastTimestamp' | tail
 
-# 3. Verificar recursos
-kubectl describe node <node> | grep -A 5 "Allocated"
+# 3. Verificar recursos del nodo Minikube
+kubectl describe node minikube | grep -A 5 "Allocated"
+
+# 4. Ver logs del scheduler
+kubectl logs -n kube-system kube-scheduler-minikube
 ```
 
 #### "Services no responden"
@@ -2381,11 +2462,15 @@ kubectl get pods -l <selector> -o jsonpath='{.items[0].metadata.labels}'
 
 # 3. Probar conectividad directa al pod
 kubectl exec -it <test-pod> -- curl http://<pod-ip>:<port>
+
+# 4. Verificar desde dentro de Minikube
+minikube ssh
+curl <service-cluster-ip>:<port>
 ```
 
 #### "DNS no funciona"
 ```bash
-# 1. Verificar CoreDNS
+# 1. Verificar CoreDNS en Minikube
 kubectl get pods -n kube-system -l k8s-app=kube-dns
 
 # 2. Verificar Service
@@ -2393,6 +2478,25 @@ kubectl get svc -n kube-system kube-dns
 
 # 3. Test directo
 kubectl run test --rm -it --image=busybox -- nslookup kubernetes
+
+# 4. Reiniciar CoreDNS si es necesario
+kubectl rollout restart deployment coredns -n kube-system
+```
+
+#### "Minikube no inicia o se queda colgado"
+```bash
+# Ver logs de Minikube
+minikube logs
+
+# Reiniciar completamente
+minikube stop
+minikube delete
+minikube start --driver=docker
+
+# Verificar recursos de la VM
+minikube ssh
+df -h  # Espacio en disco
+free -h  # Memoria
 ```
 
 ---
@@ -2417,44 +2521,46 @@ kubectl run test --rm -it --image=busybox -- nslookup kubernetes
    - LimitRanges
    - Priority Classes
 
-4. **Operaciones Avanzadas**
-   - Cluster Upgrades
-   - Node Maintenance
+4. **Operaciones con Minikube**
+   - Minikube Addons
+   - Persistent Volumes en Minikube
+   - Acceso a Services desde el host
    - Disaster Recovery
 
 **Pre-requisitos para Módulo 03:**
 - ✅ Comprensión sólida de la arquitectura (este módulo)
-- ✅ Capacidad de debuggear componentes
-- ✅ Familiaridad con kubectl
-- ✅ Conocimientos de networking básicos
+- ✅ Capacidad de usar kubectl con confianza
+- ✅ Minikube funcionando correctamente
+- ✅ Familiaridad con pods, services y deployments básicos
 
 ---
 
 ### 💡 Mejores Prácticas Aprendidas
 
-#### Diseño de Cluster
-- ✓ **Siempre usa HA en producción** (mínimo 3 masters)
-- ✓ **Separa etcd en nodos dedicados** para clusters críticos
-- ✓ **Usa Load Balancer** frente al Control Plane
-- ✓ **Implementa backup automatizado de etcd**
+#### Trabajando con Minikube
+- ✓ **Usa driver Docker** para mejor compatibilidad
+- ✓ **Asigna recursos adecuados**: `minikube start --cpus=2 --memory=4096`
+- ✓ **Habilita addons necesarios**: `minikube addons enable metrics-server`
+- ✓ **Usa `minikube ssh`** para debugging avanzado dentro del nodo
 
-#### Operación
-- ✓ **Monitorea métricas del Control Plane**
+#### Operación del Cluster
+- ✓ **Monitorea recursos**: `kubectl top nodes` y `kubectl top pods`
 - ✓ **Establece Resource Limits en todos los pods**
 - ✓ **Usa Health Probes** (liveness, readiness, startup)
-- ✓ **Implementa logging centralizado**
+- ✓ **Consulta eventos regularmente**: `kubectl get events --sort-by='.lastTimestamp'`
 
 #### Troubleshooting
 - ✓ **Empieza siempre por los eventos**: `kubectl get events`
 - ✓ **Verifica endpoints antes de culpar a DNS**
-- ✓ **Usa ephemeral containers para debugging**
-- ✓ **Mantén un pod de debug permanente** (netshoot)
+- ✓ **Usa `kubectl describe`** para ver detalles completos
+- ✓ **Revisa logs de componentes del sistema**: `kubectl logs -n kube-system`
 
-#### Seguridad
+#### Conceptos de Producción (para el futuro)
+- ✓ **En producción, usa managed Kubernetes** (AKS, EKS, GKE)
 - ✓ **Nunca expongas API Server sin autenticación**
 - ✓ **Usa RBAC para todos los usuarios**
-- ✓ **Encripta etcd en reposo**
-- ✓ **Aplica NetworkPolicies restrictivas**
+- ✓ **Implementa Network Policies restrictivas**
+- ✓ **Automatiza backups de estado crítico**
 
 ---
 
@@ -2495,25 +2601,25 @@ Antes de continuar, intenta responder sin consultar:
 
 ### 🎯 Próximos Pasos Recomendados
 
-1. **Práctica Continua**
-   - Repite los laboratorios en tu propio cluster
-   - Experimenta con diferentes configuraciones
-   - Rompe cosas intencionalmente y arreglálas
+1. **Práctica Continua en Minikube**
+   - Repite los laboratorios en tu VM de Azure
+   - Experimenta creando y eliminando recursos
+   - Practica troubleshooting intencionalmente (elimina pods, simula fallos)
 
 2. **Profundización**
-   - Lee el código fuente de componentes en [kubernetes/kubernetes](https://github.com/kubernetes/kubernetes)
-   - Estudia los KEPs (Kubernetes Enhancement Proposals)
-   - Contribuye a la documentación oficial
+   - Explora la [documentación oficial de Kubernetes](https://kubernetes.io/docs/)
+   - Sigue el blog de Kubernetes para novedades
+   - Únete a comunidades en español de Kubernetes
 
-3. **Certificación**
+3. **Preparación para Producción (futuro)**
    - Considera preparar **CKA** (Certified Kubernetes Administrator)
-   - Practica en entornos similares al examen
-   - Domina troubleshooting bajo presión de tiempo
+   - Explora managed Kubernetes (AKS en Azure)
+   - Aprende sobre GitOps (ArgoCD, Flux)
 
 4. **Comunidad**
    - Únete a [Kubernetes Slack](https://slack.k8s.io/)
-   - Participa en meetups locales
-   - Ayuda a otros en foros y StackOverflow
+   - Participa en meetups locales de Cloud Native
+   - Comparte tu aprendizaje en LinkedIn/Twitter
 
 ---
 
@@ -2522,10 +2628,17 @@ Antes de continuar, intenta responder sin consultar:
 Has completado el **Módulo 02: Arquitectura del Cluster de Kubernetes**.
 
 Este módulo te ha proporcionado las bases sólidas necesarias para:
-- Operar clusters en producción
-- Diagnosticar y resolver problemas complejos
-- Diseñar arquitecturas de alta disponibilidad
-- Continuar con módulos avanzados de seguridad y observabilidad
+- Entender cómo funciona Kubernetes internamente
+- Trabajar con confianza en Minikube
+- Diagnosticar y resolver problemas básicos
+- Prepararte para conceptos avanzados de operación y seguridad
+- Comprender la diferencia entre entornos de aprendizaje y producción
+
+**Entorno de Trabajo**:
+- ✅ Minikube con driver Docker en VM Ubuntu (Azure)
+- ✅ Cluster single-node ideal para aprendizaje
+- ✅ Todos los componentes del Control Plane accesibles para inspección
+- ✅ Conceptos de HA y clustering comprendidos (sin implementación práctica)
 
 **¡Felicitaciones por tu dedicación y esfuerzo! 🎉**
 
@@ -2535,6 +2648,7 @@ Este módulo te ha proporcionado las bases sólidas necesarias para:
 
 ---
 
-*Última actualización: 2024*  
+*Última actualización: Noviembre 2025*  
 *Curso: Kubernetes de Fundamentos a Producción*  
-*Área 2: Arquitectura de Kubernetes*
+*Área 2: Arquitectura de Kubernetes*  
+*Entorno: Minikube + Docker en Azure VM*
