@@ -1,0 +1,202 @@
+# ============================================================================
+# DEPLOYMENT BÁSICO - COMPARACIÓN CON DOCKER
+# ============================================================================
+# Este archivo demuestra cómo Kubernetes simplifica la gestión de múltiples
+# contenedores comparado con ejecutar comandos Docker manualmente en cada servidor.
+#
+# Con Docker standalone necesitarías:
+# - SSH a cada servidor manualmente
+# - Ejecutar docker run en cada uno
+# - Configurar load balancer manualmente
+# - Crear scripts para health checks
+# - Monitorear y reiniciar contenedores caídos manualmente
+#
+# Con Kubernetes:
+# - Un solo comando: kubectl apply -f deployment.yaml
+# - Kubernetes se encarga de todo lo demás automáticamente
+# ============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+    ambiente: demo
+spec:
+  # ┌────────────────────────────────────────────────────────────────┐
+  # │ RÉPLICAS: Cuántas copias de tu aplicación quieres             │
+  # │ Kubernetes mantendrá automáticamente este número               │
+  # └────────────────────────────────────────────────────────────────┘
+  replicas: 3
+  
+  # ┌────────────────────────────────────────────────────────────────┐
+  # │ SELECTOR: Cómo Kubernetes identifica qué Pods gestionar       │
+  # │ Debe coincidir con las labels en template.metadata.labels     │
+  # └────────────────────────────────────────────────────────────────┘
+  selector:
+    matchLabels:
+      app: nginx
+  
+  # ┌────────────────────────────────────────────────────────────────┐
+  # │ TEMPLATE: Plantilla para crear cada Pod                       │
+  # │ Define cómo será cada réplica de tu aplicación                │
+  # └────────────────────────────────────────────────────────────────┘
+  template:
+    metadata:
+      labels:
+        app: nginx  # Estas labels deben coincidir con el selector
+        version: v1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine  # Imagen pequeña y eficiente
+        ports:
+        - containerPort: 80
+          name: http
+        
+        # ┌──────────────────────────────────────────────────────────┐
+        # │ RECURSOS: Límites y solicitudes de CPU/memoria          │
+        # │ Kubernetes usa esto para decidir en qué nodo colocar    │
+        # │ cada Pod y para evitar que consuman demasiados recursos │
+        # └──────────────────────────────────────────────────────────┘
+        resources:
+          requests:
+            memory: "64Mi"   # Memoria mínima garantizada
+            cpu: "100m"      # 0.1 CPU cores garantizados
+          limits:
+            memory: "128Mi"  # Memoria máxima permitida
+            cpu: "200m"      # 0.2 CPU cores máximos
+        
+        # ┌──────────────────────────────────────────────────────────┐
+        # │ HEALTH CHECKS: Kubernetes verifica si el contenedor     │
+        # │ está funcionando correctamente y lo reinicia si falla   │
+        # └──────────────────────────────────────────────────────────┘
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10  # Espera 10s antes de la primera verificación
+          periodSeconds: 5         # Verifica cada 5 segundos
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+
+---
+# ============================================================================
+# SERVICE - EXPOSICIÓN DE LA APLICACIÓN
+# ============================================================================
+# Un Service proporciona una IP estable y balanceo de carga automático
+# entre todas las réplicas del Deployment anterior
+# ============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  labels:
+    app: nginx
+spec:
+  type: ClusterIP  # Accesible solo dentro del cluster
+  selector:
+    app: nginx  # Selecciona todos los Pods con esta label
+  ports:
+  - protocol: TCP
+    port: 80        # Puerto del Service
+    targetPort: 80  # Puerto del contenedor
+
+---
+# ============================================================================
+# COMPARACIÓN: DOCKER VS KUBERNETES
+# ============================================================================
+#
+# ESCENARIO: Desplegar 3 réplicas de nginx con health checks y load balancing
+#
+# ┌──────────────────────────────────────────────────────────────────────┐
+# │ CON DOCKER STANDALONE:                                               │
+# ├──────────────────────────────────────────────────────────────────────┤
+# │ # Servidor 1                                                         │
+# │ ssh usuario@servidor1.com                                            │
+# │ docker run -d -p 8080:80 --name nginx-1 \                           │
+# │   --restart unless-stopped nginx:alpine                              │
+# │                                                                       │
+# │ # Servidor 2                                                         │
+# │ ssh usuario@servidor2.com                                            │
+# │ docker run -d -p 8080:80 --name nginx-2 \                           │
+# │   --restart unless-stopped nginx:alpine                              │
+# │                                                                       │
+# │ # Servidor 3                                                         │
+# │ ssh usuario@servidor3.com                                            │
+# │ docker run -d -p 8080:80 --name nginx-3 \                           │
+# │   --restart unless-stopped nginx:alpine                              │
+# │                                                                       │
+# │ # Configurar HAProxy/Nginx como load balancer                       │
+# │ vi /etc/haproxy/haproxy.cfg                                          │
+# │ # ... añadir backend servers manualmente ...                         │
+# │ systemctl restart haproxy                                            │
+# │                                                                       │
+# │ # Crear script de monitoreo (cron cada 5 min)                       │
+# │ vi /usr/local/bin/check_containers.sh                                │
+# │ chmod +x /usr/local/bin/check_containers.sh                          │
+# │ crontab -e  # Añadir */5 * * * * /usr/local/bin/check_containers.sh │
+# │                                                                       │
+# │ TIEMPO: 30-60 minutos                                                │
+# │ COMPLEJIDAD: Alta                                                    │
+# │ MANTENIMIENTO: Manual                                                │
+# └──────────────────────────────────────────────────────────────────────┘
+#
+# ┌──────────────────────────────────────────────────────────────────────┐
+# │ CON KUBERNETES:                                                      │
+# ├──────────────────────────────────────────────────────────────────────┤
+# │ kubectl apply -f deployment-basico.yaml                              │
+# │                                                                       │
+# │ TIEMPO: 10 segundos                                                  │
+# │ COMPLEJIDAD: Baja                                                    │
+# │ MANTENIMIENTO: Automático                                            │
+# │                                                                       │
+# │ Kubernetes automáticamente:                                          │
+# │ ✅ Distribuye las 3 réplicas en nodos disponibles                   │
+# │ ✅ Configura networking entre contenedores                          │
+# │ ✅ Crea load balancer interno                                       │
+# │ ✅ Monitorea health y reinicia si falla                             │
+# │ ✅ Escala horizontal con un comando                                 │
+# │ ✅ Rolling updates sin downtime                                     │
+# └──────────────────────────────────────────────────────────────────────┘
+#
+# ============================================================================
+# COMANDOS ÚTILES
+# ============================================================================
+#
+# # Aplicar este archivo
+# kubectl apply -f deployment-basico.yaml
+#
+# # Ver el deployment
+# kubectl get deployment nginx-deployment
+#
+# # Ver las réplicas creadas
+# kubectl get pods -l app=nginx
+#
+# # Ver el service
+# kubectl get service nginx-service
+#
+# # Escalar a 5 réplicas
+# kubectl scale deployment nginx-deployment --replicas=5
+#
+# # Ver en qué nodos están los pods
+# kubectl get pods -l app=nginx -o wide
+#
+# # Acceder al servicio (desde dentro del cluster)
+# kubectl run -it --rm debug --image=alpine --restart=Never -- \
+#   wget -qO- http://nginx-service
+#
+# # Ver logs de todas las réplicas
+# kubectl logs -l app=nginx --tail=20
+#
+# # Eliminar todo
+# kubectl delete -f deployment-basico.yaml
+#
+# ============================================================================
