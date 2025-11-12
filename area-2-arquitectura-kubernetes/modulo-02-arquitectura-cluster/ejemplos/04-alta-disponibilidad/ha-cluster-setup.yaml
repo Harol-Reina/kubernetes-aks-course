@@ -1,0 +1,296 @@
+# ============================================================================
+# KUBERNETES ALTA DISPONIBILIDAD - CONFIGURACIÓN COMPLETA
+# ============================================================================
+# Setup de cluster HA con 3 masters, etcd externo, y Load Balancer
+# ============================================================================
+
+---
+# ============================================================================
+# PASO 1: CONFIGURAR LOAD BALANCER (HAProxy)
+# ============================================================================
+# 
+# NOTA: HAProxy usa su propio formato de configuración
+# El archivo se encuentra en: /etc/haproxy/haproxy.cfg
+#
+# Configuración mínima necesaria:
+#
+# Frontend para API Server (puerto 6443):
+#   - Bind en *:6443
+#   - Mode TCP
+#   - Backend k8s-api-backend
+#
+# Backend con 3 masters:
+#   - server master-1 192.168.1.10:6443 check
+#   - server master-2 192.168.1.11:6443 check
+#   - server master-3 192.168.1.12:6443 check
+#   - Balance roundrobin
+#   - Health checks habilitados
+#
+# Stats (opcional):
+#   - Bind *:9000
+#   - URI /stats
+#
+# Comandos importantes:
+# $ sudo systemctl restart haproxy
+# $ sudo systemctl enable haproxy
+# $ sudo systemctl status haproxy
+# $ curl http://localhost:9000/stats
+
+---
+# ============================================================================
+# PASO 2: CONFIGURACIÓN DE KUBEADM PARA HA
+# ============================================================================
+# Archivo: kubeadm-config.yaml
+
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: v1.28.0
+
+# ──────────────────────────────────────────────────────────────
+# CONTROL PLANE ENDPOINT (Load Balancer VIP)
+# ──────────────────────────────────────────────────────────────
+controlPlaneEndpoint: "192.168.1.100:6443"
+
+# ──────────────────────────────────────────────────────────────
+# ETCD EXTERNO (3 nodos dedicados)
+# ──────────────────────────────────────────────────────────────
+etcd:
+  external:
+    endpoints:
+    - https://192.168.1.20:2379
+    - https://192.168.1.21:2379
+    - https://192.168.1.22:2379
+    caFile: /etc/kubernetes/pki/etcd/ca.crt
+    certFile: /etc/kubernetes/pki/apiserver-etcd-client.crt
+    keyFile: /etc/kubernetes/pki/apiserver-etcd-client.key
+
+# ──────────────────────────────────────────────────────────────
+# NETWORKING
+# ──────────────────────────────────────────────────────────────
+networking:
+  dnsDomain: cluster.local
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+
+# ──────────────────────────────────────────────────────────────
+# API SERVER CONFIGURACIÓN
+# ──────────────────────────────────────────────────────────────
+apiServer:
+  extraArgs:
+    authorization-mode: "Node,RBAC"
+    enable-admission-plugins: "NodeRestriction,PodSecurityPolicy"
+    audit-log-path: "/var/log/kubernetes/audit.log"
+    audit-log-maxage: "30"
+    audit-log-maxbackup: "10"
+  certSANs:
+  - "192.168.1.100"  # Load Balancer VIP
+  - "kubernetes"
+  - "kubernetes.default"
+  - "kubernetes.default.svc"
+  - "kubernetes.default.svc.cluster.local"
+
+# ──────────────────────────────────────────────────────────────
+# SCHEDULER Y CONTROLLER MANAGER (Leader Election)
+# ──────────────────────────────────────────────────────────────
+scheduler:
+  extraArgs:
+    leader-elect: "true"
+    leader-elect-lease-duration: "15s"
+    leader-elect-renew-deadline: "10s"
+    leader-elect-retry-period: "2s"
+
+controllerManager:
+  extraArgs:
+    leader-elect: "true"
+    leader-elect-lease-duration: "15s"
+    leader-elect-renew-deadline: "10s"
+    leader-elect-retry-period: "2s"
+
+---
+# ============================================================================
+# PASO 3: INICIALIZAR PRIMER MASTER
+# ============================================================================
+
+# En master-1 (192.168.1.10)
+# $ sudo kubeadm init --config=kubeadm-config.yaml --upload-certs
+
+# Output esperado:
+# ──────────────────────────────────────────────────────────────
+# Your Kubernetes control-plane has initialized successfully!
+# 
+# To start using your cluster, you need to run the following:
+#   mkdir -p $HOME/.kube
+#   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+#   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+# 
+# You can now join any number of control-plane nodes by running:
+#   kubeadm join 192.168.1.100:6443 --token abc123.xyz789 \
+#     --discovery-token-ca-cert-hash sha256:1234567890abcdef... \
+#     --control-plane --certificate-key fedcba0987654321...
+# 
+# Join worker nodes:
+#   kubeadm join 192.168.1.100:6443 --token abc123.xyz789 \
+#     --discovery-token-ca-cert-hash sha256:1234567890abcdef...
+# ──────────────────────────────────────────────────────────────
+
+# Configurar kubectl en master-1
+# $ mkdir -p $HOME/.kube
+# $ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+# $ sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Instalar CNI (Calico ejemplo)
+# $ kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+---
+# ============================================================================
+# PASO 4: UNIR MASTERS ADICIONALES
+# ============================================================================
+
+# En master-2 (192.168.1.11)
+# $ sudo kubeadm join 192.168.1.100:6443 \
+#     --token abc123.xyz789 \
+#     --discovery-token-ca-cert-hash sha256:1234567890abcdef... \
+#     --control-plane \
+#     --certificate-key fedcba0987654321...
+
+# En master-3 (192.168.1.12)
+# $ sudo kubeadm join 192.168.1.100:6443 \
+#     --token abc123.xyz789 \
+#     --discovery-token-ca-cert-hash sha256:1234567890abcdef... \
+#     --control-plane \
+#     --certificate-key fedcba0987654321...
+
+# ⚠️ NOTA: certificate-key expira en 2 horas
+# Si expira, regenerar:
+# $ sudo kubeadm init phase upload-certs --upload-certs
+
+---
+# ============================================================================
+# PASO 5: VERIFICAR CLUSTER HA
+# ============================================================================
+
+# Ver todos los nodos control plane
+# $ kubectl get nodes
+# NAME       STATUS   ROLES           AGE   VERSION
+# master-1   Ready    control-plane   10m   v1.28.0
+# master-2   Ready    control-plane   5m    v1.28.0
+# master-3   Ready    control-plane   2m    v1.28.0
+
+# Ver componentes del control plane
+# $ kubectl get pods -n kube-system -o wide
+
+# Verificar quién es el líder del Scheduler
+# $ kubectl get endpoints kube-scheduler -n kube-system -o yaml
+# metadata:
+#   annotations:
+#     control-plane.alpha.kubernetes.io/leader: |
+#       {"holderIdentity":"master-2_abc123...","leaseDurationSeconds":15,...}
+#                          ↑ master-2 es el líder actual
+
+# Verificar quién es el líder del Controller Manager
+# $ kubectl get endpoints kube-controller-manager -n kube-system -o yaml
+
+# Ver eventos de leader election
+# $ kubectl get events -n kube-system --sort-by='.lastTimestamp' | grep -i leader
+
+---
+# ============================================================================
+# PASO 6: PRUEBAS DE ALTA DISPONIBILIDAD
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PRUEBA 1: Apagar un API Server
+# ──────────────────────────────────────────────────────────────
+# En master-1:
+# $ sudo systemctl stop kubelet
+
+# Desde otro nodo:
+# $ kubectl get nodes
+# (Debería funcionar - Load Balancer redirige a master-2 o master-3)
+
+# Ver logs de HAProxy
+# $ sudo tail -f /var/log/haproxy.log
+# Server k8s-api-backend/master-1 is DOWN (health check failed)
+
+# ──────────────────────────────────────────────────────────────
+# PRUEBA 2: Simular fallo del líder del Scheduler
+# ──────────────────────────────────────────────────────────────
+# Identificar líder actual
+# $ kubectl get endpoints kube-scheduler -n kube-system -o jsonpath='{.metadata.annotations.control-plane\.alpha\.kubernetes\.io/leader}'
+
+# Apagar ese nodo (ejemplo: master-2)
+# $ ssh master-2
+# $ sudo systemctl stop kubelet
+
+# Verificar nuevo líder (debería cambiar en ~15 segundos)
+# $ kubectl get endpoints kube-scheduler -n kube-system -o jsonpath='{.metadata.annotations.control-plane\.alpha\.kubernetes\.io/leader}'
+# holderIdentity ahora es master-1 o master-3
+
+# ──────────────────────────────────────────────────────────────
+# PRUEBA 3: Deployment continúa funcionando
+# ──────────────────────────────────────────────────────────────
+# Con master-1 apagado, crear un Deployment
+# $ kubectl create deployment nginx --image=nginx --replicas=3
+
+# Verificar que se crea correctamente
+# $ kubectl get pods -o wide
+# (Pods se crean en workers disponibles)
+
+---
+# ============================================================================
+# TOPOLOGÍA COMPLETA
+# ============================================================================
+
+# ┌────────────────────────────────────────────────────────────┐
+# │                     LOAD BALANCER                          │
+# │                 192.168.1.100:6443                         │
+# │                    (HAProxy)                               │
+# └──────────────┬──────────────┬──────────────┬───────────────┘
+#                │              │              │
+#     ┌──────────▼─────┐ ┌─────▼──────┐ ┌────▼───────┐
+#     │   MASTER-1     │ │  MASTER-2  │ │  MASTER-3  │
+#     │ 192.168.1.10   │ │192.168.1.11│ │192.168.1.12│
+#     ├────────────────┤ ├────────────┤ ├────────────┤
+#     │ API Server     │ │API Server  │ │API Server  │
+#     │ Scheduler      │ │Scheduler   │ │Scheduler   │
+#     │ Ctrl Manager   │ │Ctrl Manager│ │Ctrl Manager│
+#     └────────┬───────┘ └─────┬──────┘ └────┬───────┘
+#              │               │             │
+#              └───────────────┼─────────────┘
+#                              │
+#              ┌───────────────▼───────────────┐
+#              │        etcd CLUSTER           │
+#              ├───────────────────────────────┤
+#              │ etcd-1: 192.168.1.20:2379     │
+#              │ etcd-2: 192.168.1.21:2379     │
+#              │ etcd-3: 192.168.1.22:2379     │
+#              └───────────────────────────────┘
+#
+#     ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+#     │  WORKER-1   │  │  WORKER-2   │  │  WORKER-3   │
+#     │192.168.1.30 │  │192.168.1.31 │  │192.168.1.32 │
+#     └─────────────┘  └─────────────┘  └─────────────┘
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ Load Balancer es CRÍTICO (single point of failure si no está en HA)
+# ✓ etcd externo permite escalar control plane independientemente
+# ✓ Scheduler y Controller Manager usan leader election (solo uno activo)
+# ✓ API Server es stateless (todas las instancias activas)
+# ✓ certificate-key solo válido 2 horas (regenerar si expira)
+# ✓ Mínimo 3 masters para verdadera HA (tolera 1 fallo)
+# ✓ Número IMPAR de masters (evita split-brain)
+# ✓ controlPlaneEndpoint DEBE apuntar al Load Balancer (no a un master)
+# ✓ Todos los masters deben poder comunicarse con etcd
+# ✓ Workers se conectan SOLO al Load Balancer (no directo a masters)
+# 
+# RECOVERY:
+# • Si master cae: automatico (LB redirige)
+# • Si líder cae: leader election (~15s)
+# • Si LB cae: cluster DOWN (usar LB en HA también)
+# • Si etcd pierde quorum: cluster read-only (restaurar urgente)
+# 
+# ============================================================================

@@ -1,0 +1,349 @@
+# ============================================================================
+# KUBE-PROXY - CONFIGURACIÓN Y EJEMPLOS
+# ============================================================================
+# kube-proxy gestiona las reglas de red en cada Worker Node
+# para permitir comunicación de red a los Pods
+# ============================================================================
+
+---
+# ============================================================================
+# CONFIGURACIÓN DE KUBE-PROXY
+# ============================================================================
+# Archivo: /var/lib/kube-proxy/config.conf
+
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+
+# ──────────────────────────────────────────────────────────────
+# MODO DE OPERACIÓN
+# ──────────────────────────────────────────────────────────────
+mode: "iptables"  # Opciones: iptables, ipvs, userspace (legacy)
+
+# ──────────────────────────────────────────────────────────────
+# CONFIGURACIÓN IPTABLES
+# ──────────────────────────────────────────────────────────────
+iptables:
+  # Intervalo de sincronización
+  syncPeriod: 30s
+  minSyncPeriod: 2s
+  
+  # Masquerade para tráfico que sale del cluster
+  masqueradeAll: false
+  masqueradeBit: 14
+  
+  # Limitar conexiones por IP
+  localhostNodePorts: true
+
+# ──────────────────────────────────────────────────────────────
+# CONFIGURACIÓN IPVS (alternativa a iptables)
+# ──────────────────────────────────────────────────────────────
+ipvs:
+  # Intervalo de sincronización
+  syncPeriod: 30s
+  minSyncPeriod: 2s
+  
+  # Algoritmo de balanceo
+  scheduler: "rr"  # Opciones: rr, lc, dh, sh, sed, nq
+  
+  # Excluir CIDRs específicos
+  excludeCIDRs: []
+  
+  # Strict ARP (para MetalLB y similares)
+  strictARP: false
+
+# ──────────────────────────────────────────────────────────────
+# CONEXIÓN A API SERVER
+# ──────────────────────────────────────────────────────────────
+clientConnection:
+  kubeconfig: /var/lib/kube-proxy/kubeconfig.conf
+  acceptContentTypes: ""
+  contentType: application/vnd.kubernetes.protobuf
+  qps: 5
+  burst: 10
+
+# ──────────────────────────────────────────────────────────────
+# CONFIGURACIÓN DE CLUSTER
+# ──────────────────────────────────────────────────────────────
+clusterCIDR: "10.244.0.0/16"
+
+# ──────────────────────────────────────────────────────────────
+# CONFIGURACIÓN DE CONNTRACK
+# ──────────────────────────────────────────────────────────────
+conntrack:
+  maxPerCore: 32768
+  min: 131072
+  tcpEstablishedTimeout: 24h0m0s
+  tcpCloseWaitTimeout: 1h0m0s
+
+# ──────────────────────────────────────────────────────────────
+# LOGS Y MÉTRICAS
+# ──────────────────────────────────────────────────────────────
+metricsBindAddress: 127.0.0.1:10249
+enableProfiling: false
+
+# ──────────────────────────────────────────────────────────────
+# DETECCIÓN DE NODO
+# ──────────────────────────────────────────────────────────────
+hostnameOverride: ""
+nodePortAddresses: []
+
+---
+# ============================================================================
+# EJEMPLO: SERVICE CLUSTERIP CON BACKEND PODS
+# ============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+  - protocol: TCP
+    port: 80        # Puerto del Service
+    targetPort: 8080  # Puerto del Pod
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-1
+  labels:
+    app: backend
+spec:
+  containers:
+  - name: app
+    image: nginx
+    ports:
+    - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-2
+  labels:
+    app: backend
+spec:
+  containers:
+  - name: app
+    image: nginx
+    ports:
+    - containerPort: 8080
+
+---
+# ============================================================================
+# REGLAS IPTABLES GENERADAS AUTOMÁTICAMENTE
+# ============================================================================
+# Cuando creas el Service anterior, kube-proxy genera estas reglas:
+
+# ──────────────────────────────────────────────────────────────
+# CADENA KUBE-SERVICES (punto de entrada)
+# ──────────────────────────────────────────────────────────────
+# $ sudo iptables -t nat -L KUBE-SERVICES -n -v
+#
+# Chain KUBE-SERVICES
+# -A KUBE-SERVICES -d 10.96.100.200/32 -p tcp -m tcp --dport 80 \
+#    -j KUBE-SVC-XXXXX
+
+# ──────────────────────────────────────────────────────────────
+# CADENA KUBE-SVC-XXXXX (load balancing estadístico)
+# ──────────────────────────────────────────────────────────────
+# $ sudo iptables -t nat -L KUBE-SVC-XXXXX -n -v
+#
+# Chain KUBE-SVC-XXXXX
+# -A KUBE-SVC-XXXXX -m statistic --mode random --probability 0.5 \
+#    -j KUBE-SEP-AAAA  # 50% -> backend-1
+# -A KUBE-SVC-XXXXX -j KUBE-SEP-BBBB  # 50% -> backend-2
+
+# ──────────────────────────────────────────────────────────────
+# CADENA KUBE-SEP-XXXXX (DNAT a Pod real)
+# ──────────────────────────────────────────────────────────────
+# $ sudo iptables -t nat -L KUBE-SEP-AAAA -n -v
+#
+# Chain KUBE-SEP-AAAA
+# -A KUBE-SEP-AAAA -p tcp -m tcp \
+#    -j DNAT --to-destination 10.244.1.5:8080  # IP del Pod backend-1
+
+---
+# ============================================================================
+# EJEMPLO: SERVICE NODEPORT
+# ============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+    nodePort: 30080  # Puerto en TODOS los nodos
+
+---
+# ============================================================================
+# REGLAS IPTABLES PARA NODEPORT
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# CADENA KUBE-NODEPORTS
+# ──────────────────────────────────────────────────────────────
+# $ sudo iptables -t nat -L KUBE-NODEPORTS -n -v
+#
+# Chain KUBE-NODEPORTS
+# -A KUBE-NODEPORTS -p tcp -m tcp --dport 30080 \
+#    -j KUBE-SVC-YYYYY
+
+# Luego redirige a KUBE-SVC-YYYYY (igual que ClusterIP)
+
+---
+# ============================================================================
+# COMPARACIÓN: IPTABLES VS IPVS
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# MODO IPTABLES
+# ──────────────────────────────────────────────────────────────
+# ✓ Por defecto en Kubernetes
+# ✓ No requiere módulos kernel adicionales
+# ✓ Load balancing probabilístico (--probability)
+# ✗ Performance degrada con muchos Services (O(n))
+# ✗ Reglas complejas difíciles de debuggear
+
+# ──────────────────────────────────────────────────────────────
+# MODO IPVS
+# ──────────────────────────────────────────────────────────────
+# ✓ Mejor performance con muchos Services (O(1))
+# ✓ Múltiples algoritmos de balanceo (rr, lc, sh, etc.)
+# ✓ Más fácil de debuggear (ipvsadm)
+# ✗ Requiere módulos kernel: ip_vs, ip_vs_rr, etc.
+# ✗ Requiere configuración adicional
+
+---
+# ============================================================================
+# COMANDOS ÚTILES PARA KUBE-PROXY
+# ============================================================================
+
+# Ver modo actual de kube-proxy
+# $ kubectl logs -n kube-system kube-proxy-xxxxx | grep "Using"
+
+# Ver reglas iptables generadas (en el nodo)
+# $ sudo iptables -t nat -L -n -v | grep KUBE
+
+# Ver solo cadenas de Services
+# $ sudo iptables -t nat -L KUBE-SERVICES -n
+
+# Ver endpoints de un Service
+# $ kubectl get endpoints <service-name>
+
+# Ver conntrack entries (en el nodo)
+# $ sudo conntrack -L | grep <service-ip>
+
+# ──────────────────────────────────────────────────────────────
+# COMANDOS IPVS (si está en modo ipvs)
+# ──────────────────────────────────────────────────────────────
+# Listar servicios virtuales
+# $ sudo ipvsadm -L -n
+
+# Ver conexiones activas
+# $ sudo ipvsadm -L -n --stats
+
+# Ver tasa de paquetes
+# $ sudo ipvsadm -L -n --rate
+
+---
+# ============================================================================
+# DEBUGGING: TROUBLESHOOTING DE NETWORKING
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# Problema: Service no responde
+# ──────────────────────────────────────────────────────────────
+# 1. Verificar que el Service existe
+# $ kubectl get svc <service-name>
+
+# 2. Verificar endpoints (debe haber IPs de Pods)
+# $ kubectl get endpoints <service-name>
+
+# 3. Probar desde dentro del cluster
+# $ kubectl run test-pod --rm -it --image=busybox -- sh
+# $ wget -O- http://<service-name>
+
+# 4. Verificar reglas iptables (en el nodo)
+# $ sudo iptables -t nat -L KUBE-SERVICES -n | grep <service-ip>
+
+# 5. Ver logs de kube-proxy
+# $ kubectl logs -n kube-system kube-proxy-xxxxx
+
+# ──────────────────────────────────────────────────────────────
+# Problema: NodePort no accesible
+# ──────────────────────────────────────────────────────────────
+# 1. Verificar que el puerto está en rango válido (30000-32767)
+# $ kubectl get svc <service-name>
+
+# 2. Verificar firewall del nodo
+# $ sudo iptables -L -n | grep <nodeport>
+
+# 3. Probar desde el nodo mismo
+# $ curl localhost:<nodeport>
+
+# 4. Verificar que kube-proxy está corriendo
+# $ kubectl get pods -n kube-system -l k8s-app=kube-proxy
+
+---
+# ============================================================================
+# EJEMPLO: CAMBIAR DE IPTABLES A IPVS
+# ============================================================================
+
+# 1. Cargar módulos kernel necesarios (en TODOS los nodos)
+# $ sudo modprobe ip_vs
+# $ sudo modprobe ip_vs_rr
+# $ sudo modprobe ip_vs_wrr
+# $ sudo modprobe ip_vs_sh
+# $ sudo modprobe nf_conntrack
+
+# 2. Instalar ipvsadm
+# $ sudo apt-get install ipvsadm  # Debian/Ubuntu
+# $ sudo yum install ipvsadm      # RHEL/CentOS
+
+# 3. Editar ConfigMap de kube-proxy
+# $ kubectl edit configmap kube-proxy -n kube-system
+# Cambiar: mode: "ipvs"
+
+# 4. Reiniciar kube-proxy pods
+# $ kubectl rollout restart daemonset kube-proxy -n kube-system
+
+# 5. Verificar modo
+# $ kubectl logs -n kube-system kube-proxy-xxxxx | grep "Using"
+# Debe mostrar: "Using ipvs Proxier"
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ kube-proxy NO hace forwarding de paquetes (solo reglas)
+# ✓ El kernel de Linux hace el forwarding real (iptables/IPVS)
+# ✓ kube-proxy sincroniza estado cada 30s por defecto
+# ✓ Service ClusterIP solo accesible desde DENTRO del cluster
+# ✓ NodePort expone en TODOS los nodos (incluso sin Pods)
+# ✓ IPVS requiere módulos kernel adicionales
+# ✓ iptables usa probabilidad estadística para balanceo
+# ✓ IPVS ofrece algoritmos reales (Round Robin, Least Connection, etc.)
+# ✓ Conntrack rastrea conexiones TCP/UDP existentes
+# ✓ kube-proxy NUNCA toca los paquetes, solo crea reglas
+# 
+# FLUJO DE UN PAQUETE:
+# 1. Cliente → Service IP:Port
+# 2. iptables/IPVS intercepta (PREROUTING)
+# 3. DNAT a Pod IP:TargetPort (balanceo)
+# 4. Paquete enrutado al Pod
+# 5. Respuesta usa conntrack (SNAT inverso)
+# 
+# ============================================================================

@@ -1,0 +1,355 @@
+# ============================================================================
+# etcd CLUSTER EN ALTA DISPONIBILIDAD
+# ============================================================================
+# Configuración de etcd cluster externo con 3 nodos
+# ============================================================================
+
+---
+# ============================================================================
+# ARQUITECTURA etcd CLUSTER
+# ============================================================================
+
+# ┌──────────────────────────────────────────────────────────────┐
+# │                    etcd CLUSTER                              │
+# │                  (RAFT Consensus)                            │
+# ├──────────────────────────────────────────────────────────────┤
+# │                                                              │
+# │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐       │
+# │  │   etcd-1    │   │   etcd-2    │   │   etcd-3    │       │
+# │  │  (LEADER)   │◄──┤  (FOLLOWER) │◄──┤  (FOLLOWER) │       │
+# │  │             │──►│             │──►│             │       │
+# │  │ :2379       │   │ :2379       │   │ :2379       │       │
+# │  │ :2380       │   │ :2380       │   │ :2380       │       │
+# │  └─────────────┘   └─────────────┘   └─────────────┘       │
+# │       ↑                 ↑                 ↑                 │
+# └───────┼─────────────────┼─────────────────┼─────────────────┘
+#         │                 │                 │
+#         └─────────────────┴─────────────────┘
+#                           │
+#                  Client connections
+#             (API Server, etcdctl, etc.)
+
+# Puertos:
+# • 2379: Client connections (API Server se conecta aquí)
+# • 2380: Peer connections (comunicación entre nodos etcd)
+
+---
+# ============================================================================
+# INSTALACIÓN DE etcd EN CADA NODO
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# Pasos para instalar etcd en cada nodo
+# ──────────────────────────────────────────────────────────────
+#
+# 1. Descargar etcd:
+#    $ ETCD_VERSION="v3.5.10"
+#    $ wget https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-amd64.tar.gz
+#    $ tar xzf etcd-${ETCD_VERSION}-linux-amd64.tar.gz
+#    $ sudo mv etcd-${ETCD_VERSION}-linux-amd64/etcd* /usr/local/bin/
+#
+# 2. Crear directorios:
+#    $ sudo mkdir -p /var/lib/etcd /etc/etcd
+#
+# 3. Generar certificados TLS (usando cfssl o kubeadm)
+#
+# 4. Crear archivo systemd service en /etc/systemd/system/etcd.service
+#    con la configuración de etcd cluster (ver documentación oficial)
+#
+#    Parámetros clave:
+#    - name: etcd-1 (único por nodo)
+#    - listen-client-urls: https://192.168.1.20:2379
+#    - listen-peer-urls: https://192.168.1.20:2380
+#    - initial-cluster: lista de todos los miembros
+#    - initial-cluster-state: new (primera vez) o existing
+#    - certificados TLS para client y peer
+#
+# 5. Iniciar servicio:
+#    $ sudo systemctl daemon-reload
+#    $ sudo systemctl enable etcd
+#    $ sudo systemctl start etcd
+
+# 6. Verificar
+# $ sudo systemctl status etcd
+# $ sudo journalctl -u etcd -f
+
+---
+# ============================================================================
+# CONFIGURACIÓN PARA etcd-2 y etcd-3
+# ============================================================================
+
+# Repetir los pasos anteriores en:
+# • etcd-2 (192.168.1.21): cambiar --name=etcd-2, IPs, etc.
+# • etcd-3 (192.168.1.22): cambiar --name=etcd-3, IPs, etc.
+
+# IMPORTANTE: 
+# • --initial-cluster DEBE ser IGUAL en todos los nodos
+# • --initial-cluster-state=new solo la primera vez
+# • Todos los nodos deben iniciar casi al mismo tiempo
+
+---
+# ============================================================================
+# VERIFICAR CLUSTER etcd
+# ============================================================================
+
+# Ver miembros del cluster
+# $ ETCDCTL_API=3 etcdctl \
+#   --endpoints=https://192.168.1.20:2379,https://192.168.1.21:2379,https://192.168.1.22:2379 \
+#   --cacert=/etc/etcd/ca.crt \
+#   --cert=/etc/etcd/server.crt \
+#   --key=/etc/etcd/server.key \
+#   member list
+
+# Output:
+# a1b2c3d4, started, etcd-1, https://192.168.1.20:2380, https://192.168.1.20:2379, false
+# e5f6g7h8, started, etcd-2, https://192.168.1.21:2380, https://192.168.1.21:2379, false
+# i9j0k1l2, started, etcd-3, https://192.168.1.22:2380, https://192.168.1.22:2379, true
+#                                                                                  ↑ LEADER
+
+# Ver salud del cluster
+# $ ETCDCTL_API=3 etcdctl endpoint health \
+#   --endpoints=https://192.168.1.20:2379,https://192.168.1.21:2379,https://192.168.1.22:2379 \
+#   --cacert=/etc/etcd/ca.crt \
+#   --cert=/etc/etcd/server.crt \
+#   --key=/etc/etcd/server.key
+
+# Output:
+# https://192.168.1.20:2379 is healthy: successfully committed proposal: took = 2.3ms
+# https://192.168.1.21:2379 is healthy: successfully committed proposal: took = 2.8ms
+# https://192.168.1.22:2379 is healthy: successfully committed proposal: took = 2.5ms
+
+# Ver status detallado
+# $ ETCDCTL_API=3 etcdctl endpoint status \
+#   --endpoints=https://192.168.1.20:2379,https://192.168.1.21:2379,https://192.168.1.22:2379 \
+#   --cacert=/etc/etcd/ca.crt \
+#   --cert=/etc/etcd/server.crt \
+#   --key=/etc/etcd/server.key \
+#   --write-out=table
+
+# Output:
+# ┌──────────────────────┬────────┬─────────┬────────┬─────────┬─────────┬────────┐
+# │     ENDPOINT         │   ID   │ VERSION │ DB SIZE│ IS LEADER│IS LEARNER│ ERRORS │
+# ├──────────────────────┼────────┼─────────┼────────┼─────────┼──────────┼────────┤
+# │https://192.168.1.20  │ abc123 │  3.5.10 │  25 kB │   false │   false  │        │
+# │https://192.168.1.21  │ def456 │  3.5.10 │  25 kB │   false │   false  │        │
+# │https://192.168.1.22  │ ghi789 │  3.5.10 │  25 kB │   true  │   false  │        │
+# └──────────────────────┴────────┴─────────┴────────┴─────────┴──────────┴────────┘
+
+---
+# ============================================================================
+# BACKUP AUTOMÁTICO DE etcd
+# ============================================================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+spec:
+  # Ejecutar cada 6 horas
+  schedule: "0 */6 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: etcd-backup
+            image: registry.k8s.io/etcd:3.5.10-0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              BACKUP_DIR="/backup"
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="${BACKUP_DIR}/etcd-snapshot-${TIMESTAMP}.db"
+              
+              # Crear snapshot
+              ETCDCTL_API=3 etcdctl snapshot save ${BACKUP_FILE} \
+                --endpoints=https://192.168.1.20:2379 \
+                --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+                --cert=/etc/kubernetes/pki/etcd/server.crt \
+                --key=/etc/kubernetes/pki/etcd/server.key
+              
+              # Verificar snapshot
+              ETCDCTL_API=3 etcdctl snapshot status ${BACKUP_FILE} --write-out=table
+              
+              # Limpiar backups antiguos (mantener últimos 7 días)
+              find ${BACKUP_DIR} -name "etcd-snapshot-*.db" -mtime +7 -delete
+              
+              echo "Backup completed: ${BACKUP_FILE}"
+            
+            volumeMounts:
+            - name: etcd-certs
+              mountPath: /etc/kubernetes/pki/etcd
+              readOnly: true
+            - name: backup
+              mountPath: /backup
+          
+          volumes:
+          - name: etcd-certs
+            hostPath:
+              path: /etc/kubernetes/pki/etcd
+              type: Directory
+          - name: backup
+            hostPath:
+              path: /var/backups/etcd
+              type: DirectoryOrCreate
+          
+          restartPolicy: OnFailure
+          hostNetwork: true
+
+---
+# ============================================================================
+# RESTORE DE etcd DESDE BACKUP
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PASO 1: Detener etcd en TODOS los nodos
+# ──────────────────────────────────────────────────────────────
+# $ sudo systemctl stop etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: Backup del data directory actual (por seguridad)
+# ──────────────────────────────────────────────────────────────
+# $ sudo mv /var/lib/etcd /var/lib/etcd.backup
+
+# ──────────────────────────────────────────────────────────────
+# PASO 3: Restore desde snapshot EN CADA NODO
+# ──────────────────────────────────────────────────────────────
+
+# En etcd-1:
+# $ sudo ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-snapshot-20241111_100000.db \
+#   --name=etcd-1 \
+#   --initial-cluster=etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380 \
+#   --initial-cluster-token=etcd-cluster-1 \
+#   --initial-advertise-peer-urls=https://192.168.1.20:2380 \
+#   --data-dir=/var/lib/etcd
+
+# En etcd-2:
+# $ sudo ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-snapshot-20241111_100000.db \
+#   --name=etcd-2 \
+#   --initial-cluster=etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380 \
+#   --initial-cluster-token=etcd-cluster-1 \
+#   --initial-advertise-peer-urls=https://192.168.1.21:2380 \
+#   --data-dir=/var/lib/etcd
+
+# En etcd-3:
+# $ sudo ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-snapshot-20241111_100000.db \
+#   --name=etcd-3 \
+#   --initial-cluster=etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380 \
+#   --initial-cluster-token=etcd-cluster-1 \
+#   --initial-advertise-peer-urls=https://192.168.1.22:2380 \
+#   --data-dir=/var/lib/etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 4: Ajustar permisos
+# ──────────────────────────────────────────────────────────────
+# $ sudo chown -R etcd:etcd /var/lib/etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 5: Iniciar etcd en TODOS los nodos
+# ──────────────────────────────────────────────────────────────
+# $ sudo systemctl start etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 6: Verificar cluster restaurado
+# ──────────────────────────────────────────────────────────────
+# $ ETCDCTL_API=3 etcdctl member list
+# $ kubectl get pods --all-namespaces
+
+---
+# ============================================================================
+# AGREGAR NUEVO MIEMBRO AL CLUSTER
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PASO 1: Agregar miembro desde un nodo existente
+# ──────────────────────────────────────────────────────────────
+# $ ETCDCTL_API=3 etcdctl member add etcd-4 \
+#   --peer-urls=https://192.168.1.23:2380 \
+#   --endpoints=https://192.168.1.20:2379 \
+#   --cacert=/etc/etcd/ca.crt \
+#   --cert=/etc/etcd/server.crt \
+#   --key=/etc/etcd/server.key
+
+# Output:
+# Member abc123def456 added to cluster xyz789
+# 
+# ETCD_NAME="etcd-4"
+# ETCD_INITIAL_CLUSTER="etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380,etcd-4=https://192.168.1.23:2380"
+# ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.1.23:2380"
+# ETCD_INITIAL_CLUSTER_STATE="existing"
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: Configurar nuevo nodo (etcd-4)
+# ──────────────────────────────────────────────────────────────
+# Usar configuración del output anterior
+# IMPORTANTE: --initial-cluster-state=existing (NO "new")
+
+# ──────────────────────────────────────────────────────────────
+# PASO 3: Iniciar etcd-4
+# ──────────────────────────────────────────────────────────────
+# $ sudo systemctl start etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 4: Verificar
+# ──────────────────────────────────────────────────────────────
+# $ ETCDCTL_API=3 etcdctl member list
+
+---
+# ============================================================================
+# ELIMINAR MIEMBRO DEL CLUSTER
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PASO 1: Listar miembros y obtener ID
+# ──────────────────────────────────────────────────────────────
+# $ ETCDCTL_API=3 etcdctl member list
+# a1b2c3d4, started, etcd-1, https://192.168.1.20:2380, ...
+# e5f6g7h8, started, etcd-2, https://192.168.1.21:2380, ...
+# i9j0k1l2, started, etcd-3, https://192.168.1.22:2380, ...
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: Eliminar miembro (ejemplo: etcd-3)
+# ──────────────────────────────────────────────────────────────
+# $ ETCDCTL_API=3 etcdctl member remove i9j0k1l2 \
+#   --endpoints=https://192.168.1.20:2379 \
+#   --cacert=/etc/etcd/ca.crt \
+#   --cert=/etc/etcd/server.crt \
+#   --key=/etc/etcd/server.key
+
+# ──────────────────────────────────────────────────────────────
+# PASO 3: Detener etcd en el nodo eliminado
+# ──────────────────────────────────────────────────────────────
+# $ sudo systemctl stop etcd
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ etcd usa RAFT consensus (un líder, múltiples followers)
+# ✓ Quorum = (N + 1) / 2 nodos deben estar UP
+# ✓ 3 nodos: tolera 1 fallo (quorum = 2)
+# ✓ 5 nodos: tolera 2 fallos (quorum = 3)
+# ✓ Número IMPAR de nodos SIEMPRE (evita split-brain)
+# ✓ Snapshot NO detiene etcd (operación online)
+# ✓ Restore REQUIERE detener cluster completo
+# ✓ Agregar miembro: --initial-cluster-state=existing
+# ✓ TLS es OBLIGATORIO en producción
+# ✓ Backup automático es CRÍTICO (cada 6 horas mínimo)
+# ✓ Latencia de red entre nodos debe ser < 10ms
+# ✓ DB size grande (>8GB) afecta performance (compactar)
+# 
+# COMPACTACIÓN:
+# $ ETCDCTL_API=3 etcdctl compact <revision>
+# $ ETCDCTL_API=3 etcdctl defrag --cluster
+# 
+# MONITOREO:
+# • Ver DB size: etcdctl endpoint status
+# • Ver latency: Prometheus metrics en :2379/metrics
+# • Alertas: DB size > 2GB, latency > 100ms
+# 
+# ============================================================================

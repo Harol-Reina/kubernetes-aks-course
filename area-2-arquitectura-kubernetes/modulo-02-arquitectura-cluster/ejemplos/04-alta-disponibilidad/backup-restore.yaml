@@ -1,0 +1,414 @@
+# ============================================================================
+# BACKUP Y RESTORE DE etcd
+# ============================================================================
+# Estrategias y procedimientos para backup/restore del cluster
+# ============================================================================
+
+---
+# ============================================================================
+# ESTRATEGIA DE BACKUP
+# ============================================================================
+
+# ┌──────────────────────────────────────────────────────────────┐
+# │                  BACKUP STRATEGY                             │
+# ├──────────────────────────────────────────────────────────────┤
+# │                                                              │
+# │  1. SCHEDULED BACKUPS (Automated)                            │
+# │     • CronJob cada 6 horas                                   │
+# │     • Snapshots guardados en PV o storage externo            │
+# │     • Retención: 7 días                                      │
+# │                                                              │
+# │  2. PRE-UPGRADE BACKUPS (Manual)                             │
+# │     • Antes de actualizar Kubernetes                         │
+# │     • Antes de cambios críticos                              │
+# │                                                              │
+# │  3. DISASTER RECOVERY BACKUPS (External)                     │
+# │     • Copia a cloud storage (S3, GCS, Azure Blob)            │
+# │     • Encriptado                                             │
+# │     • Retención: 30 días                                     │
+# │                                                              │
+# └──────────────────────────────────────────────────────────────┘
+
+---
+# ============================================================================
+# PROCEDIMIENTO DE BACKUP MANUAL
+# ============================================================================
+# Para hacer backup manual de etcd, sigue estos pasos:
+#
+# 1. Configurar variables:
+#    BACKUP_DIR="/var/backups/etcd"
+#    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+#    BACKUP_FILE="${BACKUP_DIR}/etcd-snapshot-${TIMESTAMP}.db"
+#
+# 2. Endpoints y certificados:
+#    ENDPOINTS="https://192.168.1.20:2379"
+#    CACERT="/etc/kubernetes/pki/etcd/ca.crt"
+#    CERT="/etc/kubernetes/pki/etcd/server.crt"
+#    KEY="/etc/kubernetes/pki/etcd/server.key"
+#
+# 3. Crear snapshot:
+#    $ ETCDCTL_API=3 etcdctl snapshot save ${BACKUP_FILE} \
+#      --endpoints=${ENDPOINTS} \
+#      --cacert=${CACERT} \
+#      --cert=${CERT} \
+#      --key=${KEY}
+#
+# 4. Verificar snapshot:
+#    $ ETCDCTL_API=3 etcdctl snapshot status ${BACKUP_FILE} --write-out=table
+#
+# 5. Limpiar backups antiguos (opcional):
+#    $ find ${BACKUP_DIR} -name "etcd-snapshot-*.db" -mtime +7 -delete
+#
+# Para script automatizado, crear archivo backup-etcd.sh con el procedimiento completo
+
+---
+# ============================================================================
+# CRONJOB PARA BACKUPS AUTOMÁTICOS
+# ============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: etcd-backup-script
+  namespace: kube-system
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+    
+    BACKUP_DIR="/backup"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_FILE="${BACKUP_DIR}/etcd-snapshot-${TIMESTAMP}.db"
+    
+    echo "[$(date)] Starting etcd backup..."
+    
+    # Crear snapshot
+    ETCDCTL_API=3 etcdctl snapshot save ${BACKUP_FILE} \
+      --endpoints=https://192.168.1.20:2379 \
+      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+      --cert=/etc/kubernetes/pki/etcd/server.crt \
+      --key=/etc/kubernetes/pki/etcd/server.key
+    
+    # Verificar
+    ETCDCTL_API=3 etcdctl snapshot status ${BACKUP_FILE} --write-out=table
+    
+    # Comprimir (opcional)
+    gzip ${BACKUP_FILE}
+    
+    # Limpiar antiguos
+    find ${BACKUP_DIR} -name "etcd-snapshot-*.db.gz" -mtime +7 -delete
+    
+    echo "[$(date)] Backup completed: ${BACKUP_FILE}.gz"
+    
+    # Subir a S3 (opcional)
+    # aws s3 cp ${BACKUP_FILE}.gz s3://my-k8s-backups/etcd/
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+spec:
+  # Cada 6 horas
+  schedule: "0 */6 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: etcd-backup
+        spec:
+          containers:
+          - name: backup
+            image: registry.k8s.io/etcd:3.5.10-0
+            command: ["/bin/sh"]
+            args: ["/scripts/backup.sh"]
+            volumeMounts:
+            - name: etcd-certs
+              mountPath: /etc/kubernetes/pki/etcd
+              readOnly: true
+            - name: backup-volume
+              mountPath: /backup
+            - name: backup-script
+              mountPath: /scripts
+            env:
+            - name: ETCDCTL_API
+              value: "3"
+          
+          volumes:
+          - name: etcd-certs
+            hostPath:
+              path: /etc/kubernetes/pki/etcd
+              type: Directory
+          - name: backup-volume
+            persistentVolumeClaim:
+              claimName: etcd-backup-pvc
+          - name: backup-script
+            configMap:
+              name: etcd-backup-script
+              defaultMode: 0755
+          
+          restartPolicy: OnFailure
+          hostNetwork: true
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+          tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+
+---
+# PersistentVolumeClaim para backups
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: etcd-backup-pvc
+  namespace: kube-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# ============================================================================
+# RESTORE COMPLETO DEL CLUSTER
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# ESCENARIO: Cluster completamente perdido
+# ──────────────────────────────────────────────────────────────
+
+# PASO 1: DETENER TODOS LOS COMPONENTES
+# ──────────────────────────────────────────────────────────────
+
+# En TODOS los master nodes:
+# $ sudo systemctl stop kubelet
+# $ sudo systemctl stop etcd
+
+# Verificar que etcd está detenido
+# $ ps aux | grep etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: BACKUP DEL ESTADO ACTUAL (por seguridad)
+# ──────────────────────────────────────────────────────────────
+
+# En cada nodo:
+# $ sudo mv /var/lib/etcd /var/lib/etcd.backup-$(date +%Y%m%d_%H%M%S)
+
+# ──────────────────────────────────────────────────────────────
+# PASO 3: RESTORE DESDE SNAPSHOT
+# ──────────────────────────────────────────────────────────────
+
+# Seleccionar el snapshot más reciente
+# $ ls -lth /var/backups/etcd/
+# etcd-snapshot-20241111_120000.db.gz  <- Más reciente
+
+# Descomprimir si es necesario
+# $ gunzip /var/backups/etcd/etcd-snapshot-20241111_120000.db.gz
+
+# ──────────────────────────────────────────────────────────────
+# En etcd-1 (192.168.1.20):
+# ──────────────────────────────────────────────────────────────
+# $ sudo ETCDCTL_API=3 etcdctl snapshot restore \
+#   /var/backups/etcd/etcd-snapshot-20241111_120000.db \
+#   --name=etcd-1 \
+#   --initial-cluster=etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380 \
+#   --initial-cluster-token=etcd-cluster-1 \
+#   --initial-advertise-peer-urls=https://192.168.1.20:2380 \
+#   --data-dir=/var/lib/etcd
+
+# ──────────────────────────────────────────────────────────────
+# En etcd-2 (192.168.1.21):
+# ──────────────────────────────────────────────────────────────
+# $ sudo ETCDCTL_API=3 etcdctl snapshot restore \
+#   /var/backups/etcd/etcd-snapshot-20241111_120000.db \
+#   --name=etcd-2 \
+#   --initial-cluster=etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380 \
+#   --initial-cluster-token=etcd-cluster-1 \
+#   --initial-advertise-peer-urls=https://192.168.1.21:2380 \
+#   --data-dir=/var/lib/etcd
+
+# ──────────────────────────────────────────────────────────────
+# En etcd-3 (192.168.1.22):
+# ──────────────────────────────────────────────────────────────
+# $ sudo ETCDCTL_API=3 etcdctl snapshot restore \
+#   /var/backups/etcd/etcd-snapshot-20241111_120000.db \
+#   --name=etcd-3 \
+#   --initial-cluster=etcd-1=https://192.168.1.20:2380,etcd-2=https://192.168.1.21:2380,etcd-3=https://192.168.1.22:2380 \
+#   --initial-cluster-token=etcd-cluster-1 \
+#   --initial-advertise-peer-urls=https://192.168.1.22:2380 \
+#   --data-dir=/var/lib/etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 4: AJUSTAR PERMISOS
+# ──────────────────────────────────────────────────────────────
+
+# En TODOS los nodos:
+# $ sudo chown -R etcd:etcd /var/lib/etcd
+# $ sudo chmod 700 /var/lib/etcd
+
+# ──────────────────────────────────────────────────────────────
+# PASO 5: INICIAR etcd
+# ──────────────────────────────────────────────────────────────
+
+# En TODOS los nodos (casi simultáneamente):
+# $ sudo systemctl start etcd
+
+# Esperar unos segundos para que el cluster forme quorum
+
+# Verificar logs
+# $ sudo journalctl -u etcd -f
+
+# Buscar mensajes de éxito:
+# "etcdserver: published local member to cluster"
+# "raft.node: elected leader"
+
+# ──────────────────────────────────────────────────────────────
+# PASO 6: VERIFICAR CLUSTER etcd
+# ──────────────────────────────────────────────────────────────
+
+# $ ETCDCTL_API=3 etcdctl \
+#   --endpoints=https://192.168.1.20:2379 \
+#   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+#   --cert=/etc/kubernetes/pki/etcd/server.crt \
+#   --key=/etc/kubernetes/pki/etcd/server.key \
+#   member list
+
+# $ ETCDCTL_API=3 etcdctl endpoint health --cluster \
+#   --endpoints=https://192.168.1.20:2379 \
+#   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+#   --cert=/etc/kubernetes/pki/etcd/server.crt \
+#   --key=/etc/kubernetes/pki/etcd/server.key
+
+# ──────────────────────────────────────────────────────────────
+# PASO 7: INICIAR KUBELET
+# ──────────────────────────────────────────────────────────────
+
+# En TODOS los master nodes:
+# $ sudo systemctl start kubelet
+
+# ──────────────────────────────────────────────────────────────
+# PASO 8: VERIFICAR CLUSTER KUBERNETES
+# ──────────────────────────────────────────────────────────────
+
+# $ kubectl get nodes
+# $ kubectl get pods --all-namespaces
+# $ kubectl get deployments --all-namespaces
+
+# Verificar que todos los recursos están como antes del desastre
+
+---
+# ============================================================================
+# RESTORE PARCIAL (SOLO UN NAMESPACE O RECURSO)
+# ============================================================================
+
+# Si solo necesitas restaurar objetos específicos (no todo el cluster):
+
+# ──────────────────────────────────────────────────────────────
+# MÉTODO 1: Usar Velero (herramienta de backup/restore)
+# ──────────────────────────────────────────────────────────────
+
+# Instalar Velero
+# $ velero install \
+#   --provider aws \
+#   --bucket my-k8s-backups \
+#   --secret-file ./credentials-velero
+
+# Crear backup de namespace
+# $ velero backup create production-backup --include-namespaces production
+
+# Restaurar namespace
+# $ velero restore create --from-backup production-backup
+
+# ──────────────────────────────────────────────────────────────
+# MÉTODO 2: Backup manual con kubectl
+# ──────────────────────────────────────────────────────────────
+
+# Backup de namespace completo
+# $ kubectl get all -n production -o yaml > production-backup.yaml
+
+# Restore
+# $ kubectl apply -f production-backup.yaml
+
+---
+# ============================================================================
+# TESTING DEL RESTORE
+# ============================================================================
+
+# Es CRÍTICO probar el proceso de restore regularmente
+
+# ──────────────────────────────────────────────────────────────
+# PLAN DE PRUEBAS (cada 3 meses)
+# ──────────────────────────────────────────────────────────────
+
+# 1. Crear cluster de prueba IDÉNTICO
+# 2. Tomar snapshot del cluster producción
+# 3. Restore en cluster de prueba
+# 4. Verificar TODOS los recursos
+# 5. Probar aplicaciones
+# 6. Documentar tiempo de restore
+# 7. Documentar problemas encontrados
+
+# ──────────────────────────────────────────────────────────────
+# VERIFICACIÓN POST-RESTORE
+# ──────────────────────────────────────────────────────────────
+# Después de restaurar, verificar:
+#
+# 1. Nodos: kubectl get nodes
+# 2. Componentes del sistema: kubectl get pods -n kube-system
+# 3. Namespaces: kubectl get namespaces
+# 4. Deployments: kubectl get deployments --all-namespaces
+# 5. Services: kubectl get services --all-namespaces
+# 6. Volumes: kubectl get pv; kubectl get pvc --all-namespaces
+# 7. DNS: kubectl run test-dns --rm -it --image=busybox -- nslookup kubernetes
+# 8. etcd health:
+#    $ ETCDCTL_API=3 etcdctl endpoint health --cluster \
+#      --endpoints=https://192.168.1.20:2379 \
+#      --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+#      --cert=/etc/kubernetes/pki/etcd/server.crt \
+#      --key=/etc/kubernetes/pki/etcd/server.key
+#
+# Para automatizar, crear script verify-restore.sh
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ BACKUP REGULAR es OBLIGATORIO en producción
+# ✓ Snapshot NO detiene etcd (operación online)
+# ✓ Restore REQUIERE detener cluster COMPLETO
+# ✓ Probar restore REGULARMENTE (cada 3 meses)
+# ✓ Guardar backups FUERA del cluster (S3, GCS, etc.)
+# ✓ Encriptar backups si contienen datos sensibles
+# ✓ Retención mínima: 7 días local, 30 días remoto
+# ✓ Documentar RTO (Recovery Time Objective)
+# ✓ Documentar RPO (Recovery Point Objective)
+# ✓ Automatizar proceso de backup (CronJob)
+# 
+# TIEMPOS TÍPICOS:
+# • Snapshot: 10-30 segundos (depende de DB size)
+# • Restore completo: 5-15 minutos
+# • Verificación: 10-20 minutos
+# • Total RTO: ~30-45 minutos
+# 
+# RPO:
+# • Backups cada 6 horas = RPO de 6 horas máximo
+# • Backups cada 1 hora = RPO de 1 hora máximo
+# 
+# DISASTER RECOVERY CHECKLIST:
+# □ Snapshots automatizados funcionando
+# □ Backups en almacenamiento externo
+# □ Procedimiento de restore documentado
+# □ Restore probado en últimos 3 meses
+# □ Equipo entrenado en proceso
+# □ Contactos de emergencia definidos
+# □ Runbook actualizado
+# 
+# ============================================================================

@@ -1,0 +1,280 @@
+# ============================================================================
+# KUBELET - CONFIGURACIÓN Y EJEMPLOS
+# ============================================================================
+# kubelet es el agente principal que corre en cada Worker Node.
+# Responsable de ejecutar y monitorear pods en el nodo.
+# ============================================================================
+
+---
+# ============================================================================
+# CONFIGURACIÓN DE KUBELET
+# ============================================================================
+# Archivo: /var/lib/kubelet/config.yaml
+
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+
+# ──────────────────────────────────────────────────────────────
+# CONFIGURACIÓN BÁSICA
+# ──────────────────────────────────────────────────────────────
+address: 0.0.0.0
+port: 10250
+readOnlyPort: 0  # Deshabilitado por seguridad
+healthzPort: 10248
+
+# ──────────────────────────────────────────────────────────────
+# AUTENTICACIÓN Y AUTORIZACIÓN
+# ──────────────────────────────────────────────────────────────
+authentication:
+  webhook:
+    enabled: true
+    cacheTTL: 2m0s
+  anonymous:
+    enabled: false
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.crt
+
+authorization:
+  mode: Webhook
+  webhook:
+    cacheAuthorizedTTL: 5m0s
+    cacheUnauthorizedTTL: 30s
+
+# ──────────────────────────────────────────────────────────────
+# CONTAINER RUNTIME
+# ──────────────────────────────────────────────────────────────
+containerRuntimeEndpoint: unix:///var/run/containerd/containerd.sock
+cgroupDriver: systemd
+
+# ──────────────────────────────────────────────────────────────
+# RECURSOS Y LÍMITES
+# ──────────────────────────────────────────────────────────────
+maxPods: 110  # Máximo número de pods por nodo
+podPIDsLimit: 4096
+
+# Reservar recursos para el sistema
+systemReserved:
+  cpu: 100m
+  memory: 500Mi
+  ephemeral-storage: 1Gi
+
+# Reservar recursos para Kubernetes
+kubeReserved:
+  cpu: 100m
+  memory: 500Mi
+  ephemeral-storage: 1Gi
+
+# Thresholds de eviction
+evictionHard:
+  memory.available: "100Mi"
+  nodefs.available: "10%"
+  nodefs.inodesFree: "5%"
+  imagefs.available: "15%"
+
+evictionSoft:
+  memory.available: "200Mi"
+  nodefs.available: "15%"
+  
+evictionSoftGracePeriod:
+  memory.available: "1m30s"
+  nodefs.available: "2m"
+
+# ──────────────────────────────────────────────────────────────
+# NETWORKING
+# ──────────────────────────────────────────────────────────────
+clusterDomain: cluster.local
+clusterDNS:
+- 10.96.0.10
+
+# Pod CIDR para este nodo (asignado por controller)
+podCIDR: 10.244.1.0/24
+
+# ──────────────────────────────────────────────────────────────
+# VOLUMENES
+# ──────────────────────────────────────────────────────────────
+volumePluginDir: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/
+
+# ──────────────────────────────────────────────────────────────
+# LOGS Y MONITORING
+# ──────────────────────────────────────────────────────────────
+logging:
+  format: text
+  verbosity: 2
+
+enableProfilingHandler: false
+enableDebugFlagsHandler: false
+
+# ──────────────────────────────────────────────────────────────
+# REGISTRO Y CERTIFICADOS
+# ──────────────────────────────────────────────────────────────
+serverTLSBootstrap: true
+rotateCertificates: true
+
+# TLS certs
+tlsCertFile: /var/lib/kubelet/pki/kubelet.crt
+tlsPrivateKeyFile: /var/lib/kubelet/pki/kubelet.key
+
+---
+# ============================================================================
+# EJEMPLO: POD CON DIFERENTES TIPOS DE PROBES
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-with-probes
+spec:
+  containers:
+  - name: app
+    image: nginx
+    ports:
+    - containerPort: 80
+    
+    # ──────────────────────────────────────────────────────────
+    # STARTUP PROBE (desde Kubernetes 1.18+)
+    # ──────────────────────────────────────────────────────────
+    # Se ejecuta primero, antes de liveness y readiness
+    # Útil para aplicaciones que tardan en iniciar
+    startupProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 0
+      periodSeconds: 5
+      failureThreshold: 30  # 30 * 5s = 150s max de inicio
+    
+    # ──────────────────────────────────────────────────────────
+    # LIVENESS PROBE
+    # ──────────────────────────────────────────────────────────
+    # Si falla, kubelet mata y reinicia el contenedor
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 80
+        httpHeaders:
+        - name: Custom-Header
+          value: Awesome
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      successThreshold: 1
+      failureThreshold: 3  # 3 fallos = restart
+    
+    # ──────────────────────────────────────────────────────────
+    # READINESS PROBE
+    # ──────────────────────────────────────────────────────────
+    # Si falla, se quita el pod de los endpoints del Service
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 3
+      timeoutSeconds: 2
+      successThreshold: 1
+      failureThreshold: 3  # 3 fallos = not ready
+    
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+---
+# ============================================================================
+# EJEMPLO: POD CON DIFERENTES TIPOS DE PROBES (TCP y Exec)
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: database-with-probes
+spec:
+  containers:
+  - name: redis
+    image: redis
+    ports:
+    - containerPort: 6379
+    
+    # Liveness usando TCP socket
+    livenessProbe:
+      tcpSocket:
+        port: 6379
+      initialDelaySeconds: 15
+      periodSeconds: 10
+    
+    # Readiness usando exec command
+    readinessProbe:
+      exec:
+        command:
+        - redis-cli
+        - ping
+      initialDelaySeconds: 5
+      periodSeconds: 3
+
+---
+# ============================================================================
+# COMANDOS ÚTILES PARA KUBELET
+# ============================================================================
+
+# Ver configuración de kubelet
+# $ kubectl get --raw /api/v1/nodes/<node-name>/proxy/configz | jq
+
+# Ver logs de kubelet (en el nodo)
+# $ sudo journalctl -u kubelet -f
+
+# Ver métricas de kubelet
+# $ curl -k https://localhost:10250/metrics \
+#   --cert /var/lib/kubelet/pki/kubelet-client.crt \
+#   --key /var/lib/kubelet/pki/kubelet-client.key
+
+# Verificar health de kubelet
+# $ curl http://localhost:10248/healthz
+
+# Ver pods gestionados por kubelet (en el nodo)
+# $ sudo crictl pods
+
+# Reiniciar kubelet (en el nodo)
+# $ sudo systemctl restart kubelet
+
+# Ver status de kubelet
+# $ sudo systemctl status kubelet
+
+---
+# ============================================================================
+# DEBUGGING: VER EVENTOS DE KUBELET
+# ============================================================================
+
+# Ver eventos del nodo
+# $ kubectl get events --field-selector involvedObject.kind=Node
+
+# Ver eventos de un pod específico
+# $ kubectl get events --field-selector involvedObject.name=<pod-name>
+
+# Ver razones de pod eviction
+# $ kubectl get events --field-selector reason=Evicted
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ kubelet NO corre como pod (es un proceso del sistema)
+# ✓ kubelet se comunica SOLO con API Server (no con otros kubelets)
+# ✓ Cada nodo tiene su propio kubelet independiente
+# ✓ kubelet monitorea solo pods asignados a SU nodo
+# ✓ Probes son críticos para self-healing automático
+# ✓ Startup probe evita reiniciar apps lentas en iniciar
+# ✓ Liveness probe detecta deadlocks/hangs
+# ✓ Readiness probe controla tráfico (no reinicia)
+# ✓ Resource requests/limits son enforced por kubelet via cgroups
+# ✓ Eviction ocurre cuando nodo tiene presión de recursos
+# 
+# TIPOS DE PROBES:
+# • httpGet: Realiza HTTP GET (más común para APIs REST)
+# • tcpSocket: Abre conexión TCP (para servicios no-HTTP)
+# • exec: Ejecuta comando dentro del contenedor
+# 
+# ============================================================================

@@ -1,0 +1,403 @@
+# ============================================================================
+# CONTAINER RUNTIME - CONFIGURACIÓN Y EJEMPLOS
+# ============================================================================
+# El Container Runtime es responsable de ejecutar contenedores en el nodo.
+# kubelet se comunica con él a través de la Container Runtime Interface (CRI).
+# ============================================================================
+
+---
+# ============================================================================
+# STACK DEL CONTAINER RUNTIME
+# ============================================================================
+#
+#    ┌─────────────────────────────────────────┐
+#    │          KUBELET                        │
+#    └─────────────┬───────────────────────────┘
+#                  │ CRI (gRPC)
+#    ┌─────────────▼───────────────────────────┐
+#    │   HIGH-LEVEL RUNTIME                    │
+#    │   (containerd / CRI-O)                  │
+#    │   • Gestión de imágenes                 │
+#    │   • Gestión de pods (sandbox)           │
+#    │   • CRI implementation                  │
+#    └─────────────┬───────────────────────────┘
+#                  │ OCI Runtime Spec
+#    ┌─────────────▼───────────────────────────┐
+#    │   LOW-LEVEL RUNTIME                     │
+#    │   (runc / crun / kata)                  │
+#    │   • Ejecuta contenedores                │
+#    │   • Configuración cgroups/namespaces    │
+#    └─────────────────────────────────────────┘
+#
+# ============================================================================
+
+---
+# ============================================================================
+# OPCIÓN 1: CONTAINERD (RECOMENDADO)
+# ============================================================================
+# containerd es el runtime por defecto desde Kubernetes 1.24+
+# (después de la deprecación de dockershim)
+
+# ──────────────────────────────────────────────────────────────
+# Configuración de containerd
+# ──────────────────────────────────────────────────────────────
+# NOTA: La configuración de containerd usa formato TOML
+# El archivo se encuentra en: /etc/containerd/config.toml
+#
+# Principales configuraciones necesarias:
+#
+# 1. Sandbox image (pause container):
+#    sandbox_image = "registry.k8s.io/pause:3.9"
+#
+# 2. SystemdCgroup = true (CRÍTICO)
+#    Debe coincidir con kubelet cgroupDriver
+#
+# 3. CNI configuration:
+#    bin_dir = "/opt/cni/bin"
+#    conf_dir = "/etc/cni/net.d"
+#
+# 4. Registry mirrors (opcional)
+#
+# Para generar configuración por defecto:
+# $ containerd config default > /etc/containerd/config.toml
+#
+# Luego editar y cambiar SystemdCgroup a true en:
+# [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+
+---
+# ============================================================================
+# INSTALACIÓN Y COMANDOS CONTAINERD
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# INSTALACIÓN (Ubuntu/Debian)
+# ──────────────────────────────────────────────────────────────
+# $ sudo apt-get update
+# $ sudo apt-get install -y containerd
+
+# Generar configuración por defecto
+# $ sudo mkdir -p /etc/containerd
+# $ containerd config default | sudo tee /etc/containerd/config.toml
+
+# Habilitar systemd cgroup driver (editar config.toml)
+# SystemdCgroup = true
+
+# Reiniciar containerd
+# $ sudo systemctl restart containerd
+# $ sudo systemctl enable containerd
+
+# ──────────────────────────────────────────────────────────────
+# COMANDOS CON CRICTL (herramienta CLI para CRI)
+# ──────────────────────────────────────────────────────────────
+# crictl es compatible con CUALQUIER runtime CRI
+
+# Configurar crictl para usar containerd
+# $ sudo crictl config runtime-endpoint unix:///var/run/containerd/containerd.sock
+
+# Listar pods (no contenedores individuales)
+# $ sudo crictl pods
+
+# Listar contenedores
+# $ sudo crictl ps -a
+
+# Inspeccionar un pod
+# $ sudo crictl inspectp <pod-id>
+
+# Ver logs de contenedor
+# $ sudo crictl logs <container-id>
+
+# Ejecutar comando en contenedor
+# $ sudo crictl exec -it <container-id> sh
+
+# Listar imágenes
+# $ sudo crictl images
+
+# Pull de imagen
+# $ sudo crictl pull nginx
+
+# Eliminar imagen
+# $ sudo crictl rmi nginx
+
+# Ver estadísticas de contenedores
+# $ sudo crictl stats
+
+---
+# ============================================================================
+# OPCIÓN 2: CRI-O (ALTERNATIVA LIGERA)
+# ============================================================================
+# CRI-O está diseñado específicamente para Kubernetes
+
+# ──────────────────────────────────────────────────────────────
+# Configuración de CRI-O
+# ──────────────────────────────────────────────────────────────
+# NOTA: La configuración de CRI-O usa formato TOML
+# El archivo se encuentra en: /etc/crio/crio.conf
+#
+# Principales configuraciones necesarias:
+#
+# 1. Runtime por defecto:
+#    default_runtime = "runc"
+#
+# 2. Cgroup manager:
+#    cgroup_manager = "systemd"
+#
+# 3. Pause image:
+#    pause_image = "registry.k8s.io/pause:3.9"
+#
+# 4. Network configuration:
+#    network_dir = "/etc/cni/net.d/"
+#    plugin_dirs = ["/opt/cni/bin/"]
+#
+# Para instalación consultar documentación oficial de CRI-O
+
+---
+# ============================================================================
+# EJEMPLO: ANATOMÍA DE UN POD DESDE PERSPECTIVA DEL RUNTIME
+# ============================================================================
+
+# Cuando creas un pod, el runtime hace lo siguiente:
+
+# ──────────────────────────────────────────────────────────────
+# PASO 1: Crear SANDBOX (infraestructura del pod)
+# ──────────────────────────────────────────────────────────────
+# El sandbox es un contenedor "pause" que:
+# • Mantiene los namespaces (network, IPC, UTS)
+# • Tiene la IP del pod
+# • Permanece vivo mientras el pod existe
+
+# Ver sandbox con crictl:
+# $ sudo crictl pods
+# POD ID       NAME            STATE    IP             NODE
+# abc123       my-pod          Ready    10.244.1.5     worker-1
+
+# Inspeccionar sandbox:
+# $ sudo crictl inspectp abc123
+# {
+#   "status": {
+#     "id": "abc123",
+#     "metadata": {
+#       "name": "my-pod",
+#       "namespace": "default"
+#     },
+#     "state": "SANDBOX_READY",
+#     "network": {
+#       "additionalIps": [],
+#       "ip": "10.244.1.5"
+#     }
+#   }
+# }
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: Crear CONTENEDORES de aplicación
+# ──────────────────────────────────────────────────────────────
+# Cada contenedor se une al sandbox (comparten namespaces)
+
+# Ver contenedores:
+# $ sudo crictl ps
+# CONTAINER ID  IMAGE       STATE    NAME      POD ID
+# def456        nginx       Running  nginx     abc123
+# ghi789        sidecar     Running  sidecar   abc123
+
+# Ambos contenedores comparten:
+# • Network namespace (misma IP: 10.244.1.5)
+# • IPC namespace (pueden usar shared memory)
+# • UTS namespace (mismo hostname)
+
+---
+# ============================================================================
+# FLUJO COMPLETO: DE kubectl run A CONTENEDOR CORRIENDO
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# COMANDO
+# ──────────────────────────────────────────────────────────────
+# $ kubectl run nginx --image=nginx
+
+# ──────────────────────────────────────────────────────────────
+# 1. API SERVER recibe petición
+# ──────────────────────────────────────────────────────────────
+# • Valida request
+# • Persiste en etcd
+# • Emite evento PodCreated
+
+# ──────────────────────────────────────────────────────────────
+# 2. SCHEDULER detecta pod sin nodo
+# ──────────────────────────────────────────────────────────────
+# • Filtra nodos elegibles
+# • Puntúa nodos
+# • Asigna pod a nodo (binding)
+
+# ──────────────────────────────────────────────────────────────
+# 3. KUBELET (en el nodo) detecta nuevo pod
+# ──────────────────────────────────────────────────────────────
+# • Watch API notifica nuevo pod
+# • Kubelet valida pod
+
+# ──────────────────────────────────────────────────────────────
+# 4. KUBELET → CRI: RunPodSandbox
+# ──────────────────────────────────────────────────────────────
+# CRI Request:
+# {
+#   "metadata": {
+#     "name": "nginx",
+#     "namespace": "default",
+#     "uid": "abc-def-123"
+#   },
+#   "hostname": "nginx",
+#   "dns_config": {
+#     "servers": ["10.96.0.10"]
+#   }
+# }
+
+# CONTAINERD:
+# • Crea sandbox (pull pause image si es necesario)
+# • Configura network namespace
+# • Llama a CNI plugin para asignar IP
+# • Retorna sandbox ID
+
+# ──────────────────────────────────────────────────────────────
+# 5. KUBELET → CRI: PullImage
+# ──────────────────────────────────────────────────────────────
+# CRI Request:
+# {
+#   "image": {
+#     "image": "nginx:latest"
+#   }
+# }
+
+# CONTAINERD:
+# • Pull de registry
+# • Verifica checksums
+# • Descomprime layers
+# • Retorna image ID
+
+# ──────────────────────────────────────────────────────────────
+# 6. KUBELET → CRI: CreateContainer
+# ──────────────────────────────────────────────────────────────
+# CRI Request:
+# {
+#   "pod_sandbox_id": "abc123",
+#   "config": {
+#     "metadata": {"name": "nginx"},
+#     "image": {"image": "nginx:latest"},
+#     "mounts": [...],
+#     "envs": [...]
+#   }
+# }
+
+# CONTAINERD:
+# • Prepara filesystem (layers + overlay)
+# • Crea OCI runtime spec
+# • Retorna container ID
+
+# ──────────────────────────────────────────────────────────────
+# 7. KUBELET → CRI: StartContainer
+# ──────────────────────────────────────────────────────────────
+# CRI Request:
+# {
+#   "container_id": "def456"
+# }
+
+# CONTAINERD → RUNC:
+# • Configura cgroups (CPU, memory limits)
+# • Configura namespaces (se une al sandbox)
+# • Ejecuta proceso principal
+# • Retorna PID
+
+# ──────────────────────────────────────────────────────────────
+# 8. CONTENEDOR CORRIENDO
+# ──────────────────────────────────────────────────────────────
+# $ sudo crictl ps
+# CONTAINER ID  IMAGE  STATE    NAME   POD ID
+# def456        nginx  Running  nginx  abc123
+
+---
+# ============================================================================
+# DEBUGGING: TROUBLESHOOTING CONTAINER RUNTIME
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# Problema: Imagen no se puede descargar
+# ──────────────────────────────────────────────────────────────
+# 1. Verificar conectividad a registry
+# $ sudo crictl pull nginx
+
+# 2. Ver logs de containerd
+# $ sudo journalctl -u containerd -f
+
+# 3. Verificar configuración de registry
+# $ sudo cat /etc/containerd/config.toml | grep -A 5 registry
+
+# 4. Probar pull manual
+# $ sudo ctr images pull docker.io/library/nginx:latest
+
+# ──────────────────────────────────────────────────────────────
+# Problema: Contenedor no inicia
+# ──────────────────────────────────────────────────────────────
+# 1. Ver estado del contenedor
+# $ sudo crictl ps -a | grep <container-name>
+
+# 2. Inspeccionar contenedor
+# $ sudo crictl inspect <container-id>
+
+# 3. Ver logs
+# $ sudo crictl logs <container-id>
+
+# 4. Ver eventos de kubelet
+# $ kubectl describe pod <pod-name>
+
+# ──────────────────────────────────────────────────────────────
+# Problema: Runtime no responde
+# ──────────────────────────────────────────────────────────────
+# 1. Verificar socket CRI
+# $ sudo ls -la /var/run/containerd/containerd.sock
+
+# 2. Verificar servicio
+# $ sudo systemctl status containerd
+
+# 3. Reiniciar runtime
+# $ sudo systemctl restart containerd
+
+# 4. Ver logs de runtime
+# $ sudo journalctl -u containerd -n 100
+
+---
+# ============================================================================
+# COMPARACIÓN DE RUNTIMES
+# ============================================================================
+
+# ┌──────────────┬─────────────────┬─────────────────┬──────────────┐
+# │              │   containerd    │     CRI-O       │  Docker      │
+# ├──────────────┼─────────────────┼─────────────────┼──────────────┤
+# │ Soporte CRI  │ ✓ Nativo        │ ✓ Nativo        │ ✗ (via shim) │
+# │ Simplicidad  │ Media           │ Alta            │ Baja         │
+# │ Performance  │ Excelente       │ Excelente       │ Buena        │
+# │ Footprint    │ ~50MB           │ ~30MB           │ ~200MB       │
+# │ Features     │ Muchas          │ Solo K8s        │ Muchísimas   │
+# │ Community    │ CNCF            │ CNCF            │ Docker Inc   │
+# │ Recomendado  │ ✓ SÍ            │ ✓ SÍ            │ ✗ NO         │
+# └──────────────┴─────────────────┴─────────────────┴──────────────┘
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ Docker fue ELIMINADO de Kubernetes en v1.24 (dockershim deprecated)
+# ✓ containerd es el runtime RECOMENDADO actualmente
+# ✓ CRI-O es una excelente alternativa minimalista
+# ✓ crictl es la herramienta CLI estándar para CRI (funciona con todos)
+# ✓ El sandbox "pause" contiene la IP del pod
+# ✓ Todos los contenedores en un pod comparten namespaces
+# ✓ cgroupDriver DEBE coincidir entre kubelet y runtime
+# ✓ OCI runtime (runc) es quien realmente ejecuta contenedores
+# ✓ Runtime maneja pull de imágenes, no kubelet
+# ✓ CNI plugins son llamados por el runtime, no por kubelet
+# 
+# JERARQUÍA:
+# • kubelet: Gestor de pods
+# • containerd/CRI-O: High-level runtime (CRI)
+# • runc/crun: Low-level runtime (OCI)
+# • kernel: Namespaces, cgroups, capabilities
+# 
+# ============================================================================

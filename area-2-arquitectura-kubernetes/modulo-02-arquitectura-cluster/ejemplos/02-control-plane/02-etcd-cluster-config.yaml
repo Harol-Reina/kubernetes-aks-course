@@ -1,0 +1,293 @@
+# ============================================================================
+# ETCD CLUSTER - CONFIGURACIÓN Y EJEMPLOS
+# ============================================================================
+# etcd es la base de datos distribuida que almacena todo el estado del cluster.
+# Utiliza el algoritmo de consenso RAFT para alta disponibilidad.
+# ============================================================================
+
+---
+# ============================================================================
+# CONFIGURACIÓN DE UN NODO ETCD (Static Pod Manifest)
+# ============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd
+  namespace: kube-system
+  labels:
+    component: etcd
+    tier: control-plane
+spec:
+  containers:
+  - name: etcd
+    image: registry.k8s.io/etcd:3.5.9-0
+    
+    command:
+    - etcd
+    
+    # ──────────────────────────────────────────────────────────────
+    # CONFIGURACIÓN BÁSICA
+    # ──────────────────────────────────────────────────────────────
+    - --name=etcd-1
+    - --data-dir=/var/lib/etcd
+    - --listen-client-urls=https://0.0.0.0:2379
+    - --advertise-client-urls=https://192.168.1.10:2379
+    
+    # ──────────────────────────────────────────────────────────────
+    # CONFIGURACIÓN DE CLUSTER (Peer Communication)
+    # ──────────────────────────────────────────────────────────────
+    - --listen-peer-urls=https://0.0.0.0:2380
+    - --initial-advertise-peer-urls=https://192.168.1.10:2380
+    - --initial-cluster=etcd-1=https://192.168.1.10:2380,etcd-2=https://192.168.1.11:2380,etcd-3=https://192.168.1.12:2380
+    - --initial-cluster-state=new
+    - --initial-cluster-token=etcd-cluster-1
+    
+    # ──────────────────────────────────────────────────────────────
+    # SEGURIDAD - TLS para Clients
+    # ──────────────────────────────────────────────────────────────
+    - --client-cert-auth=true
+    - --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+    - --cert-file=/etc/kubernetes/pki/etcd/server.crt
+    - --key-file=/etc/kubernetes/pki/etcd/server.key
+    
+    # ──────────────────────────────────────────────────────────────
+    # SEGURIDAD - TLS para Peers
+    # ──────────────────────────────────────────────────────────────
+    - --peer-client-cert-auth=true
+    - --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+    - --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt
+    - --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
+    
+    # ──────────────────────────────────────────────────────────────
+    # SNAPSHOTS Y BACKUPS
+    # ──────────────────────────────────────────────────────────────
+    - --snapshot-count=10000
+    - --auto-compaction-retention=1
+    
+    # ──────────────────────────────────────────────────────────────
+    # RECURSOS
+    # ──────────────────────────────────────────────────────────────
+    resources:
+      requests:
+        cpu: 100m
+        memory: 200Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    
+    volumeMounts:
+    - name: etcd-data
+      mountPath: /var/lib/etcd
+    - name: etcd-certs
+      mountPath: /etc/kubernetes/pki/etcd
+      readOnly: true
+    
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 2381
+        scheme: HTTP
+      initialDelaySeconds: 15
+      periodSeconds: 10
+  
+  volumes:
+  - name: etcd-data
+    hostPath:
+      path: /var/lib/etcd
+      type: DirectoryOrCreate
+  - name: etcd-certs
+    hostPath:
+      path: /etc/kubernetes/pki/etcd
+      type: DirectoryOrCreate
+  
+  hostNetwork: true
+  priorityClassName: system-node-critical
+
+---
+# ============================================================================
+# EJEMPLO: COMANDOS ETCDCTL
+# ============================================================================
+
+# Estos comandos se ejecutan desde un nodo master con etcd instalado
+# o desde un pod con etcdctl
+
+# ──────────────────────────────────────────────────────────────────
+# CONFIGURACIÓN DE VARIABLES DE ENTORNO
+# ──────────────────────────────────────────────────────────────────
+# export ETCDCTL_API=3
+# export ETCDCTL_ENDPOINTS=https://127.0.0.1:2379
+# export ETCDCTL_CACERT=/etc/kubernetes/pki/etcd/ca.crt
+# export ETCDCTL_CERT=/etc/kubernetes/pki/etcd/server.crt
+# export ETCDCTL_KEY=/etc/kubernetes/pki/etcd/server.key
+
+# ──────────────────────────────────────────────────────────────────
+# VER MIEMBROS DEL CLUSTER
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl member list -w table
+# +------------------+---------+--------+-------------------------+-------------------------+------------+
+# |        ID        | STATUS  |  NAME  |       PEER ADDRS        |      CLIENT ADDRS       | IS LEARNER |
+# +------------------+---------+--------+-------------------------+-------------------------+------------+
+# | 8e9e05c52164694d | started | etcd-1 | https://192.168.1.10:2380 | https://192.168.1.10:2379 |      false |
+# | 2be1eb8f84b01ce4 | started | etcd-2 | https://192.168.1.11:2380 | https://192.168.1.11:2379 |      false |
+# | 9bf1b35fc7761a23 | started | etcd-3 | https://192.168.1.12:2380 | https://192.168.1.12:2379 |      false |
+# +------------------+---------+--------+-------------------------+-------------------------+------------+
+
+# ──────────────────────────────────────────────────────────────────
+# VER ESTADO DEL CLUSTER
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl endpoint status -w table
+# +-------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+# |        ENDPOINT         |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
+# +-------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+# | https://192.168.1.10:2379 | 8e9e05c52164694d |  3.5.9  |  95 MB  |      true |      false |         3 |      12345 |              12345 |        |
+# +-------------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+
+# ──────────────────────────────────────────────────────────────────
+# VER HEALTH DEL CLUSTER
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl endpoint health -w table
+# +-------------------------+--------+-------------+-------+
+# |        ENDPOINT         | HEALTH |    TOOK     | ERROR |
+# +-------------------------+--------+-------------+-------+
+# | https://192.168.1.10:2379 |   true | 8.492703ms  |       |
+# +-------------------------+--------+-------------+-------+
+
+---
+# ============================================================================
+# EJEMPLO: BACKUP Y RESTORE DE ETCD
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────────
+# CREAR SNAPSHOT (BACKUP)
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl snapshot save /backup/etcd-snapshot-$(date +%Y%m%d-%H%M%S).db
+# Snapshot saved at /backup/etcd-snapshot-20240115-143022.db
+
+# ──────────────────────────────────────────────────────────────────
+# VERIFICAR SNAPSHOT
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl snapshot status /backup/etcd-snapshot-20240115-143022.db -w table
+# +----------+----------+------------+------------+
+# |   HASH   | REVISION | TOTAL KEYS | TOTAL SIZE |
+# +----------+----------+------------+------------+
+# | 6ba6e4f2 |    12345 |       1234 |      95 MB |
+# +----------+----------+------------+------------+
+
+# ──────────────────────────────────────────────────────────────────
+# RESTORE DESDE SNAPSHOT
+# ──────────────────────────────────────────────────────────────────
+# 1. Detener API Server y etcd
+# $ systemctl stop kube-apiserver
+# $ systemctl stop etcd
+# 
+# 2. Restaurar snapshot
+# $ etcdctl snapshot restore /backup/etcd-snapshot-20240115-143022.db \
+#   --data-dir=/var/lib/etcd-restore \
+#   --name=etcd-1 \
+#   --initial-cluster=etcd-1=https://192.168.1.10:2380 \
+#   --initial-advertise-peer-urls=https://192.168.1.10:2380
+# 
+# 3. Actualizar configuración de etcd para usar nuevo data-dir
+# 4. Reiniciar etcd y API Server
+
+---
+# ============================================================================
+# EJEMPLO: EXPLORAR DATOS EN ETCD
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────────
+# VER TODOS LOS PODS
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl get /registry/pods --prefix --keys-only
+# /registry/pods/default/nginx-deployment-abc123
+# /registry/pods/default/redis-statefulset-0
+# /registry/pods/kube-system/kube-proxy-xyz789
+
+# ──────────────────────────────────────────────────────────────────
+# VER DATOS DE UN POD ESPECÍFICO
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl get /registry/pods/default/nginx-deployment-abc123
+# (Muestra JSON completo del pod)
+
+# ──────────────────────────────────────────────────────────────────
+# CONTAR RECURSOS
+# ──────────────────────────────────────────────────────────────────
+# $ etcdctl get /registry/ --prefix --keys-only | grep -E "pods|services|deployments" | wc -l
+
+---
+# ============================================================================
+# CRONJOB PARA BACKUPS AUTOMÁTICOS
+# ============================================================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+spec:
+  schedule: "0 2 * * *"  # Diario a las 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: registry.k8s.io/etcd:3.5.9-0
+            command:
+            - /bin/sh
+            - -c
+            - |
+              ETCDCTL_API=3 etcdctl \
+                --endpoints=https://127.0.0.1:2379 \
+                --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+                --cert=/etc/kubernetes/pki/etcd/server.crt \
+                --key=/etc/kubernetes/pki/etcd/server.key \
+                snapshot save /backup/etcd-snapshot-$(date +\%Y\%m\%d-\%H\%M\%S).db
+              
+              # Mantener solo últimos 7 backups
+              ls -t /backup/etcd-snapshot-*.db | tail -n +8 | xargs rm -f
+            
+            volumeMounts:
+            - name: etcd-certs
+              mountPath: /etc/kubernetes/pki/etcd
+              readOnly: true
+            - name: backup
+              mountPath: /backup
+          
+          volumes:
+          - name: etcd-certs
+            hostPath:
+              path: /etc/kubernetes/pki/etcd
+          - name: backup
+            hostPath:
+              path: /var/backups/etcd
+          
+          restartPolicy: OnFailure
+          hostNetwork: true
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ etcd es el componente MÁS CRÍTICO del cluster
+# ✓ Sin etcd funcionando, el cluster está completamente inoperativo
+# ✓ SIEMPRE hacer backups regulares (diarios mínimo en producción)
+# ✓ Para HA, usar 3 o 5 nodos (número impar para quorum)
+# ✓ Separar etcd de API Server en clusters grandes (dedicated etcd cluster)
+# ✓ Encriptar datos en reposo (encryption at rest)
+# ✓ Monitorear métricas: latencia, db size, leader changes
+# ✓ Compactación automática para evitar crecimiento excesivo de DB
+# ✓ Network latency entre nodos etcd debe ser < 10ms
+# ✓ Disk I/O es crítico - usar SSDs en producción
+# 
+# FÓRMULA DE QUORUM:
+# Cluster de N nodos tolera (N-1)/2 fallos
+# - 3 nodos: tolera 1 fallo
+# - 5 nodos: tolera 2 fallos  
+# - 7 nodos: tolera 3 fallos
+# 
+# ============================================================================

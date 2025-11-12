@@ -1,0 +1,515 @@
+# ============================================================================
+# METRICS SERVER - CONFIGURACIÓN E INSTALACIÓN
+# ============================================================================
+# Proporciona métricas de CPU y memoria para kubectl top y HPA
+# ============================================================================
+
+---
+# ============================================================================
+# SERVICEACCOUNT Y RBAC
+# ============================================================================
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-server
+  namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:metrics-server
+rules:
+- apiGroups: [""]
+  resources: ["nodes/metrics"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:metrics-server
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+
+---
+# ============================================================================
+# DEPLOYMENT DE METRICS SERVER
+# ============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+spec:
+  replicas: 1  # Generalmente 1 es suficiente (puede escalar a 2 para HA)
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  template:
+    metadata:
+      labels:
+        k8s-app: metrics-server
+    spec:
+      serviceAccountName: metrics-server
+      priorityClassName: system-cluster-critical
+      
+      containers:
+      - name: metrics-server
+        image: registry.k8s.io/metrics-server/metrics-server:v0.6.4
+        imagePullPolicy: IfNotPresent
+        
+        args:
+        # ──────────────────────────────────────────────────────
+        # CERTIFICADOS
+        # ──────────────────────────────────────────────────────
+        - --cert-dir=/tmp
+        - --secure-port=4443
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        - --metric-resolution=15s  # Scraping cada 15 segundos
+        
+        # ──────────────────────────────────────────────────────
+        # PARA DESARROLLO/TESTING (insecure)
+        # ⚠️ NO usar en producción
+        # ──────────────────────────────────────────────────────
+        # - --kubelet-insecure-tls
+        
+        ports:
+        - name: https
+          containerPort: 4443
+          protocol: TCP
+        
+        # ──────────────────────────────────────────────────────
+        # HEALTH CHECKS
+        # ──────────────────────────────────────────────────────
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+        
+        # ──────────────────────────────────────────────────────
+        # RECURSOS
+        # ──────────────────────────────────────────────────────
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 500m
+            memory: 500Mi
+        
+        # ──────────────────────────────────────────────────────
+        # SEGURIDAD
+        # ──────────────────────────────────────────────────────
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp-dir
+        emptyDir: {}
+      
+      nodeSelector:
+        kubernetes.io/os: linux
+
+---
+# ============================================================================
+# SERVICE PARA METRICS SERVER
+# ============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    kubernetes.io/name: "Metrics-server"
+    kubernetes.io/cluster-service: "true"
+spec:
+  selector:
+    k8s-app: metrics-server
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+
+---
+# ============================================================================
+# APISERVICE - Registra API de métricas
+# ============================================================================
+
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.metrics.k8s.io
+  labels:
+    k8s-app: metrics-server
+spec:
+  service:
+    name: metrics-server
+    namespace: kube-system
+  group: metrics.k8s.io
+  version: v1beta1
+  insecureSkipTLSVerify: true
+  groupPriorityMinimum: 100
+  versionPriority: 100
+
+---
+# ============================================================================
+# VERIFICACIÓN DE METRICS SERVER
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PASO 1: Verificar deployment
+# ──────────────────────────────────────────────────────────────
+# $ kubectl get deployment metrics-server -n kube-system
+# NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+# metrics-server   1/1     1            1           5m
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: Verificar APIService
+# ──────────────────────────────────────────────────────────────
+# $ kubectl get apiservice v1beta1.metrics.k8s.io
+# NAME                     SERVICE                      AVAILABLE   AGE
+# v1beta1.metrics.k8s.io   kube-system/metrics-server   True        5m
+
+# ──────────────────────────────────────────────────────────────
+# PASO 3: Probar kubectl top
+# ──────────────────────────────────────────────────────────────
+# $ kubectl top nodes
+# NAME       CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+# master-1   250m         12%    2048Mi          25%
+# worker-1   150m         7%     1536Mi          19%
+# worker-2   180m         9%     1792Mi          22%
+
+# $ kubectl top pods
+# NAME                    CPU(cores)   MEMORY(bytes)
+# nginx-abc123            10m          64Mi
+# backend-xyz789          25m          128Mi
+
+# $ kubectl top pods --all-namespaces
+# $ kubectl top pods -n production --sort-by=memory
+# $ kubectl top pods -n production --sort-by=cpu
+
+---
+# ============================================================================
+# HORIZONTAL POD AUTOSCALER (HPA) CON METRICS SERVER
+# ============================================================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: webapp-hpa
+  namespace: production
+spec:
+  # ──────────────────────────────────────────────────────────────
+  # TARGET: Deployment a escalar
+  # ──────────────────────────────────────────────────────────────
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: webapp
+  
+  # ──────────────────────────────────────────────────────────────
+  # REPLICAS: Mínimo y máximo
+  # ──────────────────────────────────────────────────────────────
+  minReplicas: 2
+  maxReplicas: 10
+  
+  # ──────────────────────────────────────────────────────────────
+  # MÉTRICAS: CPU y memoria
+  # ──────────────────────────────────────────────────────────────
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Escalar si promedio CPU > 70%
+  
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Escalar si promedio memoria > 80%
+  
+  # ──────────────────────────────────────────────────────────────
+  # COMPORTAMIENTO: Control de escalado
+  # ──────────────────────────────────────────────────────────────
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Esperar 60s antes de scale up
+      policies:
+      - type: Percent
+        value: 100  # Duplicar pods como máximo
+        periodSeconds: 60
+      - type: Pods
+        value: 2  # O agregar máximo 2 pods
+        periodSeconds: 60
+      selectPolicy: Max  # Usar la política más agresiva
+    
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Esperar 5min antes de scale down
+      policies:
+      - type: Percent
+        value: 50  # Reducir 50% como máximo
+        periodSeconds: 60
+      - type: Pods
+        value: 1  # O quitar máximo 1 pod
+        periodSeconds: 60
+      selectPolicy: Min  # Usar la política más conservadora
+
+---
+# ============================================================================
+# DEPLOYMENT CON RESOURCE REQUESTS (REQUERIDO PARA HPA)
+# ============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: production
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx
+        ports:
+        - containerPort: 80
+        
+        # ──────────────────────────────────────────────────────
+        # RESOURCES SON OBLIGATORIOS PARA HPA
+        # ──────────────────────────────────────────────────────
+        resources:
+          requests:
+            cpu: 100m      # HPA usa esto como base (100%)
+            memory: 128Mi  # HPA usa esto como base (100%)
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+---
+# ============================================================================
+# MONITOREAR HPA
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# Ver status de HPA
+# ──────────────────────────────────────────────────────────────
+# $ kubectl get hpa
+# NAME         REFERENCE          TARGETS         MINPODS   MAXPODS   REPLICAS   AGE
+# webapp-hpa   Deployment/webapp  45%/70%, 60%/80%  2         10        3          5m
+#                                 ↑ CPU    ↑ Memory
+
+# ──────────────────────────────────────────────────────────────
+# Ver detalles de HPA
+# ──────────────────────────────────────────────────────────────
+# $ kubectl describe hpa webapp-hpa
+# Name:                                       webapp-hpa
+# Namespace:                                  production
+# Reference:                                  Deployment/webapp
+# Metrics:
+#   resource cpu on pods (as a percentage of request):  45% (45m) / 70%
+#   resource memory on pods (as a percentage of request): 60% (76Mi) / 80%
+# Min replicas:                               2
+# Max replicas:                               10
+# Deployment pods:                            3 current / 3 desired
+# Events:
+#   Type    Reason             Message
+#   ----    ------             -------
+#   Normal  SuccessfulRescale  New size: 3; reason: cpu resource utilization above target
+
+# ──────────────────────────────────────────────────────────────
+# Ver eventos de escalado
+# ──────────────────────────────────────────────────────────────
+# $ kubectl get events --field-selector involvedObject.name=webapp-hpa
+
+---
+# ============================================================================
+# PRUEBA DE CARGA PARA HPA
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PASO 1: Crear deployment y HPA
+# ──────────────────────────────────────────────────────────────
+# $ kubectl apply -f webapp-deployment.yaml
+# $ kubectl apply -f webapp-hpa.yaml
+
+# ──────────────────────────────────────────────────────────────
+# PASO 2: Generar carga con Apache Bench
+# ──────────────────────────────────────────────────────────────
+# $ kubectl run load-generator --rm -it --image=busybox -- sh
+# / # while true; do wget -q -O- http://webapp; done
+
+# O con más carga:
+# $ kubectl run load-generator --rm -it --image=httpd -- sh
+# / # ab -n 1000000 -c 100 http://webapp/
+
+# ──────────────────────────────────────────────────────────────
+# PASO 3: Observar escalado en tiempo real
+# ──────────────────────────────────────────────────────────────
+# Terminal 1: Ver HPA
+# $ watch -n 2 kubectl get hpa webapp-hpa
+
+# Terminal 2: Ver pods
+# $ watch -n 2 kubectl get pods -l app=webapp
+
+# Terminal 3: Ver métricas
+# $ watch -n 2 kubectl top pods -l app=webapp
+
+# Verás cómo los pods escalan de 2 → 3 → 5 → 8 según la carga
+
+# ──────────────────────────────────────────────────────────────
+# PASO 4: Detener carga y observar scale down
+# ──────────────────────────────────────────────────────────────
+# Ctrl+C en el load generator
+# Después de ~5 minutos, verás scale down: 8 → 5 → 3 → 2
+
+---
+# ============================================================================
+# TROUBLESHOOTING METRICS SERVER
+# ============================================================================
+
+# ──────────────────────────────────────────────────────────────
+# PROBLEMA: kubectl top nodes falla con "Metrics not available"
+# ──────────────────────────────────────────────────────────────
+
+# 1. Verificar que Metrics Server está corriendo
+# $ kubectl get deployment metrics-server -n kube-system
+# $ kubectl get pods -n kube-system -l k8s-app=metrics-server
+
+# 2. Ver logs de Metrics Server
+# $ kubectl logs -n kube-system -l k8s-app=metrics-server
+# Buscar errores de conexión a kubelet
+
+# 3. Verificar APIService
+# $ kubectl get apiservice v1beta1.metrics.k8s.io
+# Debe mostrar AVAILABLE = True
+
+# 4. Si kubelet usa certificados self-signed (común en dev):
+# Agregar flag: --kubelet-insecure-tls
+# ⚠️ Solo en desarrollo, NO en producción
+
+# 5. Verificar que kubelet expone métricas
+# $ curl -k https://localhost:10250/stats/summary
+# (Desde un nodo worker)
+
+# ──────────────────────────────────────────────────────────────
+# PROBLEMA: HPA no escala
+# ──────────────────────────────────────────────────────────────
+
+# 1. Verificar que Metrics Server funciona
+# $ kubectl top pods
+
+# 2. Verificar que pods tienen resource requests
+# $ kubectl describe deployment webapp
+# Debe tener requests.cpu y requests.memory
+
+# 3. Ver eventos de HPA
+# $ kubectl describe hpa webapp-hpa
+# Buscar mensajes de error en Events
+
+# 4. Verificar métricas actuales
+# $ kubectl get hpa webapp-hpa
+# TARGETS debe mostrar valores (ej: 45%/70%)
+
+# 5. Si muestra <unknown>/70%:
+# - Pods no tienen resource requests
+# - Metrics Server no está funcionando
+# - Pods están iniciando (esperar ~1 minuto)
+
+---
+# ============================================================================
+# COMPARACIÓN: METRICS SERVER VS PROMETHEUS
+# ============================================================================
+
+# ┌──────────────────┬─────────────────────┬──────────────────────┐
+# │                  │   METRICS SERVER    │     PROMETHEUS       │
+# ├──────────────────┼─────────────────────┼──────────────────────┤
+# │ Propósito        │ kubectl top, HPA    │ Monitoring completo  │
+# │ Almacenamiento   │ En memoria (efímero)│ Persistente (disk)   │
+# │ Retención        │ Solo último valor   │ Configurable (días)  │
+# │ Métricas         │ CPU, memoria básico │ Cientos de métricas  │
+# │ Queries          │ No soporta          │ PromQL avanzado      │
+# │ Alerting         │ No                  │ Sí (Alertmanager)    │
+# │ Visualización    │ kubectl top         │ Grafana dashboards   │
+# │ Overhead         │ Muy bajo            │ Medio-alto           │
+# │ Uso              │ Autoscaling         │ Observabilidad       │
+# └──────────────────┴─────────────────────┴──────────────────────┘
+
+# CONCLUSIÓN:
+# • Metrics Server: SIEMPRE necesario (HPA, VPA, kubectl top)
+# • Prometheus: Recomendado para producción (monitoring)
+# • Ambos pueden coexistir sin problemas
+
+---
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+# 
+# ✓ Metrics Server es REQUERIDO para HPA y kubectl top
+# ✓ Solo almacena último valor (no histórico)
+# ✓ Scraping cada 15 segundos por defecto
+# ✓ Pods DEBEN tener resource requests para HPA
+# ✓ HPA evalúa cada 15 segundos (sync period)
+# ✓ Scale up es rápido (~1 min), scale down es lento (~5 min)
+# ✓ Stabilization windows evitan flapping
+# ✓ CPU % se calcula como: (current usage / requested) * 100
+# ✓ HPA v2 soporta múltiples métricas simultáneamente
+# ✓ Metrics Server usa certificados para conectar a kubelet
+# 
+# FÓRMULA DE ESCALADO HPA:
+# desired_replicas = ceil[current_replicas * (current_metric / target_metric)]
+# 
+# Ejemplo:
+# • Current replicas: 2
+# • Current CPU: 90%
+# • Target CPU: 70%
+# • Desired = ceil[2 * (90/70)] = ceil[2.57] = 3 replicas
+# 
+# ============================================================================
