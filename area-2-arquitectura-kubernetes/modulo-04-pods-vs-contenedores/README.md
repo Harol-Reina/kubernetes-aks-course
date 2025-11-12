@@ -77,12 +77,16 @@ Este módulo está organizado siguiendo la progresión **Teoría → Ejemplo →
 
 | Sección | Tema | Contenido |
 |---------|------|-----------|
-| **1** | [Fundamentos y Evolución](#-1-fundamentos-la-evolución-de-los-contenedores) | Historia LXC→Docker→K8s, motivación de Pods |
-| **2** | [Anatomía de un Pod](#-2-anatomía-de-un-pod) | Contenedor pause, arquitectura interna, networking |
-| **3** | [Namespaces Compartidos](#-3-namespaces-linux-en-pods) | Los 7 namespaces explicados en detalle |
-| **4** | [Patrones Multi-Contenedor](#-4-patrones-multi-contenedor) | Sidecar, Init Containers, Ambassador |
-| **5** | [Arquitectura y Decisiones](#-5-decisiones-de-arquitectura) | Cuándo usar Pods vs múltiples Pods, migración |
-| **6** | [Best Practices](#-6-best-practices-y-antipatrones) | Antipatrones, debugging, mejores prácticas |
+| **1** | [Fundamentos y Evolución](#📚-1-la-evolución-de-los-contenedores) | Historia LXC→Docker→K8s, motivación de Pods |
+| **2** | [Anatomía de un Pod](#🧩-2-qué-es-un-pod-la-evolución-final) | Contenedor pause, arquitectura interna, networking |
+| **3** | [Docker vs Pods](#🆚-3-docker-vs-pods-evolución-práctica) | Evolución práctica y comparación |
+| **4** | [Patrones Multi-Contenedor](#🎨-4-patrones-multi-contenedor-en-pods) | Sidecar, Init Containers, Ambassador |
+| **5** | [Migración Docker Compose](#🛠️-5-migración-docker-compose--kubernetes) | Cuándo usar Pods vs múltiples Pods, migración |
+| **6** | [Laboratorios Prácticos](#🧪-6-laboratorios-prácticos) | Ejercicios guiados paso a paso |
+| **7** | [Ciclo de Vida](#🔄-7-ciclo-de-vida-de-pods) | Estados y transiciones de Pods |
+| **8** | [Ejemplos Disponibles](#🧪-8-ejemplos-prácticos-disponibles) | Índice completo de ejemplos YAML |
+| **9** | [Antipatrones y Best Practices](#🚨-9-antipatrones-y-mejores-prácticas) | Qué evitar y mejores prácticas |
+| **10** | [Debugging](#🔧-10-debugging-y-troubleshooting) | Herramientas de diagnóstico |
 
 **🔍 Separación de responsabilidades:**
 - Este módulo (04): **Qué es un Pod y patrones básicos**
@@ -133,11 +137,11 @@ La guía te proporciona:
 
 ---
 
-## � 1. La Evolución de los Contenedores
+## 📚 1. La Evolución de los Contenedores
 
 🧪 **Laboratorio práctico**: [`laboratorios/lab-01-evolucion.md`](./laboratorios/lab-01-evolucion.md) - Demuestra la evolución con ejemplos ejecutables
 
-### **� Línea de Tiempo: LXC → Docker → Kubernetes**
+### **⏳ Línea de Tiempo: LXC → Docker → Kubernetes**
 
 ```
 2008: LXC (Linux Containers)
