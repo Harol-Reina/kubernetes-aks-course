@@ -1,19 +1,135 @@
-# 🐳 Módulo 04: Pods vs Contenedores - De LXC a Kubernetes
+# 🐳 Módulo 04: Pods vs Contenedores - Fundamentos
 
-**Duración**: 45 minutos  
-**Modalidad**: Teórico-Práctico  
-**Dificultad**: Intermedio
+> **De contenedores aislados a Pods colaborativos: entendiendo la unidad básica de Kubernetes**
 
-## 🎯 Objetivos del Módulo
+---
+
+## 📋 Información del Módulo
+
+| Atributo | Detalle |
+|----------|---------|
+| **Duración estimada** | 2-3 horas (teoría + prácticas) |
+| **Nivel** | Intermedio |
+| **Prerequisitos** | Módulo 03 (Minikube instalado), conocimientos de Docker |
+| **Enfoque** | Teórico-práctico con ejemplos ejecutables |
+
+---
+
+## 🎯 Objetivos de Aprendizaje
 
 Al completar este módulo serás capaz de:
 
-- ✅ **Entender la evolución** de LXC → Docker → Kubernetes Pods
-- ✅ **Explicar qué es un Pod** y cómo funciona internamente
-- ✅ **Comprender los namespaces compartidos** en un Pod
-- ✅ **Identificar cuándo usar** un Pod vs múltiples Pods
-- ✅ **Diseñar arquitecturas multi-contenedor** efectivas
-- ✅ **Migrar de Docker Compose** a Kubernetes Pods
+### Fundamentos
+- ✅ **Explicar la evolución** histórica: LXC → Docker → Kubernetes Pods
+- ✅ **Definir qué es un Pod** y por qué es la unidad básica de Kubernetes
+- ✅ **Comprender el contenedor "pause"** y su función como base del Pod
+
+### Namespaces Linux
+- ✅ **Identificar los 7 tipos** de Linux namespaces (Network, IPC, UTS, PID, Mount, User, Cgroup)
+- ✅ **Distinguir qué namespaces** se comparten en un Pod y cuáles no
+- ✅ **Aplicar el conocimiento** de namespaces para diseñar Pods eficientes
+
+### Patrones Multi-Contenedor
+- ✅ **Implementar el patrón Sidecar** para logging, monitoring y service mesh
+- ✅ **Utilizar Init Containers** para tareas de preparación y dependencias
+- ✅ **Aplicar el patrón Ambassador** para proxy y load balancing
+
+### Arquitectura y Decisiones
+- ✅ **Decidir cuándo usar** un Pod multi-contenedor vs múltiples Pods
+- ✅ **Migrar aplicaciones** de Docker Compose a Kubernetes
+- ✅ **Evitar antipatrones** comunes en diseño de Pods
+
+---
+
+## 📚 Prerequisitos
+
+Antes de comenzar este módulo, asegúrate de tener:
+
+**Conocimientos:**
+- ✅ Conceptos básicos de contenedores Docker
+- ✅ Familiaridad con comandos `docker run`, `docker-compose`
+- ✅ Conocimientos básicos de Linux (procesos, networking)
+- ✅ Comprensión de la arquitectura de Kubernetes (Módulo 02)
+
+**Entorno técnico:**
+- ✅ Minikube instalado y funcionando (completar Módulo 03)
+- ✅ kubectl configurado correctamente
+- ✅ Cluster de Minikube iniciado con driver Docker
+
+**Verificación rápida:**
+```bash
+# Verificar que Minikube está corriendo
+minikube status
+
+# Verificar conexión a kubectl
+kubectl get nodes
+
+# Debería mostrar:
+# NAME       STATUS   ROLES           AGE   VERSION
+# minikube   Ready    control-plane   Xd    vX.XX.X
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+Este módulo está organizado siguiendo la progresión **Teoría → Ejemplo → Laboratorio**:
+
+| Sección | Tema | Contenido |
+|---------|------|-----------|
+| **1** | [Fundamentos y Evolución](#-1-fundamentos-la-evolución-de-los-contenedores) | Historia LXC→Docker→K8s, motivación de Pods |
+| **2** | [Anatomía de un Pod](#-2-anatomía-de-un-pod) | Contenedor pause, arquitectura interna, networking |
+| **3** | [Namespaces Compartidos](#-3-namespaces-linux-en-pods) | Los 7 namespaces explicados en detalle |
+| **4** | [Patrones Multi-Contenedor](#-4-patrones-multi-contenedor) | Sidecar, Init Containers, Ambassador |
+| **5** | [Arquitectura y Decisiones](#-5-decisiones-de-arquitectura) | Cuándo usar Pods vs múltiples Pods, migración |
+| **6** | [Best Practices](#-6-best-practices-y-antipatrones) | Antipatrones, debugging, mejores prácticas |
+
+**🔍 Separación de responsabilidades:**
+- Este módulo (04): **Qué es un Pod y patrones básicos**
+- Módulo 05: **Gestión avanzada** (manifiestos complejos, resource management, health checks)
+
+---
+
+## 🎓 Recursos de Aprendizaje
+
+### Ejemplos Prácticos
+📁 **Carpeta**: [`ejemplos/`](./ejemplos/)
+- 40+ archivos YAML ejecutables organizados por concepto
+- Cada ejemplo está documentado con comentarios explicativos
+- Comandos de prueba incluidos en cada archivo
+
+### Laboratorios Guiados
+📁 **Carpeta**: [`laboratorios/`](./laboratorios/)
+- 5 laboratorios paso a paso con verificaciones
+- Duración total: ~4 horas de práctica
+- Incluyen troubleshooting y cleanup
+
+### Documentación de Referencia
+- 📖 [`ejemplos/README.md`](./ejemplos/README.md) - Índice de todos los ejemplos
+- 📖 [`laboratorios/README.md`](./laboratorios/README.md) - Guía de laboratorios
+- 📘 **[`RESUMEN-MODULO.md`](./RESUMEN-MODULO.md)** - **Guía de estudio estructurada** (RECOMENDADO)
+
+---
+
+## 🎓 Guía de Estudio Recomendada
+
+**¿Primera vez con este módulo?** Te recomendamos seguir la guía de estudio:
+
+👉 **[ABRIR GUÍA DE ESTUDIO](./RESUMEN-MODULO.md)**
+
+La guía te proporciona:
+- ✅ Ruta de aprendizaje paso a paso
+- ✅ Progresión pedagógica: Teoría → Ejemplo → Lab
+- ✅ Checkpoints de verificación en cada sección
+- ✅ Tiempo estimado por fase
+- ✅ Enlaces directos a ejemplos y labs relevantes
+
+**Estructura de la guía**:
+1. **Fase 1**: Fundamentos y evolución (45-60 min)
+2. **Fase 2**: Namespaces Linux (60-90 min)
+3. **Fase 3**: Patrones multi-contenedor (90-120 min)
+4. **Fase 4**: Decisiones de arquitectura (45-60 min)
+5. **Fase 5**: Best practices (30-45 min)
 
 ---
 
