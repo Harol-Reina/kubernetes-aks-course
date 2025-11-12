@@ -18,63 +18,63 @@ Este documento proporciona diagramas visuales detallados de la arquitectura de K
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         KUBERNETES CLUSTER                              │
 │                                                                         │
-│  ┌───────────────────────────────────────────────────────────────┐    │
-│  │                    CONTROL PLANE                              │    │
-│  │              (Cerebro del Cluster)                            │    │
-│  │                                                               │    │
-│  │  ┌──────────────────┐  ┌──────────────────┐                 │    │
-│  │  │   API Server     │  │   Scheduler      │                 │    │
-│  │  ├──────────────────┤  ├──────────────────┤                 │    │
-│  │  │ • Puerto: 6443   │  │ • Asigna pods    │                 │    │
-│  │  │ • REST API       │  │ • Considera CPU  │                 │    │
-│  │  │ • Autenticación  │  │ • Considera RAM  │                 │    │
-│  │  │ • Validación     │  │ • Afinidades     │                 │    │
-│  │  └────────┬─────────┘  └──────────────────┘                 │    │
-│  │           │                                                   │    │
-│  │  ┌────────▼─────────┐  ┌──────────────────┐                 │    │
-│  │  │      etcd        │  │ Controller Mgr   │                 │    │
-│  │  ├──────────────────┤  ├──────────────────┤                 │    │
-│  │  │ • Key-Value DB   │  │ • Replication    │                 │    │
-│  │  │ • Cluster State  │  │ • Node           │                 │    │
-│  │  │ • Configuración  │  │ • Endpoints      │                 │    │
-│  │  │ • Distribuido    │  │ • ServiceAccount │                 │    │
-│  │  └──────────────────┘  └──────────────────┘                 │    │
-│  └───────────────────────────────┬───────────────────────────────┘    │
-│                                  │                                    │
-│                       ┌──────────┼──────────┐                        │
-│                       │          │          │                         │
-│  ┌────────────────────▼───┐  ┌──▼──────────▼────┐  ┌───────────┐   │
-│  │   WORKER NODE 1        │  │  WORKER NODE 2    │  │  NODE 3   │   │
-│  │  (donde corren apps)   │  │ (donde corren apps│  │  ...      │   │
-│  │                        │  │                   │  │           │   │
-│  │  ┌──────────────────┐ │  │  ┌──────────────┐ │  └───────────┘   │
-│  │  │     kubelet      │ │  │  │   kubelet    │ │                   │
-│  │  │  (agente nodo)   │ │  │  │ (agente nodo)│ │                   │
-│  │  └────────┬─────────┘ │  │  └──────┬───────┘ │                   │
-│  │           │            │  │         │         │                   │
-│  │  ┌────────▼─────────┐ │  │  ┌──────▼───────┐ │                   │
-│  │  │ Container Runtime│ │  │  │  Container   │ │                   │
-│  │  │  (Docker/cri-o)  │ │  │  │   Runtime    │ │                   │
-│  │  └────────┬─────────┘ │  │  └──────┬───────┘ │                   │
-│  │           │            │  │         │         │                   │
-│  │  ┌────────▼─────────┐ │  │  ┌──────▼───────┐ │                   │
-│  │  │   kube-proxy     │ │  │  │  kube-proxy  │ │                   │
-│  │  │ (red networking) │ │  │  │(red network) │ │                   │
-│  │  └──────────────────┘ │  │  └──────────────┘ │                   │
-│  │                        │  │                   │                   │
-│  │  ┌─────────────────┐  │  │  ┌──────────────┐ │                   │
-│  │  │  POD 1          │  │  │  │  POD 3       │ │                   │
-│  │  │ ┌─────────────┐ │  │  │  │ ┌──────────┐ │ │                   │
-│  │  │ │ Container 1 │ │  │  │  │ │Container │ │ │                   │
-│  │  │ └─────────────┘ │  │  │  │ └──────────┘ │ │                   │
-│  │  └─────────────────┘  │  │  └──────────────┘ │                   │
-│  │  ┌─────────────────┐  │  │  ┌──────────────┐ │                   │
-│  │  │  POD 2          │  │  │  │  POD 4       │ │                   │
-│  │  │ ┌─────────────┐ │  │  │  │ ┌──────────┐ │ │                   │
-│  │  │ │ Container 2 │ │  │  │  │ │Container │ │ │                   │
-│  │  │ └─────────────┘ │  │  │  │ └──────────┘ │ │                   │
-│  │  └─────────────────┘  │  │  └──────────────┘ │                   │
-│  └────────────────────────┘  └───────────────────┘                   │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                    CONTROL PLANE                                │    │
+│  │              (Cerebro del Cluster)                              │    │
+│  │                                                                 │    │
+│  │  ┌──────────────────┐  ┌──────────────────┐                     │    │
+│  │  │   API Server     │  │   Scheduler      │                     │    │
+│  │  ├──────────────────┤  ├──────────────────┤                     │    │
+│  │  │ • Puerto: 6443   │  │ • Asigna pods    │                     │    │
+│  │  │ • REST API       │  │ • Considera CPU  │                     │    │
+│  │  │ • Autenticación  │  │ • Considera RAM  │                     │    │
+│  │  │ • Validación     │  │ • Afinidades     │                     │    │
+│  │  └────────┬─────────┘  └──────────────────┘                     │    │
+│  │           │                                                     │    │
+│  │  ┌────────▼─────────┐  ┌──────────────────┐                     │    │
+│  │  │      etcd        │  │ Controller Mgr   │                     │    │
+│  │  ├──────────────────┤  ├──────────────────┤                     │    │
+│  │  │ • Key-Value DB   │  │ • Replication    │                     │    │
+│  │  │ • Cluster State  │  │ • Node           │                     │    │
+│  │  │ • Configuración  │  │ • Endpoints      │                     │    │
+│  │  │ • Distribuido    │  │ • ServiceAccount │                     │    │
+│  │  └──────────────────┘  └──────────────────┘                     │    │
+│  └──────────────────────────────┬──────────────────────────────────┘    │
+│                                 │                                       │
+│                       ┌─────────┼──────────┐                            │
+│                       │         │          │                            │
+│  ┌────────────────────▼───┐  ┌──▼──────────▼─────┐  ┌───────────┐       │
+│  │   WORKER NODE 1        │  │  WORKER NODE 2    │  │  NODE 3   │       │
+│  │  (donde corren apps)   │  │(donde corren apps)│  │  ...      │       │
+│  │                        │  │                   │  │           │       │
+│  │  ┌──────────────────┐  │  │ ┌──────────────┐  │  └───────────┘       │
+│  │  │     kubelet      │  │  │ │   kubelet    │  │                      │
+│  │  │  (agente nodo)   │  │  │ │ (agente nodo)│  │                      │
+│  │  └────────┬─────────┘  │  │ └───────┬──────┘  │                      │
+│  │           │            │  │         │         │                      │
+│  │  ┌────────▼─────────┐  │  │  ┌──────▼───────┐ │                      │
+│  │  │ Container Runtime│  │  │  │  Container   │ │                      │
+│  │  │  (Docker/cri-o)  │  │  │  │   Runtime    │ │                      │
+│  │  └────────┬─────────┘  │  │  └──────┬───────┘ │                      │
+│  │           │            │  │         │         │                      │
+│  │  ┌────────▼─────────┐  │  │  ┌──────▼───────┐ │                      │
+│  │  │   kube-proxy     │  │  │  │  kube-proxy  │ │                      │
+│  │  │ (red networking) │  │  │  │(red network) │ │                      │
+│  │  └──────────────────┘  │  │  └──────────────┘ │                      │
+│  │                        │  │                   │                      │
+│  │  ┌─────────────────┐   │  │  ┌──────────────┐ │                      │
+│  │  │  POD 1          │   │  │  │  POD 3       │ │                      │
+│  │  │ ┌─────────────┐ │   │  │  │ ┌──────────┐ │ │                      │
+│  │  │ │ Container 1 │ │   │  │  │ │Container │ │ │                      │
+│  │  │ └─────────────┘ │   │  │  │ └──────────┘ │ │                      │
+│  │  └─────────────────┘   │  │  └──────────────┘ │                      │
+│  │  ┌─────────────────┐   │  │  ┌──────────────┐ │                      │
+│  │  │  POD 2          │   │  │  │  POD 4       │ │                      │
+│  │  │ ┌─────────────┐ │   │  │  │ ┌──────────┐ │ │                      │
+│  │  │ │ Container 2 │ │   │  │  │ │Container │ │ │                      │
+│  │  │ └─────────────┘ │   │  │  │ └──────────┘ │ │                      │
+│  │  └─────────────────┘   │  │  └──────────────┘ │                      │
+│  └────────────────────────┘  └───────────────────┘                      │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -91,17 +91,17 @@ El Control Plane es el conjunto de componentes que controlan el cluster. Toma de
 │                    API SERVER (kube-apiserver)               │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  Rol: Punto de entrada único para todas las operaciones     │
+│  Rol: Punto de entrada único para todas las operaciones      │
 │                                                              │
 │  Responsabilidades:                                          │
-│  ✓ Expone API REST de Kubernetes (puerto 6443)             │
-│  ✓ Valida y procesa peticiones                              │
-│  ✓ Autenticación y autorización (RBAC)                      │
-│  ✓ Único componente que lee/escribe en etcd                 │
-│  ✓ Punto de comunicación entre componentes                  │
+│  ✓ Expone API REST de Kubernetes (puerto 6443)               │
+│  ✓ Valida y procesa peticiones                               │
+│  ✓ Autenticación y autorización (RBAC)                       │
+│  ✓ Único componente que lee/escribe en etcd                  │
+│  ✓ Punto de comunicación entre componentes                   │
 │                                                              │
 │  Ejemplo de petición:                                        │
-│  kubectl get pods → HTTP GET /api/v1/pods                   │
+│  kubectl get pods → HTTP GET /api/v1/pods                    │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 
@@ -109,21 +109,21 @@ El Control Plane es el conjunto de componentes que controlan el cluster. Toma de
 │                         etcd                                 │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  Rol: Base de datos distribuida (clave-valor)               │
+│  Rol: Base de datos distribuida (clave-valor)                │
 │                                                              │
 │  Almacena:                                                   │
-│  • Estado del cluster (qué pods existen)                    │
-│  • Configuración (deployments, services, secrets)           │
-│  • Metadatos (labels, annotations)                          │
+│  • Estado del cluster (qué pods existen)                     │
+│  • Configuración (deployments, services, secrets)            │
+│  • Metadatos (labels, annotations)                           │
 │                                                              │
 │  Características:                                            │
-│  ✓ Altamente disponible (múltiples réplicas)               │
-│  ✓ Consistencia fuerte (RAFT consensus)                     │
-│  ✓ Solo API Server puede acceder directamente               │
-│  ✓ Backups críticos para disaster recovery                  │
+│  ✓ Altamente disponible (múltiples réplicas)                 │
+│  ✓ Consistencia fuerte (RAFT consensus)                      │
+│  ✓ Solo API Server puede acceder directamente                │
+│  ✓ Backups críticos para disaster recovery                   │
 │                                                              │
 │  Ejemplo de datos:                                           │
-│  /registry/pods/default/nginx-pod → {metadata, spec, ...}  │
+│  /registry/pods/default/nginx-pod → {metadata, spec, ...}    │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 
@@ -131,26 +131,26 @@ El Control Plane es el conjunto de componentes que controlan el cluster. Toma de
 │                      SCHEDULER (kube-scheduler)              │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  Rol: Asignar pods a nodos (scheduling)                     │
+│  Rol: Asignar pods a nodos (scheduling)                      │
 │                                                              │
 │  Proceso de decisión:                                        │
-│  1. Detecta nuevos pods sin nodo asignado                   │
-│  2. Filtra nodos que NO cumplen requisitos:                 │
-│     ✗ Recursos insuficientes (CPU/RAM)                      │
-│     ✗ NodeSelector no coincide                              │
-│     ✗ Taints que el pod no tolera                           │
-│  3. Puntúa nodos que SÍ cumplen:                            │
+│  1. Detecta nuevos pods sin nodo asignado                    │
+│  2. Filtra nodos que NO cumplen requisitos:                  │
+│     ✗ Recursos insuficientes (CPU/RAM)                       │
+│     ✗ NodeSelector no coincide                               │
+│     ✗ Taints que el pod no tolera                            │
+│  3. Puntúa nodos que SÍ cumplen:                             │
 │     • Balance de recursos                                    │
-│     • Afinidades y anti-afinidades                          │
+│     • Afinidades y anti-afinidades                           │
 │     • Distribución de pods                                   │
-│  4. Selecciona nodo con mayor puntuación                    │
-│  5. Actualiza etcd con asignación                           │
+│  4. Selecciona nodo con mayor puntuación                     │
+│  5. Actualiza etcd con asignación                            │
 │                                                              │
 │  Ejemplo:                                                    │
 │  Pod necesita 2GB RAM:                                       │
-│  Node1: 1GB libre ✗                                         │
-│  Node2: 4GB libre ✓ (puntuación: 70)                       │
-│  Node3: 8GB libre ✓ (puntuación: 90) ← ELEGIDO             │
+│  Node1: 1GB libre ✗                                          │
+│  Node2: 4GB libre ✓ (puntuación: 70)                         │
+│  Node3: 8GB libre ✓ (puntuación: 90) ← ELEGIDO               │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 
@@ -158,39 +158,39 @@ El Control Plane es el conjunto de componentes que controlan el cluster. Toma de
 │            CONTROLLER MANAGER (kube-controller-manager)      │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  Rol: Ejecutar controladores que regulan el estado          │
+│  Rol: Ejecutar controladores que regulan el estado           │
 │                                                              │
-│  Loop de control: Estado Actual → Estado Deseado            │
+│  Loop de control: Estado Actual → Estado Deseado             │
 │                                                              │
 │  Controladores principales:                                  │
 │                                                              │
-│  ┌──────────────────────────────────────────────┐          │
-│  │ Node Controller                               │          │
-│  │ • Detecta nodos caídos (heartbeat)           │          │
-│  │ • Evacua pods de nodos no saludables         │          │
-│  │ • Actualiza estado de nodos                  │          │
-│  └──────────────────────────────────────────────┘          │
+│  ┌──────────────────────────────────────────────┐            │
+│  │ Node Controller                              │            │
+│  │ • Detecta nodos caídos (heartbeat)           │            │
+│  │ • Evacua pods de nodos no saludables         │            │
+│  │ • Actualiza estado de nodos                  │            │
+│  └──────────────────────────────────────────────┘            │
 │                                                              │
-│  ┌──────────────────────────────────────────────┐          │
-│  │ Replication Controller                        │          │
-│  │ • Mantiene número deseado de réplicas        │          │
-│  │ • Crea pods si hay menos de lo deseado       │          │
-│  │ • Elimina pods si hay más de lo deseado      │          │
-│  └──────────────────────────────────────────────┘          │
+│  ┌──────────────────────────────────────────────┐            │
+│  │ Replication Controller                       │            │
+│  │ • Mantiene número deseado de réplicas        │            │
+│  │ • Crea pods si hay menos de lo deseado       │            │
+│  │ • Elimina pods si hay más de lo deseado      │            │
+│  └──────────────────────────────────────────────┘            │
 │                                                              │
-│  ┌──────────────────────────────────────────────┐          │
-│  │ Endpoint Controller                           │          │
-│  │ • Conecta Services con Pods                  │          │
-│  │ • Actualiza endpoints cuando pods cambian    │          │
-│  │ • Gestiona balanceo de carga                 │          │
-│  └──────────────────────────────────────────────┘          │
+│  ┌──────────────────────────────────────────────┐            │
+│  │ Endpoint Controller                          │            │
+│  │ • Conecta Services con Pods                  │            │
+│  │ • Actualiza endpoints cuando pods cambian    │            │
+│  │ • Gestiona balanceo de carga                 │            │
+│  └──────────────────────────────────────────────┘            │
 │                                                              │
-│  ┌──────────────────────────────────────────────┐          │
-│  │ ServiceAccount Controller                     │          │
-│  │ • Crea ServiceAccounts por defecto           │          │
-│  │ • Genera tokens para autenticación           │          │
-│  │ • Gestiona secretos de API                   │          │
-│  └──────────────────────────────────────────────┘          │
+│  ┌──────────────────────────────────────────────┐            │
+│  │ ServiceAccount Controller                    │            │
+│  │ • Crea ServiceAccounts por defecto           │            │
+│  │ • Genera tokens para autenticación           │            │
+│  │ • Gestiona secretos de API                   │            │
+│  └──────────────────────────────────────────────┘            │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -202,79 +202,79 @@ El Control Plane es el conjunto de componentes que controlan el cluster. Toma de
 Los Worker Nodes son las máquinas donde realmente corren tus aplicaciones (Pods).
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    WORKER NODE                               │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    WORKER NODE                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │               kubelet                                   │ │
+│  │               kubelet                                  │ │
 │  ├────────────────────────────────────────────────────────┤ │
-│  │                                                         │ │
+│  │                                                        │ │
 │  │  Rol: Agente que corre en cada nodo                    │ │
-│  │                                                         │ │
-│  │  Responsabilidades:                                     │ │
-│  │  ✓ Registra el nodo en el cluster                     │ │
-│  │  ✓ Monitorea pods asignados a su nodo                 │ │
-│  │  ✓ Asegura que contenedores estén corriendo           │ │
-│  │  ✓ Reporta estado al API Server                       │ │
-│  │  ✓ Ejecuta health checks (liveness/readiness)         │ │
-│  │  ✓ Monta volúmenes para pods                          │ │
-│  │                                                         │ │
-│  │  Loop principal:                                        │ │
-│  │  1. Consulta API Server: ¿pods para este nodo?        │ │
-│  │  2. Compara con pods corriendo actualmente            │ │
-│  │  3. Inicia pods nuevos via Container Runtime          │ │
-│  │  4. Detiene pods que ya no deberían correr            │ │
-│  │  5. Reporta estado de salud                           │ │
-│  │  6. Repite cada 10 segundos                           │ │
-│  │                                                         │ │
+│  │                                                        │ │
+│  │  Responsabilidades:                                    │ │
+│  │  ✓ Registra el nodo en el cluster                      │ │
+│  │  ✓ Monitorea pods asignados a su nodo                  │ │
+│  │  ✓ Asegura que contenedores estén corriendo            │ │
+│  │  ✓ Reporta estado al API Server                        │ │
+│  │  ✓ Ejecuta health checks (liveness/readiness)          │ │
+│  │  ✓ Monta volúmenes para pods                           │ │
+│  │                                                        │ │
+│  │  Loop principal:                                       │ │
+│  │  1. Consulta API Server: ¿pods para este nodo?         │ │
+│  │  2. Compara con pods corriendo actualmente             │ │
+│  │  3. Inicia pods nuevos via Container Runtime           │ │
+│  │  4. Detiene pods que ya no deberían correr             │ │
+│  │  5. Reporta estado de salud                            │ │
+│  │  6. Repite cada 10 segundos                            │ │
+│  │                                                        │ │
 │  └────────────────────────────────────────────────────────┘ │
-│                                                              │
+│                                                             │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │          Container Runtime (Docker/containerd)         │ │
 │  ├────────────────────────────────────────────────────────┤ │
-│  │                                                         │ │
+│  │                                                        │ │
 │  │  Rol: Software que ejecuta contenedores                │ │
-│  │                                                         │ │
-│  │  Implementaciones:                                      │ │
+│  │                                                        │ │
+│  │  Implementaciones:                                     │ │
 │  │  • Docker (tradicional)                                │ │
-│  │  • containerd (lightweight, recomendado)              │ │
-│  │  • CRI-O (optimizado para Kubernetes)                 │ │
-│  │                                                         │ │
-│  │  Tareas:                                                │ │
-│  │  ✓ Pull de imágenes desde registry                    │ │
-│  │  ✓ Crear y iniciar contenedores                       │ │
-│  │  ✓ Detener y eliminar contenedores                    │ │
-│  │  ✓ Gestionar ciclo de vida de contenedores            │ │
-│  │  ✓ Exponer logs de contenedores                       │ │
-│  │                                                         │ │
+│  │  • containerd (lightweight, recomendado)               │ │
+│  │  • CRI-O (optimizado para Kubernetes)                  │ │
+│  │                                                        │ │
+│  │  Tareas:                                               │ │
+│  │  ✓ Pull de imágenes desde registry                     │ │
+│  │  ✓ Crear y iniciar contenedores                        │ │
+│  │  ✓ Detener y eliminar contenedores                     │ │
+│  │  ✓ Gestionar ciclo de vida de contenedores             │ │
+│  │  ✓ Exponer logs de contenedores                        │ │
+│  │                                                        │ │
 │  └────────────────────────────────────────────────────────┘ │
-│                                                              │
+│                                                             │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │                kube-proxy                              │ │
 │  ├────────────────────────────────────────────────────────┤ │
-│  │                                                         │ │
-│  │  Rol: Proxy de red para Services                      │ │
-│  │                                                         │ │
-│  │  Modos de operación:                                    │ │
-│  │  • iptables (por defecto): Reglas firewall            │ │
-│  │  • IPVS: Más eficiente para muchos servicios          │ │
-│  │  • userspace: Modo legacy                             │ │
-│  │                                                         │ │
-│  │  Función principal:                                     │ │
-│  │  Traduce: Service IP → Pod IPs reales                 │ │
-│  │                                                         │ │
-│  │  Ejemplo:                                               │ │
-│  │  Service "nginx" → 10.96.0.50:80                      │ │
-│  │  Pod 1 → 192.168.1.10:80                              │ │
-│  │  Pod 2 → 192.168.1.11:80                              │ │
-│  │  Pod 3 → 192.168.1.12:80                              │ │
-│  │                                                         │ │
+│  │                                                        │ │
+│  │  Rol: Proxy de red para Services                       │ │
+│  │                                                        │ │
+│  │  Modos de operación:                                   │ │
+│  │  • iptables (por defecto): Reglas firewall             │ │
+│  │  • IPVS: Más eficiente para muchos servicios           │ │
+│  │  • userspace: Modo legacy                              │ │
+│  │                                                        │ │
+│  │  Función principal:                                    │ │
+│  │  Traduce: Service IP → Pod IPs reales                  │ │
+│  │                                                        │ │
+│  │  Ejemplo:                                              │ │
+│  │  Service "nginx" → 10.96.0.50:80                       │ │
+│  │  Pod 1 → 192.168.1.10:80                               │ │
+│  │  Pod 2 → 192.168.1.11:80                               │ │
+│  │  Pod 3 → 192.168.1.12:80                               │ │
+│  │                                                        │ │
 │  │  kube-proxy crea reglas para balancear:                │ │
-│  │  10.96.0.50:80 → {192.168.1.10, .11, .12} (round-robin│ │
-│  │                                                         │ │
+│  │  10.96.0.50:80 → {192.168.1.10, .11, .12} (round-robin)│ │
+│  │                                                        │ │
 │  └────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -290,24 +290,24 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
 │                                                                     │
 │  $ kubectl create -f pod.yaml                                       │
 │                                                                     │
-│  kubectl lee el archivo YAML y envía petición HTTP POST            │
+│  kubectl lee el archivo YAML y envía petición HTTP POST             │
 │  a API Server (puerto 6443)                                         │
 │                                                                     │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 2: API Server recibe y valida                                │
+│  PASO 2: API Server recibe y valida                                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  API Server hace:                                                   │
-│  1. Autenticación: ¿Quién eres? (usuario/service account)         │
-│  2. Autorización: ¿Puedes crear pods? (RBAC)                      │
-│  3. Validación: ¿El YAML es correcto?                             │
+│  1. Autenticación: ¿Quién eres? (usuario/service account)           │
+│  2. Autorización: ¿Puedes crear pods? (RBAC)                        │
+│  3. Validación: ¿El YAML es correcto?                               │
 │     • Sintaxis correcta                                             │
 │     • Campos obligatorios presentes                                 │
 │     • Valores válidos                                               │
-│  4. Admission Control: Plugins adicionales                         │
+│  4. Admission Control: Plugins adicionales                          │
 │     • Establecer valores por defecto                                │
 │     • Inyectar sidecars                                             │
 │     • Aplicar políticas                                             │
@@ -318,7 +318,7 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 3: Guardar en etcd                                           │
+│  PASO 3: Guardar en etcd                                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  API Server escribe el pod en etcd:                                 │
@@ -328,50 +328,50 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
 │    "metadata": {...},                                               │
 │    "spec": {...},                                                   │
 │    "status": {                                                      │
-│      "phase": "Pending",  ← Estado inicial                         │
+│      "phase": "Pending",  ← Estado inicial                          │
 │      "conditions": []                                               │
 │    }                                                                │
 │  }                                                                  │
 │                                                                     │
-│  kubectl recibe respuesta: "pod/mi-pod created"                    │
+│  kubectl recibe respuesta: "pod/mi-pod created"                     │
 │                                                                     │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 4: Scheduler detecta pod sin asignar                         │
+│  PASO 4: Scheduler detecta pod sin asignar                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  Scheduler constantemente consulta:                                 │
-│  "¿Hay pods sin spec.nodeName asignado?"                           │
+│  "¿Hay pods sin spec.nodeName asignado?"                            │
 │                                                                     │
-│  Encuentra: mi-pod (phase: Pending, nodeName: null)                │
+│  Encuentra: mi-pod (phase: Pending, nodeName: null)                 │
 │                                                                     │
 │  Inicia algoritmo de scheduling:                                    │
 │                                                                     │
-│  ┌─────────────────────────────────────────┐                      │
-│  │ FILTRADO (elimina nodos no viables)     │                      │
-│  ├─────────────────────────────────────────┤                      │
-│  │ Node1: 1GB RAM libre                    │                      │
-│  │   Pod necesita 2GB → ✗ DESCARTADO      │                      │
-│  │                                          │                      │
-│  │ Node2: 4GB RAM libre ✓                  │                      │
-│  │ Node3: 8GB RAM libre ✓                  │                      │
-│  └─────────────────────────────────────────┘                      │
+│  ┌─────────────────────────────────────────┐                        │
+│  │ FILTRADO (elimina nodos no viables)     │                        │
+│  ├─────────────────────────────────────────┤                        │
+│  │ Node1: 1GB RAM libre                    │                        │
+│  │   Pod necesita 2GB → ✗ DESCARTADO       │                        │
+│  │                                         │                        │
+│  │ Node2: 4GB RAM libre ✓                  │                        │
+│  │ Node3: 8GB RAM libre ✓                  │                        │
+│  └─────────────────────────────────────────┘                        │
 │                                                                     │
-│  ┌─────────────────────────────────────────┐                      │
-│  │ PUNTUACIÓN (prioriza mejor nodo)        │                      │
-│  ├─────────────────────────────────────────┤                      │
-│  │ Node2:                                   │                      │
-│  │  • Balance de recursos: 60 puntos       │                      │
-│  │  • Afinidad con zona-a: 20 puntos       │                      │
-│  │  • Total: 80 puntos                      │                      │
-│  │                                          │                      │
-│  │ Node3:                                   │                      │
-│  │  • Balance de recursos: 90 puntos       │                      │
-│  │  • Sin afinidad especial: 0 puntos      │                      │
-│  │  • Total: 90 puntos ← GANADOR           │                      │
-│  └─────────────────────────────────────────┘                      │
+│  ┌─────────────────────────────────────────┐                        │
+│  │ PUNTUACIÓN (prioriza mejor nodo)        │                        │
+│  ├─────────────────────────────────────────┤                        │
+│  │ Node2:                                  │                        │
+│  │  • Balance de recursos: 60 puntos       │                        │
+│  │  • Afinidad con zona-a: 20 puntos       │                        │
+│  │  • Total: 80 puntos                     │                        │
+│  │                                         │                        │
+│  │ Node3:                                  │                        │
+│  │  • Balance de recursos: 90 puntos       │                        │
+│  │  • Sin afinidad especial: 0 puntos      │                        │
+│  │  • Total: 90 puntos ← GANADOR           │                        │
+│  └─────────────────────────────────────────┘                        │
 │                                                                     │
 │  Scheduler actualiza etcd:                                          │
 │  spec.nodeName = "node3"                                            │
@@ -380,15 +380,15 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 5: kubelet en Node3 detecta pod asignado                     │
+│  PASO 5: kubelet en Node3 detecta pod asignado                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  kubelet cada 10s pregunta a API Server:                            │
-│  "¿Hay pods nuevos para mi nodo (node3)?"                          │
+│  "¿Hay pods nuevos para mi nodo (node3)?"                           │
 │                                                                     │
 │  Detecta: mi-pod asignado a node3                                   │
 │                                                                     │
-│  kubelet prepara:                                                    │
+│  kubelet prepara:                                                   │
 │  1. Crear directorios para volúmenes                                │
 │  2. Montar secretos/configmaps                                      │
 │  3. Configurar red del pod                                          │
@@ -397,29 +397,29 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 6: kubelet le dice a Container Runtime que ejecute           │
+│  PASO 6: kubelet le dice a Container Runtime que ejecute            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  kubelet → Container Runtime (CRI):                                 │
-│  "Ejecuta contenedor con imagen nginx:latest"                      │
+│  "Ejecuta contenedor con imagen nginx:latest"                       │
 │                                                                     │
 │  Container Runtime:                                                 │
 │  1. Pull imagen si no existe:                                       │
 │     docker pull nginx:latest                                        │
 │                                                                     │
 │  2. Crea contenedor:                                                │
-│     docker create --name k8s_nginx_mi-pod_default_... nginx        │
+│     docker create --name k8s_nginx_mi-pod_default_... nginx         │
 │                                                                     │
 │  3. Inicia contenedor:                                              │
-│     docker start k8s_nginx_mi-pod_default_...                      │
+│     docker start k8s_nginx_mi-pod_default_...                       │
 │                                                                     │
-│  4. Configura red (asigna IP del pod)                              │
+│  4. Configura red (asigna IP del pod)                               │
 │                                                                     │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 7: kubelet reporta estado "Running"                          │
+│  PASO 7: kubelet reporta estado "Running"                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  kubelet actualiza estado en API Server:                            │
@@ -429,7 +429,7 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
 │  status.containerStatuses = [                                       │
 │    {                                                                │
 │      "name": "nginx",                                               │
-│      "state": {"running": {"startedAt": "2024-..."}},              │
+│      "state": {"running": {"startedAt": "2024-..."}},               │
 │      "ready": true                                                  │
 │    }                                                                │
 │  ]                                                                  │
@@ -438,12 +438,12 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  PASO 8: Usuario puede verificar                                   │
+│  PASO 8: Usuario puede verificar                                    │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  $ kubectl get pods                                                 │
-│  NAME     READY   STATUS    RESTARTS   AGE                         │
-│  mi-pod  1/1     Running   0          30s                          │
+│  NAME     READY   STATUS    RESTARTS   AGE                          │
+│  mi-pod  1/1     Running   0          30s                           │
 │                                                                     │
 │  $ kubectl describe pod mi-pod                                      │
 │  ...                                                                │
@@ -452,7 +452,7 @@ Veamos paso a paso qué sucede cuando ejecutas `kubectl create -f pod.yaml`:
 │  IP:           192.168.1.50                                         │
 │  ...                                                                │
 │                                                                     │
-│  ✅ Pod creado exitosamente                                        │
+│  ✅ Pod creado exitosamente                                         │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -471,10 +471,10 @@ Cómo los Pods se comunican entre sí y con el exterior:
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │  Principios fundamentales:                                          │
-│  1. Cada Pod tiene una IP única                                    │
-│  2. Pods pueden comunicarse sin NAT                                │
-│  3. Contenedores en un Pod comparten la misma IP                   │
-│  4. Services proporcionan IPs estables y DNS                       │
+│  1. Cada Pod tiene una IP única                                     │
+│  2. Pods pueden comunicarse sin NAT                                 │
+│  3. Contenedores en un Pod comparten la misma IP                    │
+│  4. Services proporcionan IPs estables y DNS                        │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
@@ -483,22 +483,22 @@ ESCENARIO: Pod Frontend necesita llamar a Pod Backend
 ┌──────────────────────────────────────────────────────────────────┐
 │  Node 1                          Node 2                          │
 │                                                                  │
-│  ┌────────────────────┐          ┌────────────────────┐        │
-│  │  Pod: frontend     │          │  Pod: backend-1    │        │
-│  │  IP: 10.244.1.5    │          │  IP: 10.244.2.10   │        │
-│  │                    │          │                    │        │
-│  │  [nginx]           │          │  [API server]      │        │
-│  │   Port 80          │          │   Port 8080        │        │
-│  └─────────┬──────────┘          └──────────┬─────────┘        │
-│            │                                │                   │
-│            │                     ┌────────────────────┐        │
-│            │                     │  Pod: backend-2    │        │
-│            │                     │  IP: 10.244.2.11   │        │
-│            │                     │                    │        │
-│            │                     │  [API server]      │        │
-│            │                     │   Port 8080        │        │
-│            │                     └──────────┬─────────┘        │
-└────────────┼────────────────────────────────┼──────────────────┘
+│  ┌────────────────────┐          ┌────────────────────┐          │
+│  │  Pod: frontend     │          │  Pod: backend-1    │          │
+│  │  IP: 10.244.1.5    │          │  IP: 10.244.2.10   │          │
+│  │                    │          │                    │          │
+│  │  [nginx]           │          │  [API server]      │          │
+│  │   Port 80          │          │   Port 8080        │          │
+│  └─────────┬──────────┘          └──────────┬─────────┘          │
+│            │                                │                    │
+│            │                     ┌────────────────────┐          │
+│            │                     │  Pod: backend-2    │          │
+│            │                     │  IP: 10.244.2.11   │          │
+│            │                     │                    │          │
+│            │                     │  [API server]      │          │
+│            │                     │   Port 8080        │          │
+│            │                     └──────────┬─────────┘          │
+└────────────┼────────────────────────────────┼────────────────────┘
              │                                │
              │                                │
              └────────────┬───────────────────┘
@@ -509,11 +509,11 @@ ESCENARIO: Pod Frontend necesita llamar a Pod Backend
               │   ClusterIP: 10.96.0.50 │
               │   DNS: backend.default. │
               │        svc.cluster.local│
-              │                          │
-              │   Endpoints:             │
+              │                         │
+              │   Endpoints:            │
               │   - 10.244.2.10:8080    │
               │   - 10.244.2.11:8080    │
-              └──────────────────────────┘
+              └─────────────────────────┘
 
 FLUJO DE COMUNICACIÓN:
 
