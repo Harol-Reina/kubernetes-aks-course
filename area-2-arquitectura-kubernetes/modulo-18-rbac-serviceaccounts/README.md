@@ -63,61 +63,52 @@ Este módulo incluye:
 
 ### El Problema que Resuelven
 
-Imagina que tienes una aplicación de monitoreo corriendo dentro de tu cluster de Kubernetes. Esta aplicación necesita:
-- Listar todos los pods del cluster
-- Obtener métricas de CPU y memoria
-- Ver el estado de los deployments
+Imagina que tienes una aplicación de monitoreo corriendo dentro de tu cluster de Kubernetes. Esta aplicación necesita consultar constantemente el estado de otros pods, obtener métricas de recursos y verificar el estado de los deployments. Pero surge una pregunta fundamental: **¿cómo puede una aplicación corriendo dentro de un pod autenticarse de forma segura con la API de Kubernetes?**
 
-**Pregunta clave**: ¿Cómo puede esta aplicación autenticarse con la API de Kubernetes?
+A diferencia de los usuarios humanos que acceden al cluster desde fuera (usando kubectl con certificados), las aplicaciones corriendo dentro del cluster necesitan un mecanismo diferente. No tiene sentido crear certificados manualmente para cada pod, especialmente cuando estos se crean y destruyen dinámicamente. Aquí es donde entran los **Service Accounts**: identidades automáticas gestionadas por Kubernetes específicamente diseñadas para que las aplicaciones puedan autenticarse con la API del cluster.
 
+Los Service Accounts resuelven este problema proporcionando una identidad digital que Kubernetes genera automáticamente, monta en los pods como tokens JWT, y valida cada vez que la aplicación hace una petición a la API. Es como dar a cada aplicación su propia "tarjeta de identificación" que el cluster reconoce y confía.
+
+### Concepto Fundamental
+
+Un **Service Account** es un objeto de Kubernetes que representa una identidad para procesos que se ejecutan dentro de pods. A diferencia de las cuentas de usuario (que son para personas), los Service Accounts son exclusivamente para aplicaciones y servicios automatizados.
+
+**Características esenciales:**
+- 🤖 **Identidad para procesos**: Diseñados para aplicaciones, no para humanos
+- 🔑 **Autenticación automática**: Kubernetes genera y monta tokens JWT automáticamente
+- 📦 **Alcance por namespace**: Cada Service Account pertenece a un namespace específico
+- 🔄 **Gestionado por API**: Se crean y administran como cualquier otro recurso de Kubernetes
+- 🛡️ **Seguridad integrada**: Los tokens tienen permisos limitados según la configuración RBAC
+
+### Ejemplo práctico:
+
+Crear un Service Account básico es muy simple:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mi-aplicacion
+  namespace: produccion
 ```
-┌─────────────────────────────────────────────────────┐
-│           Cluster Kubernetes                        │
-│                                                     │
-│  ┌──────────────┐              ┌──────────────┐   │
-│  │ Pod: Monitor │─────?────────>│  API Server  │   │
-│  │              │              │              │   │
-│  │ "¿Qué pods   │              │ "¿Quién      │   │
-│  │  existen?"   │              │  eres?"      │   │
-│  └──────────────┘              └──────────────┘   │
-│                                                     │
-│  ¿Cómo se autentica el pod?                        │
-└─────────────────────────────────────────────────────┘
+
+Usar el Service Account en un pod:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mi-pod
+spec:
+  serviceAccountName: mi-aplicacion  # Asignar el SA al pod
+  containers:
+  - name: app
+    image: nginx
 ```
 
-**La respuesta**: Service Accounts
+**📁 Ver archivo completo:** [`ejemplos/02-serviceaccount-basico.yaml`](./ejemplos/02-serviceaccount-basico.yaml)
 
-### Definición
-
-Un **Service Account** es una identidad gestionada por Kubernetes que permite a los pods y aplicaciones autenticarse con la API del cluster.
-
-**Características principales**:
-- 🤖 **Identidad para procesos**: No para humanos
-- 🔑 **Token automático**: Kubernetes genera y monta el token
-- 📦 **Namespace-scoped**: Cada Service Account pertenece a un namespace
-- 🔄 **Gestionado por API**: Creación y gestión mediante kubectl/API
-
-### Ejemplo Conceptual
-
-```
-┌─────────────────────────────────────────────────────┐
-│           Namespace: monitoring                     │
-│                                                     │
-│  ┌──────────────┐              ┌──────────────┐   │
-│  │ Pod: Monitor │──────────────>│  API Server  │   │
-│  │              │  Token: xyz   │              │   │
-│  │ SA: monitor  │◄─────────────│ "Autenticado"│   │
-│  └──────────────┘              └──────────────┘   │
-│         ▲                                           │
-│         │ Usa                                       │
-│         │                                           │
-│  ┌──────┴───────┐                                  │
-│  │ServiceAccount│                                  │
-│  │ Name: monitor│                                  │
-│  │ Token: xyz   │                                  │
-│  └──────────────┘                                  │
-└─────────────────────────────────────────────────────┘
-```
+**🔬 Laboratorio:** Aprende a crear y verificar Service Accounts en [`laboratorios/lab-01-crear-serviceaccounts.md`](./laboratorios/lab-01-crear-serviceaccounts.md)
 
 ---
 
@@ -196,69 +187,28 @@ Piensa en una empresa:
 
 ## 3. Anatomía de un Service Account
 
-### Componentes de un Service Account
+### Estructura y Componentes
 
-Un Service Account está compuesto por varios elementos que trabajan juntos:
+Un Service Account en Kubernetes es más que solo un nombre. Es un recurso completo que incluye múltiples elementos trabajando en conjunto para proporcionar autenticación y autorización a las aplicaciones. Comprender su anatomía es fundamental para usarlos correctamente y aprovechar todas sus capacidades.
 
-```
-Service Account
-    ├── Metadata (nombre, namespace, labels)
-    ├── Secrets (tokens de autenticación)
-    ├── ImagePullSecrets (opcional)
-    └── AutomountServiceAccountToken (configuración)
-```
+Cuando creas un Service Account, Kubernetes automáticamente genera un Secret que contiene un token JWT. Este token es la "llave" que usa tu aplicación para autenticarse. Además, puedes configurar secretos adicionales para descargar imágenes de registros privados (como Azure Container Registry) y controlar si el token se monta automáticamente en los pods.
 
-### Manifest YAML Básico
+La configuración más importante es `automountServiceAccountToken`, que determina si Kubernetes debe montar automáticamente el token en los pods que usan este Service Account. Por defecto es `true`, lo cual es conveniente pero puede representar un riesgo de seguridad si la aplicación no necesita acceso a la API.
 
-```yaml
-# Ejemplo básico de Service Account
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: my-service-account
-  namespace: default
-  labels:
-    app: mi-aplicacion
-    team: backend
-  annotations:
-    description: "Service Account para la aplicación de backend"
+### Componentes Principales
 
-# Opcional: Secretos para pull de imágenes privadas
-imagePullSecrets:
-  - name: docker-registry-secret
+Un Service Account completo consta de:
 
-# Opcional: Control de montaje automático del token
-automountServiceAccountToken: true
-```
+1. **Metadata**: Nombre, namespace, labels y annotations
+2. **Secrets**: Token de autenticación generado automáticamente
+3. **ImagePullSecrets**: (Opcional) Credenciales para registros de imágenes privados
+4. **AutomountServiceAccountToken**: Control de montaje automático del token
 
-**Explicación de campos**:
+### Ejemplo práctico:
 
-- **`metadata.name`**: Nombre único del Service Account en el namespace
-- **`metadata.namespace`**: Namespace donde existe (si se omite, usa `default`)
-- **`imagePullSecrets`**: Referencias a secretos para descargar imágenes de registros privados
-- **`automountServiceAccountToken`**: Si es `true`, monta automáticamente el token en pods
-
-### El Service Account por Defecto
-
-**Dato importante**: Cada namespace tiene un Service Account llamado `default` creado automáticamente.
-
-```bash
-# Ver el Service Account default
-kubectl get serviceaccount default -n default
-```
-
-```
-NAME      SECRETS   AGE
-default   1         30d
-```
-
-Si no especificas un Service Account en un pod, Kubernetes usa el `default` automáticamente.
-
-### Estructura Completa con Ejemplo Inline
+Service Account con todas las opciones configuradas:
 
 ```yaml
-# ejemplos/01-serviceaccount-completo.yaml
-# Service Account con todas las configuraciones posibles
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -266,67 +216,63 @@ metadata:
   namespace: produccion
   labels:
     app: backend
-    environment: production
     team: platform
   annotations:
-    description: "SA para backend API con acceso a ConfigMaps y Secrets"
-    contact: "backend-team@empresa.com"
+    description: "SA para backend con acceso a ConfigMaps"
 
-# Secretos para descargar imágenes de Azure Container Registry
+# Secretos para pull de imágenes de Azure Container Registry
 imagePullSecrets:
   - name: acr-secret
 
-# Permitir montaje automático del token en pods
+# Permitir montaje automático del token
 automountServiceAccountToken: true
-
----
-# Secret para Azure Container Registry (ejemplo complementario)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: acr-secret
-  namespace: produccion
-type: kubernetes.io/dockerconfigjson
-data:
-  .dockerconfigjson: <base64-encoded-docker-config>
 ```
 
-> 📝 **Nota**: Este ejemplo está disponible en [`ejemplos/01-serviceaccount-completo.yaml`](./ejemplos/01-serviceaccount-completo.yaml)
+**📁 Ver archivo completo:** [`ejemplos/01-serviceaccount-completo.yaml`](./ejemplos/01-serviceaccount-completo.yaml)
+
+### El Service Account por Defecto
+
+**Concepto importante:** Cada namespace tiene automáticamente un Service Account llamado `default` que se crea cuando se crea el namespace. Si no especificas un Service Account en un pod, Kubernetes usa automáticamente el SA `default`.
+
+Verificar el Service Account default:
+
+```bash
+kubectl get serviceaccount default -n default
+kubectl describe sa default -n default
+```
+
+**� Laboratorio:** Explora la anatomía completa de Service Accounts en [`laboratorios/lab-01-crear-serviceaccounts.md`](./laboratorios/lab-01-crear-serviceaccounts.md)
 
 ---
 
 ## 4. Creación y Gestión de Service Accounts
 
-### Método 1: Usando kubectl (Imperativo)
+### Métodos de Creación
 
-La forma más rápida de crear un Service Account:
+Existen dos formas principales de crear Service Accounts en Kubernetes: el método imperativo (usando comandos `kubectl` directamente) y el método declarativo (usando archivos YAML). Como profesor, les recomiendo aprender ambos métodos. El imperativo es útil para pruebas rápidas y experimentación, pero el declarativo es el estándar en producción porque permite versionamiento, revisiones y facilita la implementación de GitOps.
+
+El método declarativo tiene ventajas importantes: puedes mantener los manifiestos en Git, revisar cambios antes de aplicarlos, y asegurar que todos los entornos (desarrollo, staging, producción) tengan configuraciones consistentes. Además, es más fácil documentar y compartir la configuración con tu equipo.
+
+### Método 1: Imperativo (Comandos kubectl)
+
+El método más rápido para crear un Service Account es usando `kubectl create`:
 
 ```bash
-# Crear un Service Account básico
+# Crear Service Account básico
 kubectl create serviceaccount mi-app
 
-# Crear en un namespace específico
+# Crear en namespace específico
 kubectl create serviceaccount mi-app -n produccion
 
-# Con dry-run para ver el YAML generado
+# Ver el YAML que se generaría (sin crearlo)
 kubectl create serviceaccount mi-app --dry-run=client -o yaml
 ```
 
-**Salida del comando dry-run**:
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: mi-app
-  namespace: default
-```
+### Método 2: Declarativo (Manifiestos YAML)
 
-### Método 2: Usando Manifiestos YAML (Declarativo)
-
-**Recomendado para producción** - permite control de versiones y reproducibilidad.
+**Recomendado para producción.** Permite control de versiones y reproducibilidad:
 
 ```yaml
-# ejemplos/02-serviceaccount-basico.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -337,69 +283,20 @@ metadata:
     team: developers
 ```
 
-```bash
-# Aplicar el manifest
-kubectl apply -f ejemplos/02-serviceaccount-basico.yaml
-```
-
-### Verificación y Consulta
+Aplicar el manifest:
 
 ```bash
-# Listar todos los Service Accounts en el namespace actual
-kubectl get serviceaccounts
-# Atajo: kubectl get sa
-
-# Listar en todos los namespaces
-kubectl get sa --all-namespaces
-
-# Ver detalles de un Service Account específico
-kubectl describe sa mi-app
-
-# Ver en formato YAML
-kubectl get sa mi-app -o yaml
+kubectl apply -f serviceaccount.yaml
 ```
 
-**Salida de ejemplo de `describe`**:
-```
-Name:                mi-app
-Namespace:           default
-Labels:              <none>
-Annotations:         <none>
-Image pull secrets:  <none>
-Mountable secrets:   mi-app-token-x7k9m
-Tokens:              mi-app-token-x7k9m
-Events:              <none>
-```
+**📁 Ver archivo completo:** [`ejemplos/02-serviceaccount-basico.yaml`](./ejemplos/02-serviceaccount-basico.yaml)
 
-### Actualización de Service Accounts
+### Ejemplo práctico: Service Accounts por Ambiente
 
-```bash
-# Editar interactivamente
-kubectl edit sa mi-app
-
-# O aplicar cambios desde archivo
-kubectl apply -f ejemplos/02-serviceaccount-basico.yaml
-```
-
-### Eliminación de Service Accounts
-
-```bash
-# Eliminar un Service Account
-kubectl delete sa mi-app
-
-# Eliminar desde archivo
-kubectl delete -f ejemplos/02-serviceaccount-basico.yaml
-```
-
-⚠️ **Advertencia**: Si eliminas un Service Account que está siendo usado por pods en ejecución, esos pods perderán acceso a la API hasta que se reinicien con un SA válido.
-
-### Ejemplo Práctico Inline: Service Account para Diferentes Entornos
+Organizar Service Accounts para diferentes ambientes:
 
 ```yaml
-# ejemplos/03-serviceaccounts-por-ambiente.yaml
-# Service Accounts organizados por ambiente
-
-# Desarrollo - permisos amplios
+# Desarrollo - configuración permisiva
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -408,16 +305,7 @@ metadata:
   labels:
     environment: dev
 ---
-# Staging - permisos intermedios
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: app-staging
-  namespace: staging
-  labels:
-    environment: staging
----
-# Producción - permisos mínimos
+# Producción - configuración restrictiva
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -425,140 +313,98 @@ metadata:
   namespace: produccion
   labels:
     environment: production
+    security-level: high
 ```
 
-> 🔬 **Laboratorio**: Para practicar la creación y gestión de Service Accounts, consulta [`laboratorios/lab-01-crear-serviceaccounts.md`](./laboratorios/lab-01-crear-serviceaccounts.md)
+**📁 Ver archivo completo:** [`ejemplos/03-serviceaccounts-por-ambiente.yaml`](./ejemplos/03-serviceaccounts-por-ambiente.yaml)
+
+### Comandos de Gestión Comunes
+
+```bash
+# Listar Service Accounts
+kubectl get serviceaccounts
+kubectl get sa  # forma corta
+
+# Ver detalles de un SA
+kubectl describe sa mi-app
+
+# Ver en formato YAML
+kubectl get sa mi-app -o yaml
+
+# Eliminar un SA
+kubectl delete sa mi-app
+```
+
+**🔬 Laboratorio:** Practica la creación y gestión de Service Accounts en [`laboratorios/lab-01-crear-serviceaccounts.md`](./laboratorios/lab-01-crear-serviceaccounts.md)
 
 ---
 
 ## 5. Tokens y Autenticación
 
-### ¿Qué es un Token de Service Account?
+### Comprendiendo los Tokens de Service Account
 
-Un token es una credencial JWT (JSON Web Token) que Kubernetes genera automáticamente para cada Service Account. Este token permite que los pods se autentiquen con la API.
+Los tokens son el mecanismo de autenticación que permite a los pods comunicarse con la API de Kubernetes. A diferencia de los certificados que usan los usuarios humanos, los Service Accounts utilizan tokens JWT (JSON Web Tokens) que Kubernetes genera automáticamente. Este diseño simplifica enormemente la gestión de credenciales para aplicaciones que se escalan dinámicamente.
 
-### Generación Automática de Tokens
+Cuando creas un Service Account, Kubernetes realiza varias acciones automáticas: crea un Secret que contiene el token JWT, asocia ese Secret al Service Account, y cuando un pod usa ese SA, monta automáticamente el token en una ubicación predecible dentro del contenedor (`/var/run/secrets/kubernetes.io/serviceaccount/`). La aplicación puede entonces leer este token y usarlo para autenticarse en cada petición a la API.
 
-Cuando creas un Service Account, Kubernetes automáticamente:
+En versiones modernas de Kubernetes (1.20+), se recomienda usar **tokens proyectados** en lugar de tokens estáticos. Los tokens proyectados tienen ventajas significativas de seguridad: expiran automáticamente, se renuevan antes de expirar, pueden ser específicos de una audiencia, y reducen el riesgo si un token es comprometido.
 
-1. **Crea un Secret** que contiene el token
-2. **Asocia el Secret** al Service Account
-3. **Monta el token** en los pods que usan ese SA
+### Generación y Montaje Automático
 
-```
-Crear SA → Kubernetes crea Secret → Secret contiene Token JWT
-```
-
-### Inspección de Tokens
-
-```bash
-# Ver el Secret asociado al Service Account
-kubectl get sa mi-app -o yaml
-
-# Output mostrará algo como:
-# secrets:
-# - name: mi-app-token-abc123
-
-# Ver el contenido del Secret
-kubectl get secret mi-app-token-abc123 -o yaml
-```
-
-**Estructura del Secret**:
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mi-app-token-abc123
-  namespace: default
-  annotations:
-    kubernetes.io/service-account.name: mi-app
-type: kubernetes.io/service-account-token
-data:
-  ca.crt: <base64-encoded-ca-certificate>
-  namespace: ZGVmYXVsdA==  # "default" en base64
-  token: <base64-encoded-jwt-token>
-```
-
-### Decodificar el Token
-
-```bash
-# Obtener el token decodificado
-kubectl get secret mi-app-token-abc123 -o jsonpath='{.data.token}' | base64 -d
-
-# Examinar el contenido del JWT (requiere jwt-cli o similar)
-# El token es un JWT con claims sobre el Service Account
-```
-
-**Estructura de un JWT de Service Account**:
-```json
-{
-  "iss": "kubernetes/serviceaccount",
-  "kubernetes.io/serviceaccount/namespace": "default",
-  "kubernetes.io/serviceaccount/service-account.name": "mi-app",
-  "kubernetes.io/serviceaccount/service-account.uid": "abc-123-def",
-  "sub": "system:serviceaccount:default:mi-app"
-}
-```
-
-### Ubicación del Token en Pods
-
-Cuando un pod usa un Service Account, Kubernetes monta automáticamente el token en:
+Proceso automático cuando creas un Service Account:
 
 ```
-/var/run/secrets/kubernetes.io/serviceaccount/
-    ├── ca.crt          # Certificado CA del cluster
-    ├── namespace       # Namespace del pod
-    └── token           # El token JWT
+1. Creas Service Account
+       ↓
+2. Kubernetes crea Secret con token JWT
+       ↓
+3. Secret se asocia al Service Account
+       ↓
+4. Pod usa el Service Account
+       ↓
+5. Kubernetes monta el token en el pod automáticamente
 ```
 
-### Ejemplo: Verificar Token desde un Pod
+### Ejemplo práctico:
+
+Verificar el token dentro de un pod:
 
 ```yaml
-# ejemplos/04-pod-con-serviceaccount.yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  name: test-sa-pod
-  namespace: default
+  name: test-token-pod
 spec:
-  # Especificar el Service Account a usar
   serviceAccountName: mi-app
-  
   containers:
-  - name: test-container
-    image: busybox:1.36
-    command:
-      - sleep
-      - "3600"
+  - name: test
+    image: busybox
+    command: ["sleep", "3600"]
 ```
 
+Inspeccionar el token desde el pod:
+
 ```bash
-# Aplicar el pod
-kubectl apply -f ejemplos/04-pod-con-serviceaccount.yaml
+# Entrar al pod
+kubectl exec -it test-token-pod -- sh
 
-# Ejecutar comandos dentro del pod
-kubectl exec -it test-sa-pod -- sh
-
-# Dentro del pod, ver el token
-cat /var/run/secrets/kubernetes.io/serviceaccount/token
+# Ver archivos del Service Account
+ls -la /var/run/secrets/kubernetes.io/serviceaccount/
 
 # Ver el namespace
 cat /var/run/secrets/kubernetes.io/serviceaccount/namespace
 
-# Ver el certificado CA
-ls -la /var/run/secrets/kubernetes.io/serviceaccount/
+# Ver el token (JWT)
+cat /var/run/secrets/kubernetes.io/serviceaccount/token
 ```
 
-### Tokens Proyectados (Token Request API)
+**📁 Ver archivo completo:** [`ejemplos/04-pod-con-serviceaccount.yaml`](./ejemplos/04-pod-con-serviceaccount.yaml)
 
-Desde Kubernetes 1.20+, se recomienda usar **tokens proyectados** que:
-- ✅ Tienen tiempo de expiración
-- ✅ Son específicos de la audiencia
-- ✅ Se renuevan automáticamente
-- ✅ Son más seguros
+### Tokens Proyectados (Recomendado)
+
+Configuración moderna y segura con tokens que expiran:
 
 ```yaml
-# ejemplos/05-pod-token-proyectado.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -567,177 +413,110 @@ spec:
   serviceAccountName: mi-app
   containers:
   - name: app
-    image: nginx:alpine
+    image: nginx
     volumeMounts:
     - name: token
       mountPath: /var/run/secrets/tokens
-      readOnly: true
-  
   volumes:
   - name: token
     projected:
       sources:
       - serviceAccountToken:
           path: token
-          expirationSeconds: 3600      # Token expira en 1 hora
-          audience: api                # Audiencia específica
+          expirationSeconds: 3600  # Expira en 1 hora
+          audience: api
 ```
 
-### Deshabilitar Montaje Automático
+**📁 Ver archivo completo:** [`ejemplos/05-pod-token-proyectado.yaml`](./ejemplos/05-pod-token-proyectado.yaml)
 
-A veces no quieres que un pod tenga acceso a la API:
-
-```yaml
-# En el Service Account
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: no-api-access
-automountServiceAccountToken: false
-
----
-# O en el Pod específico
-apiVersion: v1
-kind: Pod
-metadata:
-  name: pod-sin-token
-spec:
-  serviceAccountName: mi-app
-  automountServiceAccountToken: false  # Override SA config
-  containers:
-  - name: app
-    image: nginx:alpine
-```
+**🔬 Laboratorio:** Experimenta con tokens y autenticación en [`laboratorios/lab-02-tokens-autenticacion.md`](./laboratorios/lab-02-tokens-autenticacion.md)
 
 ---
 
 ## 6. Asignación de Permisos con Roles
 
-### El Modelo RBAC para Service Accounts
+### El Modelo RBAC Completo
 
-Los Service Accounts por sí solos **NO tienen permisos**. Necesitas asignarles permisos usando:
+Este es un concepto crítico que muchos estudiantes confunden al principio: **los Service Accounts por sí solos NO tienen permisos**. Crear un Service Account es solo el primer paso. Para que una aplicación pueda hacer algo útil con la API de Kubernetes, necesitas tres componentes trabajando juntos:
 
-1. **Role** o **ClusterRole**: Define QUÉ permisos
-2. **RoleBinding** o **ClusterRoleBinding**: Asigna permisos A QUIÉN
+1. **Service Account**: La identidad (quién es)
+2. **Role o ClusterRole**: Los permisos (qué puede hacer)
+3. **RoleBinding o ClusterRoleBinding**: La conexión (asignar permisos a la identidad)
+
+Esta separación es intencional y poderosa. Te permite reutilizar roles en múltiples Service Accounts, cambiar permisos sin modificar las aplicaciones, y mantener una clara auditoría de quién puede hacer qué. El principio de **mínimo privilegio** debe guiar siempre tus decisiones: otorga solo los permisos estrictamente necesarios para que la aplicación funcione.
+
+### Arquitectura de Permisos
 
 ```
 ServiceAccount + Role + RoleBinding = Permisos efectivos
+
+┌──────────────────┐   usa    ┌──────────────────┐
+│ ServiceAccount   │◄─────────│      Pod         │
+│  name: mi-app    │          │                  │
+└────────┬─────────┘          └──────────────────┘
+         │
+         │ asignado mediante
+         │
+    ┌────▼────────┐        ┌──────────────────┐
+    │RoleBinding  │───────►│      Role        │
+    │             │        │  Permisos:       │
+    └─────────────┘        │  - get pods      │
+                           │  - list pods     │
+                           └──────────────────┘
 ```
 
-### Diagrama de Flujo
+### Ejemplo práctico: Configuración RBAC Completa
 
-```
-┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-│ ServiceAccount   │      │      Role        │      │   RoleBinding    │
-│                  │      │                  │      │                  │
-│ name: mi-app     │      │ Permisos:        │◄─────│ Role: pod-reader│
-│ namespace: dev   │◄─────│ - get pods       │      │ Subject:         │
-│                  │      │ - list pods      │      │   - mi-app       │
-└──────────────────┘      └──────────────────┘      └──────────────────┘
-        │
-        │ Usa este SA
-        ▼
-┌──────────────────┐
-│      Pod         │
-│                  │
-│ Tiene permisos   │
-│ para get/list    │
-│ pods             │
-└──────────────────┘
-```
-
-### Ejemplo Completo: Lectura de Pods
-
-#### Paso 1: Crear el Service Account
+**Paso 1:** Crear el Service Account
 
 ```yaml
-# ejemplos/06-rbac-completo/01-serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: pod-reader
   namespace: desarrollo
-  labels:
-    purpose: monitoring
 ```
 
-#### Paso 2: Crear el Role con Permisos
+**Paso 2:** Crear el Role con permisos
 
 ```yaml
-# ejemplos/06-rbac-completo/02-role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: pod-reader-role
   namespace: desarrollo
 rules:
-  # Permiso para leer pods
-  - apiGroups: [""]           # "" indica el core API group
-    resources: ["pods"]       # Recurso: pods
-    verbs: ["get", "list"]    # Operaciones permitidas
-  
-  # Permiso adicional para leer logs
   - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
 ```
 
-**Explicación de `verbs`**:
-- `get`: Obtener un recurso específico por nombre
-- `list`: Listar todos los recursos de ese tipo
-- `watch`: Ver cambios en tiempo real
-- `create`: Crear nuevos recursos
-- `update`: Actualizar recursos existentes
-- `patch`: Modificar parcialmente recursos
-- `delete`: Eliminar recursos
-
-#### Paso 3: Crear el RoleBinding
+**Paso 3:** Crear el RoleBinding
 
 ```yaml
-# ejemplos/06-rbac-completo/03-rolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: pod-reader-binding
   namespace: desarrollo
 subjects:
-  # El Service Account que recibe los permisos
   - kind: ServiceAccount
     name: pod-reader
     namespace: desarrollo
 roleRef:
-  # El Role que contiene los permisos
   kind: Role
   name: pod-reader-role
   apiGroup: rbac.authorization.k8s.io
 ```
 
-#### Paso 4: Aplicar Todo
+**📁 Ver archivos completos:** [`ejemplos/06-rbac-completo/`](./ejemplos/06-rbac-completo/)
 
-```bash
-# Aplicar todo el conjunto
-kubectl apply -f ejemplos/06-rbac-completo/
+### Permisos Globales con ClusterRole
 
-# Verificar
-kubectl get sa pod-reader -n desarrollo
-kubectl get role pod-reader-role -n desarrollo
-kubectl get rolebinding pod-reader-binding -n desarrollo
-```
-
-### Ejemplo con ClusterRole (Permisos Globales)
-
-Para dar permisos en **todos los namespaces**:
+Para permisos en todos los namespaces:
 
 ```yaml
-# ejemplos/07-clusterrole-serviceaccount.yaml
-# Service Account
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cluster-monitor
-  namespace: monitoring
----
-# ClusterRole - permisos en todo el cluster
+# ClusterRole - permisos globales
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -745,9 +524,9 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["pods", "namespaces"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list"]
 ---
-# ClusterRoleBinding - asocia SA con ClusterRole
+# ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -762,36 +541,23 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-### Permisos Comunes para Service Accounts
+**📁 Ver archivo completo:** [`ejemplos/07-clusterrole-serviceaccount.yaml`](./ejemplos/07-clusterrole-serviceaccount.yaml)
 
-#### Solo lectura (read-only)
+### Verificar Permisos
 
-```yaml
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "configmaps", "services"]
-    verbs: ["get", "list", "watch"]
+```bash
+# Ver qué puede hacer un Service Account
+kubectl auth can-i --list \
+  --as=system:serviceaccount:desarrollo:pod-reader \
+  -n desarrollo
+
+# Verificar permiso específico
+kubectl auth can-i get pods \
+  --as=system:serviceaccount:desarrollo:pod-reader \
+  -n desarrollo
 ```
 
-#### Gestión de Deployments
-
-```yaml
-rules:
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["get", "list", "create", "update", "patch", "delete"]
-```
-
-#### Acceso a Secrets (usar con precaución)
-
-```yaml
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list"]
-```
-
-> 🔬 **Laboratorio**: Para practicar la asignación de permisos, consulta [`laboratorios/lab-02-permisos-serviceaccounts.md`](./laboratorios/lab-02-permisos-serviceaccounts.md)
+**🔬 Laboratorio:** Practica la asignación de permisos RBAC en [`laboratorios/lab-03-permisos-rbac.md`](./laboratorios/lab-03-permisos-rbac.md)
 
 ---
 
