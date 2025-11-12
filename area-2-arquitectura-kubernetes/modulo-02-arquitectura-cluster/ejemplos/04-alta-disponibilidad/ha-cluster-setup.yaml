@@ -4,6 +4,31 @@
 # Setup de cluster HA con 3 masters, etcd externo, y Load Balancer
 # ============================================================================
 
+# 🔧 IMPORTANTE - PRODUCCIÓN / CONCEPTUAL EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo es para APRENDIZAJE de conceptos de Alta Disponibilidad.
+# 
+# ❌ NO SE PUEDE EJECUTAR EN MINIKUBE porque:
+# • Minikube es single-node (solo 1 nodo)
+# • No tiene múltiples masters
+# • No usa HAProxy como Load Balancer
+# • etcd corre integrado, no como cluster externo
+# 
+# ✅ USO EN MINIKUBE:
+# • Estudiar los conceptos de HA
+# • Entender la arquitectura de producción
+# • Prepararse para clusters reales (AKS, EKS, GKE)
+# 
+# Para ver cómo Minikube gestiona el Control Plane:
+# $ kubectl get pods -n kube-system
+# $ kubectl get nodes
+# 
+# Para simular HA en desarrollo, considera:
+# • kind (Kubernetes in Docker) - soporta multi-node
+# • kubeadm en VMs separadas
+# • Clusters gestionados en cloud (AKS, EKS, GKE)
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # PASO 1: CONFIGURAR LOAD BALANCER (HAProxy)

@@ -4,6 +4,27 @@
 # Estrategias y procedimientos para backup/restore del cluster
 # ============================================================================
 
+# 🔧 IMPORTANTE - USO EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo contiene:
+# 1. Conceptos de estrategia de backup (✅ Aplicables a Minikube)
+# 2. Procedimientos manuales (⚠️ Adaptados en Lab 02 para Minikube)
+# 3. CronJob de backup (⚠️ Requiere adaptación para Minikube)
+# 
+# Para hacer backup en Minikube:
+# Ver el laboratorio: lab-02-control-plane-practico.md
+# Sección: Parte 2 - etcd Backup y Restore
+# 
+# Comandos rápidos para backup manual en Minikube:
+# $ minikube ssh
+# $ docker exec -it $(docker ps -q -f "name=k8s_etcd_etcd") sh
+# $ ETCDCTL_API=3 etcdctl snapshot save /tmp/backup.db \
+#   --endpoints=https://127.0.0.1:2379 \
+#   --cacert=/var/lib/minikube/certs/etcd/ca.crt \
+#   --cert=/var/lib/minikube/certs/etcd/server.crt \
+#   --key=/var/lib/minikube/certs/etcd/server.key
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # ESTRATEGIA DE BACKUP

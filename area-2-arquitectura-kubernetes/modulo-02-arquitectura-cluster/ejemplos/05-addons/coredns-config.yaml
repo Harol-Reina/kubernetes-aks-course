@@ -4,10 +4,35 @@
 # DNS service discovery para Services y Pods en Kubernetes
 # ============================================================================
 
+# ✅ EJECUTABLE EN MINIKUBE - CON NOTAS:
+# ────────────────────────────────────────────────────────────────────────────
+# CoreDNS ya viene instalado en Minikube por defecto.
+# 
+# Este archivo muestra cómo está configurado y cómo personalizarlo.
+# 
+# Para ver la configuración actual de CoreDNS en Minikube:
+# $ kubectl get deployment -n kube-system coredns
+# $ kubectl get configmap -n kube-system coredns -o yaml
+# $ kubectl get svc -n kube-system kube-dns
+# 
+# Para MODIFICAR la configuración de CoreDNS:
+# $ kubectl edit configmap -n kube-system coredns
+# 
+# Para ver logs de CoreDNS:
+# $ kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
+# 
+# ⚠️ NOTA sobre este archivo:
+# • Los ejemplos de ConfigMap personalizados SÍ son ejecutables
+# • El Deployment mostrado es REFERENCIA (ya existe en el cluster)
+# • Puedes crear ConfigMaps personalizados para testing
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
-# DEPLOYMENT DE COREDNS
+# DEPLOYMENT DE COREDNS (REFERENCIA)
 # ============================================================================
+# Este Deployment ya existe en Minikube. NO lo apliques directamente.
+# Úsalo como referencia para entender la configuración.
 
 apiVersion: apps/v1
 kind: Deployment

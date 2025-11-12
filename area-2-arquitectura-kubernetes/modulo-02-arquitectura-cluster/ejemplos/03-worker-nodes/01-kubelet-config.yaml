@@ -5,11 +5,36 @@
 # Responsable de ejecutar y monitorear pods en el nodo.
 # ============================================================================
 
+# ⚠️ IMPORTANTE - USO EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo es REFERENCIA EDUCATIVA - NO ES UN RECURSO KUBERNETES.
+# NO puedes aplicarlo con kubectl apply.
+# 
+# En Minikube:
+# • kubelet está configurado automáticamente
+# • La configuración está en el nodo Minikube, no como recurso K8s
+# 
+# Para VER la configuración de kubelet en Minikube:
+# $ minikube ssh
+# $ cat /var/lib/kubelet/config.yaml
+# $ systemctl status kubelet
+# 
+# Para ver los flags con los que corre kubelet:
+# $ minikube ssh
+# $ ps aux | grep kubelet
+# 
+# Para ver logs del kubelet:
+# $ minikube ssh
+# $ sudo journalctl -u kubelet -f
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
-# CONFIGURACIÓN DE KUBELET
+# CONFIGURACIÓN DE KUBELET (Archivo de configuración)
 # ============================================================================
-# Archivo: /var/lib/kubelet/config.yaml
+# Ubicación en producción/kubeadm: /var/lib/kubelet/config.yaml
+# Tipo: KubeletConfiguration (NO es un recurso de Kubernetes)
+# En Minikube: Gestionado automáticamente
 
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
@@ -184,8 +209,9 @@ spec:
 
 ---
 # ============================================================================
-# EJEMPLO: POD CON DIFERENTES TIPOS DE PROBES (TCP y Exec)
+# EJEMPLO EJECUTABLE: POD CON DIFERENTES TIPOS DE PROBES
 # ============================================================================
+# ✅ ESTE EJEMPLO SÍ SE PUEDE EJECUTAR EN MINIKUBE
 
 apiVersion: v1
 kind: Pod
@@ -197,6 +223,14 @@ spec:
     image: redis
     ports:
     - containerPort: 6379
+    
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
     
     # Liveness usando TCP socket
     livenessProbe:
@@ -214,15 +248,50 @@ spec:
       initialDelaySeconds: 5
       periodSeconds: 3
 
+# ──────────────────────────────────────────────────────────────
+# CÓMO USAR (ejecutar en Minikube):
+# ──────────────────────────────────────────────────────────────
+# $ kubectl apply -f 01-kubelet-config.yaml
+# $ kubectl get pod database-with-probes
+# $ kubectl describe pod database-with-probes
+# $ kubectl delete pod database-with-probes
+# ──────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
-# COMANDOS ÚTILES PARA KUBELET
+# COMANDOS ÚTILES PARA KUBELET EN MINIKUBE
 # ============================================================================
 
-# Ver configuración de kubelet
-# $ kubectl get --raw /api/v1/nodes/<node-name>/proxy/configz | jq
+# ──────────────────────────────────────────────────────────────
+# VER CONFIGURACIÓN DE KUBELET
+# ──────────────────────────────────────────────────────────────
+# $ kubectl get --raw /api/v1/nodes/minikube/proxy/configz | jq
 
-# Ver logs de kubelet (en el nodo)
+# Desde dentro del nodo:
+# $ minikube ssh
+# $ cat /var/lib/kubelet/config.yaml
+
+# ──────────────────────────────────────────────────────────────
+# VER LOGS DE KUBELET
+# ──────────────────────────────────────────────────────────────
+# $ minikube ssh
+# $ sudo journalctl -u kubelet -f
+
+# Ver solo errores:
+# $ minikube ssh
+# $ sudo journalctl -u kubelet | grep -i error
+
+# ──────────────────────────────────────────────────────────────
+# VER PROCESO Y FLAGS DE KUBELET
+# ──────────────────────────────────────────────────────────────
+# $ minikube ssh
+# $ ps aux | grep kubelet
+
+# ──────────────────────────────────────────────────────────────
+# VERIFICAR ESTADO DEL KUBELET
+# ──────────────────────────────────────────────────────────────
+# $ minikube ssh
+# $ sudo systemctl status kubelet
 # $ sudo journalctl -u kubelet -f
 
 # Ver métricas de kubelet

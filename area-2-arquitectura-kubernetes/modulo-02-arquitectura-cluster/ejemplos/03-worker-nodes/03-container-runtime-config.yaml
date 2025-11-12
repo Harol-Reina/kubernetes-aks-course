@@ -5,6 +5,31 @@
 # kubelet se comunica con él a través de la Container Runtime Interface (CRI).
 # ============================================================================
 
+# ⚠️ IMPORTANTE - USO EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo es REFERENCIA EDUCATIVA sobre container runtimes.
+# 
+# En Minikube con driver Docker:
+# • El runtime es Docker (no containerd directamente)
+# • La configuración es manejada por Minikube
+# • Puedes usar comandos crictl dentro del nodo
+# 
+# Para acceder al runtime en Minikube:
+# $ minikube ssh
+# 
+# Verificar qué runtime usa:
+# $ minikube ssh
+# $ docker version  # Si usa Docker driver
+# $ crictl version  # Herramienta CRI genérica
+# 
+# Comandos crictl (funcionan dentro de minikube ssh):
+# $ sudo crictl pods              # Listar pods
+# $ sudo crictl ps                # Listar contenedores
+# $ sudo crictl images            # Listar imágenes
+# $ sudo crictl logs <id>         # Ver logs
+# $ sudo crictl exec -it <id> sh  # Ejecutar comando
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # STACK DEL CONTAINER RUNTIME

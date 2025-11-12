@@ -5,12 +5,31 @@
 # Este archivo muestra cómo está configurado y cómo interactuar con él.
 # ============================================================================
 
+# ⚠️ IMPORTANTE - USO EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo es REFERENCIA EDUCATIVA - NO EJECUTAR directamente.
+# 
+# En Minikube:
+# • El API Server se gestiona automáticamente
+# • NO debes modificar su configuración manualmente
+# 
+# Para VER la configuración real del API Server en Minikube:
+# $ kubectl get pod -n kube-system kube-apiserver-minikube -o yaml
+# 
+# Para VER los argumentos específicos:
+# $ kubectl get pod -n kube-system kube-apiserver-minikube -o jsonpath='{.spec.containers[0].command}' | jq
+# 
+# Para VER logs del API Server:
+# $ kubectl logs -n kube-system kube-apiserver-minikube --tail=100
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # CONFIGURACIÓN DEL API SERVER (Static Pod Manifest)
 # ============================================================================
 # En clusters gestionados por kubeadm, el API Server corre como static pod.
-# Ubicación: /etc/kubernetes/manifests/kube-apiserver.yaml
+# Ubicación en kubeadm: /etc/kubernetes/manifests/kube-apiserver.yaml
+# En Minikube: Gestionado automáticamente, acceso vía kubectl (ver arriba)
 # ============================================================================
 
 apiVersion: v1
@@ -198,8 +217,9 @@ spec:
 
 ---
 # ============================================================================
-# EJEMPLO: POD QUE INTERACTÚA CON EL API SERVER
+# EJEMPLO EJECUTABLE: POD QUE INTERACTÚA CON EL API SERVER
 # ============================================================================
+# ✅ ESTE EJEMPLO SÍ SE PUEDE EJECUTAR EN MINIKUBE
 
 apiVersion: v1
 kind: Pod
@@ -214,16 +234,36 @@ spec:
     command:
     - sleep
     - "3600"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
     
     # Este pod tiene acceso al API Server mediante:
     # 1. Service Account token automáticamente montado
     # 2. CA certificate del cluster
     # 3. API Server endpoint via environment variables
 
-# Ejecutar dentro del pod:
-# $ kubectl exec -it api-client-example -- bash
-# $ kubectl get pods
-# $ kubectl get nodes
+# ──────────────────────────────────────────────────────────────
+# CÓMO USAR (ejecutar en Minikube):
+# ──────────────────────────────────────────────────────────────
+# 1. Aplicar este pod:
+#    $ kubectl apply -f 01-api-server-config.yaml
+#
+# 2. Ejecutar comandos dentro del pod:
+#    $ kubectl exec -it api-client-example -- bash
+#
+# 3. Desde dentro del pod, probar kubectl:
+#    $ kubectl get pods
+#    $ kubectl get nodes
+#    $ kubectl get svc
+#
+# 4. Limpiar:
+#    $ kubectl delete pod api-client-example
+# ──────────────────────────────────────────────────────────────
 
 ---
 # ============================================================================
@@ -249,25 +289,47 @@ spec:
 
 ---
 # ============================================================================
-# COMANDOS ÚTILES PARA INSPECCIONAR EL API SERVER
+# COMANDOS ÚTILES PARA INSPECCIONAR EL API SERVER EN MINIKUBE
 # ============================================================================
 
-# Ver logs del API Server
-# $ kubectl logs -n kube-system kube-apiserver-<node-name>
+# ──────────────────────────────────────────────────────────────
+# VER LOGS DEL API SERVER
+# ──────────────────────────────────────────────────────────────
+# $ kubectl logs -n kube-system kube-apiserver-minikube --tail=50
 
-# Ver métricas del API Server
-# $ kubectl top pod -n kube-system kube-apiserver-<node-name>
+# ──────────────────────────────────────────────────────────────
+# VER MÉTRICAS DEL API SERVER (requiere metrics-server)
+# ──────────────────────────────────────────────────────────────
+# $ minikube addons enable metrics-server
+# $ kubectl top pod -n kube-system kube-apiserver-minikube
 
-# Verificar health endpoints
+# ──────────────────────────────────────────────────────────────
+# VERIFICAR HEALTH ENDPOINTS
+# ──────────────────────────────────────────────────────────────
 # $ kubectl get --raw /livez?verbose
 # $ kubectl get --raw /readyz?verbose
-# $ kubectl get --raw /healthz?verbose
+# $ kubectl get --raw /healthz
 
-# Ver configuración actual
-# $ kubectl get pod -n kube-system kube-apiserver-<node-name> -o yaml
+# ──────────────────────────────────────────────────────────────
+# VER CONFIGURACIÓN COMPLETA DEL API SERVER
+# ──────────────────────────────────────────────────────────────
+# $ kubectl get pod -n kube-system kube-apiserver-minikube -o yaml
 
-# Verificar certificados
+# Ver solo los argumentos (flags):
+# $ kubectl get pod -n kube-system kube-apiserver-minikube -o jsonpath='{.spec.containers[0].command}' | tr ',' '\n'
+
+# ──────────────────────────────────────────────────────────────
+# VERIFICAR CERTIFICADOS
+# ──────────────────────────────────────────────────────────────
 # $ kubectl get csr
+
+# ──────────────────────────────────────────────────────────────
+# ACCEDER AL API SERVER DIRECTAMENTE (con kubectl proxy)
+# ──────────────────────────────────────────────────────────────
+# $ kubectl proxy --port=8080
+# Luego en otro terminal:
+# $ curl http://localhost:8080/api/v1/namespaces
+# $ curl http://localhost:8080/api/v1/pods
 
 ---
 # ============================================================================

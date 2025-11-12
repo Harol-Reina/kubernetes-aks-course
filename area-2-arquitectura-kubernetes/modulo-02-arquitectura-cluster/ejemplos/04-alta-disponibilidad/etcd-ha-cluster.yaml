@@ -4,6 +4,32 @@
 # Configuración de etcd cluster externo con 3 nodos
 # ============================================================================
 
+# 🔧 IMPORTANTE - PRODUCCIÓN / CONCEPTUAL EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo es para APRENDIZAJE de conceptos de etcd en HA.
+# 
+# ❌ NO SE PUEDE EJECUTAR EN MINIKUBE porque:
+# • Minikube tiene solo 1 nodo etcd (no cluster)
+# • etcd corre como contenedor integrado, no como cluster externo
+# • No se puede configurar un cluster RAFT de 3 nodos
+# 
+# ✅ CONCEPTOS CLAVE A APRENDER:
+# • Algoritmo de consenso RAFT
+# • Quorum: (N-1)/2 (3 nodos toleran 1 fallo)
+# • Comunicación peer-to-peer (puerto 2380)
+# • Comunicación cliente (puerto 2379)
+# • Leader election
+# 
+# En Minikube, para trabajar con etcd:
+# $ kubectl get pod -n kube-system etcd-minikube
+# $ minikube ssh
+# $ docker exec -it $(docker ps -q -f "name=k8s_etcd") sh
+# $ etcdctl member list
+# 
+# El CronJob de backup al final puede adaptarse para Minikube
+# (ver Lab 02 para procedimiento completo)
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # ARQUITECTURA etcd CLUSTER

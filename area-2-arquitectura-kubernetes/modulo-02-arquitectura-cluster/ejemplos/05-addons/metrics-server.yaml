@@ -4,10 +4,35 @@
 # Proporciona métricas de CPU y memoria para kubectl top y HPA
 # ============================================================================
 
+# ✅ EJECUTABLE EN MINIKUBE - MÉTODO RECOMENDADO:
+# ────────────────────────────────────────────────────────────────────────────
+# En Minikube, la forma MÁS FÁCIL de habilitar Metrics Server es con addon:
+# 
+# $ minikube addons enable metrics-server
+# 
+# Esto instala automáticamente Metrics Server con la configuración correcta.
+# 
+# Para verificar que funciona:
+# $ kubectl top nodes
+# $ kubectl top pods -A
+# 
+# Para ver los pods de metrics-server:
+# $ kubectl get pods -n kube-system -l k8s-app=metrics-server
+# 
+# ⚠️ SOBRE ESTE ARCHIVO:
+# • Puedes aplicarlo manualmente, PERO...
+# • En Minikube necesitas agregar el flag: --kubelet-insecure-tls
+# • Es más fácil usar el addon (arriba)
+# 
+# Si quieres aplicarlo manualmente en Minikube:
+# Descomenta la línea "- --kubelet-insecure-tls" en el Deployment
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # SERVICEACCOUNT Y RBAC
 # ============================================================================
+# ✅ Estas secciones SÍ son ejecutables directamente
 
 apiVersion: v1
 kind: ServiceAccount
@@ -83,10 +108,19 @@ spec:
         - --metric-resolution=15s  # Scraping cada 15 segundos
         
         # ──────────────────────────────────────────────────────
-        # PARA DESARROLLO/TESTING (insecure)
-        # ⚠️ NO usar en producción
+        # PARA MINIKUBE - DESCOMENTAR ESTA LÍNEA:
         # ──────────────────────────────────────────────────────
         # - --kubelet-insecure-tls
+        # 
+        # ⚠️ En Minikube, los certificados del kubelet pueden causar problemas.
+        # Si aplicas este YAML manualmente, descomenta la línea de arriba.
+        # Mejor usar: minikube addons enable metrics-server
+        
+        # ──────────────────────────────────────────────────────
+        # PARA PRODUCCIÓN (seguro)
+        # ──────────────────────────────────────────────────────
+        # NO usar --kubelet-insecure-tls en producción
+        # Configurar certificados TLS correctamente
         
         ports:
         - name: https

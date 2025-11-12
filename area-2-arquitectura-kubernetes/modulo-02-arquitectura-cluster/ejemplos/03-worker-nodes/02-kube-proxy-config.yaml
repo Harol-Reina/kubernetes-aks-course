@@ -5,11 +5,37 @@
 # para permitir comunicación de red a los Pods
 # ============================================================================
 
+# ⚠️ IMPORTANTE - USO EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo contiene:
+# 1. KubeProxyConfiguration (REFERENCIA - NO es recurso K8s)
+# 2. Ejemplos de Services (✅ SÍ EJECUTABLES en Minikube)
+# 
+# En Minikube:
+# • kube-proxy está configurado automáticamente
+# • Generalmente usa modo "iptables"
+# 
+# Para VER la configuración de kube-proxy:
+# $ kubectl get configmap -n kube-system kube-proxy -o yaml
+# 
+# Para ver los pods de kube-proxy:
+# $ kubectl get pods -n kube-system -l k8s-app=kube-proxy
+# 
+# Para ver logs de kube-proxy:
+# $ kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=50
+# 
+# Para verificar reglas iptables (desde el nodo):
+# $ minikube ssh
+# $ sudo iptables-save | grep -i kubernetes
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
-# CONFIGURACIÓN DE KUBE-PROXY
+# CONFIGURACIÓN DE KUBE-PROXY (Archivo de configuración)
 # ============================================================================
-# Archivo: /var/lib/kube-proxy/config.conf
+# Ubicación: Almacenada en ConfigMap kube-proxy en namespace kube-system
+# Tipo: KubeProxyConfiguration (NO es un recurso aplicable directamente)
+# En Minikube: Gestionado automáticamente
 
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
 kind: KubeProxyConfiguration
@@ -89,8 +115,9 @@ nodePortAddresses: []
 
 ---
 # ============================================================================
-# EJEMPLO: SERVICE CLUSTERIP CON BACKEND PODS
+# EJEMPLO EJECUTABLE: SERVICE CLUSTERIP CON BACKEND PODS
 # ============================================================================
+# ✅ ESTOS EJEMPLOS SÍ SE PUEDEN EJECUTAR EN MINIKUBE
 
 apiVersion: v1
 kind: Service
@@ -118,6 +145,13 @@ spec:
     image: nginx
     ports:
     - containerPort: 8080
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
 
 ---
 apiVersion: v1
@@ -132,6 +166,33 @@ spec:
     image: nginx
     ports:
     - containerPort: 8080
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# ──────────────────────────────────────────────────────────────
+# CÓMO USAR (ejecutar en Minikube):
+# ──────────────────────────────────────────────────────────────
+# $ kubectl apply -f 02-kube-proxy-config.yaml
+# $ kubectl get svc backend-service
+# $ kubectl get endpoints backend-service
+# $ kubectl get pods -l app=backend
+# 
+# Probar el Service desde un pod:
+# $ kubectl run test --image=busybox -it --rm -- wget -O- backend-service
+# 
+# Ver reglas iptables generadas:
+# $ minikube ssh
+# $ sudo iptables-save | grep backend-service
+# 
+# Limpiar:
+# $ kubectl delete svc backend-service
+# $ kubectl delete pod backend-1 backend-2
+# ──────────────────────────────────────────────────────────────
 
 ---
 # ============================================================================

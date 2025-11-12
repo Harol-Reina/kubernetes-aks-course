@@ -5,10 +5,37 @@
 # Utiliza el algoritmo de consenso RAFT para alta disponibilidad.
 # ============================================================================
 
+# ⚠️ IMPORTANTE - USO EN MINIKUBE:
+# ────────────────────────────────────────────────────────────────────────────
+# Este archivo es REFERENCIA EDUCATIVA - NO EJECUTAR directamente.
+# 
+# En Minikube:
+# • etcd corre como contenedor Docker gestionado automáticamente
+# • NO debes modificar su configuración manualmente
+# • Los CronJobs de backup al final SÍ son ejecutables (ver adaptación)
+# 
+# Para VER la configuración de etcd en Minikube:
+# $ kubectl get pod -n kube-system etcd-minikube -o yaml
+# 
+# Para INTERACTUAR con etcd en Minikube (desde dentro del contenedor):
+# $ minikube ssh
+# $ docker exec -it $(docker ps -q -f "name=k8s_etcd_etcd") sh
+# $ etcdctl --endpoints=https://127.0.0.1:2379 \
+#   --cacert=/var/lib/minikube/certs/etcd/ca.crt \
+#   --cert=/var/lib/minikube/certs/etcd/server.crt \
+#   --key=/var/lib/minikube/certs/etcd/server.key \
+#   member list
+# 
+# Para hacer BACKUP (ver Lab 02):
+# Consulta el laboratorio lab-02-control-plane-practico.md
+# ────────────────────────────────────────────────────────────────────────────
+
 ---
 # ============================================================================
 # CONFIGURACIÓN DE UN NODO ETCD (Static Pod Manifest)
 # ============================================================================
+# NOTA: En producción/kubeadm se configura así.
+# En Minikube, esto es gestionado automáticamente.
 
 apiVersion: v1
 kind: Pod
@@ -215,9 +242,16 @@ spec:
 # ──────────────────────────────────────────────────────────────────
 # $ etcdctl get /registry/ --prefix --keys-only | grep -E "pods|services|deployments" | wc -l
 
----
 # ============================================================================
 # CRONJOB PARA BACKUPS AUTOMÁTICOS
+# ============================================================================
+# ⚠️ ADAPTACIÓN PARA MINIKUBE:
+# Este CronJob NO funcionará directamente en Minikube porque:
+# - Requiere acceso a certificados en ubicaciones específicas
+# - Usa hostPath que puede no coincidir con la estructura de Minikube
+# 
+# Para backup en Minikube, ver el Lab 02 donde se explica cómo hacerlo
+# manualmente usando docker exec dentro del nodo.
 # ============================================================================
 
 apiVersion: batch/v1
@@ -258,7 +292,7 @@ spec:
           volumes:
           - name: etcd-certs
             hostPath:
-              path: /etc/kubernetes/pki/etcd
+              path: /etc/kubernetes/pki/etcd  # En Minikube: /var/lib/minikube/certs/etcd
           - name: backup
             hostPath:
               path: /var/backups/etcd
