@@ -1,0 +1,106 @@
+# ejemplos/06-rbac-completo/03-rolebinding.yaml
+# RoleBinding que conecta el Role con el Service Account
+#
+# Este RoleBinding asigna los permisos definidos en "pod-reader-role"
+# al Service Account "pod-reader".
+#
+# Resultado: El SA "pod-reader" puede leer pods en el namespace "desarrollo"
+#
+# Uso: kubectl apply -f 03-rolebinding.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: desarrollo
+  
+  labels:
+    app: pod-monitor
+  
+  annotations:
+    description: "Asigna permisos de lectura de pods al SA pod-reader"
+
+# Sujetos: A QUIÉN se le otorgan los permisos
+subjects:
+  # El Service Account que recibe los permisos
+  - kind: ServiceAccount
+    name: pod-reader
+    namespace: desarrollo
+
+# Referencia al Role: QUÉ permisos se otorgan
+roleRef:
+  # Tipo de Role (Role o ClusterRole)
+  kind: Role
+  
+  # Nombre del Role que contiene los permisos
+  name: pod-reader-role
+  
+  # API group para RBAC
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# VERIFICACIÓN:
+#
+# 1. Verificar que el binding se creó:
+#    kubectl get rolebinding pod-reader-binding -n desarrollo
+#    kubectl describe rolebinding pod-reader-binding -n desarrollo
+#
+# 2. Verificar qué permisos tiene el Service Account:
+#    kubectl auth can-i --list \
+#      --as=system:serviceaccount:desarrollo:pod-reader \
+#      -n desarrollo
+#
+# 3. Probar un permiso específico:
+#    kubectl auth can-i get pods \
+#      --as=system:serviceaccount:desarrollo:pod-reader \
+#      -n desarrollo
+#    # Debería devolver: yes
+#
+# 4. Probar un permiso que NO tiene:
+#    kubectl auth can-i delete pods \
+#      --as=system:serviceaccount:desarrollo:pod-reader \
+#      -n desarrollo
+#    # Debería devolver: no
+#
+# EJEMPLO DE USO EN UN POD:
+#
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: monitor-pod
+#   namespace: desarrollo
+# spec:
+#   serviceAccountName: pod-reader
+#   containers:
+#   - name: monitor
+#     image: bitnami/kubectl:latest
+#     command: ["sleep", "3600"]
+#
+# Dentro de este pod, podrás ejecutar:
+# kubectl get pods       # ✅ Funciona
+# kubectl delete pods    # ❌ Prohibido
+#
+# ESTRUCTURA COMPLETA:
+#
+# ServiceAccount (pod-reader)
+#        │
+#        │ usa el token de
+#        │
+#        ▼
+# Pod (monitor-pod)
+#        │
+#        │ autenticado como
+#        │
+#        ▼
+# API Server verifica RoleBinding
+#        │
+#        │ encuentra que pod-reader
+#        │ tiene asignado
+#        │
+#        ▼
+# Role (pod-reader-role)
+#        │
+#        │ que otorga permisos
+#        │
+#        ▼
+# get, list pods ✅

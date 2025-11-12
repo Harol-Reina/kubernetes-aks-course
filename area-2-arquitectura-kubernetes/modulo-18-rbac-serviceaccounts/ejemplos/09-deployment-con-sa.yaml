@@ -1,0 +1,314 @@
+# ejemplos/09-deployment-con-sa.yaml
+# Deployment con Service Account
+#
+# Muestra cómo configurar un Deployment completo con Service Account
+# personalizado. Esta es la forma más común de usar SAs en producción.
+#
+# Uso: kubectl apply -f 09-deployment-con-sa.yaml
+
+# ============================================
+# Namespace para la aplicación
+# ============================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: produccion
+  labels:
+    environment: production
+
+---
+# ============================================
+# Service Account para el backend
+# ============================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aplicacion-backend
+  namespace: produccion
+  labels:
+    app: backend
+    tier: application
+  annotations:
+    description: "Service Account para la aplicación backend en producción"
+
+---
+# ============================================
+# Role con permisos necesarios
+# ============================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backend-role
+  namespace: produccion
+rules:
+  # Lectura de ConfigMaps para configuración
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  
+  # Lectura de Secrets para credenciales
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  
+  # Lectura de Services para service discovery
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+
+---
+# ============================================
+# RoleBinding
+# ============================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backend-rolebinding
+  namespace: produccion
+subjects:
+  - kind: ServiceAccount
+    name: aplicacion-backend
+    namespace: produccion
+roleRef:
+  kind: Role
+  name: backend-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================
+# ConfigMap con configuración de la app
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: produccion
+data:
+  app.properties: |
+    server.port=8080
+    database.host=postgres-service
+    log.level=INFO
+  
+  database.url: "postgres://postgres-service:5432/mydb"
+
+---
+# ============================================
+# Deployment con todas las mejores prácticas
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api
+  namespace: produccion
+  labels:
+    app: backend
+    tier: application
+    version: v1.0
+spec:
+  # Número de réplicas
+  replicas: 3
+  
+  # Estrategia de actualización
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  selector:
+    matchLabels:
+      app: backend
+      tier: application
+  
+  # Template para los pods
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: application
+        version: v1.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    
+    spec:
+      # ⭐ Service Account para todos los pods
+      serviceAccountName: aplicacion-backend
+      
+      # Security context a nivel de pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      
+      containers:
+      - name: api
+        image: myregistry.azurecr.io/backend:v1.0
+        imagePullPolicy: Always
+        
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        
+        # Security context a nivel de contenedor
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        # Liveness probe
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Readiness probe
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Resources limits y requests
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Variables de entorno
+        env:
+        # Información del pod
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        - name: SERVICE_ACCOUNT
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.serviceAccountName
+        
+        # ConfigMap como variables
+        - name: DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: database.url
+        
+        # Montar ConfigMap como archivo
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        
+        - name: tmp
+          mountPath: /tmp
+        
+        - name: cache
+          mountPath: /app/cache
+      
+      # Volumes
+      volumes:
+      # ConfigMap montado como volumen
+      - name: config
+        configMap:
+          name: backend-config
+      
+      # Volumenes temporales (filesystem read-only)
+      - name: tmp
+        emptyDir: {}
+      
+      - name: cache
+        emptyDir: {}
+
+---
+# ============================================
+# Service para exponer el Deployment
+# ============================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: produccion
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+    tier: application
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+
+---
+# INSTRUCCIONES:
+#
+# 1. Aplicar todo:
+#    kubectl apply -f 09-deployment-con-sa.yaml
+#
+# 2. Verificar que todo se creó:
+#    kubectl get all -n produccion
+#    kubectl get sa -n produccion
+#    kubectl get role,rolebinding -n produccion
+#
+# 3. Ver detalles del deployment:
+#    kubectl describe deployment backend-api -n produccion
+#
+# 4. Verificar que los pods usan el SA correcto:
+#    kubectl get pods -n produccion -o jsonpath='{.items[*].spec.serviceAccountName}'
+#
+# 5. Ver logs de un pod:
+#    POD_NAME=$(kubectl get pods -n produccion -l app=backend -o jsonpath='{.items[0].metadata.name}')
+#    kubectl logs $POD_NAME -n produccion
+#
+# 6. Probar acceso a ConfigMap desde un pod:
+#    kubectl exec -it $POD_NAME -n produccion -- cat /etc/config/app.properties
+#
+# 7. Escalar el deployment:
+#    kubectl scale deployment backend-api -n produccion --replicas=5
+#
+# 8. Ver el estado del rollout:
+#    kubectl rollout status deployment backend-api -n produccion
+#
+# VENTAJAS DE ESTA CONFIGURACIÓN:
+#
+# ✅ Service Account dedicado (no usa default)
+# ✅ Permisos mínimos necesarios (least privilege)
+# ✅ Security contexts configurados
+# ✅ Health checks configurados
+# ✅ Resources limits definidos
+# ✅ ConfigMaps para configuración
+# ✅ Variables de entorno con info del pod
+# ✅ Filesystem read-only donde es posible
+#
+# LIMPIAR:
+#    kubectl delete -f 09-deployment-con-sa.yaml
+#    # O
+#    kubectl delete namespace produccion

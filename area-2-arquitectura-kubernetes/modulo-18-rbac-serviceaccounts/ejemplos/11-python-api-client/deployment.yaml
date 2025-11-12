@@ -1,0 +1,236 @@
+# ejemplos/11-python-api-client/deployment.yaml
+# Aplicación Python que usa la API de Kubernetes
+#
+# Este ejemplo muestra cómo una aplicación Python puede interactuar
+# con la API de Kubernetes usando el Service Account.
+#
+# Componentes:
+# - Service Account con permisos
+# - Deployment con la aplicación Python
+# - Script Python que lista pods
+#
+# Uso: kubectl apply -f deployment.yaml
+
+# ============================================
+# Namespace para la aplicación
+# ============================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: desarrollo
+  labels:
+    environment: dev
+
+---
+# ============================================
+# Service Account
+# ============================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: python-api-client
+  namespace: desarrollo
+  labels:
+    app: python-client
+    language: python
+
+---
+# ============================================
+# Role con permisos para listar pods
+# ============================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-lister
+  namespace: desarrollo
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "get"]
+  
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+---
+# ============================================
+# RoleBinding
+# ============================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: python-api-client-binding
+  namespace: desarrollo
+subjects:
+  - kind: ServiceAccount
+    name: python-api-client
+    namespace: desarrollo
+roleRef:
+  kind: Role
+  name: pod-lister
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================
+# ConfigMap con el script Python
+# ============================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: python-script
+  namespace: desarrollo
+data:
+  list_pods.py: |
+    #!/usr/bin/env python3
+    """
+    Script que lista pods en el namespace actual
+    usando el cliente oficial de Kubernetes para Python
+    """
+    from kubernetes import client, config
+    import os
+    
+    def main():
+        print("=== Kubernetes Pod Lister ===\n")
+        
+        # Cargar configuración desde dentro del cluster
+        # Esto usa automáticamente el token del Service Account
+        try:
+            config.load_incluster_config()
+            print("✅ Configuración cargada desde dentro del cluster\n")
+        except Exception as e:
+            print(f"❌ Error cargando configuración: {e}")
+            return
+        
+        # Crear cliente de la API
+        v1 = client.CoreV1Api()
+        
+        # Obtener namespace actual
+        namespace = open("/var/run/secrets/kubernetes.io/serviceaccount/namespace").read()
+        print(f"📦 Namespace actual: {namespace}\n")
+        
+        # Listar pods
+        try:
+            print("📋 Listando pods:\n")
+            pods = v1.list_namespaced_pod(namespace=namespace)
+            
+            if not pods.items:
+                print("   No hay pods en este namespace")
+            else:
+                for i, pod in enumerate(pods.items, 1):
+                    print(f"{i}. Pod: {pod.metadata.name}")
+                    print(f"   Estado: {pod.status.phase}")
+                    print(f"   IP: {pod.status.pod_ip}")
+                    print(f"   Nodo: {pod.spec.node_name}")
+                    print()
+        
+        except client.exceptions.ApiException as e:
+            print(f"❌ Error accediendo a la API: {e}")
+            print(f"   Código: {e.status}")
+            print(f"   Razón: {e.reason}")
+    
+    if __name__ == "__main__":
+        main()
+
+---
+# ============================================
+# Deployment
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-api-client
+  namespace: desarrollo
+  labels:
+    app: python-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-client
+  template:
+    metadata:
+      labels:
+        app: python-client
+    spec:
+      serviceAccountName: python-api-client
+      
+      containers:
+      - name: python
+        image: python:3.11-slim
+        
+        command:
+          - /bin/bash
+          - -c
+          - |
+            # Instalar cliente de Kubernetes
+            pip install --no-cache-dir kubernetes
+            
+            # Copiar script
+            cp /scripts/list_pods.py /app/list_pods.py
+            chmod +x /app/list_pods.py
+            
+            # Ejecutar script cada 30 segundos
+            while true; do
+              echo "=========================================="
+              date
+              python /app/list_pods.py
+              echo "Esperando 30 segundos..."
+              sleep 30
+            done
+        
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      
+      volumes:
+      - name: scripts
+        configMap:
+          name: python-script
+          defaultMode: 0755
+
+---
+# INSTRUCCIONES:
+#
+# 1. Aplicar este archivo:
+#    kubectl apply -f ejemplos/11-python-api-client/deployment.yaml
+#
+# 2. Verificar que el deployment está corriendo:
+#    kubectl get deployment python-api-client -n desarrollo
+#    kubectl get pods -n desarrollo -l app=python-client
+#
+# 3. Ver los logs (el script se ejecuta cada 30 segundos):
+#    kubectl logs -f deployment/python-api-client -n desarrollo
+#
+# 4. Ejecutar el script manualmente:
+#    POD=$(kubectl get pods -n desarrollo -l app=python-client -o jsonpath='{.items[0].metadata.name}')
+#    kubectl exec -it $POD -n desarrollo -- python /app/list_pods.py
+#
+# 5. Entrar al pod para experimentar:
+#    kubectl exec -it $POD -n desarrollo -- bash
+#    
+#    # Dentro del pod:
+#    python /app/list_pods.py
+#    
+#    # Abrir Python interactivo
+#    python3
+#    >>> from kubernetes import client, config
+#    >>> config.load_incluster_config()
+#    >>> v1 = client.CoreV1Api()
+#    >>> pods = v1.list_namespaced_pod(namespace="desarrollo")
+#    >>> for pod in pods.items:
+#    ...     print(pod.metadata.name)
+#
+# 6. Ver el script Python:
+#    kubectl get configmap python-script -n desarrollo -o yaml
+#
+# LIMPIAR:
+#    kubectl delete -f ejemplos/11-python-api-client/deployment.yaml

@@ -1,0 +1,75 @@
+# ejemplos/06-rbac-completo/02-role.yaml
+# Role con permisos de lectura para pods
+#
+# Define QUÉ permisos se otorgan (pero no A QUIÉN)
+# Este Role permite:
+# - Listar todos los pods
+# - Obtener información de pods específicos
+# - Leer logs de pods
+#
+# Uso: kubectl apply -f 02-role.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader-role
+  namespace: desarrollo
+  
+  labels:
+    app: pod-monitor
+    permission-level: read-only
+  
+  annotations:
+    description: "Role para lectura de pods y sus logs"
+
+# Reglas que definen los permisos
+rules:
+  # Permiso para leer pods
+  - apiGroups: [""]           # "" indica el core API group
+    resources: ["pods"]       # Tipo de recurso
+    verbs: ["get", "list"]    # Operaciones permitidas
+  
+  # Permiso adicional para leer logs de pods
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+---
+# EXPLICACIÓN DE CAMPOS:
+#
+# apiGroups:
+#   - "": Core API group (pods, services, configmaps, etc.)
+#   - "apps": Deployments, StatefulSets, DaemonSets
+#   - "batch": Jobs, CronJobs
+#   - "networking.k8s.io": Ingress, NetworkPolicy
+#
+# resources:
+#   Tipo de recurso de Kubernetes (pods, services, deployments, etc.)
+#
+# verbs (operaciones):
+#   - get: Obtener un recurso específico por nombre
+#   - list: Listar todos los recursos de ese tipo
+#   - watch: Ver cambios en tiempo real
+#   - create: Crear nuevos recursos
+#   - update: Actualizar recursos existentes
+#   - patch: Modificar parcialmente recursos
+#   - delete: Eliminar recursos
+#   - deletecollection: Eliminar múltiples recursos
+#
+# resourceNames (opcional):
+#   Lista específica de nombres de recursos
+#   Si se especifica, solo aplica a esos recursos específicos
+#
+# NOTAS:
+#
+# 1. Este Role solo existe en el namespace "desarrollo"
+#
+# 2. Para ver el Role creado:
+#    kubectl get role pod-reader-role -n desarrollo
+#    kubectl describe role pod-reader-role -n desarrollo
+#
+# 3. Este Role aún no está asignado a nadie
+#    Se requiere un RoleBinding (ver archivo 03)
+#
+# 4. Para listar todos los Roles en un namespace:
+#    kubectl get roles -n desarrollo

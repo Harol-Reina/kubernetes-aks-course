@@ -1,0 +1,242 @@
+# ejemplos/10-pod-api-access.yaml
+# Pod con acceso a la API de Kubernetes usando kubectl
+#
+# Este ejemplo crea un pod con kubectl instalado que puede
+# interactuar con la API de Kubernetes usando el Service Account.
+#
+# Útil para:
+# - Testing de permisos RBAC
+# - Debugging
+# - Scripts de administración
+#
+# Uso: kubectl apply -f 10-pod-api-access.yaml
+
+# ============================================
+# Service Account con permisos de lectura
+# ============================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-reader
+  namespace: desarrollo
+  labels:
+    purpose: api-testing
+
+---
+# ============================================
+# Role con permisos de lectura básicos
+# ============================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: basic-reader
+  namespace: desarrollo
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ============================================
+# RoleBinding
+# ============================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: desarrollo
+subjects:
+  - kind: ServiceAccount
+    name: pod-reader
+    namespace: desarrollo
+roleRef:
+  kind: Role
+  name: basic-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================
+# Pod con kubectl
+# ============================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-client
+  namespace: desarrollo
+  labels:
+    app: api-client
+spec:
+  serviceAccountName: pod-reader
+  
+  containers:
+  - name: kubectl-container
+    image: bitnami/kubectl:latest
+    
+    command:
+      - sleep
+      - "3600"
+    
+    # Variables útiles
+    env:
+    - name: NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+---
+# ============================================
+# Pod alternativo con herramientas de red
+# ============================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-client-netshoot
+  namespace: desarrollo
+  labels:
+    app: api-client-advanced
+spec:
+  serviceAccountName: pod-reader
+  
+  containers:
+  - name: netshoot
+    # Imagen con kubectl, curl, y muchas herramientas de networking
+    image: nicolaka/netshoot:latest
+    
+    command:
+      - sleep
+      - "3600"
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+---
+# INSTRUCCIONES DE USO:
+#
+# 1. Aplicar el archivo:
+#    kubectl apply -f 10-pod-api-access.yaml
+#
+# 2. Esperar a que los pods estén corriendo:
+#    kubectl get pods -n desarrollo
+#
+# 3. Entrar al pod con kubectl:
+#    kubectl exec -it api-client -n desarrollo -- bash
+#
+# 4. DENTRO DEL POD - Comandos que FUNCIONAN (tenemos permisos):
+#
+#    # Listar pods en el namespace actual
+#    kubectl get pods
+#
+#    # Ver detalles de un pod
+#    kubectl describe pod api-client
+#
+#    # Listar services
+#    kubectl get services
+#
+#    # Listar configmaps
+#    kubectl get configmaps
+#
+#    # Ver el token del Service Account
+#    cat /var/run/secrets/kubernetes.io/serviceaccount/token
+#
+#    # Ver el namespace
+#    cat /var/run/secrets/kubernetes.io/serviceaccount/namespace
+#
+# 5. DENTRO DEL POD - Comandos que FALLAN (no tenemos permisos):
+#
+#    # Listar pods en otros namespaces
+#    kubectl get pods --all-namespaces
+#    # Error: Forbidden
+#
+#    # Crear un pod
+#    kubectl run test --image=nginx
+#    # Error: Forbidden
+#
+#    # Eliminar un pod
+#    kubectl delete pod api-client
+#    # Error: Forbidden
+#
+#    # Acceder a secrets
+#    kubectl get secrets
+#    # Error: Forbidden
+#
+# 6. ACCESO DIRECTO A LA API CON CURL:
+#
+#    kubectl exec -it api-client -n desarrollo -- bash
+#    
+#    # Dentro del pod:
+#    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+#    CACERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+#    NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
+#    API_SERVER=https://kubernetes.default.svc
+#    
+#    # Listar pods usando la API REST
+#    curl --cacert $CACERT \
+#         --header "Authorization: Bearer $TOKEN" \
+#         $API_SERVER/api/v1/namespaces/$NAMESPACE/pods
+#    
+#    # Obtener información de un pod específico
+#    curl --cacert $CACERT \
+#         --header "Authorization: Bearer $TOKEN" \
+#         $API_SERVER/api/v1/namespaces/$NAMESPACE/pods/api-client
+#
+# 7. PROBAR PERMISOS DESDE FUERA DEL POD:
+#
+#    # Verificar qué puede hacer el SA
+#    kubectl auth can-i --list \
+#      --as=system:serviceaccount:desarrollo:pod-reader \
+#      -n desarrollo
+#    
+#    # Verificar permiso específico
+#    kubectl auth can-i get pods \
+#      --as=system:serviceaccount:desarrollo:pod-reader \
+#      -n desarrollo
+#
+# 8. USAR EL POD CON NETSHOOT (más herramientas):
+#
+#    kubectl exec -it api-client-netshoot -n desarrollo -- bash
+#    
+#    # Tiene kubectl instalado
+#    kubectl get pods
+#    
+#    # También tiene curl, wget, dig, nslookup, etc.
+#    curl kubernetes.default.svc
+#    nslookup kubernetes.default.svc
+#
+# CASOS DE USO:
+#
+# 1. Testing de configuración RBAC
+# 2. Debugging de problemas de conectividad
+# 3. Ejecución de scripts de mantenimiento
+# 4. Validación de service discovery
+# 5. Troubleshooting de DNS
+#
+# ESTRUCTURA DE PERMISOS:
+#
+# ServiceAccount: pod-reader
+#      │
+#      │ tiene asignado
+#      ▼
+# Role: basic-reader
+#      │
+#      │ permite
+#      ▼
+# ✅ get, list, watch: pods, services, configmaps
+# ❌ create, update, delete: cualquier recurso
+# ❌ acceso a secrets
+# ❌ acceso a otros namespaces
+#
+# LIMPIAR:
+#    kubectl delete -f 10-pod-api-access.yaml
