@@ -1,0 +1,293 @@
+# ============================================
+# EJEMPLOS DE PRIORITY CLASSES
+# ============================================
+
+# ------------------------------
+# Priority Class: System Critical
+# ------------------------------
+# Para componentes críticos del sistema (valor alto)
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: system-critical
+value: 1000000000  # Valor muy alto (mil millones)
+globalDefault: false
+description: "Para componentes críticos del sistema que no deben ser preempted"
+
+---
+# ------------------------------
+# Priority Class: High Priority
+# ------------------------------
+# Para aplicaciones de producción críticas
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 100000
+globalDefault: false
+description: "Para aplicaciones de producción críticas"
+
+---
+# ------------------------------
+# Priority Class: Medium Priority
+# ------------------------------
+# Para aplicaciones estándar de producción
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+value: 10000
+globalDefault: true  # Esta será la prioridad por defecto
+description: "Prioridad estándar para aplicaciones de producción"
+
+---
+# ------------------------------
+# Priority Class: Low Priority
+# ------------------------------
+# Para jobs batch, desarrollo y testing
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 1000
+globalDefault: false
+preemptionPolicy: Never  # Nunca puede preempt otros pods
+description: "Para workloads de baja prioridad (batch, dev, test)"
+
+---
+# ------------------------------
+# Priority Class: Best Effort
+# ------------------------------
+# Prioridad más baja, puede ser preempted fácilmente
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: best-effort
+value: 100
+globalDefault: false
+preemptionPolicy: Never
+description: "Prioridad mínima para workloads no críticos"
+
+---
+# ============================================
+# EJEMPLO 1: Pod con High Priority
+# ============================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: critical-api
+spec:
+  priorityClassName: high-priority  # Usa la PriorityClass
+  containers:
+  - name: api
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+---
+# ============================================
+# EJEMPLO 2: Deployment con Medium Priority
+# ============================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      priorityClassName: medium-priority
+      containers:
+      - name: web
+        image: nginx:1.25
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+
+---
+# ============================================
+# EJEMPLO 3: Job Batch con Low Priority
+# ============================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-processing
+spec:
+  template:
+    spec:
+      priorityClassName: low-priority  # Puede ser preempted
+      restartPolicy: OnFailure
+      containers:
+      - name: processor
+        image: python:3.11
+        command: ["python", "process_data.py"]
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "2Gi"
+
+---
+# ============================================
+# EJEMPLO 4: DaemonSet System Critical
+# ============================================
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-monitoring
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: node-monitor
+  template:
+    metadata:
+      labels:
+        app: node-monitor
+    spec:
+      priorityClassName: system-critical  # Máxima prioridad
+      tolerations:
+      - operator: "Exists"  # Tolera todos los taints
+      containers:
+      - name: monitor
+        image: prometheus/node-exporter:latest
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+
+---
+# ============================================
+# EJEMPLO 5: Preemption en Acción
+# ============================================
+# Escenario: Cluster sin recursos disponibles
+
+# Pod 1: Low Priority (ya corriendo)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: batch-job-1
+spec:
+  priorityClassName: low-priority
+  containers:
+  - name: worker
+    image: busybox
+    command: ["sleep", "3600"]
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+
+---
+# Pod 2: High Priority (nuevo, causa preemption)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: critical-service
+spec:
+  priorityClassName: high-priority
+  containers:
+  - name: api
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+# Este pod causará que batch-job-1 sea evicted
+# porque tiene mayor prioridad y necesita recursos
+
+---
+# ============================================
+# EJEMPLO 6: Priority con Resource Quotas
+# ============================================
+
+# PriorityClass para namespace específico
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: team-frontend-high
+value: 50000
+globalDefault: false
+description: "Alta prioridad para equipo frontend"
+
+---
+# ResourceQuota que limita uso por prioridad
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: high-priority-quota
+  namespace: production
+spec:
+  hard:
+    pods: "10"  # Máximo 10 pods de alta prioridad
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values: ["high-priority"]
+
+---
+# ============================================
+# COMANDOS ÚTILES
+# ============================================
+
+# Listar PriorityClasses:
+# kubectl get priorityclasses
+
+# Ver detalles de una PriorityClass:
+# kubectl describe priorityclass high-priority
+
+# Ver pods ordenados por prioridad:
+# kubectl get pods -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,PRIORITY:.spec.priorityClassName,VALUE:.spec.priority
+
+# Ver eventos de preemption:
+# kubectl get events --all-namespaces --field-selector reason=Preempted
+
+# Crear PriorityClass:
+# kubectl apply -f priority-classes.yaml
+
+# ============================================
+# NOTAS IMPORTANTES
+# ============================================
+
+# 1. Valores de prioridad:
+#    - System: 1,000,000,000+ (mil millones)
+#    - High: 100,000 - 999,999
+#    - Medium: 10,000 - 99,999
+#    - Low: 1,000 - 9,999
+#    - Best Effort: 100 - 999
+
+# 2. globalDefault:
+#    - Solo UNA PriorityClass puede tener globalDefault: true
+#    - Pods sin priorityClassName usarán la default
+
+# 3. preemptionPolicy:
+#    - PreemptLowerPriority (default): Puede evict pods de menor prioridad
+#    - Never: No puede evict otros pods
+
+# 4. Preemption solo ocurre si:
+#    - No hay recursos disponibles
+#    - Pod nuevo tiene mayor prioridad
+#    - Evictar pods de menor prioridad liberaría suficientes recursos

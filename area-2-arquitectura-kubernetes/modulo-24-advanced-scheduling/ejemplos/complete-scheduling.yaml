@@ -1,0 +1,547 @@
+# ============================================
+# EJEMPLO COMPLETO DE ADVANCED SCHEDULING
+# Combina todas las técnicas en una aplicación real
+# ============================================
+
+# ESCENARIO:
+# - Aplicación multi-tier (web, api, cache, worker)
+# - Diferentes requisitos de scheduling para cada tier
+# - Control completo de placement y recursos
+
+# ============================================
+# 1. PRIORITY CLASSES
+# ============================================
+
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: app-critical
+value: 100000
+description: "Critical application components"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: app-standard
+value: 10000
+globalDefault: true
+description: "Standard application priority"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: app-batch
+value: 1000
+preemptionPolicy: Never
+description: "Background batch jobs"
+
+---
+# ============================================
+# 2. NAMESPACE CON QUOTAS Y LIMITS
+# ============================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production-app
+
+---
+# ResourceQuota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production-app
+spec:
+  hard:
+    requests.cpu: "50"
+    requests.memory: "100Gi"
+    limits.cpu: "100"
+    limits.memory: "200Gi"
+    pods: "100"
+    services: "20"
+    persistentvolumeclaims: "50"
+
+---
+# LimitRange
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: production-limits
+  namespace: production-app
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "4000m"
+      memory: "8Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    maxLimitRequestRatio:
+      cpu: "4"
+      memory: "3"
+
+---
+# ============================================
+# 3. PREPARAR NODOS
+# ============================================
+
+# Etiquetar nodos (ejecutar con kubectl):
+# kubectl label nodes worker-01 tier=frontend disktype=ssd zone=us-east-1a
+# kubectl label nodes worker-02 tier=frontend disktype=ssd zone=us-east-1b
+# kubectl label nodes worker-03 tier=backend disktype=nvme zone=us-east-1a
+# kubectl label nodes worker-04 tier=backend disktype=nvme zone=us-east-1b
+# kubectl label nodes worker-05 tier=cache disktype=nvme zone=us-east-1a
+
+# Aplicar taints para nodos especializados:
+# kubectl taint nodes worker-05 dedicated=cache:NoSchedule
+
+---
+# ============================================
+# 4. FRONTEND WEB (Alta Disponibilidad)
+# ============================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: production-app
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: web
+        tier: frontend
+    spec:
+      # Priority alta para frontend crítico
+      priorityClassName: app-critical
+      
+      # Node Affinity: Preferir nodos frontend con SSD
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: tier
+                operator: In
+                values: ["frontend"]
+              - key: disktype
+                operator: In
+                values: ["ssd"]
+          
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: zone
+                operator: In
+                values: ["us-east-1a"]
+        
+        # Pod Anti-Affinity: Distribuir pods en diferentes nodos
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: ["web"]
+            topologyKey: "kubernetes.io/hostname"
+          
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["web"]
+              topologyKey: "topology.kubernetes.io/zone"
+      
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# ============================================
+# 5. BACKEND API (Alta Prioridad)
+# ============================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+  namespace: production-app
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: api
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: api
+        tier: backend
+    spec:
+      priorityClassName: app-critical
+      
+      affinity:
+        # Node Affinity: Solo nodos backend con NVMe
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: tier
+                operator: In
+                values: ["backend"]
+              - key: disktype
+                operator: In
+                values: ["nvme"]
+        
+        # Pod Affinity: Colocar cerca de cache
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 80
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["cache"]
+              topologyKey: "topology.kubernetes.io/zone"
+        
+        # Pod Anti-Affinity: Distribuir en diferentes nodos
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["api"]
+              topologyKey: "kubernetes.io/hostname"
+      
+      containers:
+      - name: api
+        image: myapp/api:v2.1.0
+        ports:
+        - containerPort: 8080
+        
+        env:
+        - name: CACHE_HOST
+          value: "redis-cache"
+        - name: DB_HOST
+          value: "postgres-db"
+        
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1500m"
+            memory: "2Gi"
+        
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        
+        readinessProbe:
+          httpGet:
+            path: /api/ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# ============================================
+# 6. REDIS CACHE (Nodo Dedicado)
+# ============================================
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cache
+  namespace: production-app
+spec:
+  serviceName: redis-cache
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cache
+      tier: cache
+  template:
+    metadata:
+      labels:
+        app: cache
+        tier: cache
+    spec:
+      priorityClassName: app-critical
+      
+      # NodeSelector + Toleration para nodo dedicado
+      nodeSelector:
+        tier: cache
+      
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "cache"
+        effect: "NoSchedule"
+      
+      affinity:
+        # Anti-Affinity: Un pod por nodo
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: ["cache"]
+            topologyKey: "kubernetes.io/hostname"
+      
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        
+        command:
+        - redis-server
+        - --appendonly yes
+        - --maxmemory 2gb
+        - --maxmemory-policy allkeys-lru
+        
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "1000m"
+            memory: "4Gi"
+        
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        
+        livenessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        
+        readinessProbe:
+          exec:
+            command: ["redis-cli", "ping"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 20Gi
+      storageClassName: fast-ssd
+
+---
+# ============================================
+# 7. BACKGROUND WORKERS (Baja Prioridad)
+# ============================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: background-worker
+  namespace: production-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: worker
+      tier: batch
+  template:
+    metadata:
+      labels:
+        app: worker
+        tier: batch
+    spec:
+      # Prioridad baja, puede ser preempted
+      priorityClassName: app-batch
+      
+      # Sin node affinity, usa cualquier nodo disponible
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["worker"]
+              topologyKey: "kubernetes.io/hostname"
+      
+      # Tolera taints de maintenance
+      tolerations:
+      - key: "maintenance"
+        operator: "Exists"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: worker
+        image: myapp/worker:v1.5.0
+        
+        env:
+        - name: QUEUE_URL
+          value: "redis://redis-cache:6379"
+        - name: WORKER_CONCURRENCY
+          value: "4"
+        
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+        
+        livenessProbe:
+          exec:
+            command: ["sh", "-c", "ps aux | grep worker"]
+          initialDelaySeconds: 20
+          periodSeconds: 30
+
+---
+# ============================================
+# 8. CRON JOB (Muy Baja Prioridad)
+# ============================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-cleanup
+  namespace: production-app
+spec:
+  schedule: "0 2 * * *"  # 2 AM diario
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          priorityClassName: app-batch
+          
+          restartPolicy: OnFailure
+          
+          # Puede correr en cualquier nodo
+          tolerations:
+          - operator: "Exists"
+          
+          containers:
+          - name: cleanup
+            image: myapp/cleanup:v1.0.0
+            
+            command: ["python", "cleanup.py"]
+            
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "256Mi"
+              limits:
+                cpu: "500m"
+                memory: "1Gi"
+
+---
+# ============================================
+# COMANDOS DE VERIFICACIÓN
+# ============================================
+
+# Ver distribución de pods:
+# kubectl get pods -n production-app -o wide
+
+# Ver nodos y labels:
+# kubectl get nodes --show-labels
+
+# Ver taints:
+# kubectl describe nodes | grep -A 5 Taints
+
+# Ver uso de recursos vs quota:
+# kubectl describe resourcequota -n production-app
+
+# Ver eventos de scheduling:
+# kubectl get events -n production-app --sort-by='.lastTimestamp' | grep -i schedul
+
+# Ver pods por prioridad:
+# kubectl get pods -n production-app -o custom-columns=NAME:.metadata.name,PRIORITY:.spec.priorityClassName,NODE:.spec.nodeName
+
+# Verificar anti-affinity (pods en diferentes nodos):
+# kubectl get pods -n production-app -l app=web -o wide
+
+# Ver pod affinity (api cerca de cache):
+# kubectl get pods -n production-app -l app=api -o wide
+# kubectl get pods -n production-app -l app=cache -o wide
+
+# ============================================
+# ARQUITECTURA RESULTANTE
+# ============================================
+
+# worker-01, worker-02 (frontend, ssd):
+# - web-frontend pods (distribuidos con anti-affinity)
+
+# worker-03, worker-04 (backend, nvme):
+# - api-backend pods (preferencia por zona, anti-affinity)
+
+# worker-05 (cache, nvme, tainted):
+# - redis-cache pods (dedicado, toleration)
+
+# Cualquier nodo disponible:
+# - background-worker pods (baja prioridad)
+# - cron jobs (muy baja prioridad)
+
+# Prioridades de eviction (bajo presión de recursos):
+# 1. cron jobs (app-batch, value: 1000)
+# 2. background-worker (app-batch, value: 1000)
+# 3. api-backend (app-critical, value: 100000)
+# 4. web-frontend (app-critical, value: 100000)
+# 5. redis-cache (app-critical, value: 100000)

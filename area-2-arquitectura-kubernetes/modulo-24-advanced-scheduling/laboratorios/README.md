@@ -6,10 +6,10 @@ Complete hands-on labs for mastering Kubernetes advanced scheduling.
 
 | Lab | Title | Duration | Difficulty | CKA % |
 |-----|-------|----------|------------|-------|
-| 01 | Manual Scheduling & Static Pods | 30-45 min | ⭐⭐ | 5% |
-| 02 | Taints & Tolerations | 45-60 min | ⭐⭐⭐ | 5% |
-| 03 | Affinity & Anti-Affinity | 45-60 min | ⭐⭐⭐ | 3% |
-| 04 | Resource Management | 45-60 min | ⭐⭐⭐ | 2% |
+| [01](lab-01-manual-scheduling.md) | Manual Scheduling & Static Pods | 30-45 min | ⭐⭐ | 5% |
+| [02](lab-02-taints-tolerations.md) | Taints & Tolerations | 45-60 min | ⭐⭐⭐ | 5% |
+| [03](lab-03-affinity-anti-affinity.md) | Affinity & Anti-Affinity | 45-60 min | ⭐⭐⭐ | 3% |
+| [04](lab-04-resource-management.md) | Resource Management | 45-60 min | ⭐⭐⭐ | 2% |
 
 **Total:** 2.5-4 hours | **CKA Coverage:** ~15% of exam
 

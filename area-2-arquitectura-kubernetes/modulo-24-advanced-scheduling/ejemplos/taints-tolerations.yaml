@@ -1,0 +1,188 @@
+# ============================================
+# EJEMPLOS DE TAINTS Y TOLERATIONS
+# ============================================
+
+# ------------------------------
+# Ejemplo 1: Taint NoSchedule
+# ------------------------------
+# Primero aplicar el taint al nodo:
+# kubectl taint nodes worker-01 dedicated=gpu:NoSchedule
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-toleration
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "gpu"
+    effect: "NoSchedule"
+
+---
+# ------------------------------
+# Ejemplo 2: Taint NoExecute
+# ------------------------------
+# Aplica evicción inmediata de pods sin toleration
+# kubectl taint nodes worker-02 maintenance=true:NoExecute
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-tolerate-noexecute
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: ["sleep", "3600"]
+  tolerations:
+  - key: "maintenance"
+    operator: "Equal"
+    value: "true"
+    effect: "NoExecute"
+    tolerationSeconds: 300  # Permanece 5 minutos antes de ser evicted
+
+---
+# ------------------------------
+# Ejemplo 3: Toleration con Exists
+# ------------------------------
+# Tolera cualquier valor de la key
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-tolerate-exists
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25
+  tolerations:
+  - key: "env"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+---
+# ------------------------------
+# Ejemplo 4: Tolera todos los taints
+# ------------------------------
+# Útil para DaemonSets que deben correr en todos los nodos
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-tolerate-all
+spec:
+  containers:
+  - name: monitoring-agent
+    image: prometheus/node-exporter:latest
+  tolerations:
+  - operator: "Exists"  # Tolera cualquier taint
+
+---
+# ------------------------------
+# Ejemplo 5: Deployment con Dedicated Nodes
+# ------------------------------
+# Patrón: Nodo dedicado para equipo específico
+# kubectl taint nodes worker-03 team=frontend:NoSchedule
+# kubectl label nodes worker-03 team=frontend
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      nodeSelector:
+        team: frontend  # Solo nodos con este label
+      tolerations:
+      - key: "team"
+        operator: "Equal"
+        value: "frontend"
+        effect: "NoSchedule"
+      containers:
+      - name: web
+        image: nginx:1.25
+        ports:
+        - containerPort: 80
+
+---
+# ------------------------------
+# Ejemplo 6: PreferNoSchedule
+# ------------------------------
+# Preferencia suave, no obligatoria
+# kubectl taint nodes worker-04 workload=batch:PreferNoSchedule
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: interactive-pod
+spec:
+  containers:
+  - name: app
+    image: python:3.11
+    command: ["python", "-m", "http.server", "8000"]
+  # Sin toleration: scheduler intentará evitar el nodo
+  # pero puede usarlo si no hay alternativas
+
+---
+# ------------------------------
+# Ejemplo 7: Multiple Tolerations
+# ------------------------------
+# Pod que tolera múltiples taints
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-multiple-tolerations
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+  tolerations:
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+  - key: "node.kubernetes.io/unreachable"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 300
+  - key: "dedicated"
+    operator: "Equal"
+    value: "special-workload"
+    effect: "NoSchedule"
+
+---
+# ============================================
+# COMANDOS ÚTILES
+# ============================================
+
+# Ver taints de un nodo:
+# kubectl describe node worker-01 | grep Taints
+
+# Aplicar taint:
+# kubectl taint nodes <node-name> <key>=<value>:<effect>
+
+# Remover taint:
+# kubectl taint nodes <node-name> <key>:<effect>-
+
+# Ver pods que toleran taints específicos:
+# kubectl get pods -o json | jq '.items[] | select(.spec.tolerations != null) | {name: .metadata.name, tolerations: .spec.tolerations}'
+
+# ============================================
+# EFECTOS DE TAINTS
+# ============================================
+# - NoSchedule: No programa nuevos pods (los existentes no se afectan)
+# - PreferNoSchedule: Intenta evitar el nodo (soft preference)
+# - NoExecute: Evicta pods existentes que no toleran (hard eviction)
