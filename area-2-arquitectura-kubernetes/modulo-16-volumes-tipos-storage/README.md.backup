@@ -1,254 +1,6 @@
 # Módulo 16: Volúmenes en Kubernetes - Implementación Práctica en Azure AKS
 
-## 📋 Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-### 🎯 Objetivos Implementación Práctica
-- Crear volúmenes emptyDir y hostPath con YAMLs completos
-- Provisionar PersistentVolumes y PersistentVolumeClaims en Azure AKS
-- Implementar provisioning dinámico con StorageClasses
-- Configurar Azure Disk para aplicaciones stateful
-- Usar Azure Files para compartir archivos entre Pods
-- Aplicar access modes apropiados según caso de uso
-
-### 🎯 Objetivos Técnicos
-- Ejecutar comandos kubectl para gestionar volúmenes
-- Depurar problemas de binding PV/PVC
-- Configurar reclaim policies en entornos de producción
-- Crear StorageClasses personalizadas
-- Implementar volúmenes en StatefulSets
-- Gestionar expansión de volúmenes
-
-### 🎯 Objetivos Troubleshooting
-- Diagnosticar PVC en estado Pending
-- Resolver problemas de montaje de volúmenes
-- Solucionar errores de permisos en volúmenes
-- Identificar conflictos de access modes
-- Depurar problemas de provisioning dinámico
-
-### 🎯 Objetivos Profesionales
-- Aplicar best practices de almacenamiento en producción
-- Implementar arquitecturas de datos resilientes
-- Prepararse para tareas prácticas CKA/CKAD
-- Evaluar trade-offs Azure Disk vs Azure Files en escenarios reales
-
----
-
-## ✅ Prerrequisitos
-
-### Conocimientos Previos
-- ✅ **Módulo 15**: Conceptos de Volúmenes (⚠️ **CRÍTICO** - completar primero)
-- ✅ **Módulo 04**: Pods y contenedores
-- ✅ **Módulo 07**: Deployments
-- ✅ Comprensión conceptual de PV/PVC (del Módulo 15)
-- ✅ Conocimiento de access modes (RWO, ROX, RWX)
-
-### Entorno Técnico
-Necesitas un cluster de Azure Kubernetes Service:
-
-```bash
-# Verificar cluster AKS
-kubectl cluster-info
-kubectl get nodes
-
-# Verificar StorageClasses de Azure
-kubectl get storageclass
-
-# Deberías ver:
-# managed-csi (default) - Azure Disk Standard
-# managed-csi-premium   - Azure Disk Premium SSD
-# azurefile-csi         - Azure Files Standard
-# azurefile-csi-premium - Azure Files Premium
-
-# Verificar permisos
-kubectl auth can-i create persistentvolumeclaim
-kubectl auth can-i create persistentvolume
-```
-
----
-
-## 🗺️ Estructura del Módulo
-
-| Sección | Contenido | Duración | Tipo |
-|---------|-----------|----------|------|
-| **1** | Introducción y Setup | 10 min | 🔧 Setup |
-| **2** | emptyDir Hands-on | 30 min | 💻 Práctica + YAMLs |
-| **3** | hostPath Hands-on | 30 min | 💻 Práctica + YAMLs |
-| **4** | PVC con Azure Disk | 45 min | 💻 Práctica + kubectl |
-| **5** | PV/PVC Manual | 40 min | 💻 Práctica + YAMLs |
-| **6** | Access Modes Prácticos | 40 min | 💻 Práctica + Ejemplos |
-| **7** | Reclaim Policies Prácticas | 30 min | 💻 Práctica + Testing |
-| **8** | StorageClasses Personalizadas | 35 min | 💻 Práctica + YAMLs |
-| **9** | Troubleshooting Hands-on | 40 min | 🐛 Depuración real |
-| **Lab 1** | [Volúmenes Básicos](laboratorios/lab-01-volumenes-basicos/) | 60 min | 🧪 Laboratorio |
-| **Lab 2** | [PV/PVC Avanzado](laboratorios/lab-02-pv-pvc-avanzado/) | 90 min | 🧪 Laboratorio |
-| **Total** | | **~7 horas** | |
-
----
-
-## 📚 Rutas de Estudio Recomendadas
-
-### 🟢 Ruta Principiante (3-4 días)
-**Perfil**: Primera implementación práctica de volúmenes
-**Enfoque**: Paso a paso con cada comando explicado
-
-**Día 1** (2 horas):
-- ✅ Setup del entorno AKS
-- ✅ Implementar emptyDir (ejemplos/01-emptydir/)
-- ✅ Implementar hostPath (ejemplos/02-hostpath/)
-- ✅ Ver datos persistentes en nodos
-
-**Día 2** (2 horas):
-- ✅ Crear primer PVC con Azure Disk (ejemplos/03-pvc-basico/)
-- ✅ Montar PVC en un Pod
-- ✅ Verificar persistencia de datos
-- ✅ Eliminar Pod y recrear - datos intactos
-
-**Día 3** (2 horas):
-- ✅ Crear PV y PVC manualmente (ejemplos/04-pv-pvc-manual/)
-- ✅ Probar diferentes access modes (ejemplos/05-access-modes/)
-- ✅ Lab 1: Volúmenes Básicos (60 min)
-
-**Día 4** (2 horas):
-- ✅ Reclaim Policies hands-on (ejemplos/06-reclaim-policies/)
-- ✅ Troubleshooting común
-- ✅ Lab 2: PV/PVC Avanzado (90 min)
-
----
-
-### 🟡 Ruta Intermedia (2 días)
-**Perfil**: Familiarizado con conceptos (Módulo 15 completado)
-**Enfoque**: Implementación rápida y troubleshooting
-
-**Día 1** (3 horas):
-- ✅ Repaso rápido: emptyDir y hostPath
-- ✅ PVC con provisioning dinámico (Azure Disk)
-- ✅ PV/PVC manual completo
-- ✅ Access modes en diferentes escenarios
-- ✅ Ejemplos 01-05
-
-**Día 2** (3 horas):
-- ✅ Reclaim policies testing
-- ✅ StorageClasses personalizadas
-- ✅ Troubleshooting práctico
-- ✅ Lab 1 y Lab 2 completos
-
----
-
-### 🔴 Ruta Certificación CKA/CKAD (4-5 horas)
-**Perfil**: Preparación para examen, comandos rápidos
-**Enfoque**: Velocidad, comandos imperativos, troubleshooting
-
-**Bloque 1** (1.5 horas):
-- ✅ emptyDir rápido (comando imperativo)
-- ✅ PVC con StorageClass default
-- ✅ Montar PVC en Pod (YAML rápido)
-- ✅ Verificar binding y estado
-
-**Bloque 2** (1.5 horas):
-- ✅ PV/PVC manual (YAML completo)
-- ✅ Access modes: RWO vs RWX (Azure Disk vs Files)
-- ✅ Troubleshoot: PVC Pending, Pod no monta volumen
-
-**Bloque 3** (1-2 horas):
-- ✅ Reclaim policies (Retain vs Delete)
-- ✅ Escenarios de examen simulados
-- ✅ Cheat sheet de comandos
-- ✅ Troubleshooting rápido
-
----
-
-## 🔗 Relación con Módulo 15 - SEPARACIÓN CLARA
-
-**⚠️ CRÍTICO**: Este módulo (16) es **implementación práctica**. El **Módulo 15** cubre **conceptos**.
-
-```
-┌────────────────────────────────────────────────────────┐
-│  MÓDULO 15: Conceptos Fundamentales                    │
-│  (Prerequisito - YA completado)                        │
-│                                                        │
-│  📖 ¿Qué son los volúmenes?                            │
-│  📊 Tipos de volúmenes (teoría)                        │
-│  🎨 PV/PVC (abstracción)                               │
-│  📋 Access Modes (concepto RWO/ROX/RWX)                │
-│  📚 Reclaim Policies (Retain/Delete teoría)            │
-│  💡 StorageClasses (qué son)                           │
-│                                                        │
-│  ❌ SIN YAMLs de producción                            │
-│  ❌ SIN comandos kubectl detallados                    │
-│  ❌ SIN troubleshooting práctico                       │
-└────────────────────────────────────────────────────────┘
-                         ↓
-              ¡Ahora la PRÁCTICA!
-                         ↓
-┌────────────────────────────────────────────────────────┐
-│  MÓDULO 16: Implementación Práctica en Azure AKS       │
-│  (Este módulo - PRÁCTICA HANDS-ON)                    │
-│                                                        │
-│  ✅ YAMLs completos de emptyDir, hostPath              │
-│  ✅ YAMLs completos de PV/PVC                          │
-│  ✅ Comandos kubectl paso a paso                       │
-│  ✅ Provisioning dinámico en AKS                       │
-│  ✅ Azure Disk y Azure Files hands-on                  │
-│  ✅ Access Modes en acción (testing)                   │
-│  ✅ Reclaim Policies en producción (testing)           │
-│  ✅ StorageClasses personalizadas                      │
-│  ✅ Troubleshooting práctico con ejemplos reales       │
-│  ✅ 2 Laboratorios completos                           │
-└────────────────────────────────────────────────────────┘
-```
-
-**Flujo de aprendizaje**:
-1. **Módulo 15** ✅ → Entendiste CONCEPTOS (qué, por qué, cuándo)
-2. **Módulo 16** ⏳ → Ahora IMPLEMENTAS (cómo, troubleshoot, labs)
-
----
-
-## 📁 Organización de Recursos
-
-```
-modulo-16-volumes-tipos-storage/
-├── README.md                          # ← Estás aquí
-├── RESUMEN-MODULO.md                  # Guía práctica rápida
-│
-├── ejemplos/                          # 6 ejemplos hands-on
-│   ├── 01-emptydir/                   # emptyDir con múltiples contenedores
-│   ├── 02-hostpath/                   # hostPath en DaemonSet
-│   ├── 03-pvc-basico/                 # PVC con Azure Disk dinámico
-│   ├── 04-pv-pvc-manual/              # PV y PVC manual (sin StorageClass)
-│   ├── 05-access-modes/               # RWO vs RWX (Disk vs Files)
-│   └── 06-reclaim-policies/           # Retain vs Delete testing
-│
-└── laboratorios/                      # 2 labs completos
-    ├── lab-01-volumenes-basicos/      # 60 min - emptyDir, PVC básico
-    └── lab-02-pv-pvc-avanzado/        # 90 min - PV/PVC manual, troubleshoot
-```
-
----
-
-## 🎓 Metodología de Aprendizaje
-
-Este módulo sigue una progresión **práctica pura**:
-
-1. **💻 YAMLs Completos** → Archivos listos para `kubectl apply`
-2. **⌨️ Comandos kubectl** → Cada paso explicado
-3. **🔍 Verificación** → Cómo confirmar que funciona
-4. **🐛 Troubleshooting** → Problemas reales y soluciones
-5. **🧪 Laboratorios** → Práctica guiada completa
-
-**⚠️ INCLUYE (diferencia con Módulo 15)**:
-- ✅ YAMLs de producción listos para copiar
-- ✅ Comandos kubectl con todas las opciones
-- ✅ Troubleshooting práctico con kubectl describe/logs
-- ✅ 2 laboratorios hands-on completos
-- ✅ Ejemplos específicos de Azure AKS
-
-**Recomendación**: Ejecuta cada ejemplo en tu cluster AKS. Experimenta, rompe cosas, aprende troubleshooting.
-
----
-
-## 📋 Índice de Contenido
+## 📋 Índice
 
 1. [Introducción](#introducción)
 2. [Prerrequisitos](#prerrequisitos)
@@ -263,6 +15,54 @@ Este módulo sigue una progresión **práctica pura**:
 11. [Laboratorios](#laboratorios)
 12. [Mejores Prácticas](#mejores-prácticas)
 13. [Referencias](#referencias)
+
+---
+
+## Introducción
+
+Este módulo es la **implementación práctica** de los conceptos fundamentales vistos en el [Módulo 15 - Volúmenes: Conceptos](../modulo-15-volumes-conceptos/).
+
+### ¿Qué aprenderás?
+
+En este módulo pondrás en práctica:
+
+- ✅ Crear y usar volúmenes **emptyDir** con ejemplos reales
+- ✅ Implementar **hostPath** en DaemonSets
+- ✅ Provisionar almacenamiento dinámico con **Azure Disk**
+- ✅ Compartir archivos entre Pods con **Azure Files**
+- ✅ Configurar **Access Modes** apropiados
+- ✅ Gestionar **Reclaim Policies** en producción
+- ✅ Crear **StorageClasses personalizadas**
+- ✅ **Troubleshoot** problemas reales de volúmenes
+- ✅ Realizar laboratorios hands-on completos
+
+### Relación con el Módulo 15
+
+```
+┌────────────────────────────────────────────────────┐
+│  Módulo 15: Conceptos                              │
+│  - ¿Qué son los volúmenes?                         │
+│  - Tipos de volúmenes (teoría)                     │
+│  - PV/PVC (abstracción)                            │
+│  - Access Modes (concepto)                         │
+│  - Reclaim Policies (teoría)                       │
+└────────────────────────────────────────────────────┘
+                    ↓
+┌────────────────────────────────────────────────────┐
+│  Módulo 16: Implementación Práctica                │
+│  - CÓMO crear volúmenes                            │
+│  - YAMLs completos                                 │
+│  - Comandos kubectl detallados                     │
+│  - Troubleshooting con ejemplos                    │
+│  - Laboratorios hands-on                           │
+└────────────────────────────────────────────────────┘
+```
+
+💡 **Recomendación**: Si no has completado el [Módulo 15](../modulo-15-volumes-conceptos/), revísalo primero para entender los conceptos fundamentales.
+
+---
+
+## Prerrequisitos
 
 ### Cluster AKS
 

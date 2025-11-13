@@ -1,361 +1,55 @@
 # Módulo 17: RBAC - Usuarios y Grupos en Kubernetes
 
-> **🎯 Enfoque del Módulo**: Control de acceso para **personas** (desarrolladores, administradores, operadores) usando **certificados X.509**. Para aplicaciones y pods, ver [Módulo 18: Service Accounts](../modulo-18-rbac-serviceaccounts/).
-
----
-
-## 📋 Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-### 🎓 Objetivos Conceptuales
-- **Comprender RBAC**: Entender el modelo Role-Based Access Control y su importancia en seguridad
-- **Diferenciar identidades**: Distinguir claramente entre usuarios humanos y Service Accounts
-- **Arquitectura de permisos**: Dominar la relación entre Roles, RoleBindings y Subjects
-- **Principio de mínimo privilegio**: Aplicar mejores prácticas de seguridad en control de acceso
-
-### 🛠️ Objetivos Técnicos
-- **Crear usuarios con certificados X.509**: Generar CSR, firmar certificados con CA del cluster
-- **Configurar kubectl**: Gestionar contextos, users y clusters en kubeconfig
-- **Definir Roles y ClusterRoles**: Especificar permisos granulares sobre recursos
-- **Asignar permisos con RoleBindings**: Conectar roles con usuarios y grupos
-- **Organizar usuarios en grupos**: Implementar gestión escalable de permisos
-
-### 🔍 Objetivos de Troubleshooting
-- **Diagnosticar problemas de permisos**: Usar `kubectl auth can-i` y logs de API server
-- **Auditar accesos**: Verificar qué usuarios tienen qué permisos
-- **Resolver errores comunes**: "Forbidden", certificados inválidos, contextos incorrectos
-
-### 🏢 Objetivos Profesionales
-- **Implementar seguridad corporativa**: Aplicar RBAC en entornos enterprise
-- **Documentar políticas de acceso**: Crear matrices de permisos por rol
-- **Preparación para certificaciones**: CKA, CKAD, CKS (sección de seguridad)
-
----
-
-## ✅ Prerrequisitos
-
-### Conocimientos Previos
-- ✅ **Módulos 1-16 completados**: Especialmente namespaces, pods, deployments
-- ✅ **Conceptos de seguridad básicos**: PKI, certificados, CA (Certificate Authority)
-- ✅ **Línea de comandos**: Bash/zsh, manejo de archivos, variables de entorno
-
-### Herramientas Necesarias
-- ✅ **Cluster Kubernetes funcional**: Minikube, AKS, GKE, o similar (con acceso de admin)
-- ✅ **kubectl instalado y configurado**: Versión 1.20+
-- ✅ **OpenSSL instalado**: Para generación y firma de certificados
-  ```bash
-  # Verificar instalación
-  openssl version
-  # Debe mostrar: OpenSSL 1.1.1+ o superior
-  ```
-- ✅ **Editor de texto**: VS Code, vim, nano para editar YAMLs
-- ✅ **Acceso administrativo**: Permisos para crear usuarios y roles en el cluster
-
-### Verificación de Entorno
-Ejecuta estos comandos para confirmar que estás listo:
-```bash
-# 1. Verificar acceso al cluster
-kubectl cluster-info
-
-# 2. Confirmar permisos de admin
-kubectl auth can-i '*' '*' --all-namespaces
-# Debe retornar: yes
-
-# 3. Verificar OpenSSL
-openssl version
-
-# 4. Comprobar API de certificados
-kubectl get csr
-# No debe dar error (puede estar vacío)
-```
-
----
-
-## 🗺️ Estructura del Módulo
-
-### Contenido Teórico (5-6 horas)
-1. **Introducción a RBAC** (45 min) - Qué es, por qué lo necesitamos, problemas que resuelve
-2. **Arquitectura RBAC** (45 min) - Roles, ClusterRoles, RoleBindings, Subjects
-3. **Roles a nivel Namespace** (40 min) - Definición de permisos, resources, verbs
-4. **ClusterRoles globales** (40 min) - Permisos cluster-wide, diferencias con Roles
-5. **RoleBindings** (40 min) - Conectar roles con usuarios, sintaxis, ejemplos
-6. **Creación de usuarios** (60 min) - Certificados X.509, CSR, firma con CA
-7. **Configuración kubectl** (40 min) - Kubeconfig, contextos, credenciales
-8. **Grupos en RBAC** (30 min) - Organización escalable, mejores prácticas
-9. **Troubleshooting** (40 min) - Errores comunes, diagnóstico, auditoría
-
-### Ejemplos Prácticos (11 ejemplos)
-- 📄 **01-role-pod-reader.yaml**: Role básico para leer pods
-- 📄 **02-clusterrole-pod-reader.yaml**: ClusterRole para lectura global
-- 📄 **03-rolebinding-basic.yaml**: RoleBinding simple
-- 📄 **04-clusterrolebinding-basic.yaml**: ClusterRoleBinding ejemplo
-- 📄 **05-role-configmaps.yaml**: Permisos sobre ConfigMaps
-- 📄 **06-rolebinding-group.yaml**: Asignación a grupos
-- 📄 **07-clusterrole-services.yaml**: Gestión de Services
-- 📄 **08-clusterrolebinding-admin.yaml**: Permisos administrativos
-- 🔧 **09-generar-usuario-certificado.sh**: Script generación CSR
-- 🔧 **10-firmar-certificado.sh**: Script firma de certificado
-- 🔧 **11-configurar-kubectl.sh**: Script configuración kubectl
-
-### Laboratorios Guiados (2 labs, ~120 min)
-- 🧪 **Lab 01: RBAC Básico** (60 min)
-  - Crear usuario developer con certificado
-  - Definir Role con permisos limitados
-  - Asignar permisos con RoleBinding
-  - Probar acceso con kubectl
-
-- 🧪 **Lab 02: RBAC Avanzado** (60 min)
-  - Implementar múltiples roles (dev, ops, auditor)
-  - Organizar usuarios en grupos
-  - ClusterRoles para administradores
-  - Troubleshooting de permisos
-
----
-
-## 📚 Rutas de Estudio Recomendadas
-
-### 🟢 Ruta Principiante (4-5 días, ~8-10 horas)
-**Para**: Estudiantes nuevos en Kubernetes Security
-```
-Día 1: Conceptos y Arquitectura
-  ├─ Secciones 1-2 (1.5 horas)
-  ├─ Ejemplos 01-02 (30 min)
-  └─ Practicar: kubectl get roles/rolebindings
-
-Día 2: Roles y RoleBindings
-  ├─ Secciones 3-5 (2 horas)
-  ├─ Ejemplos 03-06 (45 min)
-  └─ Crear roles simples en cluster
-
-Día 3: Certificados y Usuarios
-  ├─ Sección 6 (1 hora)
-  ├─ Ejemplos 09-10 (scripts certificados)
-  └─ Lab 01 completo (60 min)
-
-Día 4: kubectl y Grupos
-  ├─ Secciones 7-8 (1 hora)
-  ├─ Ejemplo 11 (kubectl config)
-  └─ Experimentar con contextos
-
-Día 5: Práctica y Troubleshooting
-  ├─ Sección 9 (45 min)
-  ├─ Lab 02 completo (60 min)
-  └─ Repaso general con RESUMEN-MODULO.md
-```
-
-### 🟡 Ruta Intermedia (2-3 días, ~6-7 horas)
-**Para**: Desarrolladores con experiencia en Kubernetes
-```
-Día 1: Teoría Rápida + Práctica
-  ├─ Secciones 1-5 lectura rápida (1.5 horas)
-  ├─ Ejemplos 01-08 (1 hora)
-  └─ Crear roles propios
-
-Día 2: Certificados y Configuración
-  ├─ Secciones 6-7 (1.5 horas)
-  ├─ Scripts 09-11 (30 min)
-  └─ Lab 01 (60 min)
-
-Día 3: Avanzado y Troubleshooting
-  ├─ Secciones 8-9 (1 hora)
-  ├─ Lab 02 (60 min)
-  └─ Casos de uso propios
-```
-
-### 🔴 Ruta Certificación (1 día, ~5-6 horas)
-**Para**: Preparación CKA/CKAD/CKS
-```
-Sesión Intensiva:
-  ├─ RESUMEN-MODULO.md completo (45 min)
-  ├─ Ejemplos 01-11 ejecución rápida (1.5 horas)
-  ├─ Lab 01 + Lab 02 (2 horas)
-  ├─ Sección 9 Troubleshooting (30 min)
-  └─ Práctica comando kubectl auth can-i (30 min)
-
-Comandos esenciales para memorizar:
-  - kubectl create role / clusterrole
-  - kubectl create rolebinding / clusterrolebinding
-  - kubectl auth can-i
-  - kubectl get roles/rolebindings -A
-  - openssl genrsa / req
-```
-
----
-
-## 🔗 Relación con Módulo 18 - SEPARACIÓN CLARA
-
-### Diagrama de Complementariedad
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│              RBAC en Kubernetes - Dos Caras                  │
-├───────────────────────────┬─────────────────────────────────┤
-│      MÓDULO 17           │         MÓDULO 18               │
-│   Usuarios y Grupos      │      Service Accounts           │
-├───────────────────────────┼─────────────────────────────────┤
-│  👤 IDENTIDAD             │  🤖 IDENTIDAD                   │
-│                           │                                 │
-│  • Personas (humanos)     │  • Aplicaciones (software)      │
-│  • Desarrolladores        │  • Pods                         │
-│  • Administradores        │  • Deployments                  │
-│  • Operadores             │  • CronJobs                     │
-│  • Auditores              │  • Controllers                  │
-├───────────────────────────┼─────────────────────────────────┤
-│  🔐 AUTENTICACIÓN         │  🎫 AUTENTICACIÓN               │
-│                           │                                 │
-│  • Certificados X.509     │  • Tokens JWT                   │
-│  • Generación manual      │  • Generación automática        │
-│  • OpenSSL                │  • API Kubernetes               │
-│  • Firmado por CA cluster │  • Montaje en /var/run/secrets  │
-│  • Configuración kubectl  │  • Inyección en pods            │
-├───────────────────────────┼─────────────────────────────────┤
-│  🌍 UBICACIÓN             │  🏠 UBICACIÓN                   │
-│                           │                                 │
-│  • Acceso EXTERNO         │  • Acceso INTERNO               │
-│  • Desde laptop/PC        │  • Dentro del cluster           │
-│  • kubectl remoto         │  • Llamadas a API server        │
-│  • kubeconfig local       │  • Token montado en pod         │
-├───────────────────────────┼─────────────────────────────────┤
-│  ⚙️ GESTIÓN               │  ⚙️ GESTIÓN                     │
-│                           │                                 │
-│  • Manual (scripts)       │  • Automática (kubectl create)  │
-│  • Externa a K8s          │  • Objeto nativo de K8s         │
-│  • No persiste en etcd    │  • Almacenado en etcd           │
-│  • Requiere CA del cluster│  • Gestionado por K8s           │
-├───────────────────────────┴─────────────────────────────────┤
-│           CONCEPTOS COMUNES (compartidos)                    │
-│                                                              │
-│  ✅ Roles / ClusterRoles (misma definición)                 │
-│  ✅ RoleBindings / ClusterRoleBindings (misma sintaxis)     │
-│  ✅ Permisos (resources, verbs, apiGroups)                  │
-│  ✅ Principio de mínimo privilegio                          │
-│  ✅ Namespaces (scope de Roles)                             │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### ¿Cuándo usar qué?
-
-| Pregunta | Respuesta | Módulo |
-|----------|-----------|--------|
-| ¿Necesito que un **desarrollador** acceda al cluster? | Usuarios + Certificados | **Módulo 17** |
-| ¿Mi **aplicación** necesita listar pods? | Service Account | **Módulo 18** |
-| ¿Un **administrador** debe gestionar todo el cluster? | Usuario + ClusterRole | **Módulo 17** |
-| ¿Un **pod** necesita leer ConfigMaps? | Service Account | **Módulo 18** |
-| ¿Un **auditor** debe ver recursos sin modificar? | Usuario + Role lectura | **Módulo 17** |
-| ¿Un **CronJob** debe crear recursos? | Service Account | **Módulo 18** |
-
-### Enfoque de Este Módulo (17)
-
-**✅ SÍ cubrimos**:
-- Creación de usuarios con certificados X.509
-- Configuración de kubectl y kubeconfig
-- Roles y ClusterRoles para usuarios
-- RoleBindings para conectar usuarios con roles
-- Organización de usuarios en grupos
-- Scripts para automatizar generación de certificados
-
-**❌ NO cubrimos** (ver Módulo 18):
-- Service Accounts (identidades para pods)
-- Tokens JWT automáticos
-- Montaje de tokens en pods
-- API de Service Accounts
-- Permisos para aplicaciones internas
-
----
-
-## 📁 Organización de Recursos
-
-### Carpeta `ejemplos/`
-```
-ejemplos/
-├── 01-role-pod-reader.yaml          # Role básico (lectura pods)
-├── 02-clusterrole-pod-reader.yaml   # ClusterRole (lectura global)
-├── 03-rolebinding-basic.yaml        # RoleBinding simple
-├── 04-clusterrolebinding-basic.yaml # ClusterRoleBinding
-├── 05-role-configmaps.yaml          # Permisos ConfigMaps
-├── 06-rolebinding-group.yaml        # Asignación a grupos
-├── 07-clusterrole-services.yaml     # Gestión Services
-├── 08-clusterrolebinding-admin.yaml # Admin permissions
-├── 09-generar-usuario-certificado.sh # Script: Generar CSR
-├── 10-firmar-certificado.sh         # Script: Firmar cert
-└── 11-configurar-kubectl.sh         # Script: Config kubectl
-```
-
-### Carpeta `laboratorios/`
-```
-laboratorios/
-├── lab-01-rbac-basico/
-│   ├── README.md                    # Instrucciones paso a paso
-│   ├── 01-crear-namespace.yaml      # Setup inicial
-│   ├── 02-role-developer.yaml       # Role para desarrollador
-│   ├── 03-rolebinding-developer.yaml# Binding
-│   └── scripts/
-│       ├── generar-usuario.sh       # Automatización
-│       └── probar-permisos.sh       # Tests
-│
-└── lab-02-rbac-avanzado/
-    ├── README.md                    # Guía completa
-    ├── roles/                       # Múltiples roles
-    │   ├── developer-role.yaml
-    │   ├── operator-role.yaml
-    │   └── auditor-role.yaml
-    ├── rolebindings/                # Bindings por equipo
-    └── scripts/
-        ├── crear-usuarios-grupo.sh  # Setup equipos
-        └── auditar-permisos.sh      # Verificación
-```
-
----
-
-## 🎯 Metodología de Aprendizaje
-
-Este módulo sigue un enfoque **teórico-práctico balanceado**:
-
-1. **📖 Teoría Fundamental** (40%):
-   - Conceptos de RBAC y arquitectura
-   - Diferencias entre usuarios y Service Accounts
-   - PKI y certificados X.509
-
-2. **💻 Práctica con Ejemplos** (30%):
-   - YAMLs listos para aplicar
-   - Scripts bash automatizados
-   - Comando a comando con explicaciones
-
-3. **🧪 Laboratorios Guiados** (20%):
-   - Escenarios realistas paso a paso
-   - Troubleshooting de errores comunes
-   - Casos de uso enterprise
-
-4. **🔍 Troubleshooting** (10%):
-   - Diagnóstico de problemas de permisos
-   - kubectl auth can-i
-   - Auditoría de accesos
-
-### Flujo de Trabajo Recomendado
-```
-1. Lee teoría → 2. Ejecuta ejemplo inline → 3. Experimenta variaciones
-                          ↓
-4. Completa checkpoint → 5. Aplica YAML de ejemplos/ → 6. Modifica valores
-                          ↓
-7. Inicia laboratorio → 8. Resuelve por tu cuenta → 9. Compara solución
-                          ↓
-10. Troubleshooting → 11. Documenta aprendizajes
-```
-
----
-
 ## Tabla de Contenidos
 
-1. [¿Qué es RBAC y por qué lo necesitamos?](#1-qué-es-rbac-y-por-qué-lo-necesitamos)
-2. [Arquitectura de RBAC en Kubernetes](#2-arquitectura-de-rbac-en-kubernetes)
-3. [Roles: Permisos a nivel de Namespace](#3-roles-permisos-a-nivel-de-namespace)
-4. [ClusterRoles: Permisos a nivel de Cluster](#4-clusterroles-permisos-a-nivel-de-cluster)
-5. [RoleBindings: Conectando Roles con Usuarios](#5-rolebindings-conectando-roles-con-usuarios)
-6. [Creación de Usuarios con Certificados](#6-creación-de-usuarios-con-certificados)
-7. [Configuración de kubectl para Usuarios](#7-configuración-de-kubectl-para-usuarios)
-8. [Grupos en RBAC](#8-grupos-organización-de-permisos)
-9. [Troubleshooting y Mejores Prácticas](#9-troubleshooting-y-mejores-prácticas)
+1. [Introducción al Módulo](#introducción-al-módulo)
+2. [¿Qué es RBAC y por qué lo necesitamos?](#1-qué-es-rbac-y-por-qué-lo-necesitamos)
+3. [Arquitectura de RBAC en Kubernetes](#2-arquitectura-de-rbac-en-kubernetes)
+4. [Roles: Permisos a nivel de Namespace](#3-roles-permisos-a-nivel-de-namespace)
+5. [ClusterRoles: Permisos a nivel de Cluster](#4-clusterroles-permisos-a-nivel-de-cluster)
+6. [RoleBindings: Conectando Roles con Usuarios](#5-rolebindings-conectando-roles-con-usuarios)
+7. [Creación de Usuarios con Certificados](#6-creación-de-usuarios-con-certificados)
+8. [Configuración de kubectl para Usuarios](#7-configuración-de-kubectl-para-usuarios)
+9. [Grupos en RBAC](#8-grupos-organización-de-permisos)
+10. [Troubleshooting y Mejores Prácticas](#9-troubleshooting-y-mejores-prácticas)
+
+---
+
+## Introducción al Módulo
+
+Bienvenidos al módulo 17, donde aprenderemos sobre **RBAC (Role-Based Access Control)** enfocado específicamente en **usuarios y grupos**. Este módulo es fundamental para comprender cómo gestionar el acceso humano a nuestros clusters de Kubernetes.
+
+### ¿Qué cubriremos en este módulo?
+
+En este módulo nos centraremos exclusivamente en:
+- **Usuarios**: Personas que necesitan acceder al cluster (desarrolladores, administradores, operadores)
+- **Grupos**: Organizaciones lógicas de usuarios para facilitar la gestión de permisos
+- **Autenticación basada en certificados**: El método más común para usuarios humanos
+- **Roles y RoleBindings**: Definición y asignación de permisos
+
+### ¿Qué NO cubriremos aquí?
+
+Es importante destacar que este módulo **NO incluye**:
+- **Service Accounts**: Identidades para aplicaciones y pods (esto lo veremos en el **módulo 18**)
+- **Autenticación de aplicaciones**: Esto corresponde a Service Accounts
+- **Tokens de pods**: Mecanismo diferente cubierto en el siguiente módulo
+
+> **💡 Diferencia clave**: Los **usuarios** son para personas que acceden al cluster desde fuera (usando kubectl). Los **Service Accounts** son para aplicaciones que corren dentro del cluster. Piensa en usuarios como "empleados con credenciales" y Service Accounts como "credenciales para robots/aplicaciones".
+
+### Prerrequisitos
+
+Antes de comenzar este módulo, deberías tener:
+- Un cluster de Kubernetes funcionando (minikube, AKS, o similar)
+- `kubectl` instalado y configurado
+- Conocimientos básicos de namespaces
+- OpenSSL instalado en tu sistema (para generación de certificados)
+
+### Estructura del Módulo
+
+Este módulo incluye:
+- 📖 **Documentación teórica**: Esta guía completa
+- 💾 **Ejemplos prácticos**: Carpeta [`ejemplos/`](./ejemplos/) con YAMLs y scripts
+- 🔬 **Laboratorios**: Carpeta [`laboratorios/`](./laboratorios/) con ejercicios hands-on
 
 ---
 
