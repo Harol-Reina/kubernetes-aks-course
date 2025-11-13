@@ -1,19 +1,20 @@
 # 📊 Estado del Curso Kubernetes
 
 > **Última actualización**: 2025-11-13  
-> **Versión**: 2.0 (Estructura Pedagógica Completa + Plan de Certificaciones)
+> **Versión**: 3.0 (Sprint 1 COMPLETADO - CKAD Ready 95%+)
 
 ---
 
 ## 🎯 Resumen Ejecutivo
 
-**20 módulos con estructura pedagógica completa y uniforme**
+**21 módulos con estructura pedagógica completa y uniforme**
 
-- ✅ 20/20 módulos con headers pedagógicos completos (Áreas 1 y 2)
-- ✅ 20/20 módulos con RESUMEN-MODULO.md
-- ✅ 19/20 módulos con backups de seguridad
+- ✅ 21/21 módulos con headers pedagógicos completos (Áreas 1 y 2)
+- ✅ 21/21 módulos con RESUMEN-MODULO.md
+- ✅ 21/21 módulos con backups de seguridad
 - ✅ 100% consistencia en formato y estructura
 - 📋 Plan de certificaciones CKA/CKAD/AKS documentado
+- 🎉 Sprint 1 COMPLETADO: CKAD → 95%+ (100% completo)
 
 ---
 
@@ -21,21 +22,21 @@
 
 ### Cobertura Actual por Certificación
 
-| Certificación | Cobertura | Módulos Base | Gaps Identificados | Prioridad |
-|---------------|-----------|--------------|-------------------|-----------|
-| **CKAD** | 85-90% ✅ | 18 módulos | Jobs, CronJobs, Helm (3 módulos) | 🟢 ALTA |
-| **CKA** | 60-65% ⚠️ | 18 módulos | Cluster setup, Troubleshooting, Scheduling (5 módulos) | 🟡 MEDIA |
-| **AKS** | 70-75% ⚠️ | Áreas 3-4 | ACR profundo, Policy, Defender (5 expansiones) | 🟡 MEDIA |
+| Certificación | Cobertura | Módulos Base | Gaps Identificados | Prioridad | Progreso |
+|---------------|-----------|--------------|-------------------|-----------|----------|
+| **CKAD** | 95%+ ✅ | 21 módulos | - | 🟢 COMPLETO | Sprint 1: 100% ✅ |
+| **CKA** | 60-65% ⚠️ | 19 módulos | Cluster setup, Troubleshooting, Scheduling (5 módulos) | 🟡 MEDIA | Pendiente |
+| **AKS** | 70-75% ⚠️ | Áreas 3-4 | ACR profundo, Policy, Defender (5 expansiones) | 🟡 MEDIA | Pendiente |
 
 📋 **Ver**: [PLAN-CERTIFICACIONES.md](./PLAN-CERTIFICACIONES.md) para roadmap detallado
 
 ### Roadmap de Completitud
 
 ```
-SPRINT 1 (Sem 1-2): CKAD → 95%+ ✅
-├── Módulo 19: Jobs & CronJobs
-├── Módulo 20: Init Containers & Sidecar
-└── Módulo 21: Helm Basics
+SPRINT 1 (Sem 1-2): CKAD → 95%+ ✅ COMPLETADO (100%)
+├── ✅ Módulo 19: Jobs & CronJobs (100% - 2025-11-13)
+├── ✅ Módulo 20: Init Containers & Sidecar (100% - 2025-11-13)
+└── ✅ Módulo 21: Helm Basics (100% - 2025-11-13)
 
 SPRINT 2-4 (Sem 3-9): CKA → 85%+ ⚠️
 ├── Módulo 22: Cluster Setup (kubeadm)
@@ -62,7 +63,7 @@ area-1-fundamentos-docker/
 └── modulo-2-docker/                  ✅ COMPLETO
 ```
 
-### Área 2: Arquitectura Kubernetes (18 Módulos)
+### Área 2: Arquitectura Kubernetes (21 Módulos)
 ```
 area-2-arquitectura-kubernetes/
 ├── modulo-01-introduccion-kubernetes/        ✅ COMPLETO
@@ -82,7 +83,10 @@ area-2-arquitectura-kubernetes/
 ├── modulo-15-volumes-conceptos/              ✅ COMPLETO
 ├── modulo-16-volumes-tipos-storage/          ✅ COMPLETO
 ├── modulo-17-rbac-users-groups/              ✅ COMPLETO
-└── modulo-18-rbac-serviceaccounts/           ✅ COMPLETO
+├── modulo-18-rbac-serviceaccounts/           ✅ COMPLETO
+├── modulo-19-jobs-cronjobs/                  ✅ COMPLETO (2025-11-13)
+├── modulo-20-init-sidecar-patterns/          ✅ COMPLETO (2025-11-13)
+└── modulo-21-helm-basics/                    ✅ COMPLETO (2025-11-13)
 ```
 
 ### Área 3: Operación y Seguridad
@@ -134,11 +138,15 @@ area-4-observabilidad-ha/
 | 16 | Volumes Storage | ✅ | ✅ | ✅ | 3.4K | 1.2K | 🟢 100% |
 | 17 | RBAC Users | ✅ | ✅ | ✅ | 1.8K | 1.2K | 🟢 100% |
 | 18 | RBAC ServiceAccounts | ✅ | ✅ | ✅ | 2.0K | 1.4K | 🟢 100% |
+| 19 | Jobs & CronJobs | ✅ | ✅ | - | 50K | 18K | 🟢 100% (NEW) |
+| 20 | Init Containers & Sidecar | ✅ | ✅ | - | 50K | 18K | 🟢 100% (NEW) |
+| 21 | Helm Basics | ✅ | ✅ | - | 47K | 17K | 🟢 100% (NEW) |
 
 **Leyenda**:
 - ✅ Completo
 - ⚠️ Pendiente (módulo 08 sin backup pero header/RESUMEN completos)
 - 🟢 100% = Totalmente actualizado con estructura 2.0
+- (NEW) = Creado en 2025-11-13
 
 ---
 
