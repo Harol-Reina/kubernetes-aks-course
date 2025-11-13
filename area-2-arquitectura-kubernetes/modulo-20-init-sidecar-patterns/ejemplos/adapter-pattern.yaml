@@ -1,0 +1,398 @@
+# ════════════════════════════════════════════════════════════════════════════
+# EJEMPLO 6: Adapter Pattern - Log Format Converter
+# ════════════════════════════════════════════════════════════════════════════
+#
+# DESCRIPCIÓN:
+#   Sidecar adapter que convierte logs de formato custom/legacy a JSON
+#   estándar para Elasticsearch/Splunk/sistemas de logging modernos.
+#
+# CASO DE USO:
+#   - Integrar aplicaciones legacy con sistemas modernos
+#   - Normalizar formato de logs sin modificar app
+#   - Transform data para compatibilidad downstream
+#   - Standardización de output
+#
+# APLICAR:
+#   kubectl apply -f adapter-pattern.yaml
+#
+# VERIFICAR:
+#   kubectl get pod log-adapter-demo
+#   kubectl logs log-adapter-demo -c legacy-app
+#   kubectl logs log-adapter-demo -c adapter
+#   kubectl exec log-adapter-demo -c adapter -- cat /logs/json/app.json
+#
+# LIMPIAR:
+#   kubectl delete -f adapter-pattern.yaml
+#
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-adapter-demo
+  labels:
+    app: legacy-app
+    pattern: adapter
+  annotations:
+    description: "Adapter pattern para convertir logs custom a JSON"
+spec:
+  
+  containers:
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # LEGACY APP: Escribe logs en formato custom/propietario
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: legacy-app
+    image: busybox:1.35
+    
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Legacy Application iniciada"
+      echo "Escribiendo logs en formato custom a /logs/custom/"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Formato legacy: [timestamp] LEVEL | message | user=X | code=Y
+      while true; do
+        TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+        LEVEL=$(shuf -e "ERROR" "WARNING" "INFO" "DEBUG" -n 1)
+        USER=$(shuf -e "alice" "bob" "charlie" "admin" -n 1)
+        CODE=$(shuf -i 200-500 -n 1)
+        
+        case $LEVEL in
+          "ERROR")
+            MSG="Database connection failed"
+            ;;
+          "WARNING")
+            MSG="Cache miss detected"
+            ;;
+          "INFO")
+            MSG="User login successful"
+            ;;
+          "DEBUG")
+            MSG="Query executed"
+            ;;
+        esac
+        
+        # Log en formato custom (legacy)
+        CUSTOM_LOG="[${TIMESTAMP}] ${LEVEL} | ${MSG} | user=${USER} | code=${CODE}"
+        echo "$CUSTOM_LOG" >> /logs/custom/app.log
+        echo "$CUSTOM_LOG"
+        
+        sleep 3
+      done
+    
+    volumeMounts:
+    - name: custom-logs
+      mountPath: /logs/custom
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ADAPTER: Convierte formato custom → JSON
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: adapter
+    image: busybox:1.35
+    
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Log Adapter iniciado"
+      echo "Leyendo: /logs/custom/app.log (formato custom)"
+      echo "Escribiendo: /logs/json/app.json (formato JSON)"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Esperar a que legacy app cree el archivo
+      while [ ! -f /logs/custom/app.log ]; do
+        echo "⏳ Esperando logs de legacy app..."
+        sleep 2
+      done
+      
+      echo "✅ Logs detectados, iniciando conversión..."
+      echo ""
+      
+      # Leer logs custom y convertir a JSON
+      tail -f /logs/custom/app.log | while read line; do
+        if [ -n "$line" ]; then
+          # Parsear formato custom: [timestamp] LEVEL | message | user=X | code=Y
+          TIMESTAMP=$(echo "$line" | sed -n 's/\[\([^]]*\)\].*/\1/p')
+          LEVEL=$(echo "$line" | sed -n 's/.*\] \([A-Z]*\) |.*/\1/p')
+          MESSAGE=$(echo "$line" | sed -n 's/.*| \([^|]*\) | user=.*/\1/p')
+          USER=$(echo "$line" | sed -n 's/.*user=\([^ ]*\).*/\1/p')
+          CODE=$(echo "$line" | sed -n 's/.*code=\([0-9]*\).*/\1/p')
+          
+          # Crear JSON estructurado
+          JSON_LOG="{\"@timestamp\":\"${TIMESTAMP}\",\"level\":\"${LEVEL}\",\"message\":\"${MESSAGE}\",\"user\":\"${USER}\",\"http_code\":${CODE},\"source\":\"legacy-app\",\"format\":\"adapted\"}"
+          
+          # Escribir JSON a archivo
+          echo "$JSON_LOG" >> /logs/json/app.json
+          
+          # Log de conversión
+          echo "[ADAPTER] Convertido: $LEVEL → JSON"
+          
+          # En producción, enviar directamente a Elasticsearch
+          # curl -X POST "http://elasticsearch:9200/logs/_doc" \
+          #      -H 'Content-Type: application/json' \
+          #      -d "$JSON_LOG"
+        fi
+      done
+    
+    volumeMounts:
+    - name: custom-logs
+      mountPath: /logs/custom
+      readOnly: true  # Adapter solo lee
+    - name: json-logs
+      mountPath: /logs/json
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VOLUMES
+  # ═══════════════════════════════════════════════════════════════════════════
+  volumes:
+  
+  # Logs custom de legacy app
+  - name: custom-logs
+    emptyDir: {}
+  
+  # Logs JSON convertidos
+  - name: json-logs
+    emptyDir: {}
+  
+  restartPolicy: Always
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# VARIANTE: Adapter para métricas (Prometheus format)
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: metrics-adapter-demo
+  labels:
+    app: legacy-metrics
+    pattern: adapter-metrics
+spec:
+  containers:
+  
+  # Legacy app que expone métricas en formato custom
+  - name: legacy-app
+    image: busybox:1.35
+    command:
+    - sh
+    - -c
+    - |
+      # Simular app legacy escribiendo stats a archivo
+      while true; do
+        REQUESTS=$(shuf -i 100-500 -n 1)
+        ERRORS=$(shuf -i 0-10 -n 1)
+        RESPONSE_TIME=$(shuf -i 50-300 -n 1)
+        
+        cat > /metrics/stats.txt <<EOF
+      REQUESTS=${REQUESTS}
+      ERRORS=${ERRORS}
+      RESPONSE_TIME_MS=${RESPONSE_TIME}
+      TIMESTAMP=$(date +%s)
+      EOF
+        
+        echo "Stats updated: requests=${REQUESTS}, errors=${ERRORS}"
+        sleep 10
+      done
+    volumeMounts:
+    - name: metrics
+      mountPath: /metrics
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+  
+  # Adapter: Convierte stats custom → Prometheus format
+  - name: prometheus-adapter
+    image: busybox:1.35
+    ports:
+    - containerPort: 8080
+      name: metrics
+    command:
+    - sh
+    - -c
+    - |
+      # Simular HTTP server que expone /metrics
+      while true; do
+        # Leer stats custom
+        if [ -f /metrics/stats.txt ]; then
+          . /metrics/stats.txt
+          
+          # Convertir a formato Prometheus
+          cat > /tmp/metrics.txt <<EOF
+      # HELP app_requests_total Total number of requests
+      # TYPE app_requests_total counter
+      app_requests_total ${REQUESTS}
+      
+      # HELP app_errors_total Total number of errors
+      # TYPE app_errors_total counter
+      app_errors_total ${ERRORS}
+      
+      # HELP app_response_time_ms Response time in milliseconds
+      # TYPE app_response_time_ms gauge
+      app_response_time_ms ${RESPONSE_TIME_MS}
+      EOF
+          
+          echo "[ADAPTER] Métricas Prometheus generadas"
+          cat /tmp/metrics.txt
+        fi
+        
+        sleep 10
+      done
+    volumeMounts:
+    - name: metrics
+      mountPath: /metrics
+      readOnly: true
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+  
+  volumes:
+  - name: metrics
+    emptyDir: {}
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# TESTING COMPLETO
+# ════════════════════════════════════════════════════════════════════════════
+#
+# ESCENARIO 1: Log Adapter
+# -------------------------
+# 1. Aplicar Pod:
+#    kubectl apply -f adapter-pattern.yaml
+#
+# 2. Ver logs custom de legacy app:
+#    kubectl logs log-adapter-demo -c legacy-app
+#
+#    Expected output (formato custom):
+#    [2025-11-13 10:30:00] ERROR | Database connection failed | user=alice | code=500
+#    [2025-11-13 10:30:03] INFO | User login successful | user=bob | code=200
+#
+# 3. Ver adapter convirtiendo logs:
+#    kubectl logs log-adapter-demo -c adapter
+#
+#    Expected output:
+#    [ADAPTER] Convertido: ERROR → JSON
+#    [ADAPTER] Convertido: INFO → JSON
+#
+# 4. Ver logs JSON generados:
+#    kubectl exec log-adapter-demo -c adapter -- cat /logs/json/app.json
+#
+#    Expected output (formato JSON):
+#    {"@timestamp":"2025-11-13 10:30:00","level":"ERROR","message":"Database connection failed","user":"alice","http_code":500,"source":"legacy-app","format":"adapted"}
+#    {"@timestamp":"2025-11-13 10:30:03","level":"INFO","message":"User login successful","user":"bob","http_code":200,"source":"legacy-app","format":"adapted"}
+#
+# 5. Ver archivos en cada volume:
+#    # Custom logs (legacy)
+#    kubectl exec log-adapter-demo -c legacy-app -- cat /logs/custom/app.log
+#    
+#    # JSON logs (converted)
+#    kubectl exec log-adapter-demo -c adapter -- cat /logs/json/app.json
+#
+# 6. Verificar que adapter solo lee (read-only):
+#    kubectl exec log-adapter-demo -c adapter -- touch /logs/custom/test.txt
+#    # Error: Read-only file system ✅
+#
+# ESCENARIO 2: Metrics Adapter
+# -----------------------------
+# 1. Aplicar Pod de métricas:
+#    kubectl apply -f adapter-pattern.yaml
+#
+# 2. Ver stats custom:
+#    kubectl exec metrics-adapter-demo -c legacy-app -- cat /metrics/stats.txt
+#
+#    Expected output (formato custom):
+#    REQUESTS=342
+#    ERRORS=5
+#    RESPONSE_TIME_MS=120
+#    TIMESTAMP=1699876543
+#
+# 3. Ver métricas Prometheus generadas:
+#    kubectl exec metrics-adapter-demo -c prometheus-adapter -- cat /tmp/metrics.txt
+#
+#    Expected output (formato Prometheus):
+#    # HELP app_requests_total Total number of requests
+#    # TYPE app_requests_total counter
+#    app_requests_total 342
+#    
+#    # HELP app_errors_total Total number of errors
+#    # TYPE app_errors_total counter
+#    app_errors_total 5
+#
+# 4. En producción, Prometheus scrapearía :8080/metrics
+#
+# ════════════════════════════════════════════════════════════════════════════
+# COMPARACIÓN DE FORMATOS
+# ════════════════════════════════════════════════════════════════════════════
+#
+# ANTES (Legacy Custom):
+# ----------------------
+# [2025-11-13 10:30:00] ERROR | Database connection failed | user=alice | code=500
+#
+# DESPUÉS (JSON Estándar):
+# ------------------------
+# {
+#   "@timestamp": "2025-11-13 10:30:00",
+#   "level": "ERROR",
+#   "message": "Database connection failed",
+#   "user": "alice",
+#   "http_code": 500,
+#   "source": "legacy-app",
+#   "format": "adapted"
+# }
+#
+# ════════════════════════════════════════════════════════════════════════════
+# BENEFICIOS DEL ADAPTER PATTERN
+# ════════════════════════════════════════════════════════════════════════════
+# ✅ No modificar legacy app (sin cambios de código)
+# ✅ Standardizar output para sistemas modernos
+# ✅ Reusable adapter para múltiples apps legacy
+# ✅ Separación de concerns (app produce, adapter transforma)
+# ✅ Facilita integración con herramientas modernas
+# ✅ Testing: fácil validar transformación sin tocar app
+# ════════════════════════════════════════════════════════════════════════════
+# CASOS DE USO REALES
+# ════════════════════════════════════════════════════════════════════════════
+# - Logs: Custom format → JSON/Syslog para Elasticsearch/Splunk
+# - Metrics: Proprietary format → Prometheus/StatsD
+# - Data: XML → JSON para APIs modernas
+# - Protocol: HTTP → gRPC conversion
+# - Encoding: Latin1 → UTF-8 conversion
+# - Time format: Custom → ISO8601
+# ════════════════════════════════════════════════════════════════════════════
+# ADAPTER VS SIDECAR VS AMBASSADOR
+# ════════════════════════════════════════════════════════════════════════════
+# ADAPTER:     Transforma DATA (output de app)
+# SIDECAR:     Extiende FUNCIONALIDAD (features adicionales)
+# AMBASSADOR:  Simplifica NETWORKING (proxy a externos)
+# ════════════════════════════════════════════════════════════════════════════

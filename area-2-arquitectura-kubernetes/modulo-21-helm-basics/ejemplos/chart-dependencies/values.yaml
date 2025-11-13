@@ -1,0 +1,124 @@
+# ============================================================================
+# Configuración de la aplicación principal
+# ============================================================================
+app:
+  name: myapp
+  replicaCount: 2
+  image:
+    repository: nginx
+    tag: "1.21.0"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 80
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  
+  # Variables de entorno que conectan con los subcharts
+  env:
+    - name: DATABASE_HOST
+      value: "{{ .Release.Name }}-postgresql"
+    - name: DATABASE_PORT
+      value: "5432"
+    - name: DATABASE_NAME
+      valueFrom:
+        secretKeyRef:
+          name: "{{ .Release.Name }}-db-credentials"
+          key: database
+    - name: REDIS_HOST
+      value: "{{ .Release.Name }}-redis-master"
+    - name: REDIS_PORT
+      value: "6379"
+
+# ============================================================================
+# Configuración del subchart PostgreSQL (Bitnami)
+# ============================================================================
+postgresql:
+  enabled: true
+  
+  # Configuración de autenticación
+  auth:
+    username: appuser
+    password: changeme123
+    database: appdb
+    # postgresPassword: admin123  # Password del superuser postgres
+  
+  # Arquitectura: standalone o replication
+  architecture: standalone
+  
+  # Persistencia
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+  
+  # Resources
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Metrics (opcional)
+  metrics:
+    enabled: false
+
+# ============================================================================
+# Configuración del subchart Redis (Bitnami) - Alias: cache
+# ============================================================================
+redis:
+  enabled: true
+  
+  # Arquitectura: standalone, replication
+  architecture: standalone
+  
+  # Autenticación
+  auth:
+    enabled: false
+    # password: redis123
+  
+  # Master configuration
+  master:
+    persistence:
+      enabled: false
+      # size: 2Gi
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+  
+  # Réplicas (solo si architecture: replication)
+  replica:
+    replicaCount: 0
+
+# ============================================================================
+# Valores importados desde subcharts
+# ============================================================================
+# Estos valores son importados desde las dependencias
+dbUser: ""
+dbPassword: ""
+dbName: ""
+
+# ============================================================================
+# Configuración global (compartida por todos los charts)
+# ============================================================================
+global:
+  storageClass: ""
+  # postgresql:
+  #   auth:
+  #     username: globaluser
+  #     password: globalpass

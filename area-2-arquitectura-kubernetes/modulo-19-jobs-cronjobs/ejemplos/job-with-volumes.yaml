@@ -1,0 +1,263 @@
+# ========================================
+# Job con Volumes - Data Migration
+# ========================================
+# 
+# Descripción:
+#   Job que lee datos de un volumen, los procesa,
+#   y guarda resultados en otro volumen.
+#   Útil para migraciones de datos o transformaciones.
+#
+# Prerequisitos:
+#   - PVC 'source-data-pvc' con datos originales
+#   - PVC 'output-data-pvc' para resultados
+#
+# Uso:
+#   kubectl apply -f job-with-volumes.yaml
+#   kubectl logs job/data-migration
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-migration
+  labels:
+    app: data-pipeline
+    type: migration
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600  # 1 hora max
+  ttlSecondsAfterFinished: 7200  # Limpiar después de 2 horas
+  
+  template:
+    metadata:
+      labels:
+        job-name: data-migration
+    spec:
+      containers:
+      - name: migrator
+        image: python:3.11-slim
+        command:
+        - python3
+        - -c
+        - |
+          import os
+          import time
+          
+          print("="*60)
+          print("Data Migration Job")
+          print("="*60)
+          
+          # Directorios
+          source_dir = "/source"
+          output_dir = "/output"
+          
+          print(f"Source: {source_dir}")
+          print(f"Output: {output_dir}")
+          print()
+          
+          # Listar archivos de origen
+          print("[1/3] Scanning source files...")
+          files = [f for f in os.listdir(source_dir) if f.endswith('.csv')]
+          print(f"Found {len(files)} CSV files to process")
+          
+          # Procesar cada archivo
+          print()
+          print("[2/3] Processing files...")
+          for i, file in enumerate(files, 1):
+            print(f"  Processing {i}/{len(files)}: {file}")
+            
+            # Simulación de procesamiento
+            time.sleep(2)
+            
+            # En producción: leer, transformar, escribir
+            # df = pd.read_csv(f"{source_dir}/{file}")
+            # df_transformed = transform(df)
+            # df_transformed.to_csv(f"{output_dir}/migrated_{file}")
+            
+            print(f"  ✅ {file} processed")
+          
+          # Verificar output
+          print()
+          print("[3/3] Verifying output...")
+          output_files = os.listdir(output_dir)
+          print(f"Output files created: {len(output_files)}")
+          
+          print()
+          print("="*60)
+          print("✅ Migration completed successfully!")
+          print("="*60)
+        
+        volumeMounts:
+        # Mount volume de origen (read-only)
+        - name: source-data
+          mountPath: /source
+          readOnly: true
+        
+        # Mount volume de destino (read-write)
+        - name: output-data
+          mountPath: /output
+        
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+      
+      volumes:
+      # Volume con datos de origen
+      - name: source-data
+        persistentVolumeClaim:
+          claimName: source-data-pvc
+      
+      # Volume para resultados
+      - name: output-data
+        persistentVolumeClaim:
+          claimName: output-data-pvc
+      
+      restartPolicy: OnFailure
+
+---
+
+# ========================================
+# Job con ConfigMap y Secret
+# ========================================
+# 
+# Descripción:
+#   Job que usa ConfigMap para configuración y
+#   Secret para credenciales sensibles.
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: secure-data-processor
+  labels:
+    app: data-pipeline
+    security: high
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 1800
+  
+  template:
+    spec:
+      containers:
+      - name: processor
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=========================================="
+          echo "Secure Data Processor"
+          echo "=========================================="
+          
+          # Variables desde ConfigMap
+          echo "Configuration:"
+          echo "  Environment: ${APP_ENV}"
+          echo "  Batch Size: ${BATCH_SIZE}"
+          echo "  Log Level: ${LOG_LEVEL}"
+          echo ""
+          
+          # Variables desde Secret (NO imprimir valores reales)
+          echo "Credentials loaded:"
+          echo "  API Key: [REDACTED]"
+          echo "  DB Password: [REDACTED]"
+          echo ""
+          
+          # Archivos montados desde ConfigMap
+          echo "Config files:"
+          ls -lh /config/
+          echo ""
+          cat /config/app-config.json
+          echo ""
+          
+          # Procesar datos
+          echo "Processing data with secure credentials..."
+          sleep 5
+          
+          echo "✅ Processing completed!"
+        
+        # Variables de entorno desde ConfigMap
+        env:
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: environment
+        - name: BATCH_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: batch_size
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: log_level
+        
+        # Variables sensibles desde Secret
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-credentials
+              key: api_key
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: api-credentials
+              key: db_password
+        
+        volumeMounts:
+        # ConfigMap como archivo
+        - name: config-volume
+          mountPath: /config
+          readOnly: true
+      
+      volumes:
+      # ConfigMap montado como volumen
+      - name: config-volume
+        configMap:
+          name: app-config
+          items:
+          - key: config_file
+            path: app-config.json
+      
+      restartPolicy: OnFailure
+
+---
+
+# ConfigMap de ejemplo
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  environment: "production"
+  batch_size: "1000"
+  log_level: "INFO"
+  config_file: |
+    {
+      "app": "data-processor",
+      "version": "2.0",
+      "features": {
+        "parallel_processing": true,
+        "retry_enabled": true,
+        "max_retries": 3
+      }
+    }
+
+---
+
+# Secret de ejemplo
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-credentials
+type: Opaque
+stringData:
+  api_key: "sk_live_abc123xyz789"
+  db_password: "SuperSecretPassword123!"

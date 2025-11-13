@@ -1,0 +1,17 @@
+apiVersion: v2
+name: advanced-templates
+description: Ejemplos avanzados de templates Helm con helpers y funciones
+type: application
+version: 1.0.0
+appVersion: "2.0"
+
+keywords:
+  - templates
+  - helpers
+  - advanced
+  - functions
+  - best-practices
+
+maintainers:
+  - name: "K8S Course Team"
+    email: "curso@kubernetes.local"

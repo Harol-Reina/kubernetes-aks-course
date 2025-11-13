@@ -1,0 +1,36 @@
+{{- if .Values.postgresql.enabled }}
+---
+# ConfigMap con script de inicialización para PostgreSQL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-init-db
+  labels:
+    app: {{ .Values.app.name }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    release: {{ .Release.Name }}
+data:
+  init.sql: |
+    -- Script de inicialización de base de datos
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      email VARCHAR(100) UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id),
+      token VARCHAR(255) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    -- Insertar datos de ejemplo
+    INSERT INTO users (username, email) 
+    VALUES 
+      ('admin', 'admin@example.com'),
+      ('user1', 'user1@example.com')
+    ON CONFLICT (username) DO NOTHING;
+{{- end }}

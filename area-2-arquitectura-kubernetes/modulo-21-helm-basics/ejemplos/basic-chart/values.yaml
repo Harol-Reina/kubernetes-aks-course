@@ -1,0 +1,28 @@
+# Configuración por defecto
+replicaCount: 2
+
+# Configuración de imagen
+image:
+  repository: nginx
+  tag: "1.21.0"
+  pullPolicy: IfNotPresent
+
+# Configuración del servicio
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+# Recursos del pod
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Labels personalizados
+customLabels:
+  environment: development
+  team: platform

@@ -1,0 +1,204 @@
+# ════════════════════════════════════════════════════════════════════════════
+# EJEMPLO 1: Init Container Básico
+# ════════════════════════════════════════════════════════════════════════════
+#
+# DESCRIPCIÓN:
+#   Pod simple con un init container que ejecuta una tarea de setup antes
+#   de que el container principal inicie.
+#
+# CASO DE USO:
+#   - Demostrar concepto básico de init containers
+#   - Mostrar orden de ejecución secuencial
+#   - Validar que init completa antes de main
+#
+# APLICAR:
+#   kubectl apply -f init-container-basic.yaml
+#
+# VERIFICAR:
+#   kubectl get pod init-demo -w
+#   kubectl logs init-demo -c init-setup
+#   kubectl logs init-demo -c app
+#
+# LIMPIAR:
+#   kubectl delete -f init-container-basic.yaml
+#
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-demo
+  labels:
+    app: init-demo
+    pattern: init-container
+  annotations:
+    description: "Ejemplo básico de init container"
+spec:
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INIT CONTAINERS (ejecutan ANTES de main containers)
+  # ═══════════════════════════════════════════════════════════════════════════
+  initContainers:
+  
+  - name: init-setup
+    image: busybox:1.35
+    
+    # Comando de setup simple
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════"
+      echo "Init Container ejecutando..."
+      echo "Timestamp: $(date)"
+      echo "════════════════════════════════════════"
+      
+      # Simular tarea de setup (3 segundos)
+      echo "Realizando setup..."
+      sleep 3
+      
+      # Crear archivo de flag para main container
+      echo "Init completado exitosamente" > /work-dir/init-complete.txt
+      
+      echo "✅ Setup completado!"
+      echo "════════════════════════════════════════"
+    
+    # Mount shared volume
+    volumeMounts:
+    - name: workdir
+      mountPath: /work-dir
+    
+    # Resources para init container
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MAIN CONTAINERS (ejecutan DESPUÉS de init containers)
+  # ═══════════════════════════════════════════════════════════════════════════
+  containers:
+  
+  - name: app
+    image: nginx:1.25-alpine
+    
+    # Main app inicia solo cuando init completó
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════"
+      echo "Main Container ejecutando..."
+      echo "Timestamp: $(date)"
+      echo "════════════════════════════════════════"
+      
+      # Verificar que init completó
+      if [ -f /work-dir/init-complete.txt ]; then
+        echo "✅ Init container completado:"
+        cat /work-dir/init-complete.txt
+      else
+        echo "❌ ERROR: Init container no completó"
+        exit 1
+      fi
+      
+      echo "════════════════════════════════════════"
+      echo "Iniciando nginx..."
+      nginx -g 'daemon off;'
+    
+    ports:
+    - containerPort: 80
+      name: http
+    
+    # Mount mismo volume para leer flag
+    volumeMounts:
+    - name: workdir
+      mountPath: /work-dir
+      readOnly: true
+    
+    # Resources para main container
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VOLUMES (compartidos entre init y main containers)
+  # ═══════════════════════════════════════════════════════════════════════════
+  volumes:
+  - name: workdir
+    emptyDir: {}  # Volume temporal que persiste durante vida del Pod
+  
+  # Restart policy
+  restartPolicy: Always
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# SERVICE (opcional, para acceder al Pod)
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: init-demo-service
+  labels:
+    app: init-demo
+spec:
+  selector:
+    app: init-demo
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: http
+  type: ClusterIP
+
+# ════════════════════════════════════════════════════════════════════════════
+# TESTING
+# ════════════════════════════════════════════════════════════════════════════
+#
+# 1. Aplicar y observar ejecución:
+#    kubectl apply -f init-container-basic.yaml
+#    kubectl get pod init-demo -w
+#
+# 2. Ver logs del init container:
+#    kubectl logs init-demo -c init-setup
+#
+#    Expected output:
+#    ════════════════════════════════════════
+#    Init Container ejecutando...
+#    Timestamp: Wed Nov 13 10:30:00 UTC 2025
+#    ════════════════════════════════════════
+#    Realizando setup...
+#    ✅ Setup completado!
+#
+# 3. Ver logs del main container:
+#    kubectl logs init-demo -c app
+#
+#    Expected output:
+#    ════════════════════════════════════════
+#    Main Container ejecutando...
+#    Timestamp: Wed Nov 13 10:30:03 UTC 2025
+#    ════════════════════════════════════════
+#    ✅ Init container completado:
+#    Init completado exitosamente
+#
+# 4. Verificar que nginx está corriendo:
+#    kubectl exec init-demo -c app -- curl localhost
+#
+# 5. Ver status del Pod:
+#    kubectl get pod init-demo -o jsonpath='{.status.initContainerStatuses[0].state}'
+#    kubectl get pod init-demo -o jsonpath='{.status.containerStatuses[0].ready}'
+#
+# ════════════════════════════════════════════════════════════════════════════
+# NOTAS:
+# - Init container DEBE completar exitosamente (exit 0)
+# - Si init falla, Kubernetes reinicia el Pod
+# - Main container NO inicia hasta que init complete
+# - Init containers se ejecutan secuencialmente (uno por uno)
+# ════════════════════════════════════════════════════════════════════════════

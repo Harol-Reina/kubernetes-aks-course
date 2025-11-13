@@ -1,0 +1,126 @@
+¡Chart instalado exitosamente!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+=======================================================================
+📦 COMPONENTES DESPLEGADOS
+=======================================================================
+
+Aplicación Principal:
+  - Deployment: {{ .Release.Name }}-{{ .Values.app.name }} ({{ .Values.app.replicaCount }} réplicas)
+  - Service: {{ .Release.Name }}-{{ .Values.app.name }} ({{ .Values.app.service.type }}:{{ .Values.app.service.port }})
+
+{{- if .Values.postgresql.enabled }}
+
+Base de Datos PostgreSQL:
+  - StatefulSet: {{ .Release.Name }}-postgresql
+  - Service: {{ .Release.Name }}-postgresql:5432
+  - Credenciales:
+      Usuario: {{ .Values.postgresql.auth.username }}
+      Database: {{ .Values.postgresql.auth.database }}
+      Password: (Ver secret {{ .Release.Name }}-postgresql)
+{{- else }}
+⚠️  PostgreSQL está deshabilitado
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+
+Cache Redis:
+  - Deployment: {{ .Release.Name }}-redis-master
+  - Service: {{ .Release.Name }}-redis-master:6379
+  {{- if .Values.redis.auth.enabled }}
+  - Password: (Ver secret {{ .Release.Name }}-redis)
+  {{- else }}
+  - Auth: Deshabilitado
+  {{- end }}
+{{- else }}
+⚠️  Redis está deshabilitado
+{{- end }}
+
+=======================================================================
+🚀 ACCESO A LA APLICACIÓN
+=======================================================================
+
+1. Obtener el estado:
+   kubectl get all -l release={{ .Release.Name }}
+
+2. Acceder al servicio:
+   {{- if eq .Values.app.service.type "NodePort" }}
+   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ .Release.Name }}-{{ .Values.app.name }})
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   echo "http://$NODE_IP:$NODE_PORT"
+   {{- else if eq .Values.app.service.type "LoadBalancer" }}
+   kubectl get svc {{ .Release.Name }}-{{ .Values.app.name }} --namespace {{ .Release.Namespace }}
+   {{- else }}
+   kubectl port-forward svc/{{ .Release.Name }}-{{ .Values.app.name }} 8080:{{ .Values.app.service.port }}
+   echo "http://localhost:8080"
+   {{- end }}
+
+{{- if .Values.postgresql.enabled }}
+
+3. Conectar a PostgreSQL:
+   kubectl run -i --tty --rm debug --image=postgres:14 --restart=Never -- \\
+     psql -h {{ .Release.Name }}-postgresql -U {{ .Values.postgresql.auth.username }} -d {{ .Values.postgresql.auth.database }}
+   
+   O con port-forward:
+   kubectl port-forward svc/{{ .Release.Name }}-postgresql 5432:5432
+   psql -h localhost -U {{ .Values.postgresql.auth.username }} -d {{ .Values.postgresql.auth.database }}
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+
+4. Conectar a Redis:
+   kubectl run -i --tty --rm debug --image=redis:7 --restart=Never -- \\
+     redis-cli -h {{ .Release.Name }}-redis-master
+   
+   O con port-forward:
+   kubectl port-forward svc/{{ .Release.Name }}-redis-master 6379:6379
+   redis-cli -h localhost
+{{- end }}
+
+=======================================================================
+📊 COMANDOS ÚTILES
+=======================================================================
+
+# Ver logs de la aplicación
+kubectl logs -l app={{ .Values.app.name }} -f
+
+# Ver pods creados por subcharts
+kubectl get pods -l release={{ .Release.Name }}
+
+# Ver secrets creados
+kubectl get secrets -l release={{ .Release.Name }}
+
+# Escalar la aplicación
+helm upgrade {{ .Release.Name }} . --set app.replicaCount=3
+
+# Deshabilitar Redis
+helm upgrade {{ .Release.Name }} . --set redis.enabled=false
+
+# Ver valores actuales
+helm get values {{ .Release.Name }}
+
+=======================================================================
+🔧 GESTIÓN DE DEPENDENCIAS
+=======================================================================
+
+# Ver dependencias
+helm dependency list
+
+# Actualizar dependencias (descargar subcharts)
+helm dependency update
+
+# Ver charts descargados
+ls -la charts/
+
+=======================================================================
+⚠️  IMPORTANTE
+=======================================================================
+
+- Los datos de PostgreSQL se persisten en un PVC
+- Para entornos de producción, cambia las contraseñas:
+  helm upgrade {{ .Release.Name }} . --set postgresql.auth.password=NEWPASSWORD
+
+- Para ver todas las opciones de configuración:
+  helm show values .

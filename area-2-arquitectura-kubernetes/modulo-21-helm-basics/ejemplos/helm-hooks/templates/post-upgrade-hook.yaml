@@ -1,0 +1,32 @@
+{{- if .Values.hooks.postUpgrade.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-post-upgrade-{{ .Release.Revision }}
+  labels:
+    app: {{ .Chart.Name }}
+    hook: post-upgrade
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}-post-upgrade
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: post-upgrade
+        image: busybox
+        command:
+          - /bin/sh
+          - -c
+          - |
+            echo "=== POST-UPGRADE HOOK ==="
+            echo "Ejecutando migraciones de base de datos..."
+            sleep 3
+            echo "Limpiando cache..."
+            sleep 1
+            echo "✅ Upgrade completado exitosamente"
+{{- end }}

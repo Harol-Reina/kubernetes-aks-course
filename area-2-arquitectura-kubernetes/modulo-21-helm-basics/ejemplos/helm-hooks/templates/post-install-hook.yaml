@@ -1,0 +1,31 @@
+{{- if .Values.hooks.postInstall.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-post-install
+  labels:
+    app: {{ .Chart.Name }}
+    hook: post-install
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}-post-install
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: post-install
+        image: busybox
+        command:
+          - /bin/sh
+          - -c
+          - |
+            echo "=== POST-INSTALL HOOK ==="
+            echo "Aplicación instalada exitosamente"
+            echo "Ejecutando seed de datos iniciales..."
+            sleep 3
+            echo "✅ Configuración inicial completada"
+{{- end }}

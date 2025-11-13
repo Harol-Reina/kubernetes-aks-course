@@ -1,0 +1,180 @@
+# ========================================
+# CronJob - Backup de PostgreSQL
+# ========================================
+# 
+# Descripción:
+#   CronJob que ejecuta backup diario de PostgreSQL a las 2:00 AM.
+#   Los backups se guardan en un PersistentVolume.
+#
+# Prerequisitos:
+#   - Secret 'postgres-credentials' con DB_PASSWORD
+#   - PVC 'backup-pvc' para almacenar backups
+#   - Service 'postgres-service' accesible
+#
+# Uso:
+#   kubectl apply -f cronjob-backup.yaml
+#   kubectl get cronjobs
+#   kubectl create job --from=cronjob/postgres-backup manual-backup  # Trigger manual
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    app: database
+    type: backup
+    database: postgres
+spec:
+  # Schedule: Diario a las 2:00 AM (UTC)
+  schedule: "0 2 * * *"
+  
+  # Timezone (K8s 1.25+)
+  # Si no se especifica, usa UTC
+  timezone: "America/New_York"
+  
+  # Política de concurrencia
+  concurrencyPolicy: Forbid  # No permitir backups simultáneos
+  
+  # Gestión de histórico
+  successfulJobsHistoryLimit: 7   # Mantener últimos 7 backups exitosos
+  failedJobsHistoryLimit: 3       # Mantener últimos 3 fallos
+  
+  # Deadline para iniciar (si nodo estaba apagado, etc.)
+  startingDeadlineSeconds: 300    # 5 minutos max delay
+  
+  # Template del Job
+  jobTemplate:
+    metadata:
+      labels:
+        app: database
+        type: backup
+    spec:
+      # Configuración del Job
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800  # 30 minutos max
+      
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: postgres:15
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e  # Salir si hay error
+              
+              # Variables
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="/backups/postgres_backup_${TIMESTAMP}.sql.gz"
+              
+              echo "=========================================="
+              echo "PostgreSQL Backup Started"
+              echo "Time: $(date)"
+              echo "=========================================="
+              
+              # Ejecutar pg_dump y comprimir
+              echo "Dumping database..."
+              PGPASSWORD=$DB_PASSWORD pg_dump \
+                -h $DB_HOST \
+                -p $DB_PORT \
+                -U $DB_USER \
+                -d $DB_NAME \
+                --verbose \
+                | gzip > "${BACKUP_FILE}"
+              
+              # Verificar backup
+              if [ -f "${BACKUP_FILE}" ]; then
+                SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
+                echo "✅ Backup completado: ${BACKUP_FILE} (${SIZE})"
+              else
+                echo "❌ Error: Backup file not created"
+                exit 1
+              fi
+              
+              # Limpiar backups antiguos (mantener últimos 14 días)
+              echo "Cleaning old backups (>14 days)..."
+              find /backups -name "postgres_backup_*.sql.gz" -mtime +14 -delete
+              
+              echo "=========================================="
+              echo "Backup completed successfully!"
+              echo "=========================================="
+            
+            env:
+            # Variables de conexión
+            - name: DB_HOST
+              value: "postgres-service"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: "postgres"
+            - name: DB_NAME
+              value: "myapp"
+            
+            # Contraseña desde Secret
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            
+            # Volume mount para backups
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+            
+            # Recursos
+            resources:
+              requests:
+                cpu: "500m"
+                memory: "512Mi"
+              limits:
+                cpu: "1000m"
+                memory: "1Gi"
+          
+          # Volumes
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-pvc
+          
+          restartPolicy: OnFailure
+
+---
+
+# ========================================
+# PersistentVolumeClaim para Backups
+# ========================================
+# Crear este PVC antes de aplicar el CronJob
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  labels:
+    app: database
+    type: backup
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi  # Ajustar según tamaño de DB
+  storageClassName: standard  # Cambiar según cloud provider
+
+---
+
+# ========================================
+# Secret para Credenciales de PostgreSQL
+# ========================================
+# Crear este Secret antes de aplicar el CronJob
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+type: Opaque
+stringData:
+  password: "MiPasswordSuperSecreta123"  # ⚠️ Cambiar en producción

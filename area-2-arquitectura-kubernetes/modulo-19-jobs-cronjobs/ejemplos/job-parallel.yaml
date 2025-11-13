@@ -1,0 +1,127 @@
+# ========================================
+# Job Paralelo - Procesamiento Batch
+# ========================================
+# 
+# Descripción:
+#   Job que ejecuta múltiples tareas en paralelo.
+#   Procesa 10 items con 3 workers simultáneos.
+#
+# Uso:
+#   kubectl apply -f job-parallel.yaml
+#   kubectl get jobs -w
+#   kubectl get pods -l job-name=batch-processor
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processor
+  labels:
+    app: data-pipeline
+    type: batch
+    environment: production
+spec:
+  # Configuración paralela
+  completions: 10         # Total de ejecuciones exitosas requeridas
+  parallelism: 3          # Máximo 3 Pods corriendo simultáneamente
+  backoffLimit: 5         # Permitir 5 reintentos totales
+  
+  # Timeout y limpieza
+  activeDeadlineSeconds: 600        # Matar Job después de 10 minutos
+  ttlSecondsAfterFinished: 3600     # Eliminar Job después de 1 hora (K8s 1.21+)
+  
+  template:
+    metadata:
+      labels:
+        job-name: batch-processor
+        app: data-pipeline
+    spec:
+      containers:
+      - name: processor
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Simulación de procesamiento
+          TASK_ID=$(shuf -i 1-1000 -n 1)
+          echo "[Worker: $(hostname)] Procesando tarea #${TASK_ID}"
+          
+          # Simular trabajo (5-15 segundos aleatorios)
+          SLEEP_TIME=$(shuf -i 5-15 -n 1)
+          echo "Duración estimada: ${SLEEP_TIME}s"
+          sleep ${SLEEP_TIME}
+          
+          # Completar exitosamente
+          echo "[Worker: $(hostname)] Tarea #${TASK_ID} completada!"
+          exit 0
+        
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      
+      restartPolicy: OnFailure  # Reintentar en el mismo Pod si falla
+
+---
+
+# ========================================
+# Job Paralelo con Work Queue Pattern
+# ========================================
+# 
+# Descripción:
+#   Workers que consumen tareas de una cola externa.
+#   Sin 'completions' definido - workers terminan cuando
+#   la cola está vacía.
+#
+# Nota: Requiere servicio de cola (Redis, RabbitMQ, etc.)
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: queue-worker
+  labels:
+    app: queue-consumer
+    type: work-queue
+spec:
+  # Sin completions - workers terminan cuando cola está vacía
+  parallelism: 5          # 5 workers simultáneos
+  backoffLimit: 3
+  
+  template:
+    spec:
+      containers:
+      - name: worker
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "[Worker: $(hostname)] Iniciado"
+          
+          # En producción: conectar a Redis/RabbitMQ
+          # while task=$(redis-cli LPOP queue); do
+          #   process $task
+          # done
+          
+          # Simulación: procesar 5 tareas y terminar
+          for i in 1 2 3 4 5; do
+            echo "Procesando tarea $i..."
+            sleep 2
+          done
+          
+          echo "[Worker: $(hostname)] Cola vacía, finalizando"
+          exit 0
+        
+        env:
+        - name: QUEUE_HOST
+          value: "redis-service"
+        - name: QUEUE_PORT
+          value: "6379"
+      
+      restartPolicy: OnFailure

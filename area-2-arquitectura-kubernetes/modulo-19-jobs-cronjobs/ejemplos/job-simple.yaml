@@ -1,0 +1,93 @@
+# ========================================
+# Job Simple - Cálculo de Pi
+# ========================================
+# 
+# Descripción:
+#   Job básico que calcula Pi usando el algoritmo de Monte Carlo.
+#   Ejecuta una sola vez hasta completar exitosamente.
+#
+# Uso:
+#   kubectl apply -f job-simple.yaml
+#   kubectl get jobs
+#   kubectl logs job/pi-calculation
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pi-calculation
+  labels:
+    app: math-tools
+    type: calculation
+    difficulty: simple
+spec:
+  # Configuración básica
+  completions: 1          # Ejecutar una sola vez
+  parallelism: 1          # Un solo Pod a la vez
+  backoffLimit: 4         # Máximo 4 reintentos si falla
+  
+  # Template del Pod
+  template:
+    metadata:
+      labels:
+        job-name: pi-calculation
+        app: math-tools
+    spec:
+      containers:
+      - name: pi-calculator
+        image: perl:5.34
+        command:
+        - perl
+        - -Mbignum=bpi
+        - -wle
+        - print bpi(2000)  # Calcular Pi con 2000 decimales
+        
+        # Límites de recursos
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+      
+      # CRÍTICO: Never o OnFailure (NUNCA Always)
+      restartPolicy: Never
+
+---
+
+# ========================================
+# Job Simple con Comando Shell
+# ========================================
+# 
+# Descripción:
+#   Job que ejecuta un script bash simple.
+#   Útil para tareas de mantenimiento o validación.
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: echo-job
+  labels:
+    type: test
+spec:
+  template:
+    spec:
+      containers:
+      - name: echo
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Job iniciado en: $(date)"
+          echo "Hostname: $(hostname)"
+          echo "Simulando procesamiento..."
+          sleep 10
+          echo "Job completado exitosamente!"
+          exit 0
+      restartPolicy: Never
+  backoffLimit: 2
