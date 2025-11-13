@@ -1,0 +1,109 @@
+# Node Affinity Examples
+
+# Example 1: Required Node Affinity (Hard)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-affinity-required
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: disktype
+            operator: In
+            values:
+            - ssd
+            - nvme
+  containers:
+  - name: nginx
+    image: nginx
+
+---
+# Example 2: Preferred Node Affinity (Soft)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-affinity-preferred
+spec:
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: zone
+            operator: In
+            values:
+            - us-east-1a
+      - weight: 50
+        preference:
+          matchExpressions:
+          - key: instance-type
+            operator: In
+            values:
+            - c5.xlarge
+  containers:
+  - name: nginx
+    image: nginx
+
+---
+# Example 3: Pod Affinity (Co-location)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-with-cache-affinity
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - redis-cache
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: web
+        image: nginx
+
+---
+# Example 4: Pod Anti-Affinity (Spreading)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-spread
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-spread
+  template:
+    metadata:
+      labels:
+        app: web-spread
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - web-spread
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: nginx
+        image: nginx
