@@ -11,13 +11,13 @@ Kubernetes es un **sistema distribuido** compuesto por múltiples componentes qu
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    CLUSTER KUBERNETES                    │
+│                    CLUSTER KUBERNETES                   │
 ├─────────────────────────────────────────────────────────┤
-│  CONTROL PLANE (Cerebro)    │    WORKERS (Músculo)     │
-│  ├─ API Server (6443)        │    ├─ kubelet             │
-│  ├─ etcd (2379)              │    ├─ kube-proxy          │
-│  ├─ Scheduler                │    └─ Container Runtime   │
-│  └─ Controller Manager       │                          │
+│  CONTROL PLANE (Cerebro)    │    WORKERS (Músculo)      │
+│  ├─ API Server (6443)       │    ├─ kubelet             │
+│  ├─ etcd (2379)             │    ├─ kube-proxy          │
+│  ├─ Scheduler               │    └─ Container Runtime   │
+│  └─ Controller Manager      │                           │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -341,7 +341,7 @@ RESULTADO: 3 pods nginx ejecutándose en 3 nodos diferentes
 
 ```
                     ┌──────────────┐
-                    │ Load Balancer │ (puerto 6443)
+                    │Load Balancer │ (puerto 6443)
                     └──────┬───────┘
                            │
            ┌───────────────┼───────────────┐
@@ -355,9 +355,9 @@ RESULTADO: 3 pods nginx ejecutándose en 3 nodos diferentes
                            │
                     ┌──────▼───────┐
                     │ etcd Cluster │ (quorum: 2/3)
-                    │ ┌─┐ ┌─┐ ┌─┐ │
-                    │ │1│ │2│ │3│ │
-                    │ └─┘ └─┘ └─┘ │
+                    │ ┌─┐ ┌─┐ ┌─┐  │
+                    │ │1│ │2│ │3│  │
+                    │ └─┘ └─┘ └─┘  │
                     └──────────────┘
 ```
 

@@ -1,0 +1,162 @@
+# kubeadm-config.yaml
+# Configuración de ejemplo para kubeadm init
+# 
+# Este archivo define la configuración del cluster de Kubernetes
+# incluyendo networking, API server, etcd, y más.
+#
+# Uso: sudo kubeadm init --config kubeadm-config.yaml
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+localAPIEndpoint:
+  # IP del control plane - REEMPLAZAR con tu IP
+  advertiseAddress: 192.168.1.100
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  imagePullPolicy: IfNotPresent
+  # Nombre del nodo - REEMPLAZAR con hostname
+  name: control-plane
+  taints:
+  # Taint para evitar que workloads se scheduleen en control plane
+  # Remover este taint para permitir pods en single-node cluster
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+# Versión de Kubernetes a instalar
+kubernetesVersion: v1.28.0
+# Endpoint del control plane (para HA clusters, sería un load balancer)
+controlPlaneEndpoint: "192.168.1.100:6443"
+# Configuración de networking
+networking:
+  # Pod subnet - DEBE coincidir con CNI plugin
+  # Calico usa 192.168.0.0/16 por defecto
+  # Flannel usa 10.244.0.0/16 por defecto
+  podSubnet: "192.168.0.0/16"
+  # Service subnet - ClusterIP range
+  serviceSubnet: "10.96.0.0/12"
+  # DNS domain del cluster
+  dnsDomain: "cluster.local"
+
+# Configuración del API Server
+apiServer:
+  timeoutForControlPlane: 4m0s
+  extraArgs:
+    # Modos de autorización
+    authorization-mode: "Node,RBAC"
+    # Habilitar admission plugins útiles
+    enable-admission-plugins: "NodeRestriction"
+    # Audit logs (opcional para producción)
+    # audit-log-path: "/var/log/kubernetes/audit.log"
+    # audit-log-maxage: "30"
+    # audit-log-maxbackup: "10"
+    # audit-log-maxsize: "100"
+  certSANs:
+  # SANs adicionales para el certificado del API server
+  # Útil para acceso externo con diferentes hostnames/IPs
+  - "control-plane"
+  - "192.168.1.100"
+  - "localhost"
+  - "127.0.0.1"
+
+# Configuración del Controller Manager
+controllerManager:
+  extraArgs:
+    # Bind address (0.0.0.0 permite metrics desde cualquier interfaz)
+    bind-address: "0.0.0.0"
+    # Node CIDR mask size para pod networking
+    node-cidr-mask-size: "24"
+
+# Configuración del Scheduler
+scheduler:
+  extraArgs:
+    # Bind address (0.0.0.0 permite metrics desde cualquier interfaz)
+    bind-address: "0.0.0.0"
+
+# Configuración de etcd
+etcd:
+  local:
+    # Directorio de datos de etcd
+    dataDir: /var/lib/etcd
+    extraArgs:
+      # Configuraciones adicionales de etcd (opcional)
+      # listen-metrics-urls: "http://0.0.0.0:2381"
+
+# Configuración de imágenes
+imageRepository: registry.k8s.io
+
+# Configuración de addons
+dns:
+  imageRepository: registry.k8s.io/coredns
+  imageTag: v1.10.1
+
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+# Cgroup driver - DEBE coincidir con container runtime
+# containerd usa 'systemd' por defecto
+cgroupDriver: systemd
+# Política de eviction
+evictionHard:
+  memory.available: "100Mi"
+  nodefs.available: "10%"
+  nodefs.inodesFree: "5%"
+# Configuración de recursos
+systemReserved:
+  cpu: "100m"
+  memory: "100Mi"
+kubeReserved:
+  cpu: "100m"
+  memory: "100Mi"
+# Rotación de logs
+containerLogMaxSize: "10Mi"
+containerLogMaxFiles: 5
+# Período de sincronización
+syncFrequency: 1m
+# File check frequency
+fileCheckFrequency: 20s
+# HTTP check frequency
+httpCheckFrequency: 20s
+# Resolv.conf para pods
+resolvConf: /run/systemd/resolve/resolv.conf
+# Habilitar server para kubelet API
+enableServer: true
+# Puerto del kubelet (read-only disabled)
+readOnlyPort: 0
+# Autenticación
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    enabled: true
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.crt
+# Autorización
+authorization:
+  mode: Webhook
+
+---
+# Configuración de KubeProxy (opcional)
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+# Modo de proxy (iptables o ipvs)
+mode: "iptables"
+# Configuración de conntrack
+conntrack:
+  maxPerCore: 32768
+  min: 131072
+# IP tables
+iptables:
+  masqueradeAll: false
+  masqueradeBit: 14
+  minSyncPeriod: 0s
+  syncPeriod: 30s
+# IPVS (si mode = ipvs)
+# ipvs:
+#   scheduler: "rr"
+#   syncPeriod: 30s
+#   minSyncPeriod: 5s

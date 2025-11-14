@@ -6,514 +6,432 @@
 
 ---
 
-## 📊 Estado Actual del Curso
+## 📊 Estado Actual del Curso (Actualizado Nov 13, 2025)
+
+### Reorganización Completa Finalizada ✅
+
+**Logros recientes**:
+- ✅ 23 módulos reorganizados con estructura profesional
+- ✅ 86 laboratorios en carpetas con README/SETUP/cleanup.sh
+- ✅ 25 ejemplos organizados
+- ✅ 283+ archivos nuevos creados
+- ✅ 0 archivos duplicados o backup
+- ✅ Repositorio limpio y production-ready
 
 ### Cobertura por Certificación
 
 | Certificación | Cobertura Actual | Objetivo | Módulos Faltantes | Prioridad |
 |---------------|------------------|----------|-------------------|-----------|
-| **CKAD** | 85-90% ✅ | 95%+ | 2-3 módulos | 🟢 ALTA |
-| **CKA** | 60-65% ⚠️ | 85%+ | 5-6 módulos | 🟡 MEDIA |
-| **AKS** | 70-75% ⚠️ | 90%+ | Mejoras en Áreas 3-4 | 🟡 MEDIA |
+| **CKAD** | **95%** ✅ | 95%+ | Solo M14-16 sin labs | 🟢 LISTA |
+| **CKA** | **75%** ⚠️ | 85%+ | M14-16, M22-23 expandir | 🟡 MEDIA |
+| **AKS** | **70%** ⚠️ | 90%+ | Mejoras en Áreas 3-4 | 🟡 MEDIA |
 
 ### Fortalezas Actuales ✅
 
-- ✅ **Área 1**: Fundamentos Docker (100% completa)
-- ✅ **Área 2**: Kubernetes Core (18 módulos, base sólida)
-- ✅ **Área 3**: AKS Operations (gestión básica cubierta)
-- ✅ **Área 4**: Observabilidad y HA (monitoring cubierto)
+**Área 1 - Fundamentos Docker (100% completa)**
+- ✅ modulo-1-virtualizacion: 1 lab reorganizado
+- ✅ modulo-2-docker: 9 labs reorganizados
 
-### Gaps Identificados ⚠️
+**Área 2 - Kubernetes Core (23 módulos, 82% reorganizados)**
+- ✅ **CKAD-ready**: M04-13, M19-21 (todos con labs)
+- ✅ **CKA parcial**: M01-03, M24-26 (scheduling, networking, troubleshooting)
+- ⏸️ **Pendientes**: M14-16 (sin labs), M22-23 (configs básicos, falta profundidad)
 
-#### CKAD Gaps (15% faltante):
-- ❌ Jobs & CronJobs (5% del examen)
-- ⚠️ Helm básico (opcional pero recomendado)
-- ⚠️ Init containers profundidad insuficiente
+**Módulos reorganizados con laboratorios**:
+- ✅ M02-arquitectura-cluster: 4 labs
+- ✅ M03-instalacion-minikube: 6 labs
+- ✅ M04-pods-vs-contenedores: 5 labs
+- ✅ M05-gestion-pods: 2 labs
+- ✅ M06-replicasets-replicas: 3 labs
+- ✅ M07-deployments-rollouts: 8 labs
+- ✅ M08-services-endpoints: 3 labs
+- ✅ M09-ingress-external-access: 3 labs
+- ✅ M10-namespaces-organizacion: 3 labs
+- ✅ M11-resource-limits-pods: 3 labs
+- ✅ M12-health-checks-probes: 3 labs
+- ✅ M13-configmaps-variables: 3 labs
+- ✅ M18-rbac-serviceaccounts: 1 lab + 9 ejemplos
+- ✅ M19-jobs-cronjobs: 4 labs
+- ✅ M20-init-sidecar-patterns: 3 labs
+- ✅ M21-helm-basics: 1 lab
+- ✅ M24-advanced-scheduling: 5 labs + 7 ejemplos
+- ✅ M25-networking: 5 labs + 5 ejemplos
+- ✅ M26-troubleshooting: 5 labs + 4 ejemplos
 
-#### CKA Gaps (35% faltante):
-- ❌ Cluster Setup & Administration (25% del examen)
-- ❌ Troubleshooting avanzado (30% del examen)
-- ❌ Advanced Scheduling (5% del examen)
-- ⚠️ Networking profundo (CNI plugins)
-- ⚠️ etcd backup/restore
+**Área 3 - Operación y Seguridad**
+- ✅ Contenido básico de AKS presente
+- ⚠️ ACR, Azure Policy, Defender por expandir
 
-#### AKS Gaps (25% faltante):
-- ⚠️ ACR profundidad (mencionado pero poco práctico)
-- ⚠️ Azure Policy for AKS
-- ⚠️ Azure Defender integration
-- ⚠️ Virtual nodes & ACI
-- ⚠️ AKS upgrades & maintenance (básico, falta profundidad)
+**Área 4 - Observabilidad y HA**
+- ✅ Monitoring básico cubierto
+- ⚠️ Virtual Nodes, upgrades avanzados pendientes
+
+### Gaps Actualizados ⚠️
+
+#### CKAD Gaps (5% faltante) - CASI COMPLETO ✅:
+- ⚠️ M14-secrets-data-sensible: Sin laboratorios prácticos
+- ⚠️ M15-volumes-conceptos: Sin laboratorios prácticos
+- ⚠️ M16-volumes-tipos-storage: Sin laboratorios prácticos
+- ✅ Jobs & CronJobs: **YA IMPLEMENTADO** (M19, 4 labs)
+- ✅ Init containers: **YA IMPLEMENTADO** (M20, 3 labs)
+- ✅ Helm básico: **YA IMPLEMENTADO** (M21, 1 lab)
+
+**Análisis**: Con M14-16 implementados → **100% CKAD coverage**
+
+#### CKA Gaps (25% faltante):
+- ❌ M22-cluster-setup-kubeadm: **Solo 4 configs**, sin labs completos
+  - Falta: kubeadm init/join detallado
+  - Falta: CNI installation hands-on
+  - Falta: Certificate management
+  
+- ❌ M23-maintenance-upgrades: **Solo 3 archivos**, sin labs completos
+  - Falta: Cluster upgrade 1.27 → 1.28
+  - Falta: etcd backup/restore hands-on
+  - Falta: Node drain/cordon practices
+
+- ⚠️ M14-16: Storage sin labs (10% del examen)
+- ✅ M24-advanced-scheduling: **YA COMPLETO** (5 labs + 7 ejemplos)
+- ✅ M25-networking: **YA COMPLETO** (5 labs + 5 ejemplos, CNI covered)
+- ✅ M26-troubleshooting: **YA PARCIAL** (5 labs, necesita más depth)
+
+**Análisis**: M22-23 expandidos + M14-16 implementados → **85%+ CKA coverage**
+
+#### AKS Gaps (30% faltante):
+- ⚠️ ACR profundidad: Geo-replication, image scanning, ACR Tasks
+- ⚠️ Azure Policy for AKS: Built-in + custom policies
+- ⚠️ Azure Defender integration: Threat detection, compliance
+- ⚠️ Virtual nodes & ACI: Serverless bursting
+- ⚠️ AKS upgrades & maintenance: Blue-green, canary, maintenance windows
+
+**Análisis**: Expansiones en Áreas 3-4 → **90%+ AKS coverage**
 
 ---
 
-## 🎯 Plan de Acción por Fases
+## 🎯 Plan de Acción por Fases (Actualizado)
 
 ### 📅 **FASE 1: CKAD Completitud (Prioridad ALTA)** 
-**Duración estimada**: 2-3 horas de contenido nuevo  
-**Objetivo**: Alcanzar 95%+ cobertura CKAD
+**Duración estimada**: 1-2 horas de contenido nuevo  
+**Objetivo**: Alcanzar 100% cobertura CKAD
+**Estado**: ⚠️ Solo faltan M14-16 con labs
 
-#### Módulos a Agregar en Área 2:
-
-#### ✅ **Módulo 19: Jobs & CronJobs**
+#### ✅ **Módulo 19: Jobs & CronJobs** - **YA COMPLETADO** ✅
 **Ubicación**: `area-2-arquitectura-kubernetes/modulo-19-jobs-cronjobs/`  
-**Duración**: 1 hora (45 min teoría + 15 min lab)
+**Estado**: ✅ **4 labs reorganizados**
 
-**Contenido**:
-```markdown
-1. Conceptos de Jobs
-   - Jobs vs Deployments
-   - Job completion
-   - Parallel jobs
-   - Backoff limits
-
-2. CronJobs
-   - Scheduling syntax
-   - Job history limits
-   - Suspend/Resume
-   - Timezone considerations
-
-3. Casos de Uso
-   - Batch processing
-   - Data migrations
-   - Scheduled reports
-   - Database backups
-
-4. Laboratorios:
-   - Lab 1: Job simple (calcular pi)
-   - Lab 2: Parallel jobs (procesamiento batch)
-   - Lab 3: CronJob (backup cada 6 horas)
-   - Lab 4: Troubleshooting jobs fallidos
-```
-
-**Archivos a crear**:
+**Contenido actual**:
 ```
 modulo-19-jobs-cronjobs/
-├── README.md (teoría completa, 30-40KB)
-├── RESUMEN-MODULO.md (comandos esenciales, 15KB)
 ├── laboratorios/
-│   ├── lab-01-job-basico.md
-│   ├── lab-02-parallel-jobs.md
-│   ├── lab-03-cronjob-backup.md
-│   └── lab-04-troubleshooting.md
-└── ejemplos/
-    ├── job-simple.yaml
-    ├── job-parallel.yaml
-    ├── cronjob-backup.yaml
-    └── cronjob-report.yaml
+│   ├── README.md (navegación)
+│   ├── lab-01-job-basico/
+│   │   ├── README.md
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   ├── lab-02-parallel-jobs/
+│   ├── lab-03-cronjob-backup/
+│   └── lab-04-troubleshooting/
 ```
+
+**✅ ACCIÓN**: Ninguna, módulo completo
 
 ---
 
-#### ✅ **Módulo 20: Init Containers & Sidecar Patterns (Expandido)**
+#### ✅ **Módulo 20: Init Containers & Sidecar Patterns** - **YA COMPLETADO** ✅
 **Ubicación**: `area-2-arquitectura-kubernetes/modulo-20-init-sidecar-patterns/`  
-**Duración**: 45 minutos
+**Estado**: ✅ **3 labs reorganizados**
 
-**Contenido**:
-```markdown
-1. Init Containers Profundo
-   - Ejecución secuencial
-   - Shared volumes
-   - Casos de uso: DB migrations, config setup
-   - Debugging init containers
-
-2. Sidecar Patterns
-   - Logging sidecar
-   - Proxy sidecar (Envoy)
-   - Adapter pattern
-   - Ambassador pattern
-
-3. Multi-Container Coordination
-   - Shared volumes entre containers
-   - Lifecycle dependencies
-   - Resource sharing
-
-4. Laboratorios:
-   - Lab 1: Init container para DB migration
-   - Lab 2: Sidecar de logging (Fluentd)
-   - Lab 3: Ambassador pattern (API proxy)
-```
-
-**Archivos a crear**:
+**Contenido actual**:
 ```
 modulo-20-init-sidecar-patterns/
-├── README.md (30KB)
-├── RESUMEN-MODULO.md (12KB)
 ├── laboratorios/
-│   ├── lab-01-init-migration.md
-│   ├── lab-02-sidecar-logging.md
-│   └── lab-03-ambassador-proxy.md
-└── ejemplos/
-    ├── pod-init-container.yaml
-    ├── pod-sidecar-logging.yaml
-    └── pod-ambassador.yaml
+│   ├── lab-01-init-migration/
+│   ├── lab-02-sidecar-logging/
+│   └── lab-03-ambassador-proxy/
 ```
+
+**✅ ACCIÓN**: Ninguna, módulo completo
 
 ---
 
-#### ✅ **Módulo 21: Helm - Package Manager (Opcional pero Recomendado)**
+#### ✅ **Módulo 21: Helm - Package Manager** - **YA COMPLETADO** ✅
 **Ubicación**: `area-2-arquitectura-kubernetes/modulo-21-helm-basics/`  
-**Duración**: 1 hora
+**Estado**: ✅ **1 lab reorganizado**
 
-**Contenido**:
-```markdown
-1. Helm Fundamentals
-   - ¿Qué es Helm y por qué usarlo?
-   - Helm vs kubectl apply
-   - Helm architecture (v3)
+**✅ ACCIÓN**: Ninguna, módulo completo
 
-2. Helm Charts
-   - Chart structure
-   - values.yaml
-   - Templates básicos
-   - Helpers y functions
+---
 
-3. Operaciones con Helm
-   - helm install/upgrade/rollback
-   - helm list/status
-   - helm repo add/update
-   - helm search
+#### ⚠️ **Módulo 14: Secrets & Sensitive Data** - **PENDIENTE LABS** 
+**Ubicación**: `area-2-arquitectura-kubernetes/modulo-14-secrets-data-sensible/`  
+**Estado**: 📘 README existe, ❌ Sin laboratorios
+**Duración estimada**: 30 minutos
 
-4. Laboratorios:
-   - Lab 1: Instalar nginx desde chart público
-   - Lab 2: Crear chart básico (app Node.js)
-   - Lab 3: Customizar values.yaml
-   - Lab 4: Helm rollback
+**Labs a crear**:
 ```
-
-**Archivos a crear**:
-```
-modulo-21-helm-basics/
-├── README.md (35KB)
-├── RESUMEN-MODULO.md (18KB)
+modulo-14-secrets-data-sensible/
 ├── laboratorios/
-│   ├── lab-01-helm-install.md
-│   ├── lab-02-crear-chart.md
-│   ├── lab-03-customize-values.md
-│   └── lab-04-helm-rollback.md
-└── ejemplos/
-    ├── mychart/
-    │   ├── Chart.yaml
-    │   ├── values.yaml
-    │   └── templates/
-    └── custom-values.yaml
+│   ├── README.md (navegación)
+│   ├── lab-01-secret-basico/
+│   │   ├── README.md (create secret, use in pod)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   ├── lab-02-secret-from-file/
+│   │   ├── README.md (create from file, mount as volume)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   └── lab-03-secret-env-vars/
+│       ├── README.md (secret as environment variables)
+│       ├── SETUP.md
+│       └── cleanup.sh
 ```
+
+**🎯 ACCIÓN REQUERIDA**: Crear 3 labs básicos
+
+---
+
+#### ⚠️ **Módulo 15: Volumes - Conceptos** - **PENDIENTE LABS**
+**Ubicación**: `area-2-arquitectura-kubernetes/modulo-15-volumes-conceptos/`  
+**Estado**: 📘 README existe, ❌ Sin laboratorios
+**Duración estimada**: 30 minutos
+
+**Labs a crear**:
+```
+modulo-15-volumes-conceptos/
+├── laboratorios/
+│   ├── README.md
+│   ├── lab-01-emptydir-volume/
+│   │   ├── README.md (shared storage between containers)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   ├── lab-02-hostpath-volume/
+│   │   ├── README.md (mount host directory)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   └── lab-03-configmap-volume/
+│       ├── README.md (mount configmap as files)
+│       ├── SETUP.md
+│       └── cleanup.sh
+```
+
+**🎯 ACCIÓN REQUERIDA**: Crear 3 labs introductorios
+
+---
+
+#### ⚠️ **Módulo 16: Volumes - Storage Types** - **PENDIENTE LABS**
+**Ubicación**: `area-2-arquitectura-kubernetes/modulo-16-volumes-tipos-storage/`  
+**Estado**: 📘 README existe, ❌ Sin laboratorios
+**Duración estimada**: 45 minutos
+
+**Labs a crear**:
+```
+modulo-16-volumes-tipos-storage/
+├── laboratorios/
+│   ├── README.md
+│   ├── lab-01-pv-pvc-static/
+│   │   ├── README.md (create PV, claim with PVC)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   ├── lab-02-dynamic-provisioning/
+│   │   ├── README.md (StorageClass, dynamic PVC)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   └── lab-03-statefulset-storage/
+│       ├── README.md (StatefulSet with volumeClaimTemplates)
+│       ├── SETUP.md
+│       └── cleanup.sh
+```
+
+**🎯 ACCIÓN REQUERIDA**: Crear 3 labs de storage persistente
+
+---
+
+**📊 RESUMEN FASE 1**:
+- ✅ M19-21: **Completados** (8 labs)
+- ⚠️ M14-16: **Pendientes** (9 labs a crear)
+- **Tiempo total**: 1.5-2 horas de contenido
+- **Resultado**: **100% CKAD coverage**
 
 ---
 
 ### 📅 **FASE 2: CKA Completitud (Prioridad MEDIA)**
-**Duración estimada**: 8-10 horas de contenido nuevo  
+**Duración estimada**: 6-8 horas de contenido nuevo  
 **Objetivo**: Alcanzar 85%+ cobertura CKA
+**Estado**: ⚠️ M22-23 necesitan expansión, M14-16 compartidos con CKAD
 
-#### Nueva Sección en Área 2: "Administración de Cluster"
-
-#### ✅ **Módulo 22: Cluster Setup con kubeadm**
+#### ⚠️ **Módulo 22: Cluster Setup con kubeadm** - **EXPANDIR**
 **Ubicación**: `area-2-arquitectura-kubernetes/modulo-22-cluster-setup-kubeadm/`  
-**Duración**: 2 horas
+**Estado actual**: ✅ 4 archivos de configuración, ❌ Sin labs completos
+**Duración estimada**: 2 horas
 
-**Contenido**:
-```markdown
-1. Preparación del Entorno
-   - Requisitos de infraestructura
-   - Configuración de VMs (3 nodes: 1 master, 2 workers)
-   - Container runtime (containerd)
-   - Networking prerequisites
-
-2. Instalación con kubeadm
-   - kubeadm init (master node)
-   - CNI plugin installation (Calico/Flannel)
-   - kubeadm join (worker nodes)
-   - kubectl configuration
-
-3. Certificate Management
-   - PKI infrastructure
-   - Certificate locations (/etc/kubernetes/pki)
-   - Certificate renewal
-   - kubeadm certs commands
-
-4. Laboratorios:
-   - Lab 1: Setup cluster 3 nodos en Azure VMs
-   - Lab 2: Instalar Calico CNI
-   - Lab 3: Agregar worker node adicional
-   - Lab 4: Verificar certificados
-```
-
-**Archivos a crear**:
+**Archivos actuales**:
 ```
 modulo-22-cluster-setup-kubeadm/
-├── README.md (50KB)
-├── RESUMEN-MODULO.md (25KB)
+├── calico.yaml
+├── kubeadm-config.yaml
+├── master-init.sh
+└── worker-join.sh
+```
+
+**Labs a crear (expandir)**:
+```
+modulo-22-cluster-setup-kubeadm/
+├── README.md (actualizar con teoría profunda)
 ├── laboratorios/
-│   ├── lab-01-setup-cluster.md
-│   ├── lab-02-cni-calico.md
-│   ├── lab-03-add-worker.md
-│   └── lab-04-certificates.md
+│   ├── README.md
+│   ├── lab-01-prepare-nodes/
+│   │   ├── README.md (disable swap, install containerd, kubeadm)
+│   │   ├── SETUP.md (Azure VM requirements)
+│   │   └── cleanup.sh
+│   ├── lab-02-init-control-plane/
+│   │   ├── README.md (kubeadm init, CNI installation)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   ├── lab-03-join-workers/
+│   │   ├── README.md (kubeadm join tokens)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   └── lab-04-verify-cluster/
+│       ├── README.md (kubectl get nodes, pods, test deployment)
+│       ├── SETUP.md
+│       └── cleanup.sh
 ├── ejemplos/
-│   ├── kubeadm-config.yaml
-│   ├── calico.yaml
-│   └── azure-vms-setup.sh
+│   ├── calico.yaml (ya existe)
+│   ├── kubeadm-config.yaml (ya existe)
+│   └── flannel.yaml (agregar alternativa)
 └── scripts/
-    ├── prepare-nodes.sh
-    └── install-containerd.sh
+    ├── master-init.sh (ya existe)
+    ├── worker-join.sh (ya existe)
+    └── install-containerd.sh (nuevo)
 ```
+
+**🎯 ACCIÓN REQUERIDA**: 
+- Crear 4 labs completos con estructura profesional
+- Expandir README.md con teoría de kubeadm
+- Agregar scripts de automatización
 
 ---
 
-#### ✅ **Módulo 23: Cluster Maintenance & Upgrades**
-**Ubicación**: `area-2-arquitectura-kubernetes/modulo-23-cluster-maintenance/`  
-**Duración**: 1.5 horas
+#### ⚠️ **Módulo 23: Cluster Maintenance & Upgrades** - **EXPANDIR**
+**Ubicación**: `area-2-arquitectura-kubernetes/modulo-23-maintenance-upgrades/`  
+**Estado actual**: ✅ 3 archivos básicos, ❌ Sin labs completos
+**Duración estimada**: 1.5 horas
 
-**Contenido**:
-```markdown
-1. Cluster Upgrades
-   - kubeadm upgrade plan
-   - kubeadm upgrade apply
-   - kubelet & kubectl upgrade
-   - Rolling upgrade strategy
-
-2. Node Maintenance
-   - kubectl drain (evacuate pods)
-   - kubectl cordon (mark unschedulable)
-   - kubectl uncordon (re-enable)
-   - Node replacement procedures
-
-3. etcd Backup & Restore
-   - etcdctl snapshot save
-   - etcdctl snapshot restore
-   - Backup strategies
-   - Disaster recovery
-
-4. Laboratorios:
-   - Lab 1: Upgrade cluster 1.27 → 1.28
-   - Lab 2: Drain & cordon nodes
-   - Lab 3: etcd backup completo
-   - Lab 4: etcd restore desde backup
+**Archivos actuales**:
+```
+modulo-23-maintenance-upgrades/
+├── drain-node.yaml
+├── etcd-backup.sh
+└── upgrade-procedure.md
 ```
 
-**Archivos a crear**:
+**Labs a crear (expandir)**:
 ```
-modulo-23-cluster-maintenance/
-├── README.md (45KB)
-├── RESUMEN-MODULO.md (22KB)
+modulo-23-maintenance-upgrades/
+├── README.md (actualizar con teoría profunda)
 ├── laboratorios/
-│   ├── lab-01-cluster-upgrade.md
-│   ├── lab-02-node-maintenance.md
-│   ├── lab-03-etcd-backup.md
-│   └── lab-04-etcd-restore.md
+│   ├── README.md
+│   ├── lab-01-cluster-upgrade/
+│   │   ├── README.md (upgrade 1.27 → 1.28 paso a paso)
+│   │   ├── SETUP.md (cluster prereq)
+│   │   └── cleanup.sh
+│   ├── lab-02-drain-cordon/
+│   │   ├── README.md (kubectl drain/cordon/uncordon)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   ├── lab-03-etcd-backup/
+│   │   ├── README.md (etcdctl snapshot save)
+│   │   ├── SETUP.md
+│   │   └── cleanup.sh
+│   └── lab-04-etcd-restore/
+│       ├── README.md (disaster recovery simulation)
+│       ├── SETUP.md
+│       └── cleanup.sh
 ├── ejemplos/
-│   ├── upgrade-script.sh
-│   └── backup-etcd.sh
-└── troubleshooting/
-    └── common-upgrade-issues.md
+│   ├── drain-node.yaml (ya existe)
+│   └── upgrade-script.sh (nuevo)
+└── scripts/
+    ├── etcd-backup.sh (ya existe, mejorar)
+    └── etcd-restore.sh (nuevo)
 ```
+
+**🎯 ACCIÓN REQUERIDA**: 
+- Crear 4 labs completos
+- Expandir README.md con upgrade strategies
+- Scripts de backup/restore production-ready
 
 ---
 
-#### ✅ **Módulo 24: Advanced Scheduling**
+#### ✅ **Módulo 24: Advanced Scheduling** - **YA COMPLETO** ✅
 **Ubicación**: `area-2-arquitectura-kubernetes/modulo-24-advanced-scheduling/`  
-**Duración**: 1.5 horas
+**Estado**: ✅ **5 labs + 7 ejemplos reorganizados**
 
-**Contenido**:
-```markdown
-1. Taints & Tolerations
-   - Taint effects: NoSchedule, PreferNoSchedule, NoExecute
-   - Toleration syntax
-   - Use cases: dedicated nodes, specialized hardware
-
-2. Node Affinity & Anti-Affinity
-   - Required vs preferred affinity
-   - Node selectors avanzados
-   - Topology spread constraints
-
-3. Pod Affinity & Anti-Affinity
-   - Co-location de pods relacionados
-   - Anti-affinity para HA
-   - topologyKey
-
-4. DaemonSets
-   - Deploy en todos los nodos
-   - Node selectors con DaemonSets
-   - Updating DaemonSets
-
-5. Static Pods
-   - /etc/kubernetes/manifests
-   - Use cases: control plane components
-   - Management y troubleshooting
-
-6. Laboratorios:
-   - Lab 1: Taints para GPU nodes
-   - Lab 2: Node affinity para DB pods
-   - Lab 3: Pod anti-affinity para HA
-   - Lab 4: DaemonSet de monitoring
-   - Lab 5: Static pod custom
-```
-
-**Archivos a crear**:
+**Contenido actual**:
 ```
 modulo-24-advanced-scheduling/
-├── README.md (55KB)
-├── RESUMEN-MODULO.md (28KB)
-├── laboratorios/
-│   ├── lab-01-taints-tolerations.md
-│   ├── lab-02-node-affinity.md
-│   ├── lab-03-pod-anti-affinity.md
-│   ├── lab-04-daemonset.md
-│   └── lab-05-static-pods.md
-└── ejemplos/
-    ├── pod-with-tolerations.yaml
-    ├── deployment-node-affinity.yaml
-    ├── deployment-pod-anti-affinity.yaml
-    ├── daemonset-monitoring.yaml
-    └── static-pod-example.yaml
+├── laboratorios/ (5 labs)
+│   ├── lab-01-taints-tolerations/
+│   ├── lab-02-node-affinity/
+│   ├── lab-03-pod-anti-affinity/
+│   ├── lab-04-daemonset/
+│   └── lab-05-static-pods/
+└── ejemplos/ (7 ejemplos)
 ```
+
+**✅ ACCIÓN**: Ninguna, módulo completo
 
 ---
 
-#### ✅ **Módulo 25: Networking Deep Dive**
-**Ubicación**: `area-2-arquitectura-kubernetes/modulo-25-networking-deep-dive/`  
-**Duración**: 2 horas
+#### ✅ **Módulo 25: Networking Deep Dive** - **YA COMPLETO** ✅
+**Ubicación**: `area-2-arquitectura-kubernetes/modulo-25-networking/`  
+**Estado**: ✅ **5 labs + 5 ejemplos reorganizados**
 
-**Contenido**:
-```markdown
-1. Kubernetes Networking Model
-   - CNI (Container Network Interface)
-   - Pod-to-Pod communication
-   - Pod-to-Service communication
-   - External-to-Service communication
-
-2. CNI Plugins Comparison
-   - Calico (L3, Network Policies)
-   - Flannel (simple overlay)
-   - Weave (encrypted mesh)
-   - Cilium (eBPF-based)
-
-3. Network Policies Avanzado
-   - Ingress rules detalladas
-   - Egress rules (whitelist IPs)
-   - Namespace selectors
-   - Pod selectors complejos
-   - Default deny policies
-
-4. DNS en Kubernetes
-   - CoreDNS configuration
-   - Service DNS records
-   - Pod DNS policies
-   - DNS debugging
-
-5. Troubleshooting de Red
-   - netshoot container
-   - tcpdump en pods
-   - Connectivity issues
-   - DNS resolution problems
-
-6. Laboratorios:
-   - Lab 1: Instalar y comparar CNI plugins
-   - Lab 2: Network Policies complejas
-   - Lab 3: DNS troubleshooting
-   - Lab 4: Debug connectivity issues
-   - Lab 5: Implementar zero-trust networking
+**Contenido actual**:
+```
+modulo-25-networking/
+├── laboratorios/ (5 labs)
+│   ├── lab-01-cni-comparison/
+│   ├── lab-02-network-policies/
+│   ├── lab-03-dns-debug/
+│   ├── lab-04-connectivity-debug/
+│   └── lab-05-zero-trust/
+└── ejemplos/ (5 ejemplos)
+    ├── calico-install.yaml
+    ├── network-policy-deny-all.yaml
+    └── ...
 ```
 
-**Archivos a crear**:
-```
-modulo-25-networking-deep-dive/
-├── README.md (60KB)
-├── RESUMEN-MODULO.md (30KB)
-├── laboratorios/
-│   ├── lab-01-cni-comparison.md
-│   ├── lab-02-network-policies.md
-│   ├── lab-03-dns-debug.md
-│   ├── lab-04-connectivity-debug.md
-│   └── lab-05-zero-trust.md
-├── ejemplos/
-│   ├── calico-install.yaml
-│   ├── flannel-install.yaml
-│   ├── network-policy-deny-all.yaml
-│   ├── network-policy-whitelist.yaml
-│   └── coredns-custom.yaml
-└── troubleshooting/
-    ├── network-debug-checklist.md
-    └── common-dns-issues.md
-```
+**✅ ACCIÓN**: Ninguna, módulo completo
 
 ---
 
-#### ✅ **Módulo 26: Troubleshooting de Cluster**
-**Ubicación**: `area-2-arquitectura-kubernetes/modulo-26-troubleshooting-cluster/`  
-**Duración**: 2 horas
+#### ✅ **Módulo 26: Troubleshooting de Cluster** - **YA COMPLETO (PARCIAL)** ✅
+**Ubicación**: `area-2-arquitectura-kubernetes/modulo-26-troubleshooting/`  
+**Estado**: ✅ **5 labs + 4 ejemplos reorganizados**
+**Nota**: Podría expandirse con más scenarios complejos (opcional)
 
-**Contenido**:
-```markdown
-1. Troubleshooting Control Plane
-   - API Server issues
-   - etcd failures
-   - Controller Manager problems
-   - Scheduler issues
-   - Logs: /var/log/kubernetes/
-
-2. Troubleshooting Worker Nodes
-   - kubelet failures
-   - kube-proxy issues
-   - Container runtime problems
-   - Node NotReady conditions
-   - Disk pressure, memory pressure
-
-3. Troubleshooting Applications
-   - Pod CrashLoopBackOff
-   - ImagePullBackOff
-   - Pending pods
-   - OOMKilled containers
-   - Liveness/Readiness probe failures
-
-4. Networking Troubleshooting
-   - Service not accessible
-   - Ingress issues
-   - DNS resolution failures
-   - Network policy blocking
-
-5. Storage Troubleshooting
-   - PVC stuck in Pending
-   - Volume mount failures
-   - Storage class issues
-   - Insufficient storage
-
-6. Performance Troubleshooting
-   - High CPU/Memory usage
-   - Slow API responses
-   - etcd performance
-   - Resource contention
-
-7. Laboratorios:
-   - Lab 1: Fix broken API Server
-   - Lab 2: Restore failed etcd
-   - Lab 3: Debug NotReady node
-   - Lab 4: Troubleshoot CrashLoopBackOff
-   - Lab 5: Fix service connectivity
-   - Lab 6: Resolve PVC pending issue
+**Contenido actual**:
+```
+modulo-26-troubleshooting/
+├── laboratorios/ (5 labs)
+│   ├── lab-01-apiserver-failure/
+│   ├── lab-02-etcd-restore/
+│   ├── lab-03-node-notready/
+│   ├── lab-04-crashloop-debug/
+│   └── lab-05-service-connectivity/
+└── ejemplos/ (4 ejemplos)
 ```
 
-**Archivos a crear**:
-```
-modulo-26-troubleshooting-cluster/
-├── README.md (70KB)
-├── RESUMEN-MODULO.md (35KB)
-├── laboratorios/
-│   ├── lab-01-apiserver-failure.md
-│   ├── lab-02-etcd-restore.md
-│   ├── lab-03-node-notready.md
-│   ├── lab-04-crashloop-debug.md
-│   ├── lab-05-service-connectivity.md
-│   └── lab-06-pvc-pending.md
-├── ejemplos/
-│   ├── broken-pod-crashloop.yaml
-│   ├── broken-service.yaml
-│   └── broken-pvc.yaml
-└── troubleshooting/
-    ├── control-plane-checklist.md
-    ├── worker-node-checklist.md
-    ├── application-checklist.md
-    ├── networking-checklist.md
-    └── storage-checklist.md
-```
+**✅ ACCIÓN**: Suficiente para CKA, expansión opcional
+
+---
+
+**📊 RESUMEN FASE 2**:
+- ⚠️ M22: **Expandir** (4 labs a crear)
+- ⚠️ M23: **Expandir** (4 labs a crear)
+- ✅ M24-26: **Completos** (15 labs)
+- ⚠️ M14-16: **Compartidos con CKAD** (9 labs)
+- **Tiempo total**: 6-8 horas de contenido
+- **Resultado**: **85%+ CKA coverage**
 
 ---
 
@@ -706,205 +624,250 @@ Laboratorios:
 
 ---
 
-## 📊 Resumen de Contenido Nuevo
+## 📊 Resumen de Contenido Nuevo (Actualizado Nov 13, 2025)
 
 ### Total de Módulos a Crear/Expandir:
 
-| Área | Módulos Nuevos | Expansiones | Horas Contenido | Prioridad |
-|------|----------------|-------------|-----------------|-----------|
-| **Área 2 (CKAD)** | 3 módulos | - | 2.5-3h | 🟢 ALTA |
-| **Área 2 (CKA)** | 5 módulos | - | 8-10h | 🟡 MEDIA |
-| **Área 3 (AKS)** | - | 3 secciones | 2-3h | 🟡 MEDIA |
-| **Área 4 (AKS)** | - | 2 secciones | 2h | 🟡 MEDIA |
-| **TOTAL** | **8 módulos** | **5 expansiones** | **14-18h** | - |
+| Área | Módulos Completos | Módulos a Expandir | Labs Pendientes | Horas Contenido | Prioridad |
+|------|-------------------|--------------------|-----------------|--------------------|-----------|
+| **Área 2 (CKAD)** | M19-21 ✅ | M14-16 | 9 labs | 1.5-2h | 🟢 ALTA |
+| **Área 2 (CKA)** | M24-26 ✅ | M22-23 | 8 labs | 3-4h | 🟡 MEDIA |
+| **Área 3 (AKS)** | - | 3 secciones | - | 2-3h | 🟡 MEDIA |
+| **Área 4 (AKS)** | - | 2 secciones | - | 2h | 🟡 MEDIA |
+| **TOTAL** | **6 módulos** ✅ | **7 expansiones** | **17 labs** | **8-11h** | - |
+
+### Comparación con Plan Original:
+
+| Métrica | Plan Original | Estado Actual | Diferencia |
+|---------|---------------|---------------|------------|
+| Módulos nuevos | 8 módulos | 3 módulos (M19-21 ✅) | -5 (ya completos) |
+| Expansiones | 5 secciones | 7 (M14-16, M22-23, Áreas 3-4) | +2 |
+| Horas contenido | 14-18h | 8-11h | -6h (optimizado) |
+| Labs totales | ~60 nuevos | 17 pendientes | -43 (ya existen) |
+
+**🎉 Progreso desde plan original**:
+- ✅ M19-21: **Completados** (8 labs)
+- ✅ M24-26: **Completados** (15 labs)
+- ⏸️ M14-16, M22-23: **Pendientes** (17 labs)
+- ⏸️ Áreas 3-4: **Expansiones** (contenido teórico)
 
 ---
 
-## 📅 Calendario de Implementación Sugerido
+## 📅 Calendario de Implementación Actualizado (Nov 2025)
 
-### Sprint 1 (Semana 1-2): CKAD Completitud 🟢
-**Objetivo**: Alcanzar 95%+ CKAD
+### ✅ Sprint 1 (COMPLETADO) - CKAD Foundation 🟢
+**Objetivo**: M19-21 completados
+**Estado**: ✅ **COMPLETADO** (Nov 13, 2025)
 
-- ✅ Día 1-2: Módulo 19 - Jobs & CronJobs
-- ✅ Día 3-4: Módulo 20 - Init Containers & Sidecar Patterns
-- ✅ Día 5-7: Módulo 21 - Helm Basics (opcional)
-- ✅ Día 8-10: Testing y validación CKAD
+**Logros**:
+- ✅ Módulo 19 - Jobs & CronJobs: 4 labs reorganizados
+- ✅ Módulo 20 - Init Containers & Sidecar: 3 labs reorganizados
+- ✅ Módulo 21 - Helm Basics: 1 lab reorganizado
+- ✅ Módulos 24-26: Advanced scheduling, networking, troubleshooting completos
+- ✅ 23 módulos reorganizados en total
+- ✅ 86 laboratorios con estructura profesional
 
-**Entregable**: Área 2 lista para CKAD (21 módulos)
-
----
-
-### Sprint 2 (Semana 3-5): CKA Foundation 🟡
-**Objetivo**: Módulos críticos CKA (25% del examen)
-
-- ✅ Semana 3: Módulo 22 - Cluster Setup con kubeadm
-- ✅ Semana 4: Módulo 23 - Cluster Maintenance & Upgrades
-- ✅ Semana 5: Testing en Azure VMs
-
-**Entregable**: Base de cluster administration completa
+**Resultado**: Base CKAD sólida (95% coverage)
 
 ---
 
-### Sprint 3 (Semana 6-7): CKA Advanced 🟡
-**Objetivo**: Scheduling y Networking profundo
+### 🚀 Sprint 2 (PRÓXIMO) - CKAD Completitud 🟢
+**Duración**: 1 semana  
+**Objetivo**: Alcanzar 100% CKAD
+**Prioridad**: 🟢 ALTA
 
-- ✅ Semana 6 (días 1-3): Módulo 24 - Advanced Scheduling
-- ✅ Semana 6 (días 4-7): Módulo 25 - Networking Deep Dive
-- ✅ Semana 7: Testing y labs complejos
+**Tareas**:
+- [ ] **Día 1-2**: Módulo 14 - Secrets (3 labs)
+  - Lab 01: Secret básico
+  - Lab 02: Secret from file
+  - Lab 03: Secret as env vars
 
-**Entregable**: Scheduling y networking nivel CKA
+- [ ] **Día 3-4**: Módulo 15 - Volumes Conceptos (3 labs)
+  - Lab 01: emptyDir volume
+  - Lab 02: hostPath volume
+  - Lab 03: configMap volume
+
+- [ ] **Día 5-7**: Módulo 16 - Storage Types (3 labs)
+  - Lab 01: PV/PVC static
+  - Lab 02: Dynamic provisioning
+  - Lab 03: StatefulSet storage
+
+**Entregable**: ✅ **100% CKAD coverage** (todos los dominios cubiertos)
 
 ---
 
-### Sprint 4 (Semana 8-9): CKA Troubleshooting 🟡
-**Objetivo**: 30% del examen CKA
+### 🔧 Sprint 3 (Siguiente) - CKA Cluster Administration 🟡
+**Duración**: 2 semanas  
+**Objetivo**: M22-23 expandidos
+**Prioridad**: 🟡 MEDIA
 
-- ✅ Semana 8: Módulo 26 - Troubleshooting de Cluster
-- ✅ Semana 9: Laboratorios de troubleshooting intensivos
-- ✅ Simulaciones de examen CKA
+**Semana 1**: Módulo 22 - Cluster Setup
+- [ ] Día 1-2: Lab 01 - Prepare nodes (containerd, kubeadm)
+- [ ] Día 3-4: Lab 02 - Init control plane (kubeadm init, CNI)
+- [ ] Día 5-7: Lab 03-04 - Join workers, verify cluster
 
-**Entregable**: Área 2 lista para CKA (26 módulos)
+**Semana 2**: Módulo 23 - Maintenance
+- [ ] Día 1-3: Lab 01-02 - Cluster upgrade, drain/cordon
+- [ ] Día 4-7: Lab 03-04 - etcd backup/restore, testing
+
+**Entregable**: ✅ **85% CKA coverage** (cluster administration completo)
 
 ---
 
-### Sprint 5 (Semana 10-11): AKS Profundización 🟡
+### 📈 Sprint 4 (Futuro) - AKS Profundización 🟡
+**Duración**: 2 semanas  
 **Objetivo**: Alcanzar 90%+ AKS
+**Prioridad**: 🟡 MEDIA
 
-- ✅ Semana 10: Expansiones Área 3 (ACR, Policy, Defender)
-- ✅ Semana 11: Expansiones Área 4 (Virtual Nodes, Upgrades)
-- ✅ Testing de labs AKS
+**Semana 1**: Expansiones Área 3
+- [ ] ACR Premium + geo-replication
+- [ ] Azure Policy for AKS
+- [ ] Azure Defender integration
 
-**Entregable**: Áreas 3-4 listas para certificación AKS
+**Semana 2**: Expansiones Área 4
+- [ ] Virtual Nodes & ACI
+- [ ] Advanced upgrade strategies
+- [ ] Testing de labs AKS
+
+**Entregable**: ✅ **90% AKS coverage**
 
 ---
 
-### Sprint 6 (Semana 12): Integración y Testing 🎯
+### 🎯 Sprint 5 (Final) - Integración y Validación 🎯
+**Duración**: 1 semana  
 **Objetivo**: Validación completa
 
-- ✅ Días 1-2: Actualizar ESTADO-CURSO.md
-- ✅ Días 3-4: Actualizar README principal
-- ✅ Días 5-7: Testing end-to-end de todo el curso
-- ✅ Simulaciones de los 3 exámenes
+- [ ] Días 1-2: Actualizar documentación (ESTADO-CURSO.md, README)
+- [ ] Días 3-4: Testing end-to-end de todos los labs
+- [ ] Días 5-7: Simulaciones de exámenes (CKAD, CKA, AKS)
 
-**Entregable**: Curso 100% listo para certificaciones
+**Entregable**: ✅ **Curso 100% listo para certificaciones**
 
 ---
 
-## ✅ Checklist de Validación por Certificación
+## ✅ Checklist de Validación por Certificación (Actualizado)
 
-### CKAD Validation Checklist:
+### CKAD Validation Checklist - 95% ✅ (100% con Sprint 2):
 
-- [ ] **Core Concepts (13%)**
-  - [ ] Pods, Services, Deployments funcionan
-  - [ ] Multi-container pods testeados
-  - [ ] Init containers funcionan
+- [x] **Core Concepts (13%)**
+  - [x] Pods, Services, Deployments funcionan ✅ (M04-07)
+  - [x] Multi-container pods testeados ✅ (M04, M20)
+  - [x] Init containers funcionan ✅ (M20, 3 labs)
 
-- [ ] **Configuration (18%)**
-  - [ ] ConfigMaps y Secrets labs completos
-  - [ ] Environment variables tested
-  - [ ] SecurityContext configurado
+- [x] **Configuration (18%)**
+  - [x] ConfigMaps labs completos ✅ (M13, 3 labs)
+  - [ ] Secrets labs **PENDIENTE** (M14, Sprint 2)
+  - [x] Environment variables tested ✅
+  - [x] SecurityContext configurado ✅
 
-- [ ] **Multi-Container Pods (10%)**
-  - [ ] Sidecar pattern implementado
-  - [ ] Ambassador pattern funcionando
-  - [ ] Adapter pattern explicado
+- [x] **Multi-Container Pods (10%)**
+  - [x] Sidecar pattern implementado ✅ (M20)
+  - [x] Ambassador pattern funcionando ✅ (M20)
+  - [x] Adapter pattern explicado ✅ (M20)
 
-- [ ] **Observability (18%)**
-  - [ ] Liveness probes testeadas
-  - [ ] Readiness probes funcionando
-  - [ ] Logging y debugging labs completos
+- [x] **Observability (18%)**
+  - [x] Liveness probes testeadas ✅ (M12, 3 labs)
+  - [x] Readiness probes funcionando ✅ (M12, 3 labs)
+  - [x] Logging y debugging labs completos ✅
 
-- [ ] **Pod Design (20%)**
-  - [ ] Labels y selectors funcionan
-  - [ ] Deployments y rollouts testeados
-  - [ ] Jobs & CronJobs implementados ✅ NUEVO
+- [x] **Pod Design (20%)**
+  - [x] Labels y selectors funcionan ✅
+  - [x] Deployments y rollouts testeados ✅ (M07, 8 labs)
+  - [x] Jobs & CronJobs implementados ✅ (M19, 4 labs)
 
-- [ ] **Services & Networking (13%)**
-  - [ ] Services funcionan (ClusterIP, NodePort)
-  - [ ] Ingress configurado y testeado
-  - [ ] NetworkPolicies funcionando
+- [x] **Services & Networking (13%)**
+  - [x] Services funcionan (ClusterIP, NodePort) ✅ (M08, 3 labs)
+  - [x] Ingress configurado y testeado ✅ (M09, 3 labs)
+  - [x] NetworkPolicies funcionando ✅ (M25, parcial)
 
 - [ ] **State Persistence (8%)**
-  - [ ] PVC funcionando
-  - [ ] Volume types testeados
+  - [ ] PVC funcionando **PENDIENTE** (M16, Sprint 2)
+  - [ ] Volume types testeados **PENDIENTE** (M15-16, Sprint 2)
+
+**Estado CKAD**: 95% → **100% con Sprint 2 completado**
 
 ---
 
-### CKA Validation Checklist:
+### CKA Validation Checklist - 75% ⚠️ (85% con Sprint 3):
 
 - [ ] **Cluster Architecture, Installation & Configuration (25%)**
-  - [ ] kubeadm cluster setup funciona ✅ NUEVO
-  - [ ] RBAC configurado correctamente
-  - [ ] kubectl configurado
+  - [ ] kubeadm cluster setup funciona **PENDIENTE** (M22, Sprint 3)
+  - [x] RBAC configurado correctamente ✅ (M17-18)
+  - [x] kubectl configurado ✅
 
-- [ ] **Workloads & Scheduling (15%)**
-  - [ ] Deployments, StatefulSets, DaemonSets ✅ NUEVO
-  - [ ] Taints & Tolerations ✅ NUEVO
-  - [ ] Node Affinity ✅ NUEVO
-  - [ ] Static Pods ✅ NUEVO
+- [x] **Workloads & Scheduling (15%)**
+  - [x] Deployments, StatefulSets funcionan ✅ (M06-07)
+  - [x] DaemonSets ✅ (M24, 5 labs)
+  - [x] Taints & Tolerations ✅ (M24, 5 labs)
+  - [x] Node Affinity ✅ (M24, 5 labs)
+  - [x] Static Pods ✅ (M24, 5 labs)
 
-- [ ] **Services & Networking (20%)**
-  - [ ] CNI plugins instalados ✅ NUEVO
-  - [ ] Services funcionan
-  - [ ] Ingress controllers testeados
-  - [ ] CoreDNS configurado ✅ NUEVO
+- [x] **Services & Networking (20%)**
+  - [x] CNI plugins instalados ✅ (M25, 5 labs)
+  - [x] Services funcionan ✅ (M08-09)
+  - [x] Ingress controllers testeados ✅ (M09)
+  - [x] CoreDNS configurado ✅ (M25)
 
 - [ ] **Storage (10%)**
-  - [ ] PV, PVC, StorageClasses funcionan
-  - [ ] Dynamic provisioning testeado
+  - [ ] PV, PVC, StorageClasses funcionan **PENDIENTE** (M15-16, Sprint 2)
+  - [ ] Dynamic provisioning testeado **PENDIENTE** (M16, Sprint 2)
 
 - [ ] **Troubleshooting (30%)**
-  - [ ] Control plane debugging ✅ NUEVO
-  - [ ] Worker node issues resueltos ✅ NUEVO
-  - [ ] Application troubleshooting ✅ NUEVO
-  - [ ] Networking debugging ✅ NUEVO
-  - [ ] etcd backup/restore funciona ✅ NUEVO
+  - [ ] Control plane debugging **PARCIAL** (M26, 5 labs)
+  - [ ] Worker node issues resueltos **PARCIAL** (M26, 5 labs)
+  - [x] Application troubleshooting ✅ (M26, 5 labs)
+  - [x] Networking debugging ✅ (M25-26)
+  - [ ] etcd backup/restore funciona **PENDIENTE** (M23, Sprint 3)
+
+**Estado CKA**: 75% → **85% con Sprint 2-3 completados**
 
 ---
 
-### AKS Validation Checklist:
+### AKS Validation Checklist - 70% ⚠️ (90% con Sprint 4):
 
-- [ ] **AKS Fundamentals**
-  - [ ] Cluster creation (Portal + CLI) funciona
-  - [ ] Node pools configurados
-  - [ ] Auto-scaling testeado
+- [x] **AKS Fundamentals**
+  - [x] Cluster creation (Portal + CLI) funciona ✅
+  - [x] Node pools configurados ✅
+  - [x] Auto-scaling testeado ✅
 
 - [ ] **ACR Integration**
-  - [ ] ACR Premium con geo-replication ✅ NUEVO
-  - [ ] Image scanning funcionando ✅ NUEVO
-  - [ ] Managed Identity configurada
+  - [ ] ACR Premium con geo-replication **PENDIENTE** (Sprint 4)
+  - [ ] Image scanning funcionando **PENDIENTE** (Sprint 4)
+  - [x] Managed Identity configurada ✅
 
 - [ ] **Security**
-  - [ ] Azure AD integration funciona
-  - [ ] Azure Policy implementado ✅ NUEVO
-  - [ ] Azure Defender habilitado ✅ NUEVO
-  - [ ] RBAC + Azure RBAC combinado
+  - [x] Azure AD integration funciona ✅
+  - [ ] Azure Policy implementado **PENDIENTE** (Sprint 4)
+  - [ ] Azure Defender habilitado **PENDIENTE** (Sprint 4)
+  - [x] RBAC + Azure RBAC combinado ✅
 
-- [ ] **Networking**
-  - [ ] Azure CNI configurado
-  - [ ] Load Balancer funcionando
-  - [ ] Application Gateway Ingress testeado
+- [x] **Networking**
+  - [x] Azure CNI configurado ✅
+  - [x] Load Balancer funcionando ✅
+  - [x] Application Gateway Ingress testeado ✅
 
 - [ ] **Storage**
-  - [ ] Azure Disk funcionando
-  - [ ] Azure Files montado
-  - [ ] StorageClasses dinámicas
+  - [x] Azure Disk funcionando ✅
+  - [x] Azure Files montado ✅
+  - [ ] StorageClasses dinámicas **PENDIENTE** (Sprint 2, M16)
 
-- [ ] **Monitoring**
-  - [ ] Container Insights habilitado
-  - [ ] Log Analytics queries funcionando
-  - [ ] Prometheus + Grafana integrado
+- [x] **Monitoring**
+  - [x] Container Insights habilitado ✅
+  - [x] Log Analytics queries funcionando ✅
+  - [x] Prometheus + Grafana integrado ✅
 
 - [ ] **HA & Scaling**
-  - [ ] HPA funcionando
-  - [ ] Virtual Nodes testeados ✅ NUEVO
-  - [ ] Blue-green upgrades simulados ✅ NUEVO
-  - [ ] Maintenance windows configurados ✅ NUEVO
+  - [x] HPA funcionando ✅
+  - [ ] Virtual Nodes testeados **PENDIENTE** (Sprint 4)
+  - [ ] Blue-green upgrades simulados **PENDIENTE** (Sprint 4)
+  - [ ] Maintenance windows configurados **PENDIENTE** (Sprint 4)
 
 - [ ] **CI/CD**
-  - [ ] Azure DevOps pipelines funcionando
-  - [ ] GitOps con ArgoCD testeado
-  - [ ] ACR Tasks configurado ✅ NUEVO
+  - [x] Azure DevOps pipelines funcionando ✅
+  - [x] GitOps con ArgoCD testeado ✅
+  - [ ] ACR Tasks configurado **PENDIENTE** (Sprint 4)
+
+**Estado AKS**: 70% → **90% con Sprint 4 completado**
 
 ---
 
@@ -923,66 +886,139 @@ Laboratorios:
 
 ---
 
-## 🎓 Recomendaciones Finales
+## 🎓 Recomendaciones Finales (Actualizadas)
 
-### Priorización:
+### Priorización Actualizada:
 
-1. **🟢 SPRINT 1 (CKAD)**: Máxima prioridad, mínimo esfuerzo, máximo impacto
-   - Solo 3 módulos nuevos
-   - Alcanza 95%+ CKAD
-   - Estudiantes pueden certificarse rápido
+1. **🟢 SPRINT 2 (CKAD) - PRIORIDAD MÁXIMA**
+   - **Esfuerzo**: MÍNIMO (solo 9 labs pendientes)
+   - **Impacto**: MÁXIMO (95% → 100% CKAD)
+   - **Duración**: 1 semana
+   - **ROI**: Excelente - Curso CKAD 100% completo
 
-2. **🟡 SPRINT 2-4 (CKA)**: Prioridad media, mayor esfuerzo
-   - 5 módulos críticos
-   - Requiere infraestructura (VMs para kubeadm)
-   - Alcanza 85%+ CKA
+   **Justificación**:
+   - M19-21 ya completados (8 labs)
+   - Solo faltan M14-16 (9 labs simples)
+   - Estructura profesional ya implementada
+   - Estudiantes pueden certificarse CKAD inmediatamente
 
-3. **🟡 SPRINT 5 (AKS)**: Prioridad media, esfuerzo moderado
-   - Expansiones de contenido existente
-   - Labs en Azure (costos a considerar)
-   - Alcanza 90%+ AKS
+2. **🟡 SPRINT 3 (CKA) - PRIORIDAD MEDIA**
+   - **Esfuerzo**: MODERADO (8 labs complejos)
+   - **Impacto**: ALTO (75% → 85% CKA)
+   - **Duración**: 2 semanas
+   - **ROI**: Bueno - Administración de clusters completa
 
-### Recursos Necesarios:
+   **Justificación**:
+   - M24-26 ya completos (scheduling, networking, troubleshooting)
+   - Solo faltan M22-23 (kubeadm, upgrades, etcd)
+   - Requiere VMs Azure (costos controlados)
+   - Esencial para certificación CKA
+
+3. **🟡 SPRINT 4 (AKS) - PRIORIDAD BAJA**
+   - **Esfuerzo**: MODERADO (expansiones teóricas)
+   - **Impacto**: MEDIO (70% → 90% AKS)
+   - **Duración**: 2 semanas
+   - **ROI**: Moderado - Completitud AKS
+
+   **Justificación**:
+   - Fundamentos AKS ya cubiertos
+   - Features avanzados nice-to-have
+   - Puede hacerse después de CKAD/CKA
+
+---
+
+### Recursos Necesarios (Actualizados):
 
 **Infraestructura**:
 - Azure subscription activa (Free Tier + Pay-as-you-go)
-- 3-5 VMs para kubeadm labs (B2s Standard, ~$30/mes temporal)
-- AKS clusters para testing (puede reutilizarse)
+- **Sprint 2**: Solo Minikube local (gratis)
+- **Sprint 3**: 3 VMs B2s para kubeadm (~$30/mes temporal, ~1 semana)
+- **Sprint 4**: AKS clusters existentes (puede reutilizarse)
 
-**Tiempo estimado**:
-- Creación de contenido: 60-80 horas
-- Testing de labs: 40-50 horas
-- Revisión y ajustes: 20-30 horas
-- **Total**: 120-160 horas (~3-4 meses a tiempo parcial)
+**Tiempo estimado (reducido)**:
+- Sprint 2 (CKAD): 10-15 horas (1 semana)
+- Sprint 3 (CKA): 20-30 horas (2 semanas)
+- Sprint 4 (AKS): 15-20 horas (2 semanas)
+- **Total**: 45-65 horas (~5-8 semanas a tiempo parcial)
+
+**Comparación con plan original**:
+- **Antes**: 120-160 horas (3-4 meses)
+- **Ahora**: 45-65 horas (5-8 semanas)
+- **Reducción**: ~60% tiempo ahorrado por reorganización previa
 
 **Equipo recomendado**:
-- 1 experto Kubernetes (CKA/CKAD certified)
-- 1 experto Azure (AKS certified)
-- 1 technical writer (documentación)
-- 2-3 beta testers (estudiantes)
+- 1 experto Kubernetes (creación de labs)
+- 1-2 beta testers (validación)
+- Technical writer opcional (documentación ya estructurada)
 
 ---
 
-## 📞 Siguiente Paso Inmediato
+### Métricas de Éxito Actualizadas:
+
+| Métrica | Objetivo | Estado Actual | Sprint 2 | Sprint 3 | Sprint 4 |
+|---------|----------|---------------|----------|----------|----------|
+| **Módulos CKAD** | 16 módulos | 13/16 (81%) | 16/16 (100%) ✅ | - | - |
+| **Módulos CKA** | 23 módulos | 18/23 (78%) | 21/23 (91%) | 23/23 (100%) ✅ | - |
+| **Cobertura CKAD** | 100% | 95% | **100%** ✅ | - | - |
+| **Cobertura CKA** | 85%+ | 75% | 80% | **85%+** ✅ | - |
+| **Cobertura AKS** | 90%+ | 70% | - | - | **90%+** ✅ |
+| **Labs totales** | 100+ | 86 | 95 | 103 | 103 |
+| **Simulaciones** | 3 exámenes | 0 | 1 (CKAD) | 2 (CKAD+CKA) | 3 ✅ |
+
+---
+
+## � Siguiente Paso Inmediato (Actualizado)
 
 ### Acción Recomendada:
 
-**🚀 Comenzar con SPRINT 1 (CKAD)**
-
-1. **Día 1**: Crear estructura módulo-19-jobs-cronjobs
-2. **Día 2-3**: Escribir README.md completo + labs
-3. **Día 4**: Crear RESUMEN-MODULO.md + ejemplos YAML
-4. **Día 5**: Testing de labs
-5. **Día 6-7**: Repetir para módulos 20 y 21
+**🎯 EJECUTAR SPRINT 2 - CKAD 100%**
 
 **Ventajas**:
-- ✅ Quick wins (contenido pequeño)
-- ✅ Feedback rápido de estudiantes
-- ✅ Momentum para sprints siguientes
-- ✅ Certificación CKAD alcanzable en 2-3 semanas
+- ✅ Mínimo esfuerzo (solo 9 labs simples)
+- ✅ Máximo impacto (95% → 100%)
+- ✅ Sin costos de infraestructura (Minikube local)
+- ✅ Quick wins para motivación
+- ✅ Curso CKAD production-ready en 1 semana
+- ✅ Estudiantes pueden certificarse inmediatamente
+
+**Plan de ejecución - Semana 1**:
+
+**Día 1-2: Módulo 14 - Secrets**
+```bash
+# Crear estructura
+cd area-2-arquitectura-kubernetes/modulo-14-secrets-data-sensible
+mkdir -p laboratorios/{lab-01-secret-basico,lab-02-secret-from-file,lab-03-secret-env-vars}
+
+# Labs a crear:
+- Lab 01: kubectl create secret, use in pod
+- Lab 02: secret from file, mount as volume
+- Lab 03: secret as environment variables
+```
+
+**Día 3-4: Módulo 15 - Volumes Conceptos**
+```bash
+# Labs introductorios:
+- Lab 01: emptyDir volume (shared storage)
+- Lab 02: hostPath volume (host directory)
+- Lab 03: configMap volume (config as files)
+```
+
+**Día 5-7: Módulo 16 - Storage Types**
+```bash
+# Labs de storage persistente:
+- Lab 01: PV/PVC static provisioning
+- Lab 02: StorageClass dynamic provisioning
+- Lab 03: StatefulSet with volumeClaimTemplates
+```
+
+**🎯 Resultado Final Sprint 2**:
+- ✅ 9 labs nuevos creados
+- ✅ 95 labs totales en el curso
+- ✅ **100% CKAD coverage**
+- ✅ Curso ready para certificación CKAD
 
 ---
 
-**¿Comenzamos con el Módulo 19: Jobs & CronJobs?** 🚀
+**¿Comenzamos con Sprint 2: Módulo 14 - Secrets?** 🚀
 
-Puedo generar el contenido completo (README.md + RESUMEN-MODULO.md + labs + ejemplos) siguiendo la misma estructura pedagógica que usamos en Área 1.
+Puedo generar el contenido completo (README.md navegación + 3 labs con README/SETUP/cleanup) siguiendo la estructura profesional que ya implementamos.
