@@ -1,163 +1,188 @@
-# Ejemplos YAML - Troubleshooting
+# Ejemplos de Troubleshooting
 
-Esta carpeta contiene ejemplos de configuraciones con errores intencionales para practicar troubleshooting.
+Este directorio contiene 5 ejemplos organizados en carpetas individuales, cada uno con sus propios archivos YAML, scripts y documentación.
 
-## 📁 Archivos
+## 📁 Estructura
 
-### 1. `broken-apps.yaml`
-Aplicaciones con errores comunes que encontrarás en el examen CKA:
+```
+ejemplos/
+├── README.md                           # Este archivo
+├── 01-broken-apps/                     # Aplicaciones con errores
+│   ├── README.md
+│   ├── broken-apps.yaml
+│   └── cleanup.sh
+├── 02-troubleshooting-tools/           # Herramientas de debugging
+│   ├── README.md
+│   ├── troubleshooting-tools.yaml
+│   ├── deploy-all.sh
+│   └── cleanup.sh
+├── 03-common-errors/                   # Errores comunes
+│   ├── README.md
+│   ├── common-errors.yaml
+│   └── cleanup.sh
+├── 04-performance-test/                # Tests de performance
+│   ├── README.md
+│   ├── performance-test.yaml
+│   ├── load-generator.sh
+│   └── cleanup.sh
+└── 05-rbac-debugging/                  # RBAC troubleshooting
+    ├── README.md
+    ├── rbac-debugging.yaml
+    ├── test-permissions.sh
+    └── cleanup.sh
+```
+
+## 📋 Ejemplos Disponibles
+
+### 1. [Broken Apps](./01-broken-apps/) ⭐⭐⭐
+**12 pods con errores intencionales**
+
+Aprende a diagnosticar:
 - CrashLoopBackOff
 - ImagePullBackOff
 - OOMKilled
 - Init container failures
 - Liveness/Readiness probe issues
 - Missing ConfigMaps/Secrets
+- Volume mount errors
 
-### 2. `troubleshooting-tools.yaml`
-Pods de debugging listos para usar:
-- netshoot (networking debugging)
-- busybox (lightweight testing)
-- dnsutils (DNS troubleshooting)
-- curl pod (HTTP testing)
-- Debug pods con diferentes privilegios
+**Archivos**: `broken-apps.yaml`, `cleanup.sh`
 
-### 3. `common-errors.yaml`
-Configuraciones incorrectas típicas:
-- Service sin endpoints (label mismatch)
-- PVC que no hace bind
-- Network Policy que bloquea todo
-- Ingress mal configurado
-- RBAC permissions issues
+### 2. [Troubleshooting Tools](./02-troubleshooting-tools/) ⭐⭐
+**10 herramientas de debugging listas para usar**
 
-### 4. `performance-test.yaml`
-Aplicaciones para testing de performance y resource limits:
-- Memory stress test
-- CPU stress test
-- Disk I/O test
-- Resource exhaustion scenarios
-- HPA testing
+Pods de debugging:
+- netshoot (networking completo)
+- busybox (lightweight)
+- dnsutils (DNS)
+- curl (HTTP testing)
+- Variantes con privilegios
 
-### 5. `rbac-debugging.yaml`
-Escenarios de troubleshooting RBAC:
+**Archivos**: `troubleshooting-tools.yaml`, `deploy-all.sh`, `cleanup.sh`
+
+### 3. [Common Errors](./03-common-errors/) ⭐⭐⭐
+**12 configuraciones erróneas típicas**
+
+Errores comunes:
+- Service sin endpoints
+- Port mismatches
+- PVC Pending
+- Network Policies
+- Ingress issues
+- HPA sin metrics
+
+**Archivos**: `common-errors.yaml`, `fixes.yaml`, `cleanup.sh`
+
+### 4. [Performance Test](./04-performance-test/) ⭐⭐⭐⭐
+**10 escenarios de performance y recursos**
+
+Tests de:
+- Memory/CPU stress
+- ResourceQuota/LimitRange
+- QoS classes
+- HPA bajo carga
+- PriorityClass
+- Node pressure
+
+**Archivos**: `performance-test.yaml`, `load-generator.sh`, `cleanup.sh`
+
+### 5. [RBAC Debugging](./05-rbac-debugging/) ⭐⭐⭐⭐
+**11 escenarios RBAC (8 errores + 3 correctos)**
+
+Problemas de permisos:
 - ServiceAccount sin permisos
-- Role/RoleBinding incorrectos
-- ClusterRole issues
-- Permission denied scenarios
+- Wrong verbs
+- Namespace mismatch
+- API Group errors
+- Scope confusion
 
-## 🚀 Uso
+**Archivos**: `rbac-debugging.yaml`, `test-permissions.sh`, `cleanup.sh`
 
-### Aplicar ejemplos rotos
+## 🚀 Uso Rápido
+
+### Opción 1: Ejemplo Individual
 
 ```bash
-# Aplicar aplicaciones rotas (para practicar)
+cd 01-broken-apps/
+cat README.md              # Leer instrucciones
 kubectl apply -f broken-apps.yaml
-
-# Ver qué está fallando
-kubectl get pods
-kubectl describe pod <pod-name>
-kubectl logs <pod-name>
-
-# Fix y volver a aplicar
-kubectl delete -f broken-apps.yaml
-# Editar el YAML con las correcciones
-kubectl apply -f broken-apps-fixed.yaml
+# ... diagnosticar y resolver ...
+./cleanup.sh
 ```
 
-### Usar herramientas de debugging
+### Opción 2: Todos los Ejemplos
 
 ```bash
-# Desplegar herramientas
-kubectl apply -f troubleshooting-tools.yaml
+# Aplicar todos
+for dir in 0*/; do
+  kubectl apply -f "$dir"/*.yaml
+done
 
-# Usar netshoot para debug de red
-kubectl exec -it netshoot -- bash
-# Dentro: ping, curl, nslookup, tcpdump, etc.
+# Ver estado
+kubectl get all --all-namespaces
 
-# Usar busybox para testing rápido
-kubectl exec -it busybox -- sh
-
-# DNS testing
-kubectl exec -it dnsutils -- nslookup kubernetes.default
+# Limpiar todos
+for dir in 0*/; do
+  if [ -f "$dir/cleanup.sh" ]; then
+    chmod +x "$dir/cleanup.sh"
+    "$dir/cleanup.sh"
+  fi
+done
 ```
 
-### Practicar con errores comunes
+## 📚 Orden de Estudio Recomendado
+
+### Nivel Básico-Intermedio
+1. **Broken Apps** (01) - Fundamentos de troubleshooting
+2. **Troubleshooting Tools** (02) - Familiarizarse con herramientas
+
+### Nivel Intermedio-Avanzado
+3. **Common Errors** (03) - Errores de configuración
+4. **Performance Test** (04) - Recursos y performance
+
+### Nivel Avanzado
+5. **RBAC Debugging** (05) - Seguridad y permisos
+
+## 🎯 Objetivos de Aprendizaje
+
+Después de completar estos ejemplos, deberás poder:
+
+- ✅ Diagnosticar cualquier pod en estado de error en <5 minutos
+- ✅ Usar pods de debugging efectivamente
+- ✅ Identificar y corregir configuraciones incorrectas
+- ✅ Troubleshoot problemas de recursos y performance
+- ✅ Resolver problemas RBAC con `kubectl auth can-i`
+- ✅ Aplicar metodología sistemática de troubleshooting
+
+## 💡 Tips
+
+1. **Siempre lee el README** de cada ejemplo primero
+2. **No mires las soluciones** inmediatamente - intenta resolver solo
+3. **Usa comandos de diagnóstico** antes de aplicar fixes
+4. **Documenta tus hallazgos** para reforzar aprendizaje
+5. **Practica múltiples veces** hasta que sea natural
+6. **Cronométrate** - el examen CKA tiene límite de tiempo
+
+## 🧹 Limpieza Global
 
 ```bash
-# Aplicar configuraciones incorrectas
-kubectl apply -f common-errors.yaml
+# Desde la carpeta ejemplos/
+find . -name "cleanup.sh" -exec chmod +x {} \;
+find . -name "cleanup.sh" -exec {} \;
 
-# Diagnosticar:
-# 1. Service sin endpoints
-kubectl get endpoints service-with-wrong-selector
-kubectl get pods --show-labels
-
-# 2. PVC en Pending
-kubectl get pvc
-kubectl describe pvc stuck-pvc
-
-# 3. Network Policy bloqueando
-kubectl get networkpolicy
-kubectl describe networkpolicy deny-all
+# O manualmente
+kubectl delete all --all
+kubectl delete pvc,configmap,secret,networkpolicy,ingress,hpa --all
+kubectl delete sa --all --field-selector metadata.name!=default
 ```
 
-### Performance testing
+## 📖 Recursos Relacionados
 
-```bash
-# Desplegar tests de performance
-kubectl apply -f performance-test.yaml
-
-# Monitorear recursos
-kubectl top pods
-kubectl top nodes
-
-# Ver evictions
-kubectl get events --field-selector reason=Evicted
-```
-
-### RBAC debugging
-
-```bash
-# Aplicar escenarios RBAC
-kubectl apply -f rbac-debugging.yaml
-
-# Test permissions
-kubectl auth can-i create pods --as=system:serviceaccount:default:restricted-sa
-kubectl auth can-i --list --as=system:serviceaccount:default:restricted-sa
-
-# Debug
-kubectl describe role,rolebinding -n default
-```
-
-## 🎯 Práctica Sugerida
-
-1. **Aplicar broken-apps.yaml** sin mirar el contenido
-2. **Diagnosticar** cada pod que falla
-3. **Identificar** la causa raíz usando kubectl describe/logs
-4. **Fix** el problema (editando YAML o usando kubectl edit)
-5. **Verificar** que funciona correctamente
-6. **Repetir** hasta que puedas diagnosticar en <5 minutos
-
-## 🧹 Cleanup
-
-```bash
-# Limpiar todos los ejemplos
-kubectl delete -f broken-apps.yaml
-kubectl delete -f troubleshooting-tools.yaml
-kubectl delete -f common-errors.yaml
-kubectl delete -f performance-test.yaml
-kubectl delete -f rbac-debugging.yaml
-
-# O todo a la vez
-kubectl delete -f .
-```
-
-## 📝 Notas
-
-- Todos los ejemplos están diseñados para fallar **intencionalmente**
-- Usa estos YAMLs para **practicar troubleshooting** antes del examen CKA
-- Los comentarios en cada archivo explican qué está mal
-- Intenta diagnosticar SIN mirar los comentarios primero
+- [README Principal del Módulo](../README.md)
+- [RESUMEN-MODULO](../RESUMEN-MODULO.md) - Cheatsheet de comandos
+- [Laboratorios](../laboratorios/) - Práctica hands-on guiada
 
 ---
 
-**Siguiente**: Laboratorios hands-on en [../laboratorios/](../laboratorios/)
+**Tiempo total estimado**: 3-4 horas para todos los ejemplos  
+**CKA Coverage**: ~15% del examen (Troubleshooting domain)

@@ -14,19 +14,118 @@ modulo-XX-nombre-descriptivo/
 ├── 📄 RESUMEN-MODULO.md            (15-30KB, quick reference)
 ├── 📄 README.md.backup             (backup antes de cambios)
 ├── 📁 laboratorios/
-│   ├── lab-01-basico.md
-│   ├── lab-02-intermedio.md
-│   ├── lab-03-avanzado.md
-│   └── lab-04-troubleshooting.md   (opcional)
+│   ├── README.md                   (navegación y overview de labs)
+│   ├── 📁 lab-01-nombre/
+│   │   ├── README.md               (instrucciones del lab)
+│   │   ├── SETUP.md                (prerrequisitos y setup)
+│   │   ├── archivo.yaml            (YAMLs necesarios)
+│   │   ├── script-util.sh          (scripts de ayuda)
+│   │   └── cleanup.sh              (limpieza)
+│   ├── 📁 lab-02-nombre/
+│   │   ├── README.md
+│   │   ├── SETUP.md
+│   │   └── ... (archivos específicos)
+│   └── 📁 lab-03-nombre/
+│       └── ... (estructura similar)
 ├── 📁 ejemplos/
-│   ├── archivo-ejemplo-1.yaml
-│   ├── archivo-ejemplo-2.yaml
-│   ├── script-ejemplo.sh
-│   └── README.md                   (explicación de ejemplos)
+│   ├── README.md                   (navegación y explicación)
+│   ├── 📁 01-ejemplo-basico/
+│   │   ├── README.md               (explicación del ejemplo)
+│   │   ├── archivo.yaml            (YAML del ejemplo)
+│   │   ├── deploy.sh               (script deploy)
+│   │   └── cleanup.sh              (limpieza)
+│   ├── 📁 02-ejemplo-intermedio/
+│   │   └── ... (archivos específicos)
+│   └── 📁 03-ejemplo-avanzado/
+│       └── ... (archivos específicos)
 └── 📁 troubleshooting/             (opcional para módulos avanzados)
     ├── common-issues.md
     └── debugging-checklist.md
 ```
+
+**⚠️ IMPORTANTE - Organización en Carpetas:**
+
+Cada ejemplo y laboratorio **DEBE** estar en su propia carpeta conteniendo:
+- ✅ README.md con instrucciones completas
+- ✅ Archivos YAML necesarios
+- ✅ Scripts de deploy/cleanup
+- ✅ Archivos de configuración específicos
+
+**NO** colocar archivos sueltos en `ejemplos/` o `laboratorios/` - siempre usar subcarpetas.
+
+---
+
+## 📂 Guía Detallada de Organización
+
+### Estructura de Carpeta de Ejemplo
+
+```
+ejemplos/01-ejemplo-basico/
+├── README.md              # Explicación del ejemplo, objetivos, conceptos
+├── deployment.yaml        # YAML principal
+├── service.yaml           # Recursos adicionales
+├── configmap.yaml         # Configuración
+├── deploy.sh              # Script para desplegar todo
+└── cleanup.sh             # Script para limpiar recursos
+```
+
+**README.md del ejemplo debe incluir:**
+- Objetivo del ejemplo
+- Conceptos que demuestra
+- Instrucciones paso a paso
+- Comandos de verificación
+- Output esperado
+- Limpieza
+
+**Scripts recomendados:**
+- `deploy.sh`: `kubectl apply -f .` con validaciones
+- `cleanup.sh`: `kubectl delete -f .` con confirmación
+
+### Estructura de Carpeta de Laboratorio
+
+```
+laboratorios/lab-01-nombre/
+├── README.md              # Instrucciones completas del lab
+├── SETUP.md               # Prerrequisitos y preparación
+├── recursos.yaml          # YAMLs para el lab (si aplica)
+├── solucion.yaml          # Solución (archivo separado)
+├── scripts/               # Scripts de ayuda (opcional)
+│   ├── verificar.sh
+│   └── test.sh
+└── cleanup.sh             # Limpieza de recursos
+```
+
+**README.md del lab debe incluir:**
+- Objetivo y duración
+- Escenario del problema
+- Tareas a completar
+- Criterios de validación
+- Pistas (sin revelar solución completa)
+
+**SETUP.md debe incluir:**
+- Prerequisitos de conocimiento
+- Herramientas necesarias
+- Estado inicial del cluster
+- Comandos de verificación de setup
+
+### Nomenclatura Estándar
+
+**Ejemplos:**
+- `01-ejemplo-basico/` - Número + descripción
+- `02-ejemplo-intermedio/`
+- `03-ejemplo-avanzado/`
+
+**Laboratorios:**
+- `lab-01-nombre-descriptivo/` - lab-NN + descripción
+- `lab-02-troubleshooting/`
+- `lab-03-implementacion-completa/`
+
+**Beneficios de esta estructura:**
+- ✅ Auto-contenido: Todo en un solo lugar
+- ✅ Navegable: Fácil encontrar archivos relacionados
+- ✅ Escalable: Agregar ejemplos/labs sin conflictos
+- ✅ Profesional: Estándar de la industria
+- ✅ Educativo: Estudiantes encuentran todo junto
 
 ---
 
@@ -863,8 +962,16 @@ kubectl delete ns [namespace-lab]
 
 - [ ] **README.md**: 40-70KB de contenido
 - [ ] **RESUMEN-MODULO.md**: 15-30KB quick reference
+- [ ] **Estructura de carpetas**: Ejemplos y labs en subcarpetas (NO archivos sueltos)
 - [ ] **Laboratorios**: Mínimo 3 labs (básico, intermedio, avanzado)
-- [ ] **Ejemplos**: Mínimo 3 archivos YAML comentados
+  - [ ] Cada lab con README.md, SETUP.md, cleanup.sh
+  - [ ] Carpetas nombradas: lab-01-nombre/, lab-02-nombre/, etc.
+- [ ] **Ejemplos**: Mínimo 3 ejemplos en carpetas separadas
+  - [ ] Cada ejemplo con README.md, YAMLs, cleanup.sh
+  - [ ] Carpetas numeradas: 01-nombre/, 02-nombre/, etc.
+- [ ] **README.md en ejemplos/**: Navegación a subcarpetas
+- [ ] **README.md en laboratorios/**: Navegación a labs
+- [ ] **Scripts ejecutables**: chmod +x en todos los .sh
 - [ ] **Troubleshooting**: Sección con 5+ problemas comunes
 - [ ] **Best Practices**: Sección DO/DON'T clara
 - [ ] **Navegación**: Links a módulos anterior/siguiente funcionando
