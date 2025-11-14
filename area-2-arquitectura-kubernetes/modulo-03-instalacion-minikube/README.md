@@ -463,30 +463,8 @@ Docker es el **runtime** que ejecutará el contenedor de Minikube. Sin Docker in
 📝 **Ejemplo inline**: Script de instalación automatizada
 
 ```bash
-# Ver: ejemplos/01-instalacion/install-docker.sh
-
-#!/bin/bash
-# Instalación de Docker en Ubuntu
-
-# Actualizar sistema
-sudo apt-get update
-sudo apt-get install -y \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release
-
-# Agregar GPG key de Docker
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Agregar repositorio
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# Instalación automatizada con script
+./ejemplos/01-instalacion/install-docker.sh
 
 # Instalar Docker
 sudo apt-get update
@@ -1222,38 +1200,11 @@ kubectl get pods -A
 #### 8.4 Automatización con Scripts
 
 ```bash
-# Ver: ejemplos/02-configuracion/setup-environment.sh
-
-#!/bin/bash
 # Script completo de setup del entorno
-
-# 1. Verificar Docker
-if ! docker ps >/dev/null 2>&1; then
-    echo "❌ Docker no está corriendo"
-    exit 1
-fi
-
-# 2. Crear cluster si no existe
-if ! minikube status >/dev/null 2>&1; then
-    echo "🚀 Creando cluster Minikube..."
-    minikube start --driver=docker --cpus=4 --memory=8192
-fi
-
-# 3. Habilitar addons
-minikube addons enable metrics-server
-minikube addons enable dashboard
-
-# 4. Crear namespaces
-kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
-
-# 5. Configurar contexto
-kubectl config set-context --current --namespace=dev
-
-echo "✅ Entorno configurado correctamente"
+./ejemplos/02-configuracion/setup-environment.sh
 ```
 
-📄 **Scripts de automatización**: [`ejemplos/02-configuracion/setup-environment.sh`](./ejemplos/02-configuracion/setup-environment.sh)
+📄 **Ver script completo**: [`ejemplos/02-configuracion/setup-environment.sh`](./ejemplos/02-configuracion/setup-environment.sh)
 
 #### 8.5 Seguridad Básica
 
