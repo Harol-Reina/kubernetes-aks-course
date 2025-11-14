@@ -1870,8 +1870,7 @@ spec:
 ### 7. Monitorea Throttling y OOMKilled
 
 ```bash
-# Script para detectar problemas
-#!/bin/bash
+# Script para detectar problemas de recursos
 
 # Pods con restart count alto (posible OOMKilled)
 kubectl get pods --all-namespaces -o json | \

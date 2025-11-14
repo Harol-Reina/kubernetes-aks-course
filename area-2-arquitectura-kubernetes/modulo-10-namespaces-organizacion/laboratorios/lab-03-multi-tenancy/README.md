@@ -232,7 +232,7 @@ kubectl exec test-a -n tenant-company-a -- \
 ```bash
 # Script de monitoreo
 cat <<'EOF' > monitor-tenants.sh
-#!/bin/bash
+# !/bin/bash
 echo "=== Uso de Recursos por Tenant ==="
 for tenant in company-a company-b company-c; do
   echo -e "\n--- Tenant: $tenant ---"
@@ -348,7 +348,7 @@ Escribe un script que calcule el costo mensual de cada tenant basado en CPU/RAM 
 <summary>Solución</summary>
 
 ```bash
-#!/bin/bash
+# !/bin/bash
 COST_CPU_CORE_MONTH=30  # $30 por core/mes
 COST_GB_RAM_MONTH=10    # $10 por GB/mes
 

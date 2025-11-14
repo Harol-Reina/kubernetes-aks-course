@@ -354,18 +354,7 @@ exit
 
 ```bash
 # Script para ver balanceo en acción
-cat > test-loadbalancing.sh <<'EOF'
-#!/bin/bash
-echo "Testing load balancing (20 requests):"
-for i in {1..20}; do
-  kubectl run test-lb-$i --rm --image=curlimages/curl --restart=Never -- \
-    curl -s http://backend-service | grep "Pod:" &
-done
-wait
-echo -e "\nCounting requests per Pod:"
-kubectl logs -l job-name --tail=-1 2>/dev/null | grep "Pod:" | sort | uniq -c
-EOF
-
+# Ver script: test-loadbalancing.sh
 chmod +x test-loadbalancing.sh
 ./test-loadbalancing.sh
 ```

@@ -363,7 +363,7 @@ Escribe un script que compare el número de réplicas de 'webapp' en los 3 names
 <summary>Solución</summary>
 
 ```bash
-#!/bin/bash
+# !/bin/bash
 for ns in development staging production; do
   replicas=$(kubectl get deployment webapp -n $ns -o jsonpath='{.spec.replicas}')
   echo "$ns: $replicas réplicas"

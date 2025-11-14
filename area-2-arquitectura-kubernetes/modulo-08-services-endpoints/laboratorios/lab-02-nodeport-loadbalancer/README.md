@@ -351,7 +351,7 @@ wait
 ```bash
 # Script de comparación
 cat > compare-policies.sh <<'EOF'
-#!/bin/bash
+# !/bin/bash
 echo "=== externalTrafficPolicy Comparison ==="
 echo ""
 
@@ -498,7 +498,7 @@ az network lb address-pool list --lb-name <nombre> --resource-group <rg>
 ```bash
 # Crear tabla comparativa
 cat > comparison-table.sh <<'EOF'
-#!/bin/bash
+# !/bin/bash
 echo "=========================================="
 echo "Service Types Comparison"
 echo "=========================================="

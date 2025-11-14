@@ -242,20 +242,7 @@ kubectl describe resourcequota compute-quota -n dev-limited | \
 
 ### Paso 11: Script de Monitoreo
 
-Crear `monitor-quota.sh`:
-
-```bash
-#!/bin/bash
-NS="dev-limited"
-echo "=== Uso de Quota en $NS ==="
-kubectl get resourcequota -n $NS -o custom-columns=\
-NAME:.metadata.name,\
-CPU_USED:.status.used.requests\\.cpu,\
-CPU_HARD:.status.hard.requests\\.cpu,\
-MEM_USED:.status.used.requests\\.memory,\
-MEM_HARD:.status.hard.requests\\.memory,\
-PODS:.status.used.pods
-```
+📄 Ver script: [`monitor-quota.sh`](./monitor-quota.sh)
 
 ```bash
 chmod +x monitor-quota.sh

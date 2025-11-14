@@ -236,7 +236,7 @@ fi
 ```bash
 # Crear script de verificación completa
 cat << 'EOF' > ~/verificar-docker.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== VERIFICACIÓN DE INSTALACIÓN DE DOCKER ==="
 echo ""

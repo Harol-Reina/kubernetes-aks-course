@@ -137,7 +137,7 @@ groups $USER
 ```bash
 # Crear script de verificación de dependencias de Kubernetes
 cat << 'EOF' > ~/verificar-dependencias-k8s.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== VERIFICACIÓN DE DEPENDENCIAS DE KUBERNETES ==="
 echo ""
@@ -288,7 +288,7 @@ fi
 ```bash
 # Script de verificación
 cat << 'EOF' > ~/verificar-preparacion.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== VERIFICACIÓN DE PREPARACIÓN PARA MINIKUBE ==="
 echo ""

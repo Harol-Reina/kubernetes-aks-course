@@ -274,7 +274,7 @@ echo "Preparando configuración para driver 'docker'..."
 
 # Crear script helper para cambio rápido de perfiles
 cat << 'EOF' > ~/minikube-profiles.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== PERFILES DE MINIKUBE DISPONIBLES ==="
 echo ""
@@ -327,7 +327,7 @@ chmod +x ~/minikube-profiles.sh
 ```bash
 # Crear script de verificación completa
 cat << 'EOF' > ~/verificar-minikube.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== VERIFICACIÓN COMPLETA DE MINIKUBE ==="
 echo ""
@@ -445,7 +445,7 @@ chmod +x ~/verificar-minikube.sh
 ```bash
 # Crear cheat sheet de comandos útiles
 cat << 'EOF' > ~/minikube-cheatsheet.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== COMANDOS ÚTILES DE MINIKUBE ==="
 echo ""

@@ -127,7 +127,7 @@ kubectl config current-context || echo "No hay contexto configurado aún"
 ```bash
 # Crear script de verificación
 cat << 'EOF' > ~/verificar-kubectl.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== VERIFICACIÓN DE KUBECTL ==="
 echo ""
@@ -358,7 +358,7 @@ sudo chown $USER:$USER ~/.bashrc
 ```bash
 # Crear script que verificará la conexión con Minikube (para uso futuro)
 cat << 'EOF' > ~/test-kubectl-minikube.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== TEST DE CONECTIVIDAD KUBECTL-MINIKUBE ==="
 echo ""

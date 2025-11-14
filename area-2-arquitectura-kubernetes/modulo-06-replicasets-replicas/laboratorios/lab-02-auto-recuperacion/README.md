@@ -417,7 +417,7 @@ kubectl get pods -l app=webapp-load -o wide
 Script para medir tiempo de auto-recuperación:
 
 ```bash
-#!/bin/bash
+# !/bin/bash
 
 echo "Midiendo tiempo de auto-recuperación..."
 
@@ -540,7 +540,7 @@ kubectl get pods -l app=webapp-load --watch
 <summary>💡 Ver script</summary>
 
 ```bash
-#!/bin/bash
+# !/bin/bash
 
 END_TIME=$(($(date +%s) + 60))  # 1 minuto desde ahora
 

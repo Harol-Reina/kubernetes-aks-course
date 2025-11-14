@@ -32,7 +32,7 @@ echo "=============================================="
 
 ```bash
 cat > docker-setup.sh << 'EOF'
-#!/bin/bash
+# docker-setup.sh - Docker Traditional Setup (Complex)
 echo "🐳 Docker Traditional Setup (Complex)"
 
 # 1. Create network
@@ -164,7 +164,7 @@ EOF
 
 # Script para descargar configuración
 cat > setup-scripts/download-config.sh << 'EOF'
-#!/bin/sh
+# download-config.sh - Script de inicialización
 echo "📥 Downloading configuration..."
 mkdir -p /app/config
 

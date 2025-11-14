@@ -26,7 +26,7 @@
 ```bash
 # Crear script maestro de verificación
 cat << 'EOF' > ~/verificacion-sistema-completa.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "================================================================="
 echo "    VERIFICACIÓN COMPLETA DEL SISTEMA KUBERNETES"
@@ -229,7 +229,7 @@ chmod +x ~/verificacion-sistema-completa.sh
 ```bash
 # Crear script de testing completo
 cat << 'EOF' > ~/test-aplicaciones-k8s.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "================================================================="
 echo "           TESTING DE APLICACIONES KUBERNETES"
@@ -444,7 +444,7 @@ chmod +x ~/test-aplicaciones-k8s.sh
 ```bash
 # Script para verificar y testear autocompletado
 cat << 'EOF' > ~/test-autocompletado.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "================================================================="
 echo "              TESTING DE AUTOCOMPLETADO"
@@ -541,7 +541,7 @@ source ~/.bashrc
 ```bash
 # Script para verificar métricas y estado del cluster
 cat << 'EOF' > ~/test-metricas-cluster.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "================================================================="
 echo "           MÉTRICAS Y MONITOREO DEL CLUSTER"
@@ -655,7 +655,7 @@ chmod +x ~/test-metricas-cluster.sh
 ```bash
 # Crear configuración personalizada para laboratorios
 cat << 'EOF' > ~/configurar-ambiente-labs.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "================================================================="
 echo "          CONFIGURACIÓN PARA FUTUROS LABORATORIOS"
@@ -824,7 +824,7 @@ echo "✅ Plantillas creadas en ~/kubernetes-labs/"
 
 # Crear script helper para laboratorios
 cat << 'SCRIPT' > ~/kubernetes-labs/lab-helper.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "🧪 KUBERNETES LAB HELPER"
 echo "========================="
@@ -964,7 +964,7 @@ source ~/.bashrc
 ```bash
 # Crear checklist final interactivo
 cat << 'EOF' > ~/checklist-final.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "================================================================="
 echo "              CHECKLIST FINAL DE VALIDACIÓN"

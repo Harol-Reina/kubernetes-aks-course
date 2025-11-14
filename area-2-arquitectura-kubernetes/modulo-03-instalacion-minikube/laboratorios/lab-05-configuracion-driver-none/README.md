@@ -209,7 +209,7 @@ kubectl config current-context
 ```bash
 # Crear script de verificación completa
 cat << 'EOF' > ~/verificar-cluster-docker.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "=== VERIFICACIÓN CLUSTER DRIVER 'DOCKER' ==="
 echo ""
@@ -313,7 +313,7 @@ echo "Luego accede a: http://localhost:8080"
 
 # Crear script mejorado para port-forwarding con opciones
 cat << 'EOF' > ~/port-forward-test.sh
-#!/bin/bash
+# !/bin/bash
 
 SERVICE_NAME="test-web"
 LOCAL_PORT="8080"
@@ -570,7 +570,7 @@ echo "=== CONFIGURACIÓN PARA VM DE AZURE ==="
 
 # Crear script mejorado para VMs de Azure
 cat << 'EOF' > ~/azure-port-forward.sh
-#!/bin/bash
+# !/bin/bash
 
 echo "🌩️ CONFIGURACIÓN PARA VM DE AZURE"
 echo "=================================="
@@ -824,7 +824,7 @@ echo "=== CREANDO SCRIPTS DE UTILIDAD ==="
 
 # Script para iniciar el cluster
 cat << 'EOF' > ~/start-minikube.sh
-#!/bin/bash
+# !/bin/bash
 echo "🚀 Iniciando cluster Minikube..."
 minikube start --driver=docker
 echo "✅ Cluster iniciado"
@@ -833,7 +833,7 @@ EOF
 
 # Script para detener el cluster
 cat << 'EOF' > ~/stop-minikube.sh
-#!/bin/bash
+# !/bin/bash
 echo "⏹️ Deteniendo cluster Minikube..."
 minikube stop
 echo "✅ Cluster detenido"
@@ -841,7 +841,7 @@ EOF
 
 # Script para reiniciar el cluster
 cat << 'EOF' > ~/restart-minikube.sh
-#!/bin/bash
+# !/bin/bash
 echo "🔄 Reiniciando cluster Minikube..."
 minikube stop
 minikube start --driver=docker
@@ -851,7 +851,7 @@ EOF
 
 # Script para limpiar completamente
 cat << 'EOF' > ~/clean-minikube.sh
-#!/bin/bash
+# !/bin/bash
 echo "🧹 Limpiando cluster Minikube completamente..."
 minikube stop
 minikube delete
@@ -862,7 +862,7 @@ EOF
 
 # Script para monitorear recursos
 cat << 'EOF' > ~/monitor-cluster.sh
-#!/bin/bash
+# !/bin/bash
 echo "=== MONITOREO DEL CLUSTER ==="
 echo ""
 echo "📊 Estado del cluster:"
