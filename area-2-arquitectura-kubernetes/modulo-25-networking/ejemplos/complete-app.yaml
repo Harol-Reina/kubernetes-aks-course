@@ -1,0 +1,648 @@
+# ============================================
+# APLICACIÓN COMPLETA CON NETWORKING
+# ============================================
+# Este archivo muestra una aplicación three-tier completa con:
+# - Frontend (React/Vue/Angular)
+# - Backend API (Node.js/Python/Java)
+# - Database (PostgreSQL/MongoDB)
+# - Todos los componentes de networking
+
+---
+# ============================================
+# NAMESPACE
+# ============================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webapp
+  labels:
+    name: webapp
+    environment: production
+
+---
+# ============================================
+# DATABASE TIER
+# ============================================
+
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: webapp
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: webapp_db
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+# Secret para PostgreSQL
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: webapp
+type: Opaque
+stringData:
+  username: webapp_user
+  password: SecurePassword123!
+
+---
+# Headless Service para PostgreSQL StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: webapp
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+    tier: database
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+
+---
+# ClusterIP Service para acceso a PostgreSQL
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: webapp
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    tier: database
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+
+---
+# ============================================
+# BACKEND TIER
+# ============================================
+
+# Backend API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api
+  namespace: webapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend-api
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: backend-api
+        tier: backend
+    spec:
+      containers:
+        - name: api
+          image: myregistry/backend-api:v1.0.0
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: DATABASE_HOST
+              value: postgres-service
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: webapp_db
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: API_PORT
+              value: "8080"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+---
+# Backend Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-api-service
+  namespace: webapp
+  labels:
+    app: backend-api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: backend-api
+    tier: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+  sessionAffinity: ClientIP
+
+---
+# ============================================
+# FRONTEND TIER
+# ============================================
+
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: frontend
+    spec:
+      containers:
+        - name: web
+          image: myregistry/frontend:v1.0.0
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: API_URL
+              value: "http://backend-api-service"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+---
+# Frontend Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: webapp
+  labels:
+    app: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+    tier: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+
+---
+# ============================================
+# INGRESS
+# ============================================
+
+# Ingress con TLS y routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webapp-ingress
+  namespace: webapp
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://webapp.example.com"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+spec:
+  tls:
+    - hosts:
+        - webapp.example.com
+      secretName: webapp-tls-secret
+  rules:
+    - host: webapp.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-api-service
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+
+---
+# ============================================
+# NETWORK POLICIES
+# ============================================
+
+# Policy: Frontend acepta tráfico del Ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-netpol
+  namespace: webapp
+spec:
+  podSelector:
+    matchLabels:
+      tier: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Acepta del Ingress Controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    # Puede conectarse al Backend
+    - to:
+        - podSelector:
+            matchLabels:
+              tier: backend
+      ports:
+        - protocol: TCP
+          port: 80
+    # Permite DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# Policy: Backend acepta tráfico del Frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-netpol
+  namespace: webapp
+spec:
+  podSelector:
+    matchLabels:
+      tier: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Acepta del Frontend
+    - from:
+        - podSelector:
+            matchLabels:
+              tier: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Acepta de Monitoring (Prometheus)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Puede conectarse a la Database
+    - to:
+        - podSelector:
+            matchLabels:
+              tier: database
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Permite DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Permite conexiones externas HTTPS (APIs externas)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Policy: Database solo acepta del Backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-netpol
+  namespace: webapp
+spec:
+  podSelector:
+    matchLabels:
+      tier: database
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Solo del Backend
+    - from:
+        - podSelector:
+            matchLabels:
+              tier: backend
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress:
+    # Solo DNS (no necesita conectarse a nada más)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# ============================================
+# HORIZONTAL POD AUTOSCALER
+# ============================================
+
+# HPA para Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-api-hpa
+  namespace: webapp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# HPA para Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: webapp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+---
+# ============================================
+# POD DISRUPTION BUDGET
+# ============================================
+
+# PDB para Backend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-api-pdb
+  namespace: webapp
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: backend-api
+      tier: backend
+
+---
+# PDB para Frontend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: webapp
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend
+      tier: frontend
+
+---
+# ============================================
+# COMANDOS DE DEPLOYMENT Y TESTING
+# ============================================
+
+# Aplicar toda la aplicación:
+# kubectl apply -f complete-app.yaml
+
+# Verificar namespace:
+# kubectl get all -n webapp
+
+# Ver pods:
+# kubectl get pods -n webapp -o wide
+
+# Ver services:
+# kubectl get svc -n webapp
+
+# Ver ingress:
+# kubectl get ing -n webapp
+
+# Ver network policies:
+# kubectl get networkpolicy -n webapp
+
+# Ver HPA status:
+# kubectl get hpa -n webapp
+
+# Ver PDB status:
+# kubectl get pdb -n webapp
+
+# Test conectividad Frontend -> Backend:
+# kubectl exec -n webapp <frontend-pod> -- curl http://backend-api-service/health
+
+# Test conectividad Backend -> Database:
+# kubectl exec -n webapp <backend-pod> -- nc -zv postgres-service 5432
+
+# Ver logs del Frontend:
+# kubectl logs -n webapp -l app=frontend -f
+
+# Ver logs del Backend:
+# kubectl logs -n webapp -l app=backend-api -f
+
+# Ver logs del Database:
+# kubectl logs -n webapp -l app=postgres -f
+
+# Test DNS:
+# kubectl run -n webapp test --image=busybox --rm -it -- nslookup backend-api-service
+
+# Test desde fuera del cluster:
+# curl https://webapp.example.com/
+# curl https://webapp.example.com/api/health
+
+# Port-forward para testing local:
+# kubectl port-forward -n webapp svc/frontend-service 8080:80
+# kubectl port-forward -n webapp svc/backend-api-service 8081:80
+
+# Escalar manualmente:
+# kubectl scale -n webapp deployment/backend-api --replicas=5
+
+# Ver métricas:
+# kubectl top pods -n webapp
+
+# Debug Network Policies:
+# kubectl run -n webapp netshoot --rm -it --image=nicolaka/netshoot -- /bin/bash
+
+# Eliminar toda la aplicación:
+# kubectl delete namespace webapp

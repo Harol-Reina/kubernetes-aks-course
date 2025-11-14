@@ -1,0 +1,555 @@
+# ============================================================================
+# COMMON ERRORS - Configuraciones Incorrectas Típicas
+# ============================================================================
+# Este archivo contiene errores comunes de configuración que verás en producción
+# y en el examen CKA. Cada sección tiene un error diferente.
+#
+# Uso:
+#   kubectl apply -f common-errors.yaml
+#   Diagnostica cada problema usando kubectl describe/get/logs
+# ============================================================================
+
+---
+# ============================================================================
+# 1. Service Sin Endpoints - Label Mismatch
+# ============================================================================
+# ERROR: Service selector no coincide con labels de pods
+# SÍNTOMA: Service existe pero no tiene endpoints
+# DIAGNÓSTICO:
+#   kubectl get svc wrong-selector-svc
+#   kubectl get endpoints wrong-selector-svc  # ← Vacío
+#   kubectl get svc wrong-selector-svc -o jsonpath='{.spec.selector}'
+#   kubectl get pods --show-labels
+# FIX: Corregir selector en Service O labels en Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+  labels:
+    app: myapp  # ← Label correcto
+    tier: backend
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wrong-selector-svc
+spec:
+  selector:
+    app: wrong-app  # ← Selector incorrecto (no coincide con pod)
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# ============================================================================
+# 2. Service Port Mismatch
+# ============================================================================
+# ERROR: targetPort no coincide con containerPort
+# SÍNTOMA: Service accesible pero connection refused
+# DIAGNÓSTICO:
+#   kubectl get svc port-mismatch-svc
+#   kubectl get pod port-mismatch-pod -o yaml | grep containerPort
+# FIX: Corregir targetPort en Service
+apiVersion: v1
+kind: Pod
+metadata:
+  name: port-mismatch-pod
+  labels:
+    app: port-test
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80  # ← Puerto real del container
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: port-mismatch-svc
+spec:
+  selector:
+    app: port-test
+  ports:
+  - port: 80
+    targetPort: 8080  # ← Incorrecto (debería ser 80)
+
+---
+# ============================================================================
+# 3. PVC en Pending - No Matching PV
+# ============================================================================
+# ERROR: PVC pide 10Gi pero no hay PV con esa capacidad
+# SÍNTOMA: PVC en estado Pending indefinidamente
+# DIAGNÓSTICO:
+#   kubectl get pvc stuck-pvc
+#   kubectl describe pvc stuck-pvc
+#   kubectl get pv  # No hay PV disponible
+# FIX: Crear PV con capacidad adecuada O usar StorageClass con provisioner
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stuck-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # ← No hay PV con esta capacidad
+  # storageClassName no especificado, busca PV manual
+
+---
+# ============================================================================
+# 4. PVC Access Mode Mismatch
+# ============================================================================
+# ERROR: PVC pide ReadWriteMany pero PV solo soporta ReadWriteOnce
+# SÍNTOMA: PVC Pending
+# DIAGNÓSTICO:
+#   kubectl describe pvc access-mode-pvc
+#   kubectl get pv manual-pv -o yaml | grep accessModes
+# FIX: Cambiar accessMode en PVC O crear PV con RWX
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: manual-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce  # ← Solo RWO
+  hostPath:
+    path: /data/pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: access-mode-pvc
+spec:
+  accessModes:
+  - ReadWriteMany  # ← Pide RWX, no coincide
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# ============================================================================
+# 5. Network Policy - Default Deny All
+# ============================================================================
+# ERROR: Network policy bloquea TODO el tráfico
+# SÍNTOMA: Pods no pueden comunicarse entre sí
+# DIAGNÓSTICO:
+#   kubectl get networkpolicy
+#   kubectl describe networkpolicy deny-all
+#   kubectl exec test-pod-1 -- curl test-pod-2  # ← Timeout
+# FIX: Crear allow policies específicas
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-1
+  labels:
+    app: test
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-2
+  labels:
+    app: test
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+spec:
+  podSelector: {}  # Aplica a TODOS los pods
+  policyTypes:
+  - Ingress
+  - Egress
+  # No hay rules, por lo tanto NIEGA TODO
+
+---
+# ============================================================================
+# 6. Ingress Mal Configurado - Path Incorrecto
+# ============================================================================
+# ERROR: Ingress path no coincide con application paths
+# SÍNTOMA: Ingress retorna 404 Not Found
+# DIAGNÓSTICO:
+#   kubectl get ingress wrong-path-ingress
+#   curl -H "Host: myapp.example.com" http://<ingress-ip>/api  # ← 404
+# FIX: Corregir path en Ingress
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-pod
+  labels:
+    app: api
+spec:
+  containers:
+  - name: api
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wrong-path-ingress
+spec:
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /wrong-api  # ← Path incorrecto (debería ser /api o /)
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# ============================================================================
+# 7. Deployment con Image Tag Mutable
+# ============================================================================
+# ERROR: Usa tag "latest" que puede cambiar sin aviso
+# SÍNTOMA: Comportamiento inconsistente entre despliegues
+# DIAGNÓSTICO:
+#   kubectl get deploy mutable-image -o yaml | grep image
+# FIX: Usar tags específicos o SHA256 digest
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mutable-image
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mutable
+  template:
+    metadata:
+      labels:
+        app: mutable
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest  # ← BAD: latest es mutable
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+# ============================================================================
+# 8. Pod con SecurityContext Restrictivo
+# ============================================================================
+# ERROR: SecurityContext muy restrictivo impide que app funcione
+# SÍNTOMA: Permission denied errors
+# DIAGNÓSTICO:
+#   kubectl logs restricted-pod
+#   # nginx: [emerg] mkdir() "/var/cache/nginx" failed (13: Permission denied)
+# FIX: Ajustar securityContext o usar imagen compatible
+apiVersion: v1
+kind: Pod
+metadata:
+  name: restricted-pod
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: nginx
+    image: nginx:1.21  # ← nginx needs to write to /var/cache/nginx
+    ports:
+    - containerPort: 80
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true  # ← Muy restrictivo
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+
+---
+# ============================================================================
+# 9. HPA Sin Metrics Server
+# ============================================================================
+# ERROR: HPA configurado pero metrics-server no está instalado
+# SÍNTOMA: HPA muestra "unknown" en TARGETS
+# DIAGNÓSTICO:
+#   kubectl get hpa
+#   # TARGETS: <unknown>/80%
+#   kubectl get deployment -n kube-system metrics-server  # ← No existe
+# FIX: Instalar metrics-server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-test-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpa-test
+  template:
+    metadata:
+      labels:
+        app: hpa-test
+    spec:
+      containers:
+      - name: app
+        image: k8s.gcr.io/hpa-example
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-test
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-test-app
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# ============================================================================
+# 10. StatefulSet con PVC Template Incorrecto
+# ============================================================================
+# ERROR: volumeClaimTemplates tiene StorageClass que no existe
+# SÍNTOMA: Pods del StatefulSet en Pending
+# DIAGNÓSTICO:
+#   kubectl get sts broken-statefulset
+#   kubectl get pvc  # PVCs en Pending
+#   kubectl describe pvc data-broken-statefulset-0
+# FIX: Crear StorageClass "fast" o cambiar a una existente
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: broken-statefulset
+spec:
+  serviceName: "broken-svc"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broken-sts
+  template:
+    metadata:
+      labels:
+        app: broken-sts
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "fast"  # ← Este StorageClass no existe
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# ============================================================================
+# 11. Probes Timeout Muy Corto
+# ============================================================================
+# ERROR: Probe timeout demasiado corto para app lenta
+# SÍNTOMA: Pods se reinician aunque la app esté funcionando
+# DIAGNÓSTICO:
+#   kubectl describe pod short-timeout-pod
+#   # Liveness probe failed: Get http://:8080/health: dial tcp: i/o timeout
+# FIX: Aumentar timeoutSeconds
+apiVersion: v1
+kind: Pod
+metadata:
+  name: short-timeout-pod
+spec:
+  containers:
+  - name: slow-app
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 1  # ← Muy corto si app es lenta
+      failureThreshold: 3
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+
+---
+# ============================================================================
+# 12. Resource Requests > Limits (Invalid)
+# ============================================================================
+# ERROR: Requests mayor que limits (configuración inválida)
+# SÍNTOMA: Pod no se crea, error en describe
+# DIAGNÓSTICO:
+#   kubectl apply -f common-errors.yaml
+#   # Error: Invalid value: "200Mi": must be less than or equal to memory limit
+# FIX: requests <= limits
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: invalid-resources
+# spec:
+#   containers:
+#   - name: app
+#     image: nginx:1.21
+#     resources:
+#       requests:
+#         memory: "200Mi"  # ← Mayor que limit
+#       limits:
+#         memory: "100Mi"
+
+---
+# ============================================================================
+# DIAGNOSTIC COMMANDS
+# ============================================================================
+
+# 1. Service sin endpoints:
+# kubectl get svc wrong-selector-svc
+# kubectl get endpoints wrong-selector-svc
+# kubectl get svc wrong-selector-svc -o jsonpath='{.spec.selector}'
+# kubectl get pods --show-labels
+# FIX: kubectl patch svc wrong-selector-svc -p '{"spec":{"selector":{"app":"myapp"}}}'
+
+# 2. Service port mismatch:
+# kubectl get svc port-mismatch-svc
+# kubectl get pod port-mismatch-pod -o yaml | grep -A 2 containerPort
+# FIX: kubectl patch svc port-mismatch-svc -p '{"spec":{"ports":[{"port":80,"targetPort":80}]}}'
+
+# 3. PVC pending:
+# kubectl get pvc stuck-pvc
+# kubectl describe pvc stuck-pvc
+# kubectl get pv
+# FIX: Crear PV o usar StorageClass con provisioner automático
+
+# 4. Network Policy blocking:
+# kubectl get networkpolicy
+# kubectl exec test-pod-1 -- curl test-pod-2  # Timeout
+# FIX: kubectl delete networkpolicy deny-all
+#   O crear allow policy específica
+
+# 5. Ingress 404:
+# kubectl get ingress wrong-path-ingress
+# kubectl describe ingress wrong-path-ingress
+# FIX: kubectl patch ingress wrong-path-ingress --type=json \
+#   -p='[{"op":"replace","path":"/spec/rules/0/http/paths/0/path","value":"/"}]'
+
+# 6. HPA no funciona:
+# kubectl get hpa
+# kubectl get deployment -n kube-system metrics-server
+# FIX: kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+# kubectl delete -f common-errors.yaml

@@ -1,0 +1,557 @@
+# ============================================
+# CONFIGURACIONES DNS EN KUBERNETES (CoreDNS)
+# ============================================
+# Este archivo contiene ejemplos de configuración de CoreDNS
+# y customizaciones de DNS en Kubernetes
+
+---
+# ============================================
+# 1. COREDNS CONFIGMAP (Default Configuration)
+# ============================================
+# Configuración base de CoreDNS en Kubernetes
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# ============================================
+# 2. COREDNS CON CUSTOM DNS ENTRIES
+# ============================================
+# Añadir entradas DNS personalizadas con el plugin "hosts"
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        
+        # Plugin hosts para entradas DNS personalizadas
+        hosts {
+            192.168.1.100 database.external.com
+            192.168.1.101 api.external.com
+            192.168.1.102 cache.external.com
+            fallthrough
+        }
+        
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# ============================================
+# 3. COREDNS CON UPSTREAM DNS SERVERS
+# ============================================
+# Configurar servidores DNS upstream específicos
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-upstream
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        
+        prometheus :9153
+        
+        # Forward a servidores DNS específicos
+        forward . 8.8.8.8 8.8.4.4 {
+           max_concurrent 1000
+           policy random
+           health_check 5s
+        }
+        
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# ============================================
+# 4. COREDNS CON CONDITIONAL FORWARDING
+# ============================================
+# Reenviar consultas de dominios específicos a DNS particulares
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-conditional
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        
+        prometheus :9153
+        
+        # Forward por defecto
+        forward . /etc/resolv.conf
+        
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+    
+    # Dominio corporativo específico
+    corp.example.com:53 {
+        errors
+        cache 30
+        forward . 10.10.10.10 10.10.10.11
+    }
+    
+    # Otro dominio específico
+    internal.example.com:53 {
+        errors
+        cache 30
+        forward . 192.168.1.10
+    }
+
+---
+# ============================================
+# 5. COREDNS CON LOGGING Y DEBUG
+# ============================================
+# Habilitar logs detallados para troubleshooting
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-debug
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        log  # Habilita logging de consultas
+        health
+        ready
+        
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# ============================================
+# 6. COREDNS CON CACHE OPTIMIZADO
+# ============================================
+# Configuración de cache para mejor performance
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-cache-optimized
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        
+        prometheus :9153
+        forward . /etc/resolv.conf
+        
+        # Cache mejorado
+        cache 300 {
+            success 9984 30      # Cache exitoso: 30s-2.77h
+            denial 9984 5        # Cache negativo: 5s-2.77h
+            prefetch 10 60s 10%  # Prefetch cuando quedan 10s y >10% requests
+        }
+        
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# ============================================
+# 7. POD DNS CONFIG (Custom DNS per Pod)
+# ============================================
+# Configuración DNS personalizada a nivel de Pod
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-dns-pod
+  namespace: default
+spec:
+  containers:
+    - name: app
+      image: nginx
+  dnsPolicy: "None"  # Deshabilita DNS automático
+  dnsConfig:
+    nameservers:
+      - 8.8.8.8
+      - 8.8.4.4
+    searches:
+      - custom.example.com
+      - default.svc.cluster.local
+      - svc.cluster.local
+      - cluster.local
+    options:
+      - name: ndots
+        value: "2"
+      - name: edns0
+
+---
+# ============================================
+# 8. POD CON DNS POLICY (ClusterFirst)
+# ============================================
+# Pod usando DNS del cluster (default)
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-clusterfirst-pod
+  namespace: default
+spec:
+  containers:
+    - name: app
+      image: nginx
+  dnsPolicy: ClusterFirst  # Usa CoreDNS del cluster (default)
+
+---
+# ============================================
+# 9. POD CON DNS POLICY (Default)
+# ============================================
+# Pod heredando DNS del nodo
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-default-pod
+  namespace: default
+spec:
+  containers:
+    - name: app
+      image: nginx
+  dnsPolicy: Default  # Hereda /etc/resolv.conf del nodo
+
+---
+# ============================================
+# 10. NODELOCAL DNSCACHE (Performance)
+# ============================================
+# DaemonSet para cache DNS local en cada nodo
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+data:
+  Corefile: |
+    cluster.local:53 {
+        errors
+        cache {
+            success 9984 30
+            denial 9984 5
+        }
+        reload
+        loop
+        bind 169.254.20.10
+        forward . __PILLAR__CLUSTER__DNS__ {
+            force_tcp
+        }
+        prometheus :9253
+    }
+    
+    in-addr.arpa:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind 169.254.20.10
+        forward . __PILLAR__CLUSTER__DNS__ {
+            force_tcp
+        }
+        prometheus :9253
+    }
+    
+    ip6.arpa:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind 169.254.20.10
+        forward . __PILLAR__CLUSTER__DNS__ {
+            force_tcp
+        }
+        prometheus :9253
+    }
+    
+    .:53 {
+        errors
+        cache 30
+        reload
+        loop
+        bind 169.254.20.10
+        forward . __PILLAR__UPSTREAM__SERVERS__ {
+            force_tcp
+        }
+        prometheus :9253
+    }
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+  labels:
+    k8s-app: node-local-dns
+spec:
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: node-local-dns
+  template:
+    metadata:
+      labels:
+        k8s-app: node-local-dns
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: node-local-dns
+      hostNetwork: true
+      dnsPolicy: Default
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+        - effect: "NoExecute"
+          operator: "Exists"
+        - effect: "NoSchedule"
+          operator: "Exists"
+      containers:
+        - name: node-cache
+          image: registry.k8s.io/dns/k8s-dns-node-cache:1.22.20
+          resources:
+            requests:
+              cpu: 25m
+              memory: 5Mi
+            limits:
+              memory: 30Mi
+          args:
+            - -localip
+            - 169.254.20.10
+            - -conf
+            - /etc/Corefile
+            - -upstreamsvc
+            - kube-dns-upstream
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 53
+              name: dns
+              protocol: UDP
+            - containerPort: 53
+              name: dns-tcp
+              protocol: TCP
+            - containerPort: 9253
+              name: metrics
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              host: 169.254.20.10
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+          volumeMounts:
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+              readOnly: false
+            - name: config-volume
+              mountPath: /etc/coredns
+            - name: kube-dns-config
+              mountPath: /etc/kube-dns
+      volumes:
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        - name: kube-dns-config
+          configMap:
+            name: kube-dns
+            optional: true
+        - name: config-volume
+          configMap:
+            name: node-local-dns
+            items:
+              - key: Corefile
+                path: Corefile.base
+
+---
+# ============================================
+# 11. SERVICE ACCOUNT PARA NODE-LOCAL-DNS
+# ============================================
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-local-dns
+  namespace: kube-system
+
+---
+# ============================================
+# 12. COREDNS AUTOPATH (Optimización búsquedas)
+# ============================================
+# Reduce número de consultas DNS con autopath
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-autopath
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        
+        # Autopath reduce consultas DNS
+        autopath @kubernetes
+        
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+
+---
+# ============================================
+# COMANDOS ÚTILES PARA DNS
+# ============================================
+
+# Ver ConfigMap de CoreDNS:
+# kubectl get cm coredns -n kube-system -o yaml
+
+# Editar ConfigMap de CoreDNS:
+# kubectl edit cm coredns -n kube-system
+
+# Ver pods de CoreDNS:
+# kubectl get pods -n kube-system -l k8s-app=kube-dns
+
+# Ver logs de CoreDNS:
+# kubectl logs -n kube-system -l k8s-app=kube-dns -f
+
+# Restart CoreDNS (aplicar cambios):
+# kubectl rollout restart deployment coredns -n kube-system
+
+# Test DNS desde un pod:
+# kubectl run dnsutils --image=registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3 --rm -it -- /bin/bash
+# nslookup kubernetes.default
+# nslookup my-service.default.svc.cluster.local
+# dig kubernetes.default.svc.cluster.local
+# host kubernetes.default
+
+# Ver /etc/resolv.conf de un pod:
+# kubectl exec <pod-name> -- cat /etc/resolv.conf
+
+# Ver service de kube-dns:
+# kubectl get svc kube-dns -n kube-system
+
+# Ver endpoints de kube-dns:
+# kubectl get endpoints kube-dns -n kube-system
+
+# Verificar métricas de CoreDNS:
+# kubectl port-forward -n kube-system svc/kube-dns 9153:9153
+# curl http://localhost:9153/metrics
+
+# Test DNS externo:
+# kubectl run busybox --image=busybox --rm -it -- nslookup google.com
+
+# Debug DNS completo:
+# kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- /bin/bash
+# nslookup kubernetes.default
+# dig @10.96.0.10 kubernetes.default.svc.cluster.local
+# cat /etc/resolv.conf
+
+# Ver configuración actual de CoreDNS:
+# kubectl describe cm coredns -n kube-system

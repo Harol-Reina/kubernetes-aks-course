@@ -1,0 +1,606 @@
+# ============================================================================
+# RBAC DEBUGGING - Escenarios de Troubleshooting RBAC
+# ============================================================================
+# Este archivo contiene escenarios comunes de problemas con RBAC y permisos.
+#
+# Uso:
+#   kubectl apply -f rbac-debugging.yaml
+#   kubectl auth can-i --list --as=system:serviceaccount:default:restricted-sa
+# ============================================================================
+
+---
+# ============================================================================
+# 1. ServiceAccount Sin Permisos
+# ============================================================================
+# SA que no puede hacer nada (sin Role/RoleBinding)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: restricted-sa
+  namespace: default
+---
+# Pod usando SA sin permisos
+apiVersion: v1
+kind: Pod
+metadata:
+  name: restricted-pod
+  namespace: default
+spec:
+  serviceAccountName: restricted-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test (dentro del pod):
+# kubectl get pods  # ← Forbidden
+
+---
+# ============================================================================
+# 2. Role con Permisos Incorrectos
+# ============================================================================
+# Role que solo permite "get" pero app necesita "list"
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: readonly-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wrong-verbs-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]  # ← Solo get, falta list/watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wrong-verbs-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: readonly-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: wrong-verbs-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readonly-pod
+  namespace: default
+spec:
+  serviceAccountName: readonly-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test:
+# kubectl exec readonly-pod -- kubectl get pod readonly-pod  # ← OK (get)
+# kubectl exec readonly-pod -- kubectl get pods              # ← Forbidden (list)
+
+---
+# ============================================================================
+# 3. RoleBinding en Namespace Incorrecto
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-namespace
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-sa
+  namespace: app-namespace
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: app-namespace
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+# RoleBinding en namespace INCORRECTO
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-reader-binding
+  namespace: default  # ← Debería ser "app-namespace"
+subjects:
+- kind: ServiceAccount
+  name: app-sa
+  namespace: app-namespace
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+  namespace: app-namespace
+spec:
+  serviceAccountName: app-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test:
+# kubectl exec -n app-namespace app-pod -- kubectl get pods  # ← Forbidden
+
+---
+# ============================================================================
+# 4. ClusterRole vs Role Confusion
+# ============================================================================
+# Intenta usar ClusterRole con RoleBinding (funciona pero scope limitado)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: confused-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-pod-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+# RoleBinding (no ClusterRoleBinding) = scope limitado a namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: confused-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: confused-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-pod-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: confused-pod
+  namespace: default
+spec:
+  serviceAccountName: confused-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test:
+# kubectl exec confused-pod -- kubectl get pods              # ← OK (default namespace)
+# kubectl exec confused-pod -- kubectl get pods -A           # ← Forbidden (all namespaces)
+
+---
+# ============================================================================
+# 5. Missing API Group
+# ============================================================================
+# Role sin apiGroup para Deployments (necesita "apps")
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: wrong-apigroup-role
+  namespace: default
+rules:
+- apiGroups: [""]  # ← Incorrecto, Deployments están en "apps"
+  resources: ["deployments"]
+  verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: wrong-apigroup-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: deploy-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: wrong-apigroup-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: deploy-pod
+  namespace: default
+spec:
+  serviceAccountName: deploy-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test:
+# kubectl exec deploy-pod -- kubectl get deployments  # ← Forbidden
+
+---
+# ============================================================================
+# 6. Secrets Access Denied
+# ============================================================================
+# SA que puede ver pods pero NO secrets
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: no-secrets-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: no-secrets-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps"]
+  verbs: ["get", "list"]
+# ← secrets NO incluido
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: no-secrets-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: no-secrets-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: no-secrets-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-secrets-pod
+  namespace: default
+spec:
+  serviceAccountName: no-secrets-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test:
+# kubectl exec no-secrets-pod -- kubectl get pods       # ← OK
+# kubectl exec no-secrets-pod -- kubectl get secrets    # ← Forbidden
+
+---
+# ============================================================================
+# 7. Node Access for Debugging
+# ============================================================================
+# SA que necesita acceso a nodes (común error: falta permisos)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-reader-sa
+  namespace: default
+---
+# Role que solo funciona en namespace (nodes son cluster-wide)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: node-reader-role  # ← ERROR: Debería ser ClusterRole
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: node-reader-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: node-reader-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: node-reader-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-reader-pod
+  namespace: default
+spec:
+  serviceAccountName: node-reader-sa
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# Test:
+# kubectl exec node-reader-pod -- kubectl get nodes  # ← Forbidden
+
+---
+# ============================================================================
+# 8. Correct RBAC Examples (For Comparison)
+# ============================================================================
+
+# ============================================================================
+# 8a. Correct: Full Pod Access
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-admin-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-admin-role
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-admin-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: pod-admin-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: pod-admin-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ============================================================================
+# 8b. Correct: Cluster-wide Read-Only
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-viewer-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-viewer-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-viewer-binding
+subjects:
+- kind: ServiceAccount
+  name: cluster-viewer-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-viewer-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ============================================================================
+# 8c. Correct: Deployment Manager
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deploy-manager-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deploy-manager-role
+  namespace: default
+rules:
+- apiGroups: ["apps"]  # ← Correcto: "apps" para Deployments
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]  # Para ver pods del deployment
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deploy-manager-binding
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: deploy-manager-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: deploy-manager-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ============================================================================
+# DIAGNOSTIC COMMANDS
+# ============================================================================
+
+# Check if SA can perform action:
+# kubectl auth can-i create pods --as=system:serviceaccount:default:restricted-sa
+# kubectl auth can-i get secrets --as=system:serviceaccount:default:no-secrets-sa
+
+# List all permissions for SA:
+# kubectl auth can-i --list --as=system:serviceaccount:default:pod-admin-sa
+
+# From inside pod:
+# kubectl exec <pod> -- kubectl auth can-i create pods
+# kubectl exec <pod> -- kubectl auth can-i --list
+
+# View Role:
+# kubectl describe role <role-name>
+# kubectl get role <role-name> -o yaml
+
+# View RoleBinding:
+# kubectl describe rolebinding <binding-name>
+# kubectl get rolebinding <binding-name> -o yaml
+
+# Find all RoleBindings for a SA:
+# kubectl get rolebindings -o json | jq '.items[] | select(.subjects[]?.name=="pod-admin-sa")'
+
+# View ClusterRole:
+# kubectl describe clusterrole <role-name>
+
+# View ClusterRoleBinding:
+# kubectl describe clusterrolebinding <binding-name>
+
+# ============================================================================
+# FIXES
+# ============================================================================
+
+# Fix 1: Grant permissions to restricted-sa
+# kubectl create role pod-reader --verb=get,list --resource=pods
+# kubectl create rolebinding restricted-sa-binding --role=pod-reader --serviceaccount=default:restricted-sa
+
+# Fix 2: Add "list" verb to wrong-verbs-role
+# kubectl patch role wrong-verbs-role -p '{"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get","list","watch"]}]}'
+
+# Fix 3: Move RoleBinding to correct namespace
+# kubectl delete rolebinding pod-reader-binding -n default
+# kubectl create rolebinding pod-reader-binding --role=pod-reader --serviceaccount=app-namespace:app-sa -n app-namespace
+
+# Fix 4: Use ClusterRoleBinding for cluster-wide access
+# kubectl delete rolebinding confused-binding
+# kubectl create clusterrolebinding confused-binding --clusterrole=cluster-pod-reader --serviceaccount=default:confused-sa
+
+# Fix 5: Fix apiGroup for Deployments
+# kubectl patch role wrong-apigroup-role -p '{"rules":[{"apiGroups":["apps"],"resources":["deployments"],"verbs":["get","list","create"]}]}'
+
+# Fix 6: Add secrets to role
+# kubectl patch role no-secrets-role -p '{"rules":[{"apiGroups":[""],"resources":["pods","configmaps","secrets"],"verbs":["get","list"]}]}'
+
+# Fix 7: Use ClusterRole for nodes
+# kubectl delete role node-reader-role
+# kubectl delete rolebinding node-reader-binding
+# kubectl create clusterrole node-reader-role --verb=get,list --resource=nodes
+# kubectl create clusterrolebinding node-reader-binding --clusterrole=node-reader-role --serviceaccount=default:node-reader-sa
+
+# ============================================================================
+# TESTING FROM INSIDE PODS
+# ============================================================================
+
+# Test restricted-sa (should fail):
+# kubectl exec restricted-pod -- kubectl get pods
+
+# Test readonly-sa (get works, list fails):
+# kubectl exec readonly-pod -- kubectl get pod readonly-pod    # OK
+# kubectl exec readonly-pod -- kubectl get pods                # Forbidden
+
+# Test app-sa (wrong namespace):
+# kubectl exec -n app-namespace app-pod -- kubectl get pods    # Forbidden
+
+# Test confused-sa (namespace vs cluster):
+# kubectl exec confused-pod -- kubectl get pods                # OK (default ns)
+# kubectl exec confused-pod -- kubectl get pods -A             # Forbidden
+
+# Test deploy-sa (wrong apiGroup):
+# kubectl exec deploy-pod -- kubectl get deployments           # Forbidden
+
+# Test no-secrets-sa:
+# kubectl exec no-secrets-pod -- kubectl get configmaps        # OK
+# kubectl exec no-secrets-pod -- kubectl get secrets           # Forbidden
+
+# Test node-reader-sa (nodes are cluster-wide):
+# kubectl exec node-reader-pod -- kubectl get nodes            # Forbidden
+
+# Test correct SAs (should all work):
+# kubectl exec -it <pod-with-pod-admin-sa> -- kubectl get pods
+# kubectl exec -it <pod-with-cluster-viewer-sa> -- kubectl get pods -A
+# kubectl exec -it <pod-with-deploy-manager-sa> -- kubectl get deployments
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+# kubectl delete -f rbac-debugging.yaml
+# kubectl delete namespace app-namespace
