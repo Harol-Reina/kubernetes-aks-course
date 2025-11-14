@@ -1,301 +1,152 @@
-# 🚀 Laboratorios - Instalación de Minikube# Laboratorios del Módulo 03: Instalación de Minikube
+# Laboratorios del Módulo 03: Instalación de Minikube
 
+Este directorio contiene laboratorios prácticos paso a paso para aprender a instalar y configurar un entorno de Kubernetes usando Minikube.
 
+---
 
-Este módulo contiene laboratorios prácticos para la instalación completa de Minikube en una VM.Este directorio contiene laboratorios prácticos paso a paso para aprender a instalar y configurar un entorno de Kubernetes usando Minikube.
-
-
-
-## 📋 Índice de Laboratorios---
-
-
-
-### [Lab 01: Preparación de VM](./lab-01-preparacion-vm/)## 📚 Laboratorios Disponibles
-
-**Duración:** 30-45 minutos | **Dificultad:** ⭐⭐☆☆☆
+## 📚 Laboratorios Disponibles
 
 ### Lab 01: Instalación de Docker
-
-Preparación del entorno base para Minikube.**Archivo**: `instalacion-docker.md`  
-
+**Archivo**: `instalacion-docker.md`  
 **Duración**: 30-40 minutos  
+**Nivel**: Principiante
 
-**Objetivos:****Nivel**: Principiante
-
-- Actualizar sistema operativo
-
-- Configurar requisitos previos**Objetivos**:
-
-- Verificar recursos disponibles- Instalar Docker Engine en Ubuntu
-
-- Configurar red y permisos- Configurar permisos de usuario
-
+**Objetivos**:
+- Instalar Docker Engine en Ubuntu
+- Configurar permisos de usuario
 - Verificar instalación correcta
-
----- Ejecutar primer contenedor
-
-
-
-### [Lab 02: Instalación de Docker](./lab-02-instalacion-docker/)**Prerequisitos**:
-
-**Duración:** 45-60 minutos | **Dificultad:** ⭐⭐☆☆☆- Ubuntu 20.04+
-
-- Acceso sudo
-
-Instalación y configuración de Docker como runtime.- Conexión a internet
-
-
-
-**Objetivos:****Relación con ejemplos**:
-
-- Instalar Docker Engine- Script automatizado: `ejemplos/01-instalacion/install-docker.sh`
-
-- Configurar usuario sin sudo- Teoría: README.md - Sección 2
-
-- Verificar instalación
-
-- Configurar daemon---
-
-
-
----### Lab 02: Instalación de kubectl
-
-**Archivo**: `instalacion-kubectl.md`  
-
-### [Lab 03: Instalación de kubectl](./lab-03-instalacion-kubectl/)**Duración**: 20-30 minutos  
-
-**Duración:** 20-30 minutos | **Dificultad:** ⭐☆☆☆☆**Nivel**: Principiante
-
-
-
-Instalación de la herramienta CLI de Kubernetes.**Objetivos**:
-
-- Instalar kubectl (cliente de Kubernetes)
-
-**Objetivos:**- Configurar autocomplete
-
-- Descargar kubectl- Comprender comandos básicos
-
-- Instalar y configurar PATH- Preparar entorno para conectarse a clusters
-
-- Verificar instalación
-
-- Autocompletado**Prerequisitos**:
-
-- Ninguno (kubectl es independiente)
-
----
-
-**Relación con ejemplos**:
-
-### [Lab 04: Instalación de Minikube](./lab-04-instalacion-minikube/)- Script automatizado: `ejemplos/01-instalacion/install-kubectl.sh`
-
-**Duración:** 30-45 minutos | **Dificultad:** ⭐⭐☆☆☆- Autocomplete: `ejemplos/02-configuracion/kubectl-autocomplete-bash.sh`
-
-- Teoría: README.md - Sección 3
-
-Instalación de Minikube.
-
----
-
-**Objetivos:**
-
-- Descargar Minikube### Lab 03: Instalación de Minikube
-
-- Instalar binario**Archivo**: `instalacion-minikube.md`  
-
-- Verificar instalación**Duración**: 30-45 minutos  
-
-- Configuración inicial**Nivel**: Principiante-Intermedio
-
-
-
----**Objetivos**:
-
-- Instalar Minikube
-
-### [Lab 05: Configuración Driver None](./lab-05-configuracion-driver-none/)- Iniciar primer cluster
-
-**Duración:** 45-60 minutos | **Dificultad:** ⭐⭐⭐☆☆- Comprender parámetros de configuración
-
-- Verificar cluster funcionando
-
-Configuración de Minikube con driver none (bare metal).
+- Ejecutar primer contenedor
 
 **Prerequisitos**:
+- Ubuntu 20.04+
+- Acceso sudo
+- Conexión a internet
 
-**Objetivos:**- Docker instalado (Lab 01)
+**Relación con ejemplos**:
+- Script automatizado: `ejemplos/01-instalacion/install-docker.sh`
+- Teoría: README.md - Sección 2
 
-- Entender driver none- kubectl instalado (Lab 02)
+---
 
-- Configurar permisos
+### Lab 02: Instalación de kubectl
+**Archivo**: `instalacion-kubectl.md`  
+**Duración**: 20-30 minutos  
+**Nivel**: Principiante
 
-- Iniciar Minikube sin VM**Relación con ejemplos**:
+**Objetivos**:
+- Instalar kubectl (cliente de Kubernetes)
+- Configurar autocomplete
+- Comprender comandos básicos
+- Preparar entorno para conectarse a clusters
 
-- Troubleshooting común- Script instalación: `ejemplos/01-instalacion/install-minikube.sh`
+**Prerequisitos**:
+- Ninguno (kubectl es independiente)
 
+**Relación con ejemplos**:
+- Script automatizado: `ejemplos/01-instalacion/install-kubectl.sh`
+- Autocomplete: `ejemplos/02-configuracion/kubectl-autocomplete-bash.sh`
+- Teoría: README.md - Sección 3
+
+---
+
+### Lab 03: Instalación de Minikube
+**Archivo**: `instalacion-minikube.md`  
+**Duración**: 30-45 minutos  
+**Nivel**: Principiante-Intermedio
+
+**Objetivos**:
+- Instalar Minikube
+- Iniciar primer cluster
+- Comprender parámetros de configuración
+- Verificar cluster funcionando
+
+**Prerequisitos**:
+- Docker instalado (Lab 01)
+- kubectl instalado (Lab 02)
+
+**Relación con ejemplos**:
+- Script instalación: `ejemplos/01-instalacion/install-minikube.sh`
 - Script inicio: `ejemplos/02-configuracion/minikube-start-custom.sh`
-
----- Verificación: `ejemplos/02-configuracion/verify-cluster.sh`
-
+- Verificación: `ejemplos/02-configuracion/verify-cluster.sh`
 - Teoría: README.md - Sección 4
 
-### [Lab 06: Verificación y Testing](./lab-06-verificacion-testing/)
+---
 
-**Duración:** 45-60 minutos | **Dificultad:** ⭐⭐☆☆☆---
-
-
-
-Verificación completa de la instalación.### Lab 04: Preparación de VM
-
+### Lab 04: Preparación de VM
 **Archivo**: `preparacion-vm.md`  
+**Duración**: 45-60 minutos  
+**Nivel**: Intermedio
 
-**Objetivos:****Duración**: 45-60 minutos  
-
-- Verificar componentes del cluster**Nivel**: Intermedio
-
-- Desplegar aplicación de prueba
-
-- Probar networking**Objetivos**:
-
-- Comandos esenciales- Configurar Azure VM para Kubernetes
-
+**Objetivos**:
+- Configurar Azure VM para Kubernetes
 - Optimizar recursos del sistema
-
----- Configurar networking
-
+- Configurar networking
 - Preparar entorno completo de desarrollo
+
+**Prerequisitos**:
+- Azure VM con Ubuntu
+- Acceso SSH
+- Conocimientos básicos de Linux
+
+**Contexto**: Este laboratorio es específico para el entorno de Azure VM que usamos en el curso.
+
+---
+
+### Lab 05: Verificación y Testing
+**Archivo**: `verificacion-testing.md`  
+**Duración**: 40-60 minutos  
+**Nivel**: Intermedio
+
+**Objetivos**:
+- Verificar instalación completa
+- Ejecutar tests de funcionalidad
+- Troubleshooting de problemas comunes
+- Validar cluster production-ready
+
+**Prerequisitos**:
+- Labs 01, 02, 03 completados
+- Cluster Minikube funcionando
+
+**Relación con ejemplos**:
+- Script verificación: `ejemplos/02-configuracion/verify-cluster.sh`
+- Primera app: `ejemplos/03-primeros-pasos/primera-app.sh`
+- Teoría: README.md - Sección 7 (Troubleshooting)
+
+---
+
+### Lab 06: Configuración del Driver (Avanzado)
+**Archivo**: `configuracion-driver-none.md`  
+**Duración**: 60+ minutos  
+**Nivel**: Avanzado
+
+**Objetivos**:
+- Comprender driver "none" (bare metal)
+- Configuración avanzada de Minikube
+- Casos de uso especiales
+- Limitaciones y consideraciones
+
+**⚠️ ADVERTENCIA**: El driver "none" está **deprecado** y NO es recomendado para la mayoría de usuarios.
+
+**Prerequisitos**:
+- Experiencia con Kubernetes
+- Conocimientos avanzados de Linux
+- Entender riesgos de seguridad
+
+**Recomendación**: Usa este laboratorio solo con propósitos educativos o casos muy específicos. Para uso normal, utiliza el driver Docker (ver `ejemplos/01-instalacion/comparativa-drivers.md`).
+
+---
 
 ## 🎯 Ruta de Aprendizaje Recomendada
 
-**Prerequisitos**:
-
-Ejecutar los laboratorios **en orden secuencial** (01 → 06):- Azure VM con Ubuntu
-
-- Acceso SSH
-
-1. **Preparación** → Labs 01-02 (VM y Docker)- Conocimientos básicos de Linux
-
-2. **Herramientas** → Labs 03-04 (kubectl y Minikube)
-
-3. **Configuración** → Labs 05-06 (Driver y Verificación)**Contexto**: Este laboratorio es específico para el entorno de Azure VM que usamos en el curso.
-
-
-
-**Tiempo total estimado:** 3.5-5 horas---
-
-
-
-## 📚 Prerequisitos Generales### Lab 05: Verificación y Testing
-
-**Archivo**: `verificacion-testing.md`  
-
-### Hardware Mínimo**Duración**: 40-60 minutos  
-
-- CPU: 2 cores (4 recomendado)**Nivel**: Intermedio
-
-- RAM: 4GB (8GB recomendado)
-
-- Disco: 20GB libres**Objetivos**:
-
-- Verificar instalación completa
-
-### Software- Ejecutar tests de funcionalidad
-
-- Ubuntu 20.04 o superior- Troubleshooting de problemas comunes
-
-- Acceso root/sudo- Validar cluster production-ready
-
-- Conexión a Internet estable
-
-**Prerequisitos**:
-
-### Conocimientos- Labs 01, 02, 03 completados
-
-- Linux básico (comandos, permisos)- Cluster Minikube funcionando
-
-- Conceptos básicos de virtualización
-
-- Familiaridad con terminal**Relación con ejemplos**:
-
-- Script verificación: `ejemplos/02-configuracion/verify-cluster.sh`
-
-## ⚠️ Importante- Primera app: `ejemplos/03-primeros-pasos/primera-app.sh`
-
-- Teoría: README.md - Sección 7 (Troubleshooting)
-
-### Driver None vs Other Drivers
-
-**Driver None:**---
-
-- ✅ Máximo rendimiento
-
-- ✅ Sin overhead de virtualización### Lab 06: Configuración del Driver (Avanzado)
-
-- ❌ Requiere root**Archivo**: `configuracion-driver-none.md`  
-
-- ❌ Afecta sistema host**Duración**: 60+ minutos  
-
-- **Recomendado solo para VMs dedicadas****Nivel**: Avanzado
-
-
-
-**Docker/VirtualBox/etc:****Objetivos**:
-
-- ✅ Aislamiento del host- Comprender driver "none" (bare metal)
-
-- ✅ No requiere root- Configuración avanzada de Minikube
-
-- ❌ Menor rendimiento- Casos de uso especiales
-
-- **Recomendado para desarrollo local**- Limitaciones y consideraciones
-
-
-
-## 🧹 Limpieza**⚠️ ADVERTENCIA**: El driver "none" está **deprecado** y NO es recomendado para la mayoría de usuarios.
-
-
-
-Para desinstalar completamente:**Prerequisitos**:
-
-```bash- Experiencia con Kubernetes
-
-# Detener y eliminar Minikube- Conocimientos avanzados de Linux
-
-minikube delete --all --purge- Entender riesgos de seguridad
-
-
-
-# Eliminar binarios**Recomendación**: Usa este laboratorio solo con propósitos educativos o casos muy específicos. Para uso normal, utiliza el driver Docker (ver `ejemplos/01-instalacion/comparativa-drivers.md`).
-
-sudo rm /usr/local/bin/minikube
-
-sudo rm /usr/local/bin/kubectl---
-
-
-
-# Eliminar configuraciones## 🎯 Ruta de Aprendizaje Recomendada
-
-rm -rf ~/.minikube
-
-rm -rf ~/.kube### Para Principiantes Completos
+### Para Principiantes Completos
 
 ```
-
-```
-
-## 💡 Tips1. preparacion-vm.md           (si usas Azure VM)
-
+1. preparacion-vm.md           (si usas Azure VM)
    ↓
-
-- Usa `minikube status` para verificar estado2. instalacion-docker.md        (Lab 01)
-
-- `minikube logs` para troubleshooting   ↓
-
-- `minikube ssh` para acceder al node3. instalacion-kubectl.md       (Lab 02)
-
-- Snapshots de VM antes de cambios importantes   ↓
-
+2. instalacion-docker.md        (Lab 01)
+   ↓
+3. instalacion-kubectl.md       (Lab 02)
+   ↓
 4. instalacion-minikube.md      (Lab 03)
    ↓
 5. verificacion-testing.md      (Lab 05)
