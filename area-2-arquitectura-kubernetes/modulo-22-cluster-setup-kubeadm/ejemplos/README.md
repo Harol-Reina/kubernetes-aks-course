@@ -1,11 +1,35 @@
-# Ejemplos: Cluster Setup con kubeadm
+# Ejemplos - Módulo 22: Cluster Setup con Kubeadm
 
-Esta carpeta contiene configuraciones y scripts de ejemplo para el setup de clusters de Kubernetes con kubeadm.
+> **Enfoque**: Archivos de configuración para instalación y setup de clusters  
+> **Total**: 4 configuraciones de producción
 
-## 📁 Contenido
+## 📁 Estructura
 
-### 1. **kubeadm-config.yaml**
-Archivo de configuración personalizado para `kubeadm init` en un cluster de producción.
+```
+ejemplos/
+├── README.md                   # Este archivo
+├── 01-calico-custom/          # Calico CNI personalizado
+│   ├── README.md
+│   ├── calico-custom.yaml
+│   └── cleanup.sh
+├── 02-containerd-config/      # Configuración de containerd
+│   ├── README.md
+│   ├── containerd-config.toml
+│   └── cleanup.sh
+├── 03-kubeadm-config/         # Kubeadm init config
+│   ├── README.md
+│   ├── kubeadm-config.yaml
+│   └── cleanup.sh
+└── 04-kubeadm-ha-config/      # Kubeadm HA config
+    ├── README.md
+    ├── kubeadm-ha-config.yaml
+    └── cleanup.sh
+```
+
+## 📋 Configuraciones Disponibles
+
+### [01: Calico Custom](./01-calico-custom/)
+Configuración personalizada de Calico CNI
 
 **Características:**
 - ✅ Control plane de un solo nodo
