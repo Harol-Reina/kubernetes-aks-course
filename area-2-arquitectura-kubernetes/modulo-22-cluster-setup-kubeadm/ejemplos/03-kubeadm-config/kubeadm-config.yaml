@@ -1,0 +1,110 @@
+# Archivo de configuración personalizado para kubeadm init
+# Uso: kubeadm init --config kubeadm-config.yaml
+
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef  # Token para workers (24 horas validez)
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+localAPIEndpoint:
+  advertiseAddress: 192.168.1.10  # IP del control plane
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  imagePullPolicy: IfNotPresent
+  name: k8s-master-01
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: v1.28.0
+clusterName: production-cluster
+controlPlaneEndpoint: "k8s-master-01:6443"  # Para single master
+
+# Configuración de red
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 192.168.0.0/16      # Para Calico
+  serviceSubnet: 10.96.0.0/12    # Default service network
+
+# API Server settings
+apiServer:
+  timeoutForControlPlane: 4m0s
+  certSANs:
+  - "k8s-master-01"
+  - "192.168.1.10"
+  - "127.0.0.1"
+  extraArgs:
+    authorization-mode: "Node,RBAC"
+    enable-admission-plugins: "NodeRestriction,PodSecurityPolicy"
+    audit-log-path: "/var/log/kubernetes/audit.log"
+    audit-log-maxage: "30"
+    audit-log-maxbackup: "10"
+    audit-log-maxsize: "100"
+
+# Controller Manager settings
+controllerManager:
+  extraArgs:
+    node-monitor-grace-period: "40s"
+    node-monitor-period: "5s"
+    pod-eviction-timeout: "5m0s"
+
+# Scheduler settings
+scheduler:
+  extraArgs:
+    profiling: "false"
+
+# Etcd configuration
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+    extraArgs:
+      snapshot-count: "10000"
+      quota-backend-bytes: "8589934592"  # 8 GB
+
+# Certificate directories
+certificatesDir: /etc/kubernetes/pki
+
+# Image repository
+imageRepository: registry.k8s.io
+
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+failSwapOn: true
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    enabled: true
+authorization:
+  mode: Webhook
+clusterDNS:
+- 10.96.0.10
+clusterDomain: cluster.local
+runtimeRequestTimeout: "15m"
+rotateCertificates: true
+serverTLSBootstrap: true
+evictionHard:
+  memory.available: "100Mi"
+  nodefs.available: "10%"
+  nodefs.inodesFree: "5%"
+  imagefs.available: "15%"
+maxPods: 110
+
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: ipvs  # Mejor performance que iptables
+ipvs:
+  strictARP: true  # Para MetalLB compatibility
+clusterCIDR: 192.168.0.0/16

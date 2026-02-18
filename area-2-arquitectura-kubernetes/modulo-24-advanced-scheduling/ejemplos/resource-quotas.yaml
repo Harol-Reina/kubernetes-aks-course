@@ -1,0 +1,320 @@
+# ============================================
+# EJEMPLOS DE RESOURCE QUOTAS
+# ============================================
+
+# ------------------------------
+# Ejemplo 1: Compute Resource Quota
+# ------------------------------
+# Limita CPU y memoria en namespace
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: development
+spec:
+  hard:
+    # CPU
+    requests.cpu: "10"      # Total CPU requests: 10 cores
+    limits.cpu: "20"        # Total CPU limits: 20 cores
+    
+    # Memoria
+    requests.memory: "20Gi" # Total memory requests: 20 GB
+    limits.memory: "40Gi"   # Total memory limits: 40 GB
+
+---
+# ------------------------------
+# Ejemplo 2: Object Count Quota
+# ------------------------------
+# Limita número de objetos en namespace
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: development
+spec:
+  hard:
+    # Pods y Deployments
+    pods: "50"                        # Máximo 50 pods
+    replicationcontrollers: "10"
+    
+    # Services
+    services: "10"                    # Máximo 10 services
+    services.loadbalancers: "2"       # Máximo 2 LoadBalancers
+    services.nodeports: "5"           # Máximo 5 NodePort services
+    
+    # Storage
+    persistentvolumeclaims: "20"      # Máximo 20 PVCs
+    
+    # ConfigMaps y Secrets
+    configmaps: "20"
+    secrets: "30"
+
+---
+# ------------------------------
+# Ejemplo 3: Storage Resource Quota
+# ------------------------------
+# Limita almacenamiento por storage class
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: storage-quota
+  namespace: production
+spec:
+  hard:
+    # Total storage requests
+    requests.storage: "500Gi"
+    
+    # Por storage class
+    requests.storage.class.ssd: "200Gi"
+    requests.storage.class.hdd: "1Ti"
+    
+    # Número de PVCs
+    persistentvolumeclaims: "50"
+    ssd.storageclass.storage.k8s.io/persistentvolumeclaims: "20"
+
+---
+# ------------------------------
+# Ejemplo 4: Quota con Scope - BestEffort
+# ------------------------------
+# Aplica solo a pods sin resource requests/limits
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: besteffort-quota
+  namespace: development
+spec:
+  hard:
+    pods: "5"  # Solo 5 pods BestEffort permitidos
+  scopes:
+  - BestEffort
+
+---
+# ------------------------------
+# Ejemplo 5: Quota con Scope - NotBestEffort
+# ------------------------------
+# Aplica solo a pods con resource requests/limits
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: notbesteffort-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "50"
+    requests.memory: "100Gi"
+    limits.cpu: "100"
+    limits.memory: "200Gi"
+  scopes:
+  - NotBestEffort
+
+---
+# ------------------------------
+# Ejemplo 6: Quota por PriorityClass
+# ------------------------------
+# Limita recursos según prioridad
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: high-priority-quota
+  namespace: production
+spec:
+  hard:
+    pods: "20"
+    requests.cpu: "40"
+    requests.memory: "80Gi"
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values: ["high-priority"]
+
+---
+# ------------------------------
+# Ejemplo 7: Quota Combinada (Producción)
+# ------------------------------
+# ResourceQuota completa para namespace de producción
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production
+spec:
+  hard:
+    # Compute Resources
+    requests.cpu: "100"
+    requests.memory: "200Gi"
+    limits.cpu: "200"
+    limits.memory: "400Gi"
+    
+    # Storage
+    requests.storage: "2Ti"
+    persistentvolumeclaims: "100"
+    
+    # Objects
+    pods: "200"
+    services: "50"
+    services.loadbalancers: "10"
+    configmaps: "100"
+    secrets: "150"
+    
+    # GPU (si aplica)
+    requests.nvidia.com/gpu: "4"
+
+---
+# ============================================
+# PODS DE EJEMPLO - Cumpliendo con Quotas
+# ============================================
+
+# ------------------------------
+# Pod que respeta Compute Quota
+# ------------------------------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-resources
+  namespace: development
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "500m"      # Contribuye al requests.cpu quota
+        memory: "512Mi"  # Contribuye al requests.memory quota
+      limits:
+        cpu: "1000m"     # Contribuye al limits.cpu quota
+        memory: "1Gi"    # Contribuye al limits.memory quota
+
+---
+# ------------------------------
+# Deployment con Resource Quotas
+# ------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: development
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.25
+        resources:
+          requests:
+            cpu: "200m"      # 3 replicas = 600m total
+            memory: "256Mi"  # 3 replicas = 768Mi total
+          limits:
+            cpu: "500m"      # 3 replicas = 1500m total
+            memory: "512Mi"  # 3 replicas = 1536Mi total
+
+---
+# ============================================
+# NAMESPACE CON QUOTA APLICADA
+# ============================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-frontend
+
+---
+# ResourceQuota para team-frontend
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-frontend-quota
+  namespace: team-frontend
+spec:
+  hard:
+    # Compute
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    limits.cpu: "40"
+    limits.memory: "80Gi"
+    
+    # Objects
+    pods: "100"
+    services: "20"
+    persistentvolumeclaims: "30"
+    
+    # Storage
+    requests.storage: "500Gi"
+
+---
+# ============================================
+# COMANDOS ÚTILES
+# ============================================
+
+# Ver ResourceQuotas en namespace:
+# kubectl get resourcequota -n development
+
+# Detalles de una quota:
+# kubectl describe resourcequota compute-quota -n development
+
+# Ver uso actual vs límites:
+# kubectl get resourcequota -n development -o yaml
+
+# Listar todas las quotas del cluster:
+# kubectl get resourcequota --all-namespaces
+
+# Ver uso de recursos en namespace:
+# kubectl top pods -n development
+# kubectl top nodes
+
+# Crear quota:
+# kubectl apply -f resource-quotas.yaml
+
+# Ver eventos relacionados con quotas:
+# kubectl get events -n development --field-selector reason=FailedCreate
+
+# Calcular uso actual de recursos:
+# kubectl get pods -n development -o custom-columns=NAME:.metadata.name,CPU_REQ:.spec.containers[*].resources.requests.cpu,MEM_REQ:.spec.containers[*].resources.requests.memory
+
+# ============================================
+# TROUBLESHOOTING
+# ============================================
+
+# Error común: "exceeded quota"
+# Solución:
+# 1. Ver uso actual: kubectl describe resourcequota -n <namespace>
+# 2. Identificar recursos que exceden límite
+# 3. Opciones:
+#    a) Reducir requests/limits de pods
+#    b) Eliminar pods innecesarios
+#    c) Aumentar quota (si es apropiado)
+
+# Verificar si pod puede crearse:
+# kubectl auth can-i create pods --as=system:serviceaccount:development:default -n development
+
+# Ver por qué falló creación de pod:
+# kubectl get events -n development --sort-by='.lastTimestamp' | grep "quota"
+
+# ============================================
+# BUENAS PRÁCTICAS
+# ============================================
+
+# 1. Siempre definir quotas en namespaces compartidos
+# 2. Usar LimitRange junto con ResourceQuota (defaults y limits)
+# 3. Monitorear uso regularmente
+# 4. Separar quotas por tipo: compute, storage, objects
+# 5. Usar scopes para diferentes QoS classes
+# 6. Documentar quotas asignadas por equipo/proyecto
+# 7. Revisar y ajustar quotas periódicamente
+# 8. Configurar alertas cuando uso > 80% de quota

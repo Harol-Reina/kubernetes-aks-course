@@ -1,0 +1,152 @@
+# Configuración para cluster High Availability (HA)
+# Con 3 control plane nodes y load balancer externo
+# Uso: kubeadm init --config kubeadm-ha-config.yaml --upload-certs
+
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+localAPIEndpoint:
+  advertiseAddress: 192.168.1.10  # IP del PRIMER control plane
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  name: k8s-master-01
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: v1.28.0
+clusterName: ha-production-cluster
+# ⚠️ IMPORTANTE: Load balancer endpoint para HA
+controlPlaneEndpoint: "k8s-lb.example.com:6443"  # HAProxy/nginx load balancer
+
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 192.168.0.0/16
+  serviceSubnet: 10.96.0.0/12
+
+apiServer:
+  timeoutForControlPlane: 4m0s
+  certSANs:
+  # Incluir todos los control planes y el load balancer
+  - "k8s-lb.example.com"
+  - "k8s-master-01"
+  - "k8s-master-02"
+  - "k8s-master-03"
+  - "192.168.1.10"   # master-01 IP
+  - "192.168.1.11"   # master-02 IP
+  - "192.168.1.12"   # master-03 IP
+  - "192.168.1.100"  # Load balancer IP
+  - "127.0.0.1"
+  extraArgs:
+    authorization-mode: "Node,RBAC"
+    enable-admission-plugins: "NodeRestriction,PodSecurityPolicy"
+    audit-log-path: "/var/log/kubernetes/audit.log"
+    audit-log-maxage: "30"
+    feature-gates: "EphemeralContainers=true"
+
+controllerManager:
+  extraArgs:
+    node-monitor-grace-period: "40s"
+    leader-elect: "true"  # Para HA controller manager
+    leader-elect-lease-duration: "15s"
+    leader-elect-renew-deadline: "10s"
+
+scheduler:
+  extraArgs:
+    leader-elect: "true"  # Para HA scheduler
+    leader-elect-lease-duration: "15s"
+
+# Etcd con configuración para HA (stacked topology)
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+    serverCertSANs:
+    - "k8s-master-01"
+    - "192.168.1.10"
+    - "k8s-master-02"
+    - "192.168.1.11"
+    - "k8s-master-03"
+    - "192.168.1.12"
+    peerCertSANs:
+    - "k8s-master-01"
+    - "192.168.1.10"
+    - "k8s-master-02"
+    - "192.168.1.11"
+    - "k8s-master-03"
+    - "192.168.1.12"
+    extraArgs:
+      snapshot-count: "10000"
+      auto-compaction-retention: "8"  # Horas
+      quota-backend-bytes: "8589934592"
+
+certificatesDir: /etc/kubernetes/pki
+imageRepository: registry.k8s.io
+
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+failSwapOn: true
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    enabled: true
+authorization:
+  mode: Webhook
+clusterDNS:
+- 10.96.0.10
+clusterDomain: cluster.local
+rotateCertificates: true
+serverTLSBootstrap: true
+evictionHard:
+  memory.available: "200Mi"  # Más estricto para HA
+  nodefs.available: "10%"
+  imagefs.available: "15%"
+maxPods: 110
+
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: ipvs
+ipvs:
+  strictARP: true
+  scheduler: "rr"  # Round-robin para mejor distribución
+clusterCIDR: 192.168.0.0/16
+
+---
+# Instrucciones de uso:
+# 
+# 1. En el PRIMER control plane (k8s-master-01):
+#    sudo kubeadm init --config kubeadm-ha-config.yaml --upload-certs
+#
+# 2. Guardar el output:
+#    - certificate-key para adicionar control planes
+#    - token y discovery-token-ca-cert-hash para workers
+#
+# 3. En control planes ADICIONALES (k8s-master-02, k8s-master-03):
+#    sudo kubeadm join k8s-lb.example.com:6443 \
+#      --token abcdef.0123456789abcdef \
+#      --discovery-token-ca-cert-hash sha256:<hash> \
+#      --control-plane \
+#      --certificate-key <certificate-key>
+#
+# 4. Cambiar advertiseAddress en cada nodo adicional:
+#    - k8s-master-02: 192.168.1.11
+#    - k8s-master-03: 192.168.1.12
+#
+# 5. Verificar HA:
+#    kubectl get nodes
+#    kubectl get pods -n kube-system
+#    kubectl get endpoints -n kube-system

@@ -1,18 +1,201 @@
 # 🌟 Módulo 01: Introducción a Kubernetes
 
-**Duración**: 30 minutos  
-**Modalidad**: Teórico  
-**Dificultad**: Principiante
+> **Fundamentos de Kubernetes**: De contenedores a orquestación, entendiendo por qué K8s es el estándar de facto en la industria.
 
-## 🎯 Objetivos del Módulo
+---
+
+## 📋 Objetivos de Aprendizaje
 
 Al completar este módulo serás capaz de:
 
-- ✅ **Explicar qué es Kubernetes** y por qué es fundamental
-- ✅ **Entender la evolución** desde Docker hasta Kubernetes
-- ✅ **Identificar casos de uso** empresariales reales
-- ✅ **Reconocer beneficios** de la orquestación de contenedores
-- ✅ **Preparar el contexto** para aprender arquitectura
+### 🎓 Objetivos Conceptuales
+- **Definir Kubernetes**: Explicar qué es, su origen y por qué existe
+- **Entender la evolución**: Progresión desde servidores tradicionales → VMs → contenedores → orquestación
+- **Identificar problemas resueltos**: Comprender qué problemas específicos soluciona K8s
+- **Reconocer el ecosistema**: CNCF, Cloud Native, contenedores como fundamento
+
+### 🏢 Objetivos Contextuales
+- **Casos de uso empresariales**: Identificar cuándo usar K8s (y cuándo no)
+- **Beneficios de negocio**: Escalabilidad, alta disponibilidad, portabilidad
+- **Comparación con alternativas**: Docker Swarm, Nomad, ECS, AKS vs self-managed
+- **Preparación mental**: Contexto necesario antes de aprender arquitectura técnica
+
+### 🔍 Objetivos de Análisis
+- **Evaluar aplicabilidad**: Determinar si K8s es apropiado para un proyecto
+- **Identificar complejidad**: Entender que K8s requiere inversión en aprendizaje
+- **Reconocer trade-offs**: Poder vs complejidad, flexibilidad vs curva de aprendizaje
+
+---
+
+## ✅ Prerrequisitos
+
+### Conocimientos Previos
+- ✅ **Contenedores básicos**: Conceptos de Docker, imágenes, contenedores
+- ✅ **Línea de comandos**: Familiaridad con terminal Linux/Mac
+- ✅ **Redes básicas**: Puertos, IPs, DNS (nivel básico)
+- ✅ **Desarrollo de aplicaciones**: Entender cómo se despliegan apps
+
+### Mindset Necesario
+- 🧠 **Curiosidad**: Ganas de entender "el por qué" antes de "el cómo"
+- 🧠 **Paciencia**: K8s es complejo pero vale la pena aprenderlo
+- 🧠 **Visión de sistema**: Pensar en aplicaciones distribuidas
+
+### No Necesitas (aún)
+- ❌ Conocer arquitectura de Kubernetes (se verá en Módulo 02)
+- ❌ Tener cluster instalado (se instalará en Módulo 03)
+- ❌ Saber crear manifiestos YAML (se aprenderá después)
+
+---
+
+## 🗺️ Estructura del Módulo
+
+### Contenido Teórico (30-40 minutos)
+1. **¿Qué es Kubernetes?** (10 min) - Definición, origen, etimología
+2. **Evolución de la infraestructura** (8 min) - Servidores → VMs → Contenedores → K8s
+3. **Problemas que resuelve** (7 min) - Orquestación, escalado, self-healing
+4. **Casos de uso** (5 min) - Microservicios, CI/CD, big data
+5. **Beneficios y trade-offs** (5 min) - Cuándo usar K8s, cuándo no
+6. **Ecosistema CNCF** (5 min) - Cloud Native, proyectos relacionados
+
+### Recursos Visuales (2 directorios)
+- 📁 **01-comparacion-docker-k8s/** - Diagramas comparativos
+- 📁 **02-arquitectura/** - Visualizaciones de alto nivel
+
+### Ejercicios de Reflexión (3 checkpoints)
+- 🤔 **Checkpoint 1**: ¿Por qué no basta con Docker?
+- 🤔 **Checkpoint 2**: ¿Cuándo NO usar Kubernetes?
+- 🤔 **Checkpoint 3**: ¿Qué esperas aprender en este curso?
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (Primera Vez con K8s)
+**Tiempo**: 1 hora (lectura tranquila + reflexión)
+```
+Paso 1: Lee completo sin saltarte nada (30 min)
+  ├─ No te preocupes si no entiendes todo
+  └─ Enfócate en el "por qué", no el "cómo"
+
+Paso 2: Revisa diagramas de ejemplos/ (10 min)
+  ├─ 01-comparacion-docker-k8s/
+  └─ 02-arquitectura/
+
+Paso 3: Responde checkpoints (15 min)
+  ├─ Escribe tus respuestas
+  └─ No hay respuestas "correctas" aún
+
+Paso 4: RESUMEN-MODULO.md (5 min)
+  └─ Repaso rápido de conceptos clave
+```
+
+### 🟡 Ruta Intermedia (Ya Conoces Docker)
+**Tiempo**: 30-40 minutos
+```
+Paso 1: Lectura enfocada (20 min)
+  ├─ Sección 1: ¿Qué es K8s? (leer rápido)
+  ├─ Sección 3: Problemas que resuelve (foco aquí)
+  └─ Sección 5: Beneficios y trade-offs (importante)
+
+Paso 2: Checkpoints (10 min)
+  └─ Reflexiona especialmente sobre cuándo NO usar K8s
+
+Paso 3: RESUMEN-MODULO.md (10 min)
+  └─ Conceptos clave y decisiones de arquitectura
+```
+
+### 🔴 Ruta Rápida (Repaso o Certificación)
+**Tiempo**: 15-20 minutos
+```
+Opción A: Solo RESUMEN-MODULO.md (10 min)
+  └─ Conceptos esenciales concentrados
+
+Opción B: Lectura diagonal + casos de uso (15 min)
+  ├─ Sección 3: Problemas que resuelve
+  ├─ Sección 4: Casos de uso
+  └─ Checkpoint 2: Cuándo NO usar K8s
+```
+
+---
+
+## 🎯 Metodología de Aprendizaje
+
+Este módulo es **100% conceptual** (no hay práctica aún):
+
+### Distribución de Contenido
+```
+📖 Teoría fundamental          70%  ████████████████▓░░░░░░
+🎨 Diagramas y visualizaciones 20%  ████▓░░░░░░░░░░░░░░░░░░
+🤔 Reflexión y checkpoints     10%  ██▓░░░░░░░░░░░░░░░░░░░░
+```
+
+### Enfoque Pedagógico
+1. **Contexto antes que detalles**: Entender "el por qué" es más importante que memorizar
+2. **Analogías del mundo real**: Comparaciones con sistemas conocidos
+3. **Progresión lógica**: De problemas cotidianos a soluciones K8s
+4. **Sin código aún**: Este módulo prepara la mente, no las manos
+
+### Flujo de Trabajo
+```
+1. Lee sección teórica → 2. Ve diagrama relacionado → 3. Reflexiona
+                ↓
+4. Checkpoint de validación → 5. Continúa o repasa
+                ↓
+6. RESUMEN final → 7. Listo para Módulo 02
+```
+
+---
+
+## 🔗 Conexión con Otros Módulos
+
+### Este Módulo te Prepara Para
+- ➡️ **Módulo 02**: Arquitectura de Cluster (componentes técnicos)
+- ➡️ **Módulo 03**: Instalación de Minikube (práctica empieza aquí)
+- ➡️ **Módulo 04**: Pods vs Contenedores (primer recurso K8s)
+
+### Relación con el Curso Completo
+```
+ÁREA 2: Arquitectura Kubernetes
+├─ [01] Introducción ← ESTÁS AQUÍ (contexto y motivación)
+├─ [02] Arquitectura (componentes técnicos)
+├─ [03] Instalación (entorno práctica)
+├─ [04-10] Recursos Core (workloads, networking)
+├─ [11-16] Configuración y Storage
+└─ [17-18] Seguridad RBAC
+```
+
+---
+
+## 📁 Organización de Recursos
+
+### Carpeta `ejemplos/`
+```
+ejemplos/
+├── 01-comparacion-docker-k8s/
+│   ├── README.md                    # Comparación detallada
+│   ├── docker-workflow.png          # Flujo Docker tradicional
+│   └── kubernetes-workflow.png      # Flujo K8s orquestado
+│
+└── 02-arquitectura/
+    ├── README.md                    # Vista de alto nivel
+    ├── cluster-overview.png         # Diagrama cluster
+    └── control-plane-workers.png    # Arquitectura simplificada
+```
+
+**Nota**: Estos diagramas son visualizaciones de alto nivel. La arquitectura detallada se cubre en el Módulo 02.
+
+---
+
+## 🎯 Objetivos del Módulo (Expandido)
+
+Al completar este módulo serás capaz de:
+
+- ✅ **Explicar qué es Kubernetes** y por qué es fundamental en la industria moderna
+- ✅ **Entender la evolución** desde servidores tradicionales hasta orquestación de contenedores
+- ✅ **Identificar problemas** que K8s resuelve (escalado, self-healing, portabilidad)
+- ✅ **Reconocer casos de uso** apropiados (microservicios, CI/CD, cloud native)
+- ✅ **Evaluar trade-offs** (complejidad vs beneficios, cuándo NO usar K8s)
+- ✅ **Preparar el mindset** para aprender arquitectura técnica en próximos módulos
 
 ---
 

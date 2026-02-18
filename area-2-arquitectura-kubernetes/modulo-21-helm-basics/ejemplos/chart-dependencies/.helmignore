@@ -1,0 +1,30 @@
+# .helmignore
+
+# Desarrollo
+.git/
+.gitignore
+*.swp
+*.bak
+*.tmp
+*~
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Documentación
+OWNERS
+CONTRIBUTING.md
+
+# Testing
+test/
+*.test
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Otros
+.DS_Store

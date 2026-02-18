@@ -1,0 +1,130 @@
+# Configuración optimizada de containerd para Kubernetes
+# Ubicación: /etc/containerd/config.toml
+# Generar default: containerd config default > /etc/containerd/config.toml
+
+version = 2
+
+# Root directory for persistent data
+root = "/var/lib/containerd"
+
+# State directory for execution state files
+state = "/run/containerd"
+
+# Address for containerd's GRPC server
+[grpc]
+  address = "/run/containerd/containerd.sock"
+  max_recv_message_size = 16777216
+  max_send_message_size = 16777216
+
+# CRI plugin configuration
+[plugins."io.containerd.grpc.v1.cri"]
+  # Sandbox image (pause container) - sincronizar con kubeadm
+  sandbox_image = "registry.k8s.io/pause:3.9"
+  
+  # SystemdCgroup = true es REQUERIDO para systemd cgroup driver
+  [plugins."io.containerd.grpc.v1.cri".containerd]
+    # Usar snapshotter nativo (overlayfs)
+    snapshotter = "overlayfs"
+    default_runtime_name = "runc"
+    
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+      # Runtime por defecto (runc)
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+        runtime_type = "io.containerd.runc.v2"
+        
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+          # ⚠️ CRITICAL: SystemdCgroup DEBE ser true
+          SystemdCgroup = true
+          
+  # CNI plugin configuration
+  [plugins."io.containerd.grpc.v1.cri".cni]
+    bin_dir = "/opt/cni/bin"
+    conf_dir = "/etc/cni/net.d"
+    max_conf_num = 1
+    
+  # Registry configuration (private registries)
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"
+    
+    # Registry mirrors (opcional, para cache/proxy)
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
+      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+        endpoint = ["https://registry-1.docker.io"]
+      # Agregar mirrors privados aquí
+      # [plugins."io.containerd.grpc.v1.cri".registry.mirrors."private-registry.example.com"]
+      #   endpoint = ["https://private-registry.example.com"]
+
+# Metrics configuration
+[metrics]
+  address = "127.0.0.1:1338"
+  grpc_histogram = false
+
+# Stream server configuration
+[plugins."io.containerd.grpc.v1.cri".stream_server]
+  stream_idle_timeout = "4h0m0s"
+  stream_connection_timeout = "1h0m0s"
+
+# Configuración de recursos y límites
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+  # CPU shares por defecto
+  CpuShares = 1024
+  
+# Image pulling configuration
+[plugins."io.containerd.grpc.v1.cri".image_pull_progress_timeout]
+  # Timeout para pull de imágenes grandes
+  timeout = "10m"
+
+# GC (Garbage Collection) settings
+[plugins."io.containerd.gc.v1.scheduler"]
+  pause_threshold = 0.02
+  deletion_threshold = 0
+  mutation_threshold = 100
+  schedule_delay = "0s"
+  startup_delay = "100ms"
+
+# Logging
+[plugins."io.containerd.grpc.v1.cri".containerd]
+  # Configuración de logs de contenedores
+  [plugins."io.containerd.grpc.v1.cri".containerd.default_runtime]
+    runtime_type = "io.containerd.runc.v2"
+
+# Timeouts
+[timeouts]
+  "io.containerd.timeout.shim.cleanup" = "5s"
+  "io.containerd.timeout.shim.load" = "5s"
+  "io.containerd.timeout.shim.shutdown" = "3s"
+  "io.containerd.timeout.task.state" = "2s"
+
+# Plugins a deshabilitar (opcional)
+disabled_plugins = []
+
+# Importar configuraciones adicionales
+imports = []
+
+# ============================================
+# NOTAS DE CONFIGURACIÓN:
+# ============================================
+#
+# 1. SystemdCgroup = true
+#    - CRÍTICO para Kubernetes con systemd
+#    - Debe coincidir con kubelet cgroupDriver
+#
+# 2. sandbox_image
+#    - Debe coincidir con la versión de Kubernetes
+#    - registry.k8s.io/pause:3.9 para K8s 1.28+
+#
+# 3. Registry mirrors
+#    - Configura mirrors privados para performance
+#    - Harbor, Nexus, JFrog Artifactory
+#
+# 4. Después de modificar:
+#    sudo systemctl restart containerd
+#    sudo systemctl status containerd
+#
+# 5. Verificar config:
+#    crictl info
+#    crictl images
+#
+# 6. Troubleshooting:
+#    journalctl -u containerd -f
+#    sudo containerd config dump

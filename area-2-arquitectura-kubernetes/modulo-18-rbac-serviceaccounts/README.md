@@ -1,61 +1,368 @@
 # Módulo 18: RBAC - Service Accounts en Kubernetes
 
-## Tabla de Contenidos
-
-1. [Introducción al Módulo](#introducción-al-módulo)
-2. [¿Qué son los Service Accounts?](#1-qué-son-los-service-accounts)
-3. [Service Accounts vs Usuarios: Diferencias Clave](#2-service-accounts-vs-usuarios-diferencias-clave)
-4. [Anatomía de un Service Account](#3-anatomía-de-un-service-account)
-5. [Creación y Gestión de Service Accounts](#4-creación-y-gestión-de-service-accounts)
-6. [Tokens y Autenticación](#5-tokens-y-autenticación)
-7. [Asignación de Permisos con Roles](#6-asignación-de-permisos-con-roles)
-8. [Service Accounts en Pods](#7-service-accounts-en-pods)
-9. [Casos de Uso Prácticos](#8-casos-de-uso-prácticos)
-10. [Mejores Prácticas y Seguridad](#9-mejores-prácticas-y-seguridad)
-11. [Troubleshooting](#10-troubleshooting)
-12. [Conclusiones y Próximos Pasos](#conclusiones-y-próximos-pasos)
+> **🎯 Enfoque del Módulo**: Control de acceso para **aplicaciones y pods** usando **tokens JWT automáticos**. Para personas (desarrolladores, admins), ver [Módulo 17: Usuarios y Grupos](../modulo-17-rbac-users-groups/).
 
 ---
 
-## Introducción al Módulo
+## 📋 Objetivos de Aprendizaje
 
-Bienvenidos al módulo 18, donde profundizaremos en **Service Accounts**, un componente fundamental de RBAC diseñado específicamente para **identidades de aplicaciones y procesos** dentro de Kubernetes.
+Al completar este módulo, serás capaz de:
 
-### ¿Qué cubriremos en este módulo?
+### 🎓 Objetivos Conceptuales
+- **Entender Service Accounts**: Comprender qué son, para qué sirven y cuándo usarlos
+- **Diferenciar identidades**: Distinguir Service Accounts de usuarios humanos
+- **Tokens JWT**: Entender cómo funcionan los tokens automáticos en Kubernetes
+- **Arquitectura de seguridad**: Dominar el modelo de permisos para aplicaciones internas
 
-En este módulo nos enfocaremos exclusivamente en:
-- **Service Accounts**: Identidades para pods y aplicaciones
-- **Tokens automáticos**: Mecanismo de autenticación para procesos
-- **Asignación de permisos a aplicaciones**: Usando Roles y RoleBindings
-- **Integración con pods**: Cómo las aplicaciones usan Service Accounts
-- **Gestión del ciclo de vida**: Creación, actualización y eliminación
+### 🛠️ Objetivos Técnicos
+- **Crear Service Accounts**: Usar kubectl y manifiestos YAML
+- **Asignar a pods**: Configurar `serviceAccountName` en specs
+- **Configurar permisos RBAC**: Roles y RoleBindings para Service Accounts
+- **Gestionar tokens**: Entender montaje automático y projected volumes
+- **Acceder a API desde pods**: Implementar aplicaciones que usan Kubernetes API
 
-### ¿En qué se diferencia del Módulo 17?
+### 🔍 Objetivos de Troubleshooting
+- **Diagnosticar problemas de autenticación**: Tokens inválidos o expirados
+- **Resolver errores de permisos**: "Forbidden" desde pods
+- **Verificar montaje de tokens**: Validar `/var/run/secrets/kubernetes.io/serviceaccount`
+- **Auditar accesos de aplicaciones**: Qué pods tienen qué permisos
 
-| Aspecto | Módulo 17 (Usuarios y Grupos) | Módulo 18 (Service Accounts) |
-|---------|-------------------------------|------------------------------|
-| **Para quién** | Personas (desarrolladores, admins) | Aplicaciones y pods |
-| **Autenticación** | Certificados X.509 | Tokens JWT |
-| **Gestión** | Manual (externa a Kubernetes) | Automática (API de Kubernetes) |
-| **Ubicación** | Acceso externo (kubectl) | Dentro del cluster |
-| **Scope** | Global al cluster | Por namespace |
+### 🏢 Objetivos Profesionales
+- **Implementar seguridad de aplicaciones**: Mínimo privilegio para pods
+- **Diseñar arquitecturas seguras**: Service Accounts por función/componente
+- **Automatizar CI/CD**: Usar Service Accounts en pipelines
+- **Preparación para certificaciones**: CKA, CKAD, CKS (seguridad de aplicaciones)
 
-> **💡 Regla de oro**: Si necesitas dar acceso a una **persona**, usa usuarios y grupos (Módulo 17). Si necesitas dar acceso a un **pod o aplicación**, usa Service Accounts (este módulo).
+---
 
-### Prerrequisitos
+## ✅ Prerrequisitos
 
-Antes de comenzar este módulo, deberías:
-- ✅ Haber completado el Módulo 17 (RBAC: Usuarios y Grupos)
-- ✅ Tener un cluster de Kubernetes funcionando
-- ✅ Conocer los conceptos de Roles y RoleBindings
-- ✅ Entender qué son los pods y deployments
+### Conocimientos Previos
+- ✅ **Módulo 17 completado (CRÍTICO)**: Debes dominar Roles, RoleBindings, RBAC conceptos
+- ✅ **Pods y Deployments**: Cómo crear y gestionar workloads
+- ✅ **Namespaces**: Scope de Service Accounts
+- ✅ **Conceptos de API REST**: HTTP, JSON, tokens de autenticación
 
-### Estructura del Módulo
+### Herramientas Necesarias
+- ✅ **Cluster Kubernetes funcional**: Minikube, AKS, GKE, o similar
+- ✅ **kubectl instalado**: Versión 1.20+
+- ✅ **Conocimientos de YAML**: Para crear manifiestos
+- ✅ **Opcional: Python o Go**: Para ejemplos de API clients
 
-Este módulo incluye:
-- 📖 **Documentación teórica**: Esta guía completa con ejemplos inline
-- 💾 **Ejemplos prácticos**: Carpeta [`ejemplos/`](./ejemplos/) con manifiestos YAML
-- 🔬 **Laboratorios guiados**: Carpeta [`laboratorios/`](./laboratorios/) con ejercicios hands-on
+### Verificación de Entorno
+```bash
+# 1. Verificar acceso al cluster
+kubectl cluster-info
+
+# 2. Confirmar permisos de admin
+kubectl auth can-i '*' '*' --all-namespaces
+# Debe retornar: yes
+
+# 3. Listar Service Accounts existentes
+kubectl get serviceaccounts --all-namespaces
+
+# 4. Ver default Service Account
+kubectl get serviceaccount default -n default -o yaml
+
+# 5. Verificar si existen RoleBindings para SAs
+kubectl get rolebindings --all-namespaces | grep ServiceAccount
+```
+
+### Diferencia con Módulo 17
+**NO confundir**:
+- Módulo 17: **Certificados X.509** para **personas** (desarrolladores, admins)
+- Módulo 18: **Tokens JWT** para **aplicaciones** (pods, deployments)
+
+---
+
+## 🗺️ Estructura del Módulo
+
+### Contenido Teórico (4-5 horas)
+1. **¿Qué son Service Accounts?** (30 min) - Identidades para pods, diferencias con usuarios
+2. **Service Accounts vs Usuarios** (30 min) - Comparación detallada, casos de uso
+3. **Anatomía de un Service Account** (30 min) - Estructura, secrets, tokens
+4. **Creación y Gestión** (40 min) - kubectl create, manifiestos YAML, ciclo de vida
+5. **Tokens y Autenticación** (45 min) - JWT tokens, montaje automático, projected volumes
+6. **Asignación de Permisos** (45 min) - Roles y RoleBindings para SAs
+7. **Service Accounts en Pods** (40 min) - Configuración, acceso a API
+8. **Casos de Uso Prácticos** (30 min) - Monitoring, CI/CD, operators
+9. **Mejores Prácticas** (30 min) - Seguridad, auditoría, principio de mínimo privilegio
+10. **Troubleshooting** (30 min) - Errores comunes, diagnóstico
+
+### Ejemplos Prácticos (11 archivos/directorios)
+- 📄 **01-serviceaccount-completo.yaml**: SA con metadata completa
+- 📄 **02-serviceaccount-basico.yaml**: SA minimalista
+- 📄 **03-serviceaccounts-por-ambiente.yaml**: Dev, Staging, Prod
+- 📄 **04-pod-con-serviceaccount.yaml**: Pod usando SA custom
+- 📄 **05-pod-token-proyectado.yaml**: Projected volume para tokens
+- 📁 **06-rbac-completo/**: Role + RoleBinding + SA + Pod completo
+- 📄 **07-clusterrole-serviceaccount.yaml**: Permisos cluster-wide
+- 📄 **08-pod-custom-sa.yaml**: Multiple SAs en diferentes pods
+- 📄 **09-deployment-con-sa.yaml**: Deployment con SA específico
+- 📄 **10-pod-api-access.yaml**: Pod que accede a K8s API
+- 📁 **11-python-api-client/**: Aplicación Python usando SA
+
+### Laboratorios Guiados (1 lab, ~90 min)
+- 🧪 **Lab 01: Crear y Usar Service Accounts** (90 min)
+  - Crear Service Account para aplicación de monitoreo
+  - Definir Role con permisos para leer pods y events
+  - Asignar permisos con RoleBinding
+  - Desplegar pod que usa el SA
+  - Verificar acceso desde dentro del pod
+  - Implementar aplicación Python que consulta API
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (3-4 días, ~6-7 horas)
+**Para**: Estudiantes que completaron Módulo 17
+```
+Día 1: Conceptos y Diferencias
+  ├─ Secciones 1-3 (1.5 horas)
+  ├─ Ejemplos 01-03 (30 min)
+  └─ Practicar: kubectl get sa, describe sa
+
+Día 2: Creación y Gestión
+  ├─ Secciones 4-5 (1.5 horas)
+  ├─ Ejemplos 04-05 (tokens y montaje)
+  └─ Crear SAs propios en cluster
+
+Día 3: RBAC para Service Accounts
+  ├─ Sección 6 (45 min)
+  ├─ Ejemplo 06-rbac-completo (1 hora)
+  └─ Asignar permisos a SAs
+
+Día 4: Práctica y Troubleshooting
+  ├─ Secciones 7-10 (1.5 horas)
+  ├─ Lab 01 completo (90 min)
+  └─ Repaso con RESUMEN-MODULO.md
+```
+
+### 🟡 Ruta Intermedia (2 días, ~5-6 horas)
+**Para**: Desarrolladores con experiencia en K8s
+```
+Día 1: Teoría + RBAC
+  ├─ Secciones 1-6 lectura rápida (2 horas)
+  ├─ Ejemplos 01-07 (1 hora)
+  └─ Crear SA con permisos propios
+
+Día 2: Aplicaciones Prácticas
+  ├─ Secciones 7-10 (1 hora)
+  ├─ Ejemplos 08-11 (API clients)
+  └─ Lab 01 completo (90 min)
+```
+
+### 🔴 Ruta Certificación (1 día, ~4-5 horas)
+**Para**: Preparación CKA/CKAD/CKS
+```
+Sesión Intensiva:
+  ├─ RESUMEN-MODULO.md completo (30 min)
+  ├─ Ejemplos 01-11 ejecución rápida (1.5 horas)
+  ├─ Lab 01 (90 min)
+  ├─ Sección 10 Troubleshooting (30 min)
+  └─ Práctica comandos rápidos (30 min)
+
+Comandos esenciales para memorizar:
+  - kubectl create serviceaccount
+  - kubectl create rolebinding --serviceaccount
+  - kubectl set serviceaccount
+  - kubectl get sa -A
+  - kubectl describe sa <name>
+  - kubectl get secret <sa-token>
+```
+
+---
+
+## 🔗 Relación con Módulo 17 - COMPLEMENTARIEDAD
+
+### Diagrama de Identidades en Kubernetes
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│         Identidades en Kubernetes - Dos Tipos                │
+├───────────────────────────┬─────────────────────────────────┤
+│      MÓDULO 17           │         MÓDULO 18               │
+│   Usuarios y Grupos      │      Service Accounts           │
+├───────────────────────────┼─────────────────────────────────┤
+│  👤 PARA QUIÉN            │  🤖 PARA QUIÉN                  │
+│                           │                                 │
+│  • Personas (humanos)     │  • Aplicaciones (software)      │
+│  • Desarrolladores        │  • Pods                         │
+│  • Administradores        │  • Deployments                  │
+│  • Operadores SRE         │  • CronJobs                     │
+│  • Auditores              │  • Controllers                  │
+│  • Externos al cluster    │  • DaemonSets                   │
+├───────────────────────────┼─────────────────────────────────┤
+│  🔐 AUTENTICACIÓN         │  🎫 AUTENTICACIÓN               │
+│                           │                                 │
+│  • Certificados X.509     │  • Tokens JWT                   │
+│  • Generación MANUAL      │  • Generación AUTOMÁTICA        │
+│  • OpenSSL                │  • API Kubernetes (nativo)      │
+│  • CA externa             │  • CA del cluster               │
+│  • Renovación manual      │  • Rotación automática          │
+│  • Distribución manual    │  • Montaje automático en pods   │
+├───────────────────────────┼─────────────────────────────────┤
+│  🌍 ACCESO                │  🏠 ACCESO                      │
+│                           │                                 │
+│  • EXTERNO al cluster     │  • INTERNO al cluster           │
+│  • Desde laptop/PC        │  • Desde dentro de pods         │
+│  • kubectl en terminal    │  • Llamadas HTTP a API server   │
+│  • kubeconfig local       │  • Token en /var/run/secrets    │
+│  • IP remota              │  • IP interna (10.x.x.x)        │
+├───────────────────────────┼─────────────────────────────────┤
+│  ⚙️ GESTIÓN               │  ⚙️ GESTIÓN                     │
+│                           │                                 │
+│  • Manual (scripts bash)  │  • Declarativa (kubectl apply)  │
+│  • NO es objeto K8s       │  • ES objeto nativo K8s         │
+│  • NO persiste en etcd    │  • PERSISTE en etcd             │
+│  • Requiere scripts       │  • API estándar de K8s          │
+│  • Complejidad alta       │  • Simplicidad relativa         │
+├───────────────────────────┼─────────────────────────────────┤
+│  📦 SCOPE                 │  📦 SCOPE                       │
+│                           │                                 │
+│  • Global (no namespace)  │  • Por namespace                │
+│  • Usuario único          │  • SA por namespace             │
+│  • CN en certificado      │  • Nombre + namespace           │
+├───────────────────────────┴─────────────────────────────────┤
+│           CONCEPTOS COMPARTIDOS (mismos para ambos)          │
+│                                                              │
+│  ✅ Roles / ClusterRoles (definición idéntica)              │
+│  ✅ RoleBindings / ClusterRoleBindings (misma sintaxis)     │
+│  ✅ Permisos (resources, verbs, apiGroups)                  │
+│  ✅ Principio de mínimo privilegio                          │
+│  ✅ Auditoría de accesos                                    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### ¿Cuándo usar qué?
+
+| Escenario | Solución | Módulo |
+|-----------|----------|--------|
+| Developer ejecuta `kubectl get pods` | Usuario + Certificado | **Módulo 17** |
+| Pod de monitoring necesita listar pods | Service Account + Role | **Módulo 18** |
+| Admin gestiona cluster remoto | Usuario + ClusterRole | **Módulo 17** |
+| Deployment necesita crear ConfigMaps | Service Account + Role | **Módulo 18** |
+| CronJob hace backups de etcd | Service Account + ClusterRole | **Módulo 18** |
+| CI/CD pipeline despliega apps | Service Account (mejor práctica) | **Módulo 18** |
+| Auditor revisa recursos | Usuario (read-only) | **Módulo 17** |
+| Operator de K8s crea CRDs | Service Account + ClusterRole | **Módulo 18** |
+
+### Enfoque de Este Módulo (18)
+
+**✅ SÍ cubrimos**:
+- Creación de Service Accounts con kubectl y YAML
+- Tokens JWT y cómo funcionan
+- Montaje automático de tokens en pods
+- Asignación de permisos RBAC a Service Accounts
+- Acceso a Kubernetes API desde aplicaciones
+- Casos de uso: monitoring, CI/CD, operators
+- Seguridad y mejores prácticas para aplicaciones
+
+**❌ NO cubrimos** (ver Módulo 17):
+- Usuarios humanos (personas)
+- Certificados X.509 para autenticación
+- OpenSSL y generación manual de certificados
+- kubectl config y contextos de usuario
+- Grupos de usuarios
+- Acceso externo al cluster
+
+---
+
+## 📁 Organización de Recursos
+
+### Carpeta `ejemplos/`
+```
+ejemplos/
+├── 01-serviceaccount-completo.yaml      # SA con annotations y labels
+├── 02-serviceaccount-basico.yaml        # SA minimalista
+├── 03-serviceaccounts-por-ambiente.yaml # Dev, staging, prod
+├── 04-pod-con-serviceaccount.yaml       # Pod usando SA custom
+├── 05-pod-token-proyectado.yaml         # Projected volume
+├── 06-rbac-completo/                    # Suite completa
+│   ├── 01-serviceaccount.yaml           # Service Account
+│   ├── 02-role.yaml                     # Role con permisos
+│   ├── 03-rolebinding.yaml              # RoleBinding SA→Role
+│   └── 04-pod.yaml                      # Pod que usa todo
+├── 07-clusterrole-serviceaccount.yaml   # Permisos cluster-wide
+├── 08-pod-custom-sa.yaml                # Variaciones de SAs
+├── 09-deployment-con-sa.yaml            # Deployment + SA
+├── 10-pod-api-access.yaml               # Pod accediendo API
+└── 11-python-api-client/                # App Python real
+    ├── Dockerfile                       # Imagen container
+    ├── requirements.txt                 # Dependencias
+    ├── app.py                           # Código Python
+    ├── serviceaccount.yaml              # SA para la app
+    ├── role.yaml                        # Permisos necesarios
+    ├── rolebinding.yaml                 # Binding
+    └── deployment.yaml                  # Deploy completo
+```
+
+### Carpeta `laboratorios/`
+```
+laboratorios/
+└── lab-01-crear-serviceaccounts.md      # Lab guiado completo
+    ├── Objetivos y prerrequisitos
+    ├── Parte 1: Crear SA básico
+    ├── Parte 2: Asignar permisos RBAC
+    ├── Parte 3: Usar SA en pod
+    ├── Parte 4: Acceder a K8s API desde pod
+    ├── Parte 5: Troubleshooting
+    └── Parte 6: Implementar app Python
+```
+
+---
+
+## 🎯 Metodología de Aprendizaje
+
+Este módulo sigue un enfoque **práctico-progresivo**:
+
+1. **📖 Fundamentos Teóricos** (30%):
+   - Qué son Service Accounts
+   - Diferencias con usuarios
+   - Arquitectura de tokens JWT
+
+2. **💻 Práctica Incremental** (40%):
+   - Crear SAs simples
+   - Asignar permisos RBAC
+   - Configurar pods con SAs
+   - Acceder a API desde aplicaciones
+
+3. **🧪 Laboratorio Integral** (20%):
+   - Caso de uso realista (app de monitoring)
+   - Implementación end-to-end
+   - Troubleshooting de problemas reales
+
+4. **🔍 Mejores Prácticas** (10%):
+   - Seguridad de aplicaciones
+   - Auditoría de permisos
+   - Patrones de diseño
+
+### Flujo de Trabajo Recomendado
+```
+1. Lee teoría → 2. Crea SA básico → 3. Experimenta en cluster
+                          ↓
+4. Asigna permisos → 5. Crea pod con SA → 6. Verifica acceso
+                          ↓
+7. Implementa app → 8. Troubleshooting → 9. Optimiza seguridad
+                          ↓
+10. Lab completo → 11. Caso de uso propio
+```
+
+---
+
+## Tabla de Contenidos
+
+1. [¿Qué son los Service Accounts?](#1-qué-son-los-service-accounts)
+2. [Service Accounts vs Usuarios: Diferencias Clave](#2-service-accounts-vs-usuarios-diferencias-clave)
+3. [Anatomía de un Service Account](#3-anatomía-de-un-service-account)
+4. [Creación y Gestión de Service Accounts](#4-creación-y-gestión-de-service-accounts)
+5. [Tokens y Autenticación](#5-tokens-y-autenticación)
+6. [Asignación de Permisos con Roles](#6-asignación-de-permisos-con-roles)
+7. [Service Accounts en Pods](#7-service-accounts-en-pods)
+8. [Casos de Uso Prácticos](#8-casos-de-uso-prácticos)
+9. [Mejores Prácticas y Seguridad](#9-mejores-prácticas-y-seguridad)
+10. [Troubleshooting](#10-troubleshooting)
 
 ---
 

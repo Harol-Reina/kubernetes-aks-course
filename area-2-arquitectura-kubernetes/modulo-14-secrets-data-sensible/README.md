@@ -1,6 +1,193 @@
 # Módulo 14: Secrets - Gestión de Datos Sensibles en Kubernetes
 
-## 📋 Índice
+## 📋 Objetivos de Aprendizaje
+
+Al completar este módulo, serás capaz de:
+
+### 🎯 Objetivos Fundamentos
+- Comprender qué son los Secrets y cuándo usarlos
+- Diferenciar Secrets de ConfigMaps (uso, seguridad, codificación)
+- Conocer los tipos de Secrets (Opaque, TLS, docker-registry, service-account-token)
+- Entender las limitaciones de seguridad de base64
+
+### 🎯 Objetivos Técnicos
+- Crear Secrets usando kubectl (literales, archivos, YAML)
+- Consumir Secrets como variables de entorno
+- Montar Secrets como volúmenes en Pods
+- Gestionar Secrets TLS para Ingress/HTTPS
+- Configurar imagePullSecrets para registros privados
+- Aplicar Secrets inmutables
+
+### 🎯 Objetivos Avanzados
+- Implementar buenas prácticas de seguridad (RBAC, encryption at rest)
+- Integrar herramientas externas (Sealed Secrets, Vault, External Secrets)
+- Diseñar estrategias de rotación de credenciales
+- Troubleshoot problemas de permisos y montaje de Secrets
+- Auditar acceso a Secrets
+
+### 🎯 Objetivos Profesionales
+- Evaluar cuándo usar Secrets vs soluciones externas
+- Prepararse para escenarios CKA/CKAD sobre Secrets
+- Diseñar arquitecturas seguras de gestión de secretos
+- Aplicar principio de least privilege con RBAC
+
+---
+
+## ✅ Prerrequisitos
+
+Antes de comenzar este módulo, debes:
+
+### Conocimientos Previos
+- ✅ **Módulo 04**: Pods y contenedores
+- ✅ **Módulo 05**: Gestión de Pods
+- ✅ **Módulo 10**: Namespaces (Secrets son namespace-scoped)
+- ✅ **Módulo 13**: ConfigMaps (similar pero para datos no sensibles)
+- ✅ Conocimiento básico de base64
+- ✅ Conceptos de seguridad (passwords, tokens, certificados)
+
+### Verificación de Entorno
+```bash
+# Verificar acceso al clúster
+kubectl cluster-info
+
+# Verificar namespace
+kubectl get namespace default
+
+# Verificar permisos para crear Secrets
+kubectl auth can-i create secrets
+
+# Verificar versión de Kubernetes (Secrets inmutables desde 1.21+)
+kubectl version --short
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+| Sección | Contenido | Duración | Tipo |
+|---------|-----------|----------|------|
+| **1** | Introducción a Secrets | 20 min | 📖 Teoría |
+| **2** | Secrets vs ConfigMaps | 15 min | 📖 Teoría |
+| **3** | Tipos de Secrets | 30 min | 📖 Teoría + 💻 Ejemplos |
+| **4** | Creación de Secrets | 40 min | 📖 Teoría + 💻 Ejemplos |
+| **5** | Consumo de Secrets | 40 min | 📖 Teoría + 💻 Ejemplos |
+| **6** | Base64 y Seguridad | 25 min | 📖 Teoría + 🔍 Análisis |
+| **7** | Secrets Inmutables | 20 min | 📖 Teoría + 💻 Ejemplos |
+| **8** | Buenas Prácticas | 45 min | 📖 Teoría + 🔐 Seguridad |
+| **9** | Troubleshooting | 30 min | 🐛 Depuración |
+| **Total** | | **~4.5 horas** | |
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (2-3 días)
+**Perfil**: Primera vez con Secrets en Kubernetes
+**Enfoque**: Comprensión de conceptos y práctica básica
+
+**Día 1** (2 horas):
+- ✅ Introducción a Secrets (¿qué son?, ¿para qué sirven?)
+- ✅ Secrets vs ConfigMaps (diferencias clave)
+- ✅ Tipos de Secrets básicos (Opaque)
+- ✅ Crear Secrets con `kubectl create secret`
+
+**Día 2** (2 horas):
+- ✅ Consumir Secrets como env vars
+- ✅ Montar Secrets como volúmenes
+- ✅ Base64 encoding/decoding
+- ✅ Práctica con ejemplos/01-secrets-basicos/
+
+**Día 3** (1.5 horas):
+- ✅ Secrets TLS básicos
+- ✅ imagePullSecrets
+- ✅ Troubleshooting común
+- ✅ Laboratorio práctico
+
+---
+
+### 🟡 Ruta Intermedia (1-2 días)
+**Perfil**: Experiencia con ConfigMaps, entiendes base64
+**Enfoque**: Dominio de tipos de Secrets y casos de uso
+
+**Día 1** (3 horas):
+- ✅ Repaso rápido: Secrets vs ConfigMaps
+- ✅ Todos los tipos de Secrets (Opaque, TLS, docker-registry, SA-token)
+- ✅ Creación avanzada (desde archivos, YAML, stringData)
+- ✅ Consumo en diferentes escenarios
+- ✅ Ejemplos 01-08
+
+**Día 2** (2 horas):
+- ✅ Secrets inmutables
+- ✅ Buenas prácticas de seguridad
+- ✅ RBAC para Secrets
+- ✅ Introducción a Sealed Secrets/Vault
+- ✅ Troubleshooting avanzado
+- ✅ Laboratorios completos
+
+---
+
+### 🔴 Ruta Certificación CKA/CKAD (3-4 horas)
+**Perfil**: Preparación para examen de certificación
+**Enfoque**: Velocidad, comandos imperativos, troubleshooting
+
+**Bloque 1** (1.5 horas):
+- ✅ Creación rápida de Secrets (todas las formas)
+- ✅ Consumo como env vars y volumes (sintaxis exacta)
+- ✅ Troubleshooting típico de examen
+- ✅ Comandos imperativos vs declarativos
+
+**Bloque 2** (1 hora):
+- ✅ Secrets TLS para Ingress
+- ✅ imagePullSecrets para registros privados
+- ✅ Verificación con `kubectl describe` y `kubectl get -o yaml`
+
+**Bloque 3** (1 hora):
+- ✅ Escenarios de examen simulados
+- ✅ Corrección rápida de errores
+- ✅ Best practices aplicables en 5 minutos
+- ✅ Cheat sheet de comandos
+
+---
+
+## 📁 Organización de Recursos
+
+```
+modulo-14-secrets-data-sensible/
+├── README.md                          # ← Estás aquí
+├── RESUMEN-MODULO.md                  # Guía de estudio rápida
+│
+├── ejemplos/                          # 8 ejemplos progresivos
+│   ├── 01-secrets-basicos/            # Secret Opaque básico
+│   ├── 02-secrets-literales/          # Creación con --from-literal
+│   ├── 03-secrets-archivos/           # Creación con --from-file
+│   ├── 04-secrets-env/                # Consumo como env vars
+│   ├── 05-secrets-volume/             # Consumo como volúmenes
+│   ├── 06-secrets-tls/                # Certificados TLS/HTTPS
+│   ├── 07-secrets-docker-registry/    # imagePullSecrets
+│   └── 08-combinados/                 # Múltiples Secrets
+│
+└── laboratorios/                      # Laboratorios hands-on
+    └── (Se crearán según necesidad)
+```
+
+---
+
+## 🎓 Metodología de Aprendizaje
+
+Este módulo sigue una progresión estructurada:
+
+1. **📖 Teoría Fundamental** → Conceptos de Secrets y seguridad
+2. **💻 Ejemplos Inline** → Snippets en cada sección del README
+3. **🔍 Análisis de Seguridad** → Limitaciones de base64
+4. **💡 Best Practices** → Patrones de seguridad profesionales
+5. **🐛 Troubleshooting** → Problemas comunes y soluciones
+6. **🧪 Laboratorios** → Práctica hands-on
+
+**Recomendación**: Lee cada sección, ejecuta los ejemplos y verifica con `kubectl describe/get`. Secrets son críticos para seguridad - entiende las limitaciones.
+
+---
+
+## 📋 Índice de Contenido
 
 1. [Introducción a los Secrets](#introducción-a-los-secrets)
 2. [Secrets vs ConfigMaps](#secrets-vs-configmaps)

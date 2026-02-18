@@ -1,27 +1,450 @@
-# 🐳 Módulo 04: Pods vs Contenedores - De LXC a Kubernetes
+# 🐳 Módulo 04: Pods vs Contenedores - Fundamentos
 
-**Duración**: 45 minutos  
-**Modalidad**: Teórico-Práctico  
-**Dificultad**: Intermedio
-
-## 🎯 Objetivos del Módulo
-
-Al completar este módulo serás capaz de:
-
-- ✅ **Entender la evolución** de LXC → Docker → Kubernetes Pods
-- ✅ **Explicar qué es un Pod** y cómo funciona internamente
-- ✅ **Comprender los namespaces compartidos** en un Pod
-- ✅ **Identificar cuándo usar** un Pod vs múltiples Pods
-- ✅ **Diseñar arquitecturas multi-contenedor** efectivas
-- ✅ **Migrar de Docker Compose** a Kubernetes Pods
+> **De contenedores aislados a Pods colaborativos**: Entender la unidad básica de Kubernetes y por qué no son solo "Docker++".
 
 ---
 
-## � 1. La Evolución de los Contenedores
+## 📋 Objetivos de Aprendizaje
+
+Al completar este módulo serás capaz de:
+
+### 🎓 Objetivos Conceptuales
+- **Entender la evolución**: LXC → Docker → Kubernetes Pods (historia de containers)
+- **Definir qué es un Pod**: La unidad atómica de K8s (no es un contenedor)
+- **Comprender el contenedor pause**: Infraestructura invisible que sostiene el Pod
+- **Namespaces Linux**: Los 7 tipos y cuáles se comparten en un Pod
+- **Pod = grupo lógico**: Por qué múltiples contenedores en un Pod
+
+### 🛠️ Objetivos Técnicos
+- **Crear Pods con kubectl**: run, apply con YAML
+- **Inspeccionar Pods**: describe, logs, exec para debugging
+- **Diseñar multi-contenedor**: Sidecar, adapter, ambassador patterns
+- **Comprender networking**: Localhost entre contenedores del mismo Pod
+- **Entender almacenamiento**: Volúmenes compartidos entre contenedores
+
+### 🔍 Objetivos de Troubleshooting
+- **Diagnosticar Pods fallidos**: CrashLoopBackOff, ImagePullBackOff, Error
+- **Analizar logs**: kubectl logs -c <contenedor> para multi-contenedor
+- **Debugging interactivo**: kubectl exec para inspeccionar contenedor
+- **Entender estados**: Pending, Running, Failed, Succeeded, Unknown
+
+### 🏢 Objetivos Profesionales
+- **Diseñar Pods efectivos**: Cuándo usar 1 vs múltiples contenedores
+- **Patrones de arquitectura**: Sidecar (logging), Adapter (métricas), Ambassador (proxy)
+- **Mejores prácticas**: Pods inmutables, un proceso por contenedor
+- **Preparación CKA/CKAD**: Pods son 20-30% del examen
+
+---
+
+## ✅ Prerrequisitos
+
+### Conocimientos Previos
+- ✅ **Módulos 01-03 completados**: K8s básico, arquitectura, Minikube funcionando
+- ✅ **Docker intermedio**: Imágenes, contenedores, volúmenes, redes
+- ✅ **Linux namespaces**: Conceptos básicos de aislamiento
+- ✅ **Redes básicas**: IPs, puertos, localhost
+
+### Herramientas Necesarias
+- 🔧 **Minikube funcionando**: `minikube status` debe mostrar "Running"
+- 🔧 **kubectl configurado**: `kubectl get nodes` debe funcionar
+- 🔧 **Cluster activo**: Al menos 1 nodo Ready
+
+### Verificación
+```bash
+# Verificar Minikube
+minikube status
+
+# Verificar kubectl
+kubectl version --short
+
+# Verificar conectividad con cluster
+kubectl get nodes
+# Debe mostrar al menos 1 nodo "Ready"
+
+# Verificar namespace default
+kubectl get pods
+# Puede estar vacío (No resources found) - está OK
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+### Contenido Teórico (60 minutos)
+1. **Evolución de Contenedores** (15 min) - LXC, Docker, K8s
+2. **Anatomía de un Pod** (20 min) - Pause container, namespaces compartidos
+3. **Multi-contenedor Patterns** (15 min) - Sidecar, Adapter, Ambassador
+4. **Ciclo de vida del Pod** (10 min) - Estados y transiciones
+
+### Contenido Práctico (90-120 minutos)
+1. **Crear Pods básicos** (20 min) - kubectl run, YAML
+2. **Inspeccionar Pods** (20 min) - describe, logs, exec
+3. **Pods multi-contenedor** (30 min) - Sidecar pattern
+4. **Troubleshooting** (20 min) - Diagnosticar fallos
+5. **Ejercicios avanzados** (20 min) - Patrones arquitectónicos
+
+### Ejemplos Prácticos (10 directorios)
+- 📁 **01-evolucion-contenedores/** - Historia y comparación
+- 📁 **02-pod-basico/** - Primera creación de Pod
+- 📁 **03-namespaces-compartidos/** - Networking interno
+- 📁 **04-contenedor-pause/** - Infraestructura del Pod
+- 📁 **05-multi-contenedor/** - Varios contenedores en un Pod
+- 📁 **06-sidecar-pattern/** - Logging, monitoring
+- 📁 **07-adapter-pattern/** - Transformación de datos
+- 📁 **08-ambassador-pattern/** - Proxy, networking
+- 📁 **09-debugging/** - Troubleshooting práctico
+- 📁 **10-mejores-practicas/** - Diseño de Pods
+
+### Laboratorios
+- 🔬 **Lab 01**: Mi primer Pod (nginx simple)
+- 🔬 **Lab 02**: Pod multi-contenedor (app + logging sidecar)
+- 🔬 **Lab 03**: Debugging de Pods fallidos
+- 🔬 **Lab 04**: Implementar patrón Ambassador
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (Nuevo en Pods)
+**Tiempo**: 4-5 horas (teoría + práctica profunda)
+```
+Día 1: Fundamentos Teóricos (90 min)
+  ├─ Sección 1: Evolución de contenedores (20 min)
+  │   └─ Entender diferencia Docker vs Pod
+  ├─ Sección 2: Anatomía de un Pod (30 min)
+  │   ├─ Pause container
+  │   └─ Namespaces compartidos
+  └─ Sección 3: Ciclo de vida (20 min)
+      └─ Estados del Pod
+
+Día 1: Práctica Básica (60 min)
+  ├─ Lab 01: Crear primer Pod
+  ├─ kubectl describe pod <nombre>
+  ├─ kubectl logs <pod>
+  └─ kubectl exec -it <pod> -- /bin/bash
+
+Día 2: Multi-contenedor (90 min)
+  ├─ Sección 4: Patterns (30 min)
+  ├─ Lab 02: Sidecar pattern (40 min)
+  └─ Lab 03: Troubleshooting (20 min)
+
+Día 2: Consolidación (30 min)
+  └─ RESUMEN-MODULO.md + preguntas repaso
+```
+
+### 🟡 Ruta Intermedia (Conoces Docker bien)
+**Tiempo**: 2-3 horas
+```
+Sesión 1: Teoría enfocada (45 min)
+  ├─ Sección 2: Anatomía del Pod (25 min)
+  │   └─ Enfoque en namespaces
+  └─ Sección 4: Patterns (20 min)
+      └─ Sidecar, Adapter, Ambassador
+
+Sesión 1: Práctica rápida (60 min)
+  ├─ Lab 01: Pod básico (15 min)
+  ├─ Lab 02: Multi-contenedor (30 min)
+  └─ Ejemplos de patterns (15 min)
+
+Sesión 2: Troubleshooting (30 min)
+  ├─ Lab 03: Debugging
+  └─ RESUMEN-MODULO.md
+```
+
+### 🔴 Ruta Certificación (CKA/CKAD)
+**Tiempo**: 60-90 minutos
+```
+Estrategia Examen:
+  ├─ RESUMEN-MODULO.md primero (20 min)
+  │   ├─ Comandos esenciales
+  │   ├─ Anatomía de YAML
+  │   └─ Troubleshooting cheat sheet
+  │
+  ├─ Práctica de comandos (30 min)
+  │   ├─ kubectl run nginx --image=nginx
+  │   ├─ kubectl get pods -o wide
+  │   ├─ kubectl describe pod <nombre>
+  │   ├─ kubectl logs <pod> -c <contenedor>
+  │   └─ kubectl exec -it <pod> -- sh
+  │
+  └─ Ejercicios multi-contenedor (20 min)
+      └─ Crear Pod con 2-3 contenedores
+
+Memorizar para examen:
+  - Estados: Pending, Running, Failed, Succeeded, Unknown
+  - Anatomía YAML: apiVersion, kind, metadata, spec
+  - Multi-contenedor: spec.containers[] (lista)
+  - Comandos: run, get, describe, logs, exec, delete
+  - Troubleshooting: describe → Events, logs → salida contenedor
+```
+
+---
+
+## 📁 Organización de Recursos
+
+### Carpeta `ejemplos/`
+```
+ejemplos/
+├── 01-evolucion-contenedores/
+│   ├── README.md                      # Historia LXC → Docker → K8s
+│   ├── docker-vs-pod.png              # Comparación visual
+│   └── timeline.md                    # Línea temporal
+│
+├── 02-pod-basico/
+│   ├── README.md                      # Mi primer Pod
+│   ├── pod-nginx.yaml                 # Pod simple con nginx
+│   └── commands.md                    # Comandos básicos
+│
+├── 03-namespaces-compartidos/
+│   ├── README.md                      # Namespaces Linux
+│   ├── pod-two-containers.yaml        # 2 contenedores, localhost
+│   └─ verify-namespaces.sh           # Inspeccionar namespaces
+│
+├── 04-contenedor-pause/
+│   ├── README.md                      # El contenedor invisible
+│   ├── inspect-pause.sh               # Ver pause container
+│   └── pause-diagram.png              # Diagrama arquitectónico
+│
+├── 05-multi-contenedor/
+│   ├── README.md                      # Múltiples contenedores
+│   ├── pod-app-db.yaml                # App + DB local
+│   └── shared-volume.yaml             # Volumen compartido
+│
+├── 06-sidecar-pattern/
+│   ├── README.md                      # Patrón Sidecar
+│   ├── pod-logging-sidecar.yaml       # App + log aggregator
+│   └── example-fluent-bit.yaml        # Caso real
+│
+├── 07-adapter-pattern/
+│   ├── README.md                      # Patrón Adapter
+│   ├── pod-metrics-adapter.yaml       # App + adaptador métricas
+│   └── prometheus-example.yaml        # Formato Prometheus
+│
+├── 08-ambassador-pattern/
+│   ├── README.md                      # Patrón Ambassador
+│   ├── pod-proxy-ambassador.yaml      # App + proxy local
+│   └── database-proxy.yaml            # Proxy a DB externa
+│
+├── 09-debugging/
+│   ├── README.md                      # Troubleshooting Pods
+│   ├── pod-crashloop.yaml             # Ejemplo fallo
+│   ├── pod-imagepull-error.yaml       # Imagen no existe
+│   └── debugging-commands.md          # Cheat sheet diagnóstico
+│
+└── 10-mejores-practicas/
+    ├── README.md                      # Diseño de Pods
+    ├── good-pod.yaml                  # Ejemplo correcto
+    ├── bad-pod.yaml                   # Anti-patterns
+    └── checklist.md                   # Lista de verificación
+```
+
+---
+
+## 🎯 Metodología de Aprendizaje
+
+Este módulo es **40% teórico, 60% práctico**:
+
+### Distribución de Contenido
+```
+💻 Práctica con Pods        40%  ████████▓░░░░░░░░░░░
+📖 Teoría y conceptos       30%  ██████▓░░░░░░░░░░░░░
+🔍 Troubleshooting          20%  ████▓░░░░░░░░░░░░░░░
+🎨 Patterns arquitectura    10%  ██▓░░░░░░░░░░░░░░░░░
+```
+
+### Enfoque Pedagógico
+1. **Del concepto al código**: Entender antes de ejecutar
+2. **Experimentación**: Romper cosas para aprender
+3. **Iteración**: Empezar simple, añadir complejidad gradualmente
+4. **Troubleshooting integrado**: Los errores son parte del aprendizaje
+
+### Flujo de Trabajo
+```
+1. Lee teoría → 2. Ve diagrama → 3. Ejecuta ejemplo
+                ↓
+4. Modifica YAML → 5. Observa resultado → 6. Entiende por qué
+                ↓
+7. Rompe algo → 8. Diagnostica → 9. Repara
+```
+
+---
+
+## 🔗 Conexión con Otros Módulos
+
+### Este Módulo te Prepara Para
+- ➡️ **Módulo 05**: Gestión de Pods (estrategias restart, resources)
+- ➡️ **Módulo 06**: ReplicaSets (múltiples réplicas del mismo Pod)
+- ➡️ **Módulo 07**: Deployments (orquestación de Pods)
+- ➡️ **Módulo 12**: Health Checks (liveness, readiness en Pods)
+- ➡️ **Módulo 15-16**: Volumes (persistencia en Pods)
+
+### Relación con Módulos Anteriores
+```
+Módulo 03: Instalación Minikube (tienes cluster)
+    ↓
+Módulo 04: Crear Pods (primera workload) ← ESTÁS AQUÍ
+    ↓
+Módulo 05-07: Gestionar Pods a escala
+```
+
+---
+
+## 💡 Concepto Clave: Pod ≠ Contenedor
+
+**IMPORTANTE**: Un Pod NO es un contenedor más potente.
+
+```
+DOCKER:              KUBERNETES:
+┌──────────┐         ┌─────────────────────────┐
+│Container │         │         Pod             │
+│  nginx   │         │  ┌──────────┐           │
+└──────────┘         │  │ pause    │ (infra)   │
+                     │  └──────────┘           │
+                     │  ┌──────────┐           │
+                     │  │ nginx    │           │
+                     │  └──────────┘           │
+                     │  ┌──────────┐           │
+                     │  │ logger   │ (sidecar) │
+                     │  └──────────┘           │
+                     └─────────────────────────┘
+                      Comparten: Network, IPC, localhost
+```
+
+**Un Pod es una abstracción que permite**:
+- Múltiples contenedores hablando por `localhost`
+- Volúmenes compartidos entre contenedores
+- Ciclo de vida coordinado
+- IP única para todo el grupo
+
+---
+
+## 🎯 Objetivos del Módulo (Expandido)
+
+Al completar este módulo serás capaz de:
+
+- ✅ **Explicar la evolución histórica** de contenedores hasta Pods
+- ✅ **Definir qué es un Pod** y diferenciarlo de un contenedor Docker
+- ✅ **Comprender el contenedor pause** como infraestructura del Pod
+- ✅ **Identificar los 7 namespaces Linux** y cuáles se comparten
+- ✅ **Diseñar Pods multi-contenedor** usando patrones Sidecar, Adapter, Ambassador
+- ✅ **Crear Pods con kubectl** (run, apply) y YAML
+- ✅ **Inspeccionar Pods** con describe, logs, exec
+- ✅ **Diagnosticar fallos** usando estados y eventos
+- ✅ **Aplicar mejores prácticas** en diseño de Pods
+
+### Patrones Multi-Contenedor
+- ✅ **Implementar el patrón Sidecar** para logging, monitoring y service mesh
+- ✅ **Utilizar Init Containers** para tareas de preparación y dependencias
+- ✅ **Aplicar el patrón Ambassador** para proxy y load balancing
+
+### Arquitectura y Decisiones
+- ✅ **Decidir cuándo usar** un Pod multi-contenedor vs múltiples Pods
+- ✅ **Migrar aplicaciones** de Docker Compose a Kubernetes
+- ✅ **Evitar antipatrones** comunes en diseño de Pods
+
+---
+
+## 📚 Prerequisitos
+
+Antes de comenzar este módulo, asegúrate de tener:
+
+**Conocimientos:**
+- ✅ Conceptos básicos de contenedores Docker
+- ✅ Familiaridad con comandos `docker run`, `docker-compose`
+- ✅ Conocimientos básicos de Linux (procesos, networking)
+- ✅ Comprensión de la arquitectura de Kubernetes (Módulo 02)
+
+**Entorno técnico:**
+- ✅ Minikube instalado y funcionando (completar Módulo 03)
+- ✅ kubectl configurado correctamente
+- ✅ Cluster de Minikube iniciado con driver Docker
+
+**Verificación rápida:**
+```bash
+# Verificar que Minikube está corriendo
+minikube status
+
+# Verificar conexión a kubectl
+kubectl get nodes
+
+# Debería mostrar:
+# NAME       STATUS   ROLES           AGE   VERSION
+# minikube   Ready    control-plane   Xd    vX.XX.X
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+Este módulo está organizado siguiendo la progresión **Teoría → Ejemplo → Laboratorio**:
+
+| Sección | Tema | Contenido |
+|---------|------|-----------|
+| **1** | [Fundamentos y Evolución](#📚-1-la-evolución-de-los-contenedores) | Historia LXC→Docker→K8s, motivación de Pods |
+| **2** | [Anatomía de un Pod](#🧩-2-qué-es-un-pod-la-evolución-final) | Contenedor pause, arquitectura interna, networking |
+| **3** | [Docker vs Pods](#🆚-3-docker-vs-pods-evolución-práctica) | Evolución práctica y comparación |
+| **4** | [Patrones Multi-Contenedor](#🎨-4-patrones-multi-contenedor-en-pods) | Sidecar, Init Containers, Ambassador |
+| **5** | [Migración Docker Compose](#🛠️-5-migración-docker-compose--kubernetes) | Cuándo usar Pods vs múltiples Pods, migración |
+| **6** | [Laboratorios Prácticos](#🧪-6-laboratorios-prácticos) | Ejercicios guiados paso a paso |
+| **7** | [Ciclo de Vida](#🔄-7-ciclo-de-vida-de-pods) | Estados y transiciones de Pods |
+| **8** | [Ejemplos Disponibles](#🧪-8-ejemplos-prácticos-disponibles) | Índice completo de ejemplos YAML |
+| **9** | [Antipatrones y Best Practices](#🚨-9-antipatrones-y-mejores-prácticas) | Qué evitar y mejores prácticas |
+| **10** | [Debugging](#🔧-10-debugging-y-troubleshooting) | Herramientas de diagnóstico |
+
+**🔍 Separación de responsabilidades:**
+- Este módulo (04): **Qué es un Pod y patrones básicos**
+- Módulo 05: **Gestión avanzada** (manifiestos complejos, resource management, health checks)
+
+---
+
+## 🎓 Recursos de Aprendizaje
+
+### Ejemplos Prácticos
+📁 **Carpeta**: [`ejemplos/`](./ejemplos/)
+- 40+ archivos YAML ejecutables organizados por concepto
+- Cada ejemplo está documentado con comentarios explicativos
+- Comandos de prueba incluidos en cada archivo
+
+### Laboratorios Guiados
+📁 **Carpeta**: [`laboratorios/`](./laboratorios/)
+- 5 laboratorios paso a paso con verificaciones
+- Duración total: ~4 horas de práctica
+- Incluyen troubleshooting y cleanup
+
+### Documentación de Referencia
+- 📖 [`ejemplos/README.md`](./ejemplos/README.md) - Índice de todos los ejemplos
+- 📖 [`laboratorios/README.md`](./laboratorios/README.md) - Guía de laboratorios
+- 📘 **[`RESUMEN-MODULO.md`](./RESUMEN-MODULO.md)** - **Guía de estudio estructurada** (RECOMENDADO)
+
+---
+
+## 🎓 Guía de Estudio Recomendada
+
+**¿Primera vez con este módulo?** Te recomendamos seguir la guía de estudio:
+
+👉 **[ABRIR GUÍA DE ESTUDIO](./RESUMEN-MODULO.md)**
+
+La guía te proporciona:
+- ✅ Ruta de aprendizaje paso a paso
+- ✅ Progresión pedagógica: Teoría → Ejemplo → Lab
+- ✅ Checkpoints de verificación en cada sección
+- ✅ Tiempo estimado por fase
+- ✅ Enlaces directos a ejemplos y labs relevantes
+
+**Estructura de la guía**:
+1. **Fase 1**: Fundamentos y evolución (45-60 min)
+2. **Fase 2**: Namespaces Linux (60-90 min)
+3. **Fase 3**: Patrones multi-contenedor (90-120 min)
+4. **Fase 4**: Decisiones de arquitectura (45-60 min)
+5. **Fase 5**: Best practices (30-45 min)
+
+---
+
+## 📚 1. La Evolución de los Contenedores
 
 🧪 **Laboratorio práctico**: [`laboratorios/lab-01-evolucion.md`](./laboratorios/lab-01-evolucion.md) - Demuestra la evolución con ejemplos ejecutables
 
-### **� Línea de Tiempo: LXC → Docker → Kubernetes**
+### **⏳ Línea de Tiempo: LXC → Docker → Kubernetes**
 
 ```
 2008: LXC (Linux Containers)

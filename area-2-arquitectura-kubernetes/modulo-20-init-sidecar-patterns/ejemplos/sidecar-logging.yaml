@@ -1,0 +1,314 @@
+# ════════════════════════════════════════════════════════════════════════════
+# EJEMPLO 3: Sidecar Pattern - Logging
+# ════════════════════════════════════════════════════════════════════════════
+#
+# DESCRIPCIÓN:
+#   Pod con sidecar que lee logs de la aplicación principal y los procesa.
+#   Demuestra shared volumes y comunicación entre containers.
+#
+# CASO DE USO:
+#   - Centralized logging (Fluentd, Fluent Bit, Logstash)
+#   - Log aggregation y forwarding
+#   - Separar concerns: app escribe logs, sidecar los procesa
+#
+# APLICAR:
+#   kubectl apply -f sidecar-logging.yaml
+#
+# VERIFICAR:
+#   kubectl get pod log-app
+#   kubectl logs log-app -c app  # Ver logs de app
+#   kubectl logs log-app -c log-shipper  # Ver sidecar procesando
+#
+# LIMPIAR:
+#   kubectl delete -f sidecar-logging.yaml
+#
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-app
+  labels:
+    app: log-demo
+    pattern: sidecar-logging
+  annotations:
+    description: "Sidecar logging pattern con shared volume"
+spec:
+  
+  containers:
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MAIN CONTAINER: Application (escribe logs)
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: app
+    image: busybox:1.35
+    
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Aplicación iniciada - escribiendo logs a /var/log/app/"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Crear directorio de logs
+      mkdir -p /var/log/app
+      
+      # Generar logs continuamente
+      COUNTER=1
+      while true; do
+        TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+        LEVEL=$(shuf -e "INFO" "WARN" "ERROR" "DEBUG" -n 1)
+        
+        # Simular diferentes tipos de logs
+        case $LEVEL in
+          "INFO")
+            MESSAGE="Usuario ${COUNTER} autenticado correctamente"
+            ;;
+          "WARN")
+            MESSAGE="Cache miss para key user_${COUNTER}"
+            ;;
+          "ERROR")
+            MESSAGE="Fallo al conectar a servicio externo (retry ${COUNTER})"
+            ;;
+          "DEBUG")
+            MESSAGE="Query ejecutado en ${COUNTER}ms"
+            ;;
+        esac
+        
+        # Escribir log en formato custom
+        LOG_ENTRY="[${TIMESTAMP}] ${LEVEL} | ${MESSAGE}"
+        echo "$LOG_ENTRY" | tee -a /var/log/app/application.log
+        
+        COUNTER=$((COUNTER + 1))
+        sleep 3
+      done
+    
+    # Mount shared volume (read-write)
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/app
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SIDECAR CONTAINER: Log Shipper (lee y procesa logs)
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: log-shipper
+    image: busybox:1.35
+    
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Log Shipper iniciado - monitoreando /var/log/app/"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Esperar a que app cree el archivo de log
+      while [ ! -f /var/log/app/application.log ]; do
+        echo "⏳ Esperando a que app cree application.log..."
+        sleep 2
+      done
+      
+      echo "✅ Archivo de log detectado, iniciando procesamiento..."
+      echo ""
+      
+      # Leer logs en tiempo real y procesarlos
+      tail -f /var/log/app/application.log | while read line; do
+        # Extraer componentes del log
+        TIMESTAMP=$(echo "$line" | cut -d']' -f1 | tr -d '[')
+        LEVEL=$(echo "$line" | cut -d'|' -f1 | awk '{print $NF}')
+        MESSAGE=$(echo "$line" | cut -d'|' -f2-)
+        
+        # Convertir a JSON (formato para sistemas centralizados)
+        JSON_LOG="{\"timestamp\":\"${TIMESTAMP}\",\"level\":\"${LEVEL}\",\"message\":\"${MESSAGE}\",\"source\":\"log-app\",\"pod\":\"${POD_NAME}\"}"
+        
+        # Simular envío a sistema centralizado
+        echo "[SHIPPER] Enviando a Elasticsearch: $JSON_LOG"
+        
+        # En producción, aquí enviarías con curl/fluentd/logstash
+        # curl -X POST http://elasticsearch:9200/logs/_doc -d "$JSON_LOG"
+      done
+    
+    env:
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    
+    # Mount mismo volume pero READ-ONLY (seguridad)
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/app
+      readOnly: true
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SHARED VOLUME (emptyDir)
+  # ═══════════════════════════════════════════════════════════════════════════
+  volumes:
+  - name: logs
+    emptyDir: {}
+    # Alternativa con tamaño limitado:
+    # emptyDir:
+    #   sizeLimit: "1Gi"
+  
+  restartPolicy: Always
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# VARIANTE: Sidecar con Fluentd Real
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+data:
+  fluent.conf: |
+    <source>
+      @type tail
+      path /var/log/app/*.log
+      pos_file /var/log/fluentd-app.log.pos
+      tag app.logs
+      <parse>
+        @type regexp
+        expression /^\[(?<time>[^\]]+)\] (?<level>\w+) \| (?<message>.*)$/
+        time_key time
+        time_format %Y-%m-%d %H:%M:%S
+      </parse>
+    </source>
+    
+    <match app.logs>
+      @type stdout
+      # En producción, usar elasticsearch, kafka, etc:
+      # @type elasticsearch
+      # host elasticsearch.logging.svc.cluster.local
+      # port 9200
+      # logstash_format true
+    </match>
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-app-fluentd
+  labels:
+    app: log-demo
+    pattern: sidecar-fluentd
+spec:
+  containers:
+  
+  # MAIN APP (igual que anterior)
+  - name: app
+    image: nginx:1.25-alpine
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+  
+  # FLUENTD SIDECAR
+  - name: fluentd
+    image: fluent/fluentd:v1.16-1
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+      readOnly: true
+    - name: fluentd-config
+      mountPath: /fluentd/etc
+    env:
+    - name: FLUENT_UID
+      value: "0"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+  
+  volumes:
+  - name: logs
+    emptyDir: {}
+  - name: fluentd-config
+    configMap:
+      name: fluentd-config
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# TESTING
+# ════════════════════════════════════════════════════════════════════════════
+#
+# 1. Aplicar Pod básico:
+#    kubectl apply -f sidecar-logging.yaml
+#
+# 2. Ver logs de la app (escribiendo logs):
+#    kubectl logs log-app -c app
+#
+#    Expected output:
+#    ════════════════════════════════════════════════════════
+#    Aplicación iniciada - escribiendo logs a /var/log/app/
+#    ════════════════════════════════════════════════════════
+#    [2025-11-13 10:30:00] INFO | Usuario 1 autenticado correctamente
+#    [2025-11-13 10:30:03] WARN | Cache miss para key user_2
+#    [2025-11-13 10:30:06] ERROR | Fallo al conectar a servicio externo
+#
+# 3. Ver logs del sidecar (procesando logs):
+#    kubectl logs log-app -c log-shipper
+#
+#    Expected output:
+#    ════════════════════════════════════════════════════════
+#    Log Shipper iniciado - monitoreando /var/log/app/
+#    ════════════════════════════════════════════════════════
+#    ✅ Archivo de log detectado, iniciando procesamiento...
+#    
+#    [SHIPPER] Enviando a Elasticsearch: {"timestamp":"2025-11-13 10:30:00","level":"INFO","message":" Usuario 1...
+#
+# 4. Ver ambos logs simultáneamente (con stern):
+#    stern log-app
+#
+# 5. Verificar shared volume:
+#    kubectl exec log-app -c app -- ls -la /var/log/app
+#    kubectl exec log-app -c log-shipper -- ls -la /var/log/app
+#    # Mismo contenido en ambos
+#
+# 6. Verificar read-only en sidecar:
+#    kubectl exec log-app -c log-shipper -- touch /var/log/app/test.txt
+#    # Error: Read-only file system ✅
+#
+# 7. Generar tráfico (para Fluentd variant):
+#    kubectl port-forward log-app-fluentd 8080:80
+#    curl localhost:8080
+#    kubectl logs log-app-fluentd -c fluentd
+#
+# ════════════════════════════════════════════════════════════════════════════
+# CONCEPTOS CLAVE
+# ════════════════════════════════════════════════════════════════════════════
+# - SHARED VOLUME: emptyDir compartido entre app y sidecar
+# - READ-ONLY: Sidecar solo lee, no modifica logs (seguridad)
+# - SEPARATION OF CONCERNS: App solo escribe, sidecar solo procesa
+# - LOCALHOST COMMUNICATION: Ambos containers en misma red
+# - RESOURCE LIMITS: Sidecar usa menos recursos que app
+# ════════════════════════════════════════════════════════════════════════════

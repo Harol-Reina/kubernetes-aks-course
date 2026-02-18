@@ -1,0 +1,47 @@
+✅ Multi-Tier Application desplegada exitosamente!
+
+Componentes instalados:
+{{- if .Values.frontend.enabled }}
+- Frontend: {{ .Values.frontend.replicaCount }} réplicas
+{{- end }}
+{{- if .Values.backend.enabled }}
+- Backend: {{ .Values.backend.replicaCount }} réplicas
+{{- end }}
+{{- if .Values.database.enabled }}
+- Database: PostgreSQL
+{{- end }}
+{{- if .Values.redis.enabled }}
+- Cache: Redis
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+
+🌐 Acceso a la aplicación:
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+
+{{- else }}
+
+📋 Para acceder sin Ingress:
+
+Frontend:
+  kubectl port-forward svc/{{ .Release.Name }}-frontend 8080:{{ .Values.frontend.service.port }}
+  http://localhost:8080
+
+Backend:
+  kubectl port-forward svc/{{ .Release.Name }}-backend 3000:{{ .Values.backend.service.port }}
+  http://localhost:3000
+
+{{- end }}
+
+🔐 Credenciales de Database:
+  Usuario: {{ .Values.database.auth.username }}
+  Password: Guardado en secret {{ .Release.Name }}-database-secret
+  Database: {{ .Values.database.auth.database }}
+
+📊 Ver componentes:
+  kubectl get all -l release={{ .Release.Name }}
+
+🔄 Actualizar:
+  helm upgrade {{ .Release.Name }} .

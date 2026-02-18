@@ -1,6 +1,201 @@
 # Módulo 13: ConfigMaps y Variables de Entorno
 
-## 📋 Índice
+> **Gestión de Configuración Externa en Kubernetes**  
+> Aprende a separar la configuración del código usando variables de entorno, field references y ConfigMaps para aplicaciones portables y seguras.
+
+---
+
+## 📋 Objetivos de Aprendizaje
+
+Al completar este módulo serás capaz de:
+
+### 🎯 Fundamentos
+- Comprender el principio de separación configuración/código (12-Factor App)
+- Diferenciar entre variables de entorno, field references y ConfigMaps
+- Explicar cuándo usar ConfigMaps vs Secrets
+- Entender el ciclo de vida y actualización de ConfigMaps
+
+### 🔧 Técnicos
+- Definir variables de entorno estáticas en Pods
+- Usar field references para acceder a metadata del Pod
+- Crear ConfigMaps desde literales, archivos y directorios
+- Consumir ConfigMaps como variables de entorno
+- Montar ConfigMaps como volúmenes
+- Gestionar actualizaciones de configuración
+
+### 🚀 Avanzados
+- Implementar ConfigMaps inmutables para performance
+- Combinar múltiples fuentes de configuración
+- Aplicar patterns de hot-reload de configuración
+- Diseñar estrategias de versionado de ConfigMaps
+- Integrar con Helm para gestión de configuración
+
+### 💼 Profesionales
+- Establecer políticas de configuración por entorno
+- Implementar configuración jerárquica (base + overrides)
+- Aplicar GitOps para gestión de ConfigMaps
+- Troubleshoot problemas comunes de configuración
+- Optimizar performance con ConfigMaps inmutables
+
+---
+
+## ✅ Prerrequisitos
+
+### Conocimientos Requeridos
+- ✅ **Módulo 04**: Pods vs Contenedores
+- ✅ **Módulo 05**: Gestión de Pods
+- ✅ **Módulo 07**: Deployments
+- ✅ **Módulo 10**: Namespaces (para scope de ConfigMaps)
+
+### Herramientas Necesarias
+```bash
+# Verificar kubectl
+kubectl version --client
+
+# Verificar clúster activo
+kubectl cluster-info
+
+# Crear namespace de pruebas
+kubectl create namespace config-demo
+
+# Verificar acceso
+kubectl get configmaps -n config-demo
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+| Sección | Tema | Duración | Tipo |
+|---------|------|----------|------|
+| **1** | Introducción y conceptos fundamentales | 15 min | 📖 Teoría |
+| **2** | Variables de entorno básicas | 20 min | 📖 Teoría |
+| **3** | Field References (metadata del Pod) | 25 min | 💻 Práctica |
+| **Lab 1** | [Env Vars y Field Ref](laboratorios/lab-01-env-vars-field-ref.md) | 40 min | 🧪 Laboratorio |
+| **4** | ConfigMaps - Creación | 30 min | 📖 Teoría |
+| **5** | ConfigMaps - Consumo (env y volumes) | 40 min | 💻 Práctica |
+| **6** | Actualizaciones de ConfigMaps | 20 min | 📖 Teoría |
+| **Lab 2** | [ConfigMaps Avanzado](laboratorios/lab-02-configmaps-avanzado.md) | 60 min | 🧪 Laboratorio |
+| **7** | Secrets (introducción) | 20 min | 📖 Teoría |
+| **8** | ConfigMaps Inmutables | 20 min | 📖 Teoría |
+| **9** | Best Practices | 30 min | 📖 Teoría |
+| **10** | Troubleshooting | 30 min | 📖 Teoría |
+| **Lab 3** | [Troubleshooting](laboratorios/lab-03-troubleshooting.md) | 50 min | 🧪 Laboratorio |
+| **11** | Ejemplo completo (Node.js app) | 20 min | 💻 Práctica |
+| | **TOTAL** | **6 horas** | |
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (2-3 días)
+**Para developers que comienzan con configuración en K8s**
+
+**Día 1**: Fundamentos
+- Estudiar secciones 1-3 (introducción, env vars, field references)
+- Entender el principio de separación configuración/código
+- Explorar ejemplos en `ejemplos/01-env-vars-basicas/` y `ejemplos/02-field-references/`
+- **Lab 1**: Env Vars y Field Ref (40 min)
+
+**Día 2**: ConfigMaps
+- Sección 4-6 (creación, consumo, actualizaciones)
+- Experimentar con literales, archivos y directorios
+- Probar envFrom y volumeMounts
+- **Lab 2**: ConfigMaps Avanzado (60 min)
+
+**Día 3**: Producción
+- Sección 7-10 (Secrets, inmutables, best practices, troubleshooting)
+- Ejemplo completo Node.js
+- **Lab 3**: Troubleshooting (50 min)
+- Revisar [RESUMEN-MODULO.md](RESUMEN-MODULO.md)
+
+---
+
+### 🟡 Ruta Intermedia (1-2 días)
+**Para quienes ya usan ConfigMaps básicamente**
+
+**Día 1**: Profundización
+- Repasar field references (sección 3)
+- Enfocarse en consumo de ConfigMaps (volumeMounts)
+- Explorar actualizaciones y hot-reload
+- **Lab 1 y Lab 2** (100 min total)
+
+**Día 2**: Optimización
+- ConfigMaps inmutables (performance)
+- Best practices (sección 9)
+- Troubleshooting avanzado
+- **Lab 3**: Troubleshooting (50 min)
+- Aplicar a apps existentes
+
+---
+
+### 🔴 Ruta Certificación CKA/CKAD (3-4 horas)
+**Para preparación de examen**
+
+**Mañana (2 horas)**:
+- ⚡ Revisar [RESUMEN-MODULO.md](RESUMEN-MODULO.md) completo (30 min)
+- Memorizar comandos de creación rápida de ConfigMaps
+- Dominar `envFrom` vs individual env vars
+- Practicar: crear ConfigMap y consumirlo sin mirar docs (30 min)
+- Practicar: field references (namespace, nodeName, podIP) (30 min)
+
+**Tarde (1.5 horas)**:
+- 🧪 **Los 3 laboratorios** en time-boxing estricto
+- ⚠️ Troubleshooting: ConfigMap no se actualiza en Pod
+- 📊 Practicar `kubectl create configmap` con todas las opciones
+- 🎯 Escenarios: agregar ConfigMap a Deployment existente (<5 min)
+
+**Temas críticos para examen**:
+- Crear ConfigMap desde literal: `kubectl create cm <name> --from-literal=key=value`
+- Crear ConfigMap desde archivo: `kubectl create cm <name> --from-file=<path>`
+- Consumir con `envFrom.configMapRef`
+- Montar como volume en `/etc/config`
+- Field references: `fieldRef.fieldPath: metadata.namespace`
+
+---
+
+## 📁 Organización de Recursos
+
+```
+modulo-13-configmaps-variables/
+├── README.md                          # Este archivo (teoría completa)
+├── RESUMEN-MODULO.md                  # Guía de estudio rápida
+├── ejemplos/                          # 7 ejemplos prácticos
+│   ├── 01-env-vars-basicas/           # Variables de entorno estáticas
+│   ├── 02-field-references/           # Metadata del Pod
+│   ├── 03-configmap-literal/          # ConfigMap desde literal
+│   ├── 04-configmap-file/             # ConfigMap desde archivos
+│   ├── 05-configmap-env/              # ConfigMap como env vars
+│   ├── 06-configmap-volume/           # ConfigMap como volumen
+│   └── 07-combinados/                 # Múltiples fuentes
+└── laboratorios/                      # 3 labs prácticos guiados
+    ├── lab-01-env-vars-field-ref.md   # 40 min - Fundamentos
+    ├── lab-02-configmaps-avanzado.md  # 60 min - ConfigMaps completo
+    └── lab-03-troubleshooting.md      # 50 min - Diagnóstico
+
+```
+
+---
+
+## 🎓 Metodología de Aprendizaje
+
+Este módulo sigue el patrón pedagógico del curso:
+
+1. **Teoría estructurada**: Cada sección explica conceptos con ejemplos claros
+2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
+3. **Laboratorios progresivos**: 3 labs de básico a troubleshooting
+4. **Resumen ejecutivo**: [RESUMEN-MODULO.md](RESUMEN-MODULO.md) para repaso rápido
+
+### Consejos de Estudio
+- ⚠️ **Crítico**: Entender cuándo usar env vars vs ConfigMaps vs Secrets
+- 🧪 Experimentar con updates: ¿Se actualizan automáticamente los Pods?
+- 📊 Usar `kubectl describe pod` para ver variables de entorno
+- 🔍 Probar volumeMounts para ver archivos en tiempo real
+- 💡 Implementar hot-reload en tus apps para detectar cambios de config
+
+---
+
+## 📋 Índice Detallado
 
 1. [Introducción](#introducción)
 2. [Variables de Entorno Básicas](#variables-de-entorno-básicas)

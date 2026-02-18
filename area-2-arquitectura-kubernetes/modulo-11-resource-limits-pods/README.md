@@ -1,6 +1,202 @@
 # Módulo 11: Resource Limits en Pods
 
-## Índice
+> **Gestión de Recursos CPU, Memoria y Storage**  
+> Aprende a configurar requests, limits, QoS classes y optimizar el uso de recursos en tus aplicaciones Kubernetes.
+
+---
+
+## 📋 Objetivos de Aprendizaje
+
+Al completar este módulo serás capaz de:
+
+### 🎯 Fundamentos
+- Comprender la diferencia entre **requests** y **limits**
+- Explicar cómo el scheduler usa requests para placement de Pods
+- Identificar los tres tipos de recursos: CPU, memoria y storage
+- Entender las unidades de medición (milicores, bytes, etc.)
+
+### 🔧 Técnicos
+- Configurar requests y limits en contenedores
+- Aplicar QoS classes (Guaranteed, Burstable, BestEffort)
+- Gestionar ephemeral storage en Pods
+- Monitorear el uso de recursos con `kubectl top`
+- Diagnosticar problemas OOMKilled y CPU throttling
+
+### 🚀 Avanzados
+- Implementar Pod-level resources (K8s 1.34+)
+- Configurar extended resources (GPUs, FPGAs)
+- Optimizar configuraciones para producción
+- Aplicar strategies de right-sizing
+- Integrar con Vertical Pod Autoscaler (VPA)
+
+### 💼 Profesionales
+- Diseñar políticas de recursos para equipos/proyectos
+- Balancear performance vs costo en el clúster
+- Implementar monitoreo avanzado (Prometheus, Grafana)
+- Aplicar best practices de resource management a escala
+- Troubleshoot problemas complejos de recursos
+
+---
+
+## ✅ Prerrequisitos
+
+### Conocimientos Requeridos
+- ✅ **Módulo 04**: Pods vs Contenedores
+- ✅ **Módulo 05**: Gestión de Pods
+- ✅ **Módulo 07**: Deployments
+- ✅ **Módulo 10**: Namespaces (para ResourceQuotas)
+
+### Herramientas Necesarias
+```bash
+# Verificar kubectl
+kubectl version --client
+
+# Verificar clúster activo
+kubectl cluster-info
+
+# Verificar metrics-server (necesario para 'kubectl top')
+kubectl get deployment metrics-server -n kube-system
+
+# Si no existe, instalar metrics-server
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Verificar nodos con capacidad de recursos
+kubectl get nodes -o custom-columns=NAME:.metadata.name,CPU:.status.capacity.cpu,MEMORY:.status.capacity.memory
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+| Sección | Tema | Duración | Tipo |
+|---------|------|----------|------|
+| **1** | Introducción y conceptos fundamentales | 20 min | 📖 Teoría |
+| **2** | Requests vs Limits (diferencias críticas) | 30 min | 📖 Teoría |
+| **3** | Tipos de recursos y unidades | 20 min | 📖 Teoría |
+| **4** | Quality of Service (QoS) Classes | 40 min | 📖 Teoría |
+| **5** | Configuración práctica de recursos | 30 min | 💻 Práctica |
+| **Lab 1** | [Fundamentos](laboratorios/lab-01-fundamentos.md) | 50 min | 🧪 Laboratorio |
+| **6** | Ephemeral Storage y Extended Resources | 30 min | 📖 Teoría |
+| **7** | Scheduler y Enforcement | 30 min | 📖 Teoría |
+| **8** | Monitoreo de recursos | 20 min | 💻 Práctica |
+| **Lab 2** | [Troubleshooting](laboratorios/lab-02-troubleshooting.md) | 60 min | 🧪 Laboratorio |
+| **9** | Best Practices y optimización | 30 min | 📖 Teoría |
+| **Lab 3** | [Producción](laboratorios/lab-03-produccion.md) | 60 min | 🧪 Laboratorio |
+| **10** | Troubleshooting avanzado | 30 min | 📖 Teoría |
+| | **TOTAL** | **6 horas** | |
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (3-4 días)
+**Para developers que comienzan con Kubernetes**
+
+**Día 1-2**: Fundamentos
+- Estudiar secciones 1-4 (conceptos, requests vs limits, QoS)
+- Completar ejemplos básicos en `ejemplos/01-requests-limits-basico/`
+- **Lab 1**: Fundamentos (50 min)
+
+**Día 3**: Práctica
+- Sección 5-7 (configuración, ephemeral storage)
+- Experimentar con ejemplos 06-09 (QoS classes)
+- **Lab 2**: Troubleshooting (60 min)
+
+**Día 4**: Consolidación
+- Sección 8-9 (monitoreo, best practices)
+- **Lab 3**: Producción (60 min)
+- Revisar [RESUMEN-MODULO.md](RESUMEN-MODULO.md)
+
+---
+
+### 🟡 Ruta Intermedia (2 días)
+**Para quienes ya configuraron recursos básicamente**
+
+**Día 1**: Profundización
+- Repasar secciones 2-4 rápidamente
+- Enfocarse en sección 6 (QoS avanzado)
+- Explorar ejemplos 10-12 (pod-level, extended resources)
+- **Lab 1 y Lab 2** (110 min total)
+
+**Día 2**: Optimización
+- Sección 8-9 (monitoreo, best practices)
+- Sección 10 (troubleshooting avanzado)
+- **Lab 3**: Producción (60 min)
+- Aplicar learnings a tus aplicaciones reales
+
+---
+
+### 🔴 Ruta Certificación CKA/CKAD (1 día intensivo)
+**Para preparación de examen**
+
+**Mañana (3 horas)**:
+- ⚡ Revisar [RESUMEN-MODULO.md](RESUMEN-MODULO.md) completo
+- Memorizar diferencias requests vs limits
+- Dominar las 3 QoS classes y cómo se asignan
+- Practicar comandos: `kubectl set resources`, `kubectl top`
+
+**Tarde (3 horas)**:
+- 🧪 **Los 3 laboratorios** sin consultar documentación
+- ⚠️ Enfocarse en troubleshooting OOMKilled
+- 📊 Practicar cálculos de QoS class
+- 🎯 Time-boxing: Resolver escenarios en <5 min cada uno
+
+**Temas críticos para examen**:
+- Configurar requests/limits rápidamente
+- Diagnosticar por qué un Pod no se programa (Insufficient CPU/memory)
+- Identificar QoS class de un Pod existente
+- Usar `kubectl top` para encontrar Pods con alto consumo
+
+---
+
+## 📁 Organización de Recursos
+
+```
+modulo-11-resource-limits-pods/
+├── README.md                          # Este archivo (teoría completa)
+├── RESUMEN-MODULO.md                  # Guía de estudio rápida
+├── ejemplos/                          # 14 ejemplos prácticos
+│   ├── 01-requests-limits-basico/     # Configuración básica
+│   ├── 02-multi-container/            # Múltiples contenedores
+│   ├── 03-init-containers/            # Init containers
+│   ├── 04-solo-requests/              # Solo requests (sin limits)
+│   ├── 05-solo-limits/                # Solo limits (sin requests)
+│   ├── 06-ephemeral-storage-basico/   # Storage efímero básico
+│   ├── 07-qos-guaranteed/             # QoS Guaranteed
+│   ├── 08-qos-burstable/              # QoS Burstable
+│   ├── 09-qos-besteffort/             # QoS BestEffort
+│   ├── 10-ephemeral-storage/          # Storage avanzado
+│   ├── 11-pod-level-resources/        # Pod-level (K8s 1.34+)
+│   ├── 12-extended-resources/         # GPUs, custom resources
+│   ├── 13-troubleshooting-oom/        # OOMKilled scenarios
+│   └── 14-troubleshooting-cpu/        # CPU throttling
+└── laboratorios/                      # 3 labs prácticos guiados
+    ├── lab-01-fundamentos.md          # 50 min - Requests, limits, QoS
+    ├── lab-02-troubleshooting.md      # 60 min - OOMKilled, scheduling
+    └── lab-03-produccion.md           # 60 min - Optimización real
+```
+
+---
+
+## 🎓 Metodología de Aprendizaje
+
+Este módulo sigue el patrón pedagógico del curso:
+
+1. **Teoría estructurada**: Cada sección explica conceptos con analogías y diagramas
+2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
+3. **Laboratorios prácticos**: 3 labs progresivos con escenarios realistas
+4. **Resumen ejecutivo**: [RESUMEN-MODULO.md](RESUMEN-MODULO.md) para repaso rápido
+
+### Consejos de Estudio
+- ⚠️ **Crítico**: Entender la diferencia entre requests y limits (80% de problemas vienen de aquí)
+- 📊 Experimentar con las 3 QoS classes en el clúster
+- 🧪 Provocar OOMKilled intencionalmente para entender su comportamiento
+- 📈 Usar `kubectl top` constantemente para correlacionar teoría con realidad
+- 🔍 Leer logs del kubelet cuando un Pod no se programa
+
+---
+
+## Índice Detallado
 
 1. [Introducción](#introducción)
 2. [Conceptos Fundamentales](#conceptos-fundamentales)
@@ -1674,8 +1870,7 @@ spec:
 ### 7. Monitorea Throttling y OOMKilled
 
 ```bash
-# Script para detectar problemas
-#!/bin/bash
+# Script para detectar problemas de recursos
 
 # Pods con restart count alto (posible OOMKilled)
 kubectl get pods --all-namespaces -o json | \

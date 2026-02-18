@@ -1,5 +1,169 @@
 # Módulo 10: Namespaces y Organización
 
+> **Organización multitenancy y gestión de recursos en Kubernetes**
+
+---
+
+## 📋 Objetivos de Aprendizaje
+
+Al completar este módulo, serás capaz de:
+
+### 🎯 Fundamentos
+- Explicar qué son los Namespaces y por qué son necesarios
+- Comprender la diferencia entre aislamiento lógico vs físico
+- Identificar los namespaces del sistema y su propósito
+- Entender cuándo usar namespaces (casos de uso)
+
+### 🔧 Técnicos
+- Crear, listar y eliminar namespaces con kubectl
+- Configurar contextos en kubeconfig para cambiar entre namespaces
+- Trabajar con recursos en namespaces específicos
+- Comprender DNS scoping en namespaces
+- Diferenciar recursos namespaced vs cluster-scoped
+
+### 🚀 Avanzados
+- Implementar ResourceQuotas para limitar recursos por namespace
+- Configurar LimitRanges para defaults de contenedores
+- Aplicar NetworkPolicies para aislamiento de red
+- Integrar RBAC con namespaces para control de acceso
+- Diseñar arquitecturas multi-tenant
+
+### 💼 Profesionales
+- Aplicar patrones de organización (por entorno, equipo, proyecto)
+- Implementar best practices de naming conventions
+- Configurar monitoreo por namespace
+- Gestionar costos con chargebacks/showbacks
+- Diseñar estrategias de gobernanza
+
+---
+
+## ✅ Prerequisites
+
+Antes de comenzar este módulo, debes:
+
+- ✅ **Módulos completados**:
+  - Módulo 08: Services y Endpoints
+  - Módulo 07: Deployments y Rollouts
+  - Módulo 05: Gestión de Pods
+
+- ✅ **Conocimientos**:
+  - Cómo funcionan Pods, Deployments y Services
+  - Conceptos básicos de YAML
+  - Comandos kubectl básicos
+  - Conceptos de multi-tenancy
+
+- ✅ **Herramientas**:
+  ```bash
+  # Verificar kubectl
+  kubectl version --client
+  
+  # Verificar minikube
+  minikube status
+  
+  # Ver contexto actual
+  kubectl config current-context
+  ```
+
+- ✅ **Entorno**:
+  - Minikube corriendo con driver docker
+  - Cluster con al menos 2 CPUs y 4GB RAM
+  - Permisos de cluster-admin (por defecto en minikube)
+
+---
+
+## 🗺️ Estructura del Módulo
+
+| Sección | Tema | Duración | Tipo |
+|---------|------|----------|------|
+| **1-4** | Introducción y Conceptos Fundamentales | 30 min | Teoría |
+| **5-6** | Gestión de Namespaces y Contextos | 40 min | Teoría + Práctica |
+| **Lab 1** | [Namespaces Básico](laboratorios/lab-01-namespaces-basico.md) | 40 min | 🧪 Laboratorio |
+| **7-8** | DNS y Recursos Scoped | 30 min | Teoría |
+| **9-10** | ResourceQuota y LimitRange | 50 min | Teoría + Ejemplos |
+| **Lab 2** | [Quotas y Limits](laboratorios/lab-02-quotas-limits.md) | 50 min | 🧪 Laboratorio |
+| **11-13** | Aislamiento, Patrones y Best Practices | 40 min | Teoría |
+| **Lab 3** | [Multi-Tenancy](laboratorios/lab-03-multi-tenancy.md) | 60 min | 🧪 Laboratorio |
+| **14** | Troubleshooting | 20 min | Teoría |
+| **Total** | | **5 horas** | |
+
+---
+
+## 📚 Guía de Estudio
+
+### Para Principiantes (3 días)
+**Día 1**: Fundamentos y gestión básica
+- Secciones 1-6
+- Entender qué son namespaces
+- Crear y gestionar namespaces
+- Lab 1: Namespaces Básico
+
+**Día 2**: Cuotas y límites
+- Secciones 7-10
+- DNS en namespaces
+- ResourceQuotas y LimitRanges
+- Lab 2: Quotas y Limits
+
+**Día 3**: Organización y multi-tenancy
+- Secciones 11-14
+- Patrones de organización
+- Aislamiento con NetworkPolicies
+- Lab 3: Multi-Tenancy
+
+### Para Experimentados (1.5 días)
+**Sesión 1**: Conceptos y quotas (2 horas)
+- Secciones 1-10 (lectura rápida)
+- Foco en ResourceQuota y LimitRange
+- Lab 1 y Lab 2
+
+**Sesión 2**: Multi-tenancy y producción (2.5 horas)
+- Secciones 11-14
+- Patrones avanzados
+- Lab 3
+
+### Para Preparación de Certificación (enfoque CKA/CKAD)
+- ⚡ Secciones 5, 9, 10 (comandos de gestión)
+- ⚡ ResourceQuota y LimitRange (creación)
+- ⚡ DNS cross-namespace (sección 7)
+- ⚡ Troubleshooting (sección 14)
+- ⚡ Labs 1 y 2
+
+---
+
+## 📁 Organización de Recursos
+
+```
+modulo-10-namespaces-organizacion/
+├── README.md                          # ← Estás aquí
+├── RESUMEN-MODULO.md                  # Guía de estudio condensada
+│
+├── ejemplos/                          # Ejemplos por tema
+│   ├── 01-basico/                    # Creación básica de namespaces
+│   ├── 02-contextos/                 # Kubeconfig y contextos
+│   ├── 03-quotas/                    # ResourceQuotas
+│   ├── 04-limits/                    # LimitRanges
+│   └── 05-organizacion/              # Patrones de organización
+│
+└── laboratorios/                      # Labs prácticos guiados
+    ├── lab-01-namespaces-basico.md   # 40 min - CRUD + contextos
+    ├── lab-02-quotas-limits.md       # 50 min - Cuotas y límites
+    └── lab-03-multi-tenancy.md       # 60 min - Multi-tenancy completo
+```
+
+---
+
+## 🎓 Metodología de Aprendizaje
+
+Este módulo sigue el patrón **Teoría → Ejemplo Inline → Checkpoint → Laboratorio**:
+
+1. **Teoría**: Conceptos explicados con diagramas ASCII
+2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
+3. **Checkpoints**: Autoevaluaciones para verificar comprensión
+4. **Laboratorios**: Ejercicios prácticos guiados paso a paso
+
+**💡 Tip**: Los namespaces son fundamentales para organización. Practica creándolos y destruyéndolos frecuentemente.
+
+---
+
 ## Índice
 
 1. [Introducción](#introducción)

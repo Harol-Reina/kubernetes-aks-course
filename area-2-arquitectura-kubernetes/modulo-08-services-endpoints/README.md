@@ -2,25 +2,164 @@
 
 ## 📋 Información del Módulo
 
-- **Duración estimada**: 4 horas
+- **Duración estimada**: 4-5 horas
 - **Nivel**: Intermedio
+- **Modalidad**: Teoría + Ejemplos prácticos + 3 Laboratorios
 - **Requisitos previos**: 
-  - Módulo 04: Pods vs Contenedores
-  - Módulo 06: ReplicaSets
-  - Módulo 07: Deployments y Rolling Updates
+  - ✅ Módulo 04: Pods vs Contenedores completado
+  - ✅ Módulo 06: ReplicaSets y escalado completado
+  - ✅ Módulo 07: Deployments y Rolling Updates completado
+  - ✅ Conocimientos básicos de networking (TCP/IP, DNS, puertos)
+  - ✅ Familiaridad con minikube y kubectl
+
+---
 
 ## 🎯 Objetivos de Aprendizaje
 
 Al completar este módulo, serás capaz de:
 
-1. Comprender el concepto de Service como abstracción de red en Kubernetes
-2. Diferenciar entre los tipos de Services: ClusterIP, NodePort, LoadBalancer, ExternalName
-3. Entender el rol de los Endpoints en el descubrimiento de servicios
-4. Configurar Services para comunicación interna y externa
-5. Implementar balanceo de carga entre Pods
-6. Gestionar descubrimiento de servicios mediante DNS
-7. Configurar Services headless para casos avanzados
-8. Aplicar best practices de networking en producción
+### 📚 Conceptos Fundamentales
+- Comprender el concepto de Service como abstracción de red en Kubernetes
+- Entender el problema de los Pods efímeros y cómo los Services lo resuelven
+- Dominar el rol de Endpoints y EndpointSlices en el descubrimiento de servicios
+- Explicar el funcionamiento de kube-proxy y sus modos (iptables, IPVS)
+
+### 🔧 Habilidades Técnicas
+- Diferenciar y configurar los 4 tipos de Services: ClusterIP, NodePort, LoadBalancer, ExternalName
+- Implementar balanceo de carga entre Pods con distintas políticas
+- Gestionar descubrimiento de servicios mediante DNS y variables de entorno
+- Configurar Services headless para aplicaciones stateful (StatefulSets)
+- Usar session affinity y externalTrafficPolicy apropiadamente
+
+### 🚀 Aplicación Práctica
+- Diseñar comunicación entre microservicios con ClusterIP
+- Exponer aplicaciones externamente con NodePort y LoadBalancer
+- Diagnosticar y resolver problemas comunes de networking
+- Aplicar best practices de Services en producción
+- Implementar estrategias de acceso seguro y eficiente
+
+### 🎓 Nivel Profesional
+- Evaluar cuándo usar cada tipo de Service según el caso de uso
+- Optimizar performance con configuraciones avanzadas (IPVS, Local traffic policy)
+- Integrar Services con herramientas de monitoreo (Prometheus)
+- Documentar arquitecturas de networking para equipos
+
+---
+
+## 📚 Prerrequisitos Detallados
+
+### Conocimientos Técnicos
+```bash
+# Debes estar cómodo ejecutando:
+kubectl get pods
+kubectl describe deployment <name>
+kubectl logs <pod-name>
+kubectl exec -it <pod-name> -- /bin/sh
+
+# Conocer networking básico:
+- Direcciones IP (privadas vs públicas)
+- Puertos TCP/UDP
+- DNS (resolución de nombres)
+- Conceptos de proxy y balanceo de carga
+```
+
+### Entorno de Trabajo
+```bash
+# Verificar minikube
+minikube version
+minikube status
+
+# Verificar kubectl
+kubectl version --client
+kubectl cluster-info
+
+# Verificar acceso al cluster
+kubectl get nodes
+kubectl get namespaces
+```
+
+### Si Necesitas Repaso
+- 📖 [Módulo 04 - Pods](../modulo-04-pods-vs-contenedores/)
+- 📖 [Módulo 06 - ReplicaSets](../modulo-06-replicasets-replicas/)
+- 📖 [Módulo 07 - Deployments](../modulo-07-deployments-rollouts/)
+
+---
+
+## 📑 Estructura del Módulo
+
+Este módulo está organizado en **6 secciones temáticas** con progresión lógica:
+
+| Sección | Tema | Duración | Contenido |
+|---------|------|----------|-----------|
+| **1** | Introducción a Services | 30 min | Conceptos fundamentales, anatomía, flujos |
+| **2** | ClusterIP y Endpoints | 45 min | Comunicación interna, DNS, troubleshooting |
+| **3** | NodePort y LoadBalancer | 50 min | Acceso externo, cloud providers, configuraciones |
+| **4** | Endpoints y EndpointSlices | 35 min | Gestión avanzada, endpoints manuales |
+| **5** | Headless Services | 40 min | StatefulSets, casos de uso especiales |
+| **6** | Best Practices y Troubleshooting | 45 min | Producción, seguridad, debugging |
+
+**Total teoría**: ~3.5 horas  
+**Laboratorios**: ~2.5 horas  
+**Total**: ~6 horas (con práctica)
+
+---
+
+## 📂 Recursos de Aprendizaje
+
+### Ejemplos Prácticos (`ejemplos/`)
+```
+ejemplos/
+├── 01-clusterip/          # Services internos
+├── 02-nodeport/           # Exposición con NodePort
+├── 03-loadbalancer/       # LoadBalancers en cloud
+├── 04-externalname/       # Servicios externos
+├── 05-endpoints/          # Endpoints manuales
+├── 06-headless/           # Services headless
+└── 07-produccion/         # Configuraciones production-ready
+```
+
+### Laboratorios Prácticos (`laboratorios/`)
+1. **lab-01-clusterip-basics.md** (40 min) - ClusterIP y Endpoints
+2. **lab-02-nodeport-loadbalancer.md** (50 min) - Exposición externa
+3. **lab-03-advanced-services.md** (60 min) - Services avanzados
+
+### Documentación de Referencia
+- 📖 [Kubernetes Services Documentation](https://kubernetes.io/docs/concepts/services-networking/service/)
+- 📖 [EndpointSlices](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
+- 📖 [DNS for Services](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
+
+---
+
+## 🗺️ Guía de Estudio Recomendada
+
+### Para Principiantes (Primera vez con Services)
+1. **Día 1** (2 horas):
+   - Leer Secciones 1-2 (Introducción + ClusterIP)
+   - Ejecutar ejemplos inline
+   - Completar Lab 01
+
+2. **Día 2** (2 horas):
+   - Leer Sección 3 (NodePort + LoadBalancer)
+   - Ejecutar ejemplos
+   - Completar Lab 02
+
+3. **Día 3** (2 horas):
+   - Leer Secciones 4-6
+   - Completar Lab 03
+   - Revisar troubleshooting
+
+### Para Estudiantes con Experiencia
+1. **Revisión rápida**: Secciones 1-3 (1 hora)
+2. **Focus avanzado**: Secciones 4-6 (1.5 horas)
+3. **Labs selectivos**: Lab 03 (servicios avanzados)
+
+### Para Preparación de Certificación (CKA/CKAD)
+- ✅ Dominar todos los tipos de Services
+- ✅ Troubleshooting rápido de Endpoints
+- ✅ Configuración de Services sin YAML (imperativos)
+- ✅ Practicar Labs bajo tiempo límite
+
+---
 
 ---
 
@@ -60,6 +199,41 @@ Endpoints (lista dinámica de Pods)
 - **Balanceo de Carga**: Distribuye tráfico entre Pods backend
 - **Descubrimiento de Servicios**: Mediante DNS o variables de entorno
 - **Desacoplamiento**: Clientes independientes de la topología de Pods
+
+---
+
+## ✅ Checkpoint 1: Conceptos Fundamentales
+
+Antes de continuar, asegúrate de comprender:
+
+**Preguntas de Autoevaluación**:
+1. ¿Por qué los Pods necesitan Services? ¿Qué problema resuelven?
+2. ¿Qué sucede cuando un Pod muere y se recrea? ¿Cómo afecta su IP?
+3. ¿Qué componentes intervienen entre un cliente y un Pod backend?
+4. Explica con tus palabras: ¿Qué es un Endpoint?
+
+**Respuestas esperadas**:
+<details>
+<summary>Ver respuestas</summary>
+
+1. Los Pods son efímeros (IP cambia al recrearse). Services proporcionan una IP estable y nombre DNS para acceder a un grupo de Pods dinámico.
+
+2. Cuando un Pod muere, se recrea con una **nueva IP**. Sin Service, los clientes perderían la conexión. El Service mantiene una IP estable y actualiza automáticamente sus Endpoints.
+
+3. Cliente → DNS (resuelve nombre) → Service (ClusterIP) → kube-proxy (balanceo) → Endpoint (IP del Pod) → Pod backend
+
+4. Un Endpoint es la dirección IP:Puerto de un Pod que cumple con el selector del Service. Es el "puente" entre el Service (abstracción) y los Pods reales (implementación).
+</details>
+
+**Mini-ejercicio**:
+```bash
+# Ejecuta estos comandos y observa la relación
+kubectl get pods -o wide  # Ver IPs de Pods
+kubectl get svc           # Ver ClusterIP del Service
+kubectl get endpoints     # Ver mapping Service → Pods
+```
+
+**¿Listo para continuar?** Si respondiste correctamente, avanza a la siguiente sección. Si tienes dudas, revisa la Sección 1.
 
 ---
 
@@ -337,6 +511,55 @@ subsets:
 
 ---
 
+## ✅ Checkpoint 2: ClusterIP y Endpoints
+
+Verifica tu comprensión antes de avanzar a exposición externa:
+
+**Preguntas de Autoevaluación**:
+1. ¿Cuál es la diferencia entre el `port` y el `targetPort` en un Service?
+2. ¿Cómo sabe un Service qué Pods debe incluir en sus Endpoints?
+3. ¿Qué sucede si cambias el selector de un Service existente?
+4. ¿Cuándo necesitarías crear Endpoints manuales (sin selector)?
+5. ¿Qué comando usarías para verificar que un Service tiene Endpoints configurados?
+
+**Respuestas esperadas**:
+<details>
+<summary>Ver respuestas</summary>
+
+1. **`port`**: Puerto expuesto por el Service (donde escucha el Service). **`targetPort`**: Puerto donde escucha el contenedor en el Pod. Ejemplo: Service en puerto 80 → redirige a puerto 8080 del Pod.
+
+2. El Service usa el **`selector`** para encontrar Pods. El controlador de Endpoints busca todos los Pods con labels que coincidan con el selector y crea/actualiza el objeto Endpoints automáticamente.
+
+3. Kubernetes actualiza los Endpoints inmediatamente. Los Pods que cumplan el nuevo selector se agregan; los que ya no cumplan se eliminan de los Endpoints.
+
+4. Endpoints manuales se usan para:
+   - Servicios externos (bases de datos fuera de K8s)
+   - Migración gradual a Kubernetes
+   - Servicios legacy que no son Pods
+
+5. `kubectl get endpoints <service-name>` o `kubectl describe service <service-name>` (ver sección Endpoints)
+</details>
+
+**Ejercicio Práctico**:
+```bash
+# Crea un Deployment y Service
+kubectl create deployment nginx --image=nginx --replicas=3
+kubectl expose deployment nginx --port=80 --target-port=80
+
+# Verifica la cadena completa
+kubectl get pods -o wide -l app=nginx        # Ver IPs de Pods
+kubectl get svc nginx                        # Ver ClusterIP
+kubectl get endpoints nginx                  # Ver mapping
+kubectl describe svc nginx                   # Ver todo junto
+
+# Test desde otro Pod
+kubectl run test --image=busybox -it --rm -- wget -O- http://nginx
+```
+
+**¿Listo?** Si entiendes ClusterIP y Endpoints, ¡continuemos con exposición externa!
+
+---
+
 ### 6. Service NodePort
 
 #### Descripción
@@ -550,6 +773,69 @@ metadata:
 #### Ver también
 - [Ejemplo: service-loadbalancer-basic.yaml](ejemplos/03-loadbalancer/service-loadbalancer-basic.yaml)
 - [Ejemplo: service-loadbalancer-annotations.yaml](ejemplos/03-loadbalancer/service-loadbalancer-annotations.yaml)
+- [Laboratorio 2: NodePort y LoadBalancer](laboratorios/lab-02-nodeport-loadbalancer.md)
+
+---
+
+## ✅ Checkpoint 3: Exposición Externa
+
+Evalúa tu dominio de NodePort y LoadBalancer:
+
+**Preguntas de Autoevaluación**:
+1. ¿Cuál es el rango de puertos válido para NodePort? ¿Por qué existe ese rango?
+2. ¿Qué sucede "bajo el capó" cuando creas un Service de tipo LoadBalancer?
+3. Si tienes un NodePort en el puerto 30080, ¿puedes acceder al Service desde cualquier nodo del cluster?
+4. ¿Por qué un LoadBalancer queda en `<pending>` en minikube? ¿Cómo lo solucionarías?
+5. Compara: ¿Cuándo usarías NodePort vs LoadBalancer en producción?
+
+**Respuestas esperadas**:
+<details>
+<summary>Ver respuestas</summary>
+
+1. **Rango**: 30000-32767. Este rango existe para evitar conflictos con puertos del sistema (0-1023) y aplicaciones comunes (1024-29999). Es configurable en la API server.
+
+2. LoadBalancer crea **tres capas**:
+   - ClusterIP (interno)
+   - NodePort automático (para que LB pueda llegar)
+   - Solicitud al cloud provider para crear balanceador externo con IP pública
+
+3. **Sí**, el tráfico llega a cualquier nodo:30080 y kube-proxy lo redirige internamente a Pods en cualquier nodo. Todos los nodos escuchan en el NodePort.
+
+4. Minikube no tiene cloud provider. Soluciones:
+   - `minikube tunnel` (simula LoadBalancer)
+   - Usar MetalLB (bare-metal load balancer)
+   - Cambiar a NodePort para testing local
+
+5. **NodePort**: Solo para testing/dev o clusters sin cloud provider. **LoadBalancer**: Producción en cloud (AWS/GCP/Azure) - proporciona IP pública, health checks, distribución de tráfico real.
+</details>
+
+**Comparación Rápida**:
+| Aspecto | ClusterIP | NodePort | LoadBalancer |
+|---------|-----------|----------|--------------|
+| Acceso | Solo interno | Interno + Externo (IP nodo) | Interno + Externo (IP pública) |
+| Producción | ✅ Microservicios | ❌ Solo dev/test | ✅ Apps públicas |
+| Costo | Gratis | Gratis | 💰 Costo por LB |
+| Complejidad | Baja | Media | Media-Alta |
+
+**Mini-Lab**:
+```bash
+# Experimenta con los 3 tipos
+kubectl create deployment web --image=nginx --replicas=2
+
+# 1. ClusterIP (interno)
+kubectl expose deployment web --port=80 --name=web-clusterip
+
+# 2. NodePort (externo)
+kubectl expose deployment web --port=80 --type=NodePort --name=web-nodeport
+
+# 3. LoadBalancer (si tienes cloud o minikube tunnel)
+kubectl expose deployment web --port=80 --type=LoadBalancer --name=web-lb
+
+# Compara
+kubectl get svc
+```
+
+**Continúa cuando domines la diferencia entre los 3 tipos principales!**
 
 ---
 
@@ -1147,6 +1433,56 @@ spec:
 
 ---
 
+## ✅ Checkpoint 4: Configuraciones Avanzadas
+
+Verifica tu dominio de características avanzadas:
+
+**Preguntas de Autoevaluación**:
+1. ¿Qué es un Service headless y cuándo lo usarías?
+2. Explica la diferencia entre Session Affinity "None" y "ClientIP"
+3. ¿Cuál es el beneficio de usar `externalTrafficPolicy: Local`? ¿Qué desventaja tiene?
+4. ¿Cómo afecta el modo de kube-proxy (iptables vs IPVS) al performance?
+5. ¿Puedes tener múltiples Services apuntando a los mismos Pods?
+
+**Respuestas esperadas**:
+<details>
+<summary>Ver respuestas</summary>
+
+1. **Headless Service**: `clusterIP: None`. No tiene balanceo automático. DNS retorna **todas las IPs de Pods** directamente. Uso: StatefulSets (bases de datos), cuando la app necesita conectarse a Pods específicos.
+
+2. **None** (default): Cada request se balancea aleatoriamente entre Pods. **ClientIP**: Requests de la misma IP origen van siempre al mismo Pod (hasta timeout). Útil para sesiones stateful.
+
+3. **Beneficio de Local**: Preserva IP origen del cliente (logs reales), sin hop extra (mejor latencia). **Desventaja**: Balanceo desigual si Pods no están distribuidos uniformemente; si un nodo no tiene Pods, el tráfico falla.
+
+4. **iptables**: Reglas lineales (lento con >5000 Services). **IPVS**: Hash table en kernel (muy rápido), algoritmos avanzados de balanceo (rr, lc, sh), soporta decenas de miles de Services.
+
+5. **Sí**, múltiples Services pueden usar el mismo selector. Casos comunes:
+   - Service interno (ClusterIP) + externo (LoadBalancer)
+   - Diferentes puertos para diferentes propósitos
+   - Servicios en múltiples namespaces
+</details>
+
+**Ejercicio Mental**:
+```
+Escenario: Base de datos MongoDB con 3 réplicas (primary + 2 secondary)
+- ¿Qué tipo de Service usarías? ¿Por qué?
+- ¿Necesitas un Service headless?
+- ¿Usarías StatefulSet o Deployment?
+```
+
+<details>
+<summary>Respuesta sugerida</summary>
+
+- **Headless Service** para acceso directo a cada replica
+- **StatefulSet** para identidad de Pod persistente (mongo-0, mongo-1, mongo-2)
+- DNS: `mongo-0.mongo.default.svc.cluster.local` para conectarse al primary
+- Possibly un segundo Service ClusterIP para reads balanceados
+</details>
+
+**Si dominas estos conceptos avanzados, ¡estás listo para best practices de producción!**
+
+---
+
 ### 15. Mejores Prácticas
 
 #### 15.1 Naming Conventions
@@ -1479,6 +1815,87 @@ ExternalName, Services headless, StatefulSets, session affinity, production best
 - [MetalLB](https://metallb.universe.tf/) - Load balancer para bare-metal
 - [CoreDNS](https://coredns.io/) - DNS server para Kubernetes
 - [Cilium](https://cilium.io/) - Networking y seguridad avanzada
+
+---
+
+## ✅ Checkpoint Final: Integración de Conceptos
+
+**¡Felicitaciones!** Has completado todo el contenido teórico. Ahora integra lo aprendido:
+
+**Desafío de Diseño**:
+
+Imagina que debes diseñar la arquitectura de networking para una aplicación de e-commerce:
+- **Frontend** (React SPA) - necesita acceso público
+- **API Gateway** - enruta requests al backend
+- **Auth Service** - autenticación de usuarios
+- **Product Service** - gestión de productos
+- **Order Service** - procesamiento de órdenes
+- **PostgreSQL** - base de datos (StatefulSet, 3 replicas)
+- **Redis** - cache
+
+**Diseña**:
+1. ¿Qué tipo de Service usarías para cada componente?
+2. ¿Cuáles necesitan acceso externo vs interno?
+3. ¿Cómo configurarías la base de datos?
+4. ¿Qué configuraciones avanzadas aplicarías (session affinity, traffic policy, etc.)?
+
+<details>
+<summary>Solución Sugerida</summary>
+
+```yaml
+# Frontend - Acceso público
+---
+kind: Service
+spec:
+  type: LoadBalancer  # O Ingress en producción real
+  sessionAffinity: ClientIP  # Mantener sesión del browser
+  
+# API Gateway - Interno + externo
+---
+kind: Service
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local  # Preservar IPs para logs
+  
+# Auth, Product, Order Services - Solo interno
+---
+kind: Service
+spec:
+  type: ClusterIP  # Default, comunicación interna
+  
+# PostgreSQL - Headless para identidad de Pods
+---
+kind: Service
+spec:
+  clusterIP: None  # Headless
+  # Usado por StatefulSet
+  # DNS: postgres-0.postgres, postgres-1.postgres, etc.
+
+# Redis - ClusterIP simple
+---
+kind: Service
+spec:
+  type: ClusterIP
+  # Cache distribuido
+```
+
+**Configuraciones adicionales**:
+- NetworkPolicies para restringir tráfico
+- Readiness/Liveness probes en todos los Pods
+- Prometheus annotations para monitoring
+- TLS en Ingress (no en Services)
+</details>
+
+**Checklist de Dominio del Módulo**:
+- [ ] Puedo explicar los 4 tipos de Services y cuándo usar cada uno
+- [ ] Entiendo la relación Service → Endpoints → Pods
+- [ ] Sé configurar Services internos (ClusterIP) y externos (NodePort/LB)
+- [ ] Puedo diagnosticar problemas comunes (Endpoints vacíos, DNS issues)
+- [ ] Conozco configuraciones avanzadas (headless, session affinity, traffic policy)
+- [ ] He completado los 3 laboratorios prácticos
+- [ ] Puedo diseñar arquitecturas de Services para aplicaciones reales
+
+**Si marcaste todo, ¡estás listo para el siguiente módulo!** 🎉
 
 ---
 

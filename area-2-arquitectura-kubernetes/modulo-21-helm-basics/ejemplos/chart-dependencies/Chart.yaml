@@ -1,0 +1,46 @@
+apiVersion: v2
+name: chart-dependencies
+description: Ejemplo de Helm Chart con dependencias (subcharts)
+type: application
+version: 1.0.0
+appVersion: "1.0"
+
+# Keywords para búsqueda
+keywords:
+  - dependencies
+  - subcharts
+  - postgresql
+  - redis
+  - composite
+
+# Dependencias externas
+# Estos subcharts se descargan automáticamente con 'helm dependency update'
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+    tags:
+      - database
+    # Valores por defecto para este subchart
+    import-values:
+      - child: auth.username
+        parent: dbUser
+      - child: auth.password
+        parent: dbPassword
+      - child: auth.database
+        parent: dbName
+
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+    tags:
+      - cache
+    # Alias para usar múltiples instancias del mismo subchart
+    alias: cache
+
+# Maintainers
+maintainers:
+  - name: "K8S Course Team"
+    email: "curso@kubernetes.local"

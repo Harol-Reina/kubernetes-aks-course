@@ -1,0 +1,32 @@
+{{- if .Values.hooks.preUpgrade.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-pre-upgrade-{{ .Release.Revision }}
+  labels:
+    app: {{ .Chart.Name }}
+    hook: pre-upgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}-pre-upgrade
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: pre-upgrade
+        image: busybox
+        command:
+          - /bin/sh
+          - -c
+          - |
+            echo "=== PRE-UPGRADE HOOK ==="
+            echo "Haciendo backup de base de datos..."
+            sleep 2
+            echo "Backup completado"
+            echo "Preparando migración..."
+            echo "✅ Pre-upgrade completado"
+{{- end }}

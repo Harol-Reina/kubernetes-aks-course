@@ -1,0 +1,579 @@
+# ============================================================================
+# PERFORMANCE TEST - Testing de Performance y Resource Limits
+# ============================================================================
+# Este archivo contiene aplicaciones para testing de performance,
+# resource limits, y escenarios de stress.
+#
+# Uso:
+#   kubectl apply -f performance-test.yaml
+#   kubectl top pods
+#   kubectl get events --field-selector reason=Evicted
+# ============================================================================
+
+---
+# ============================================================================
+# 1. Memory Stress Test - Gradual Memory Increase
+# ============================================================================
+# Incrementa uso de memoria gradualmente para testing
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-stress
+  labels:
+    app: performance-test
+    type: memory-stress
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args:
+    - "--vm"
+    - "1"
+    - "--vm-bytes"
+    - "256M"
+    - "--vm-hang"
+    - "0"
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+---
+# ============================================================================
+# 2. CPU Stress Test - High CPU Usage
+# ============================================================================
+# Genera carga de CPU para testing
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-stress
+  labels:
+    app: performance-test
+    type: cpu-stress
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"
+    - "--timeout"
+    - "300s"
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "1000m"
+
+---
+# ============================================================================
+# 3. Resource Quota Test Namespace
+# ============================================================================
+# Namespace con ResourceQuota para testing de límites
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quota-test
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: quota-test
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: "2Gi"
+    limits.cpu: "4"
+    limits.memory: "4Gi"
+    pods: "10"
+---
+# Pod que excede quota
+apiVersion: v1
+kind: Pod
+metadata:
+  name: exceeds-quota
+  namespace: quota-test
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    resources:
+      requests:
+        memory: "3Gi"  # ← Excede quota de 2Gi
+        cpu: "1"
+      limits:
+        memory: "3Gi"
+        cpu: "2"
+
+---
+# ============================================================================
+# 4. LimitRange Test
+# ============================================================================
+# Namespace con LimitRange para testing
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: limitrange-test
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mem-limit-range
+  namespace: limitrange-test
+spec:
+  limits:
+  - max:
+      memory: "512Mi"
+      cpu: "1"
+    min:
+      memory: "64Mi"
+      cpu: "50m"
+    default:
+      memory: "256Mi"
+      cpu: "500m"
+    defaultRequest:
+      memory: "128Mi"
+      cpu: "100m"
+    type: Container
+---
+# Pod que viola LimitRange
+apiVersion: v1
+kind: Pod
+metadata:
+  name: violates-limitrange
+  namespace: limitrange-test
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    resources:
+      requests:
+        memory: "1Gi"  # ← Excede max de 512Mi
+        cpu: "1"
+
+---
+# ============================================================================
+# 5. Memory Leak Simulator
+# ============================================================================
+# Simula memory leak que eventualmente causa OOMKill
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-leak
+  labels:
+    app: performance-test
+    type: memory-leak
+spec:
+  containers:
+  - name: leak
+    image: python:3.9-slim
+    command: ["python", "-c"]
+    args:
+    - |
+      import time
+      leak = []
+      while True:
+          leak.append(' ' * 10**6)  # Agrega 1MB cada iteración
+          time.sleep(1)
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"  # Eventualmente OOMKilled
+        cpu: "200m"
+
+---
+# ============================================================================
+# 6. Disk I/O Stress Test
+# ============================================================================
+# Testing de I/O de disco
+apiVersion: v1
+kind: Pod
+metadata:
+  name: disk-stress
+  labels:
+    app: performance-test
+    type: disk-io
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args:
+    - "--io"
+    - "4"
+    - "--timeout"
+    - "300s"
+    volumeMounts:
+    - name: data
+      mountPath: /data
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "500m"
+  volumes:
+  - name: data
+    emptyDir: {}
+
+---
+# ============================================================================
+# 7. HPA Testing Application
+# ============================================================================
+# App con HPA para testing de autoscaling
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpa-test
+  template:
+    metadata:
+      labels:
+        app: hpa-test
+    spec:
+      containers:
+      - name: php-apache
+        image: k8s.gcr.io/hpa-example
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "64Mi"
+          limits:
+            cpu: "500m"
+            memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpa-test
+spec:
+  selector:
+    app: hpa-test
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-test
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hpa-test
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+---
+# Load generator para HPA
+apiVersion: v1
+kind: Pod
+metadata:
+  name: load-generator
+spec:
+  containers:
+  - name: load
+    image: busybox:1.28
+    command: ["/bin/sh"]
+    args:
+    - -c
+    - |
+      while true; do
+        wget -q -O- http://hpa-test;
+      done
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+
+---
+# ============================================================================
+# 8. QoS Classes Examples
+# ============================================================================
+# Guaranteed QoS
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-guaranteed
+  labels:
+    qos: guaranteed
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    resources:
+      requests:
+        memory: "200Mi"
+        cpu: "500m"
+      limits:
+        memory: "200Mi"  # requests == limits
+        cpu: "500m"
+---
+# Burstable QoS
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable
+  labels:
+    qos: burstable
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    resources:
+      requests:
+        memory: "100Mi"
+        cpu: "250m"
+      limits:
+        memory: "200Mi"  # limits > requests
+        cpu: "500m"
+---
+# BestEffort QoS
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-besteffort
+  labels:
+    qos: besteffort
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    # Sin resources = BestEffort
+
+---
+# ============================================================================
+# 9. Node Pressure Simulator
+# ============================================================================
+# Pods para simular node pressure
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-hog-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: memory-hog
+  template:
+    metadata:
+      labels:
+        app: memory-hog
+    spec:
+      containers:
+      - name: stress
+        image: polinux/stress
+        command: ["stress"]
+        args: ["--vm", "1", "--vm-bytes", "512M", "--vm-hang", "0"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "768Mi"
+            cpu: "500m"
+
+---
+# ============================================================================
+# 10. PriorityClass Testing
+# ============================================================================
+# High priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "High priority for critical apps"
+---
+# Low priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 1000
+globalDefault: false
+description: "Low priority for batch jobs"
+---
+# High priority pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: high-priority-pod
+spec:
+  priorityClassName: high-priority
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+---
+# Low priority pod (puede ser evicted)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: low-priority-pod
+spec:
+  priorityClassName: low-priority
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+---
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+# Deploy performance tests:
+# kubectl apply -f performance-test.yaml
+
+# ============================================================================
+# MONITORING
+# ============================================================================
+
+# Watch resource usage:
+# kubectl top pods -w
+# kubectl top nodes -w
+
+# Watch pod states:
+# kubectl get pods -w
+
+# Check events:
+# kubectl get events --sort-by='.lastTimestamp'
+# kubectl get events --field-selector reason=Evicted
+
+# ============================================================================
+# STRESS TESTING
+# ============================================================================
+
+# Memory stress:
+# kubectl logs memory-stress
+# kubectl top pod memory-stress
+
+# CPU stress:
+# kubectl logs cpu-stress
+# kubectl top pod cpu-stress
+
+# Watch for OOMKilled:
+# watch kubectl get pod memory-leak -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}'
+
+# ============================================================================
+# HPA TESTING
+# ============================================================================
+
+# Watch HPA scale:
+# kubectl get hpa hpa-test -w
+
+# Generate load (start load-generator):
+# kubectl apply -f performance-test.yaml (includes load-generator)
+
+# Watch replicas increase:
+# kubectl get deployment hpa-test -w
+
+# Stop load:
+# kubectl delete pod load-generator
+
+# Watch replicas decrease:
+# kubectl get hpa hpa-test -w
+
+# ============================================================================
+# QOS TESTING
+# ============================================================================
+
+# Check QoS classes:
+# kubectl get pod qos-guaranteed -o jsonpath='{.status.qosClass}'
+# kubectl get pod qos-burstable -o jsonpath='{.status.qosClass}'
+# kubectl get pod qos-besteffort -o jsonpath='{.status.qosClass}'
+
+# List all pods by QoS:
+# kubectl get pods -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass
+
+# During node pressure, BestEffort pods evicted first:
+# kubectl get events --field-selector reason=Evicted
+
+# ============================================================================
+# RESOURCE QUOTA TESTING
+# ============================================================================
+
+# Try to create pod that exceeds quota:
+# kubectl apply -f performance-test.yaml
+# Error: exceeded quota: compute-quota
+
+# Check quota usage:
+# kubectl describe resourcequota compute-quota -n quota-test
+
+# ============================================================================
+# LIMITRANGE TESTING
+# ============================================================================
+
+# Try to create pod that violates limits:
+# kubectl apply -f performance-test.yaml
+# Error: maximum memory usage per Container is 512Mi
+
+# Check limit range:
+# kubectl describe limitrange mem-limit-range -n limitrange-test
+
+# ============================================================================
+# PRIORITY/EVICTION TESTING
+# ============================================================================
+
+# Create resource pressure:
+# kubectl apply -f performance-test.yaml (memory-hog-deployment)
+
+# Create high and low priority pods:
+# Already in YAML
+
+# Watch for evictions (low-priority evicted first):
+# kubectl get events --field-selector reason=Evicted -w
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Delete all performance tests:
+# kubectl delete -f performance-test.yaml
+
+# Delete namespaces:
+# kubectl delete namespace quota-test limitrange-test
+
+# Force delete stuck pods:
+# kubectl delete pod <pod> --grace-period=0 --force

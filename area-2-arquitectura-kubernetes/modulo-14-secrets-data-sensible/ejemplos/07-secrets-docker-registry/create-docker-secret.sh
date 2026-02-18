@@ -1,0 +1,1 @@
+07-secrets-docker-registry/create-registry-secret.sh

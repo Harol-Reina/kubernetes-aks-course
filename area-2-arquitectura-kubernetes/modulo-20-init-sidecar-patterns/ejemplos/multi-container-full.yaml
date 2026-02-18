@@ -1,0 +1,434 @@
+# ════════════════════════════════════════════════════════════════════════════
+# EJEMPLO 4: Multi-Container Pod - Full Stack
+# ════════════════════════════════════════════════════════════════════════════
+#
+# DESCRIPCIÓN:
+#   Pod completo con init container, main app, y múltiples sidecars:
+#   - Init: Setup de configuración
+#   - Main: Web application (nginx)
+#   - Sidecar 1: Log processor
+#   - Sidecar 2: Metrics exporter
+#
+# CASO DE USO:
+#   - Aplicación completa con observabilidad
+#   - Demostrar todos los patrones juntos
+#   - Production-ready Pod configuration
+#
+# APLICAR:
+#   kubectl apply -f multi-container-full.yaml
+#
+# VERIFICAR:
+#   kubectl get pod fullstack-app
+#   kubectl logs fullstack-app -c <container-name>
+#   kubectl exec fullstack-app -c web -- curl localhost
+#   kubectl exec fullstack-app -c metrics -- curl localhost:9113/metrics
+#
+# LIMPIAR:
+#   kubectl delete -f multi-container-full.yaml
+#
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fullstack-app
+  labels:
+    app: fullstack
+    tier: web
+    observability: enabled
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9113"
+    prometheus.io/path: "/metrics"
+    description: "Full-stack multi-container pod con observabilidad completa"
+spec:
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INIT CONTAINERS
+  # ═══════════════════════════════════════════════════════════════════════════
+  initContainers:
+  
+  # Init 1: Generar configuración dinámica
+  - name: config-generator
+    image: busybox:1.35
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Init 1: Generando configuración..."
+      echo "════════════════════════════════════════════════════════"
+      
+      # Generar nginx.conf
+      cat > /config/nginx.conf <<'EOF'
+      events {
+          worker_connections 1024;
+      }
+      
+      http {
+          include /etc/nginx/mime.types;
+          default_type application/octet-stream;
+          
+          log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent"';
+          
+          access_log /var/log/nginx/access.log main;
+          error_log /var/log/nginx/error.log warn;
+          
+          server {
+              listen 80;
+              server_name localhost;
+              
+              location / {
+                  root /usr/share/nginx/html;
+                  index index.html;
+              }
+              
+              # Stub status para metrics exporter
+              location /stub_status {
+                  stub_status on;
+                  access_log off;
+                  allow 127.0.0.1;
+                  deny all;
+              }
+              
+              # Health check endpoint
+              location /health {
+                  access_log off;
+                  return 200 "healthy\n";
+                  add_header Content-Type text/plain;
+              }
+          }
+      }
+      EOF
+      
+      # Generar index.html personalizado
+      cat > /html/index.html <<EOF
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Fullstack Multi-Container App</title>
+          <style>
+              body { font-family: Arial; margin: 40px; }
+              .info { background: #e3f2fd; padding: 20px; border-radius: 5px; }
+          </style>
+      </head>
+      <body>
+          <h1>🚀 Fullstack Multi-Container Pod</h1>
+          <div class="info">
+              <h2>Pod Info:</h2>
+              <p><strong>Hostname:</strong> $(hostname)</p>
+              <p><strong>Generated at:</strong> $(date)</p>
+              <p><strong>Containers:</strong></p>
+              <ul>
+                  <li>Init: config-generator, wait-for-health</li>
+                  <li>Main: web (nginx)</li>
+                  <li>Sidecar: log-processor, metrics-exporter</li>
+              </ul>
+          </div>
+          <h3>Endpoints:</h3>
+          <ul>
+              <li><a href="/">/</a> - Esta página</li>
+              <li><a href="/health">/health</a> - Health check</li>
+              <li>/stub_status - Nginx metrics (localhost only)</li>
+              <li>:9113/metrics - Prometheus metrics</li>
+          </ul>
+      </body>
+      </html>
+      EOF
+      
+      echo "✅ Config generada exitosamente"
+      ls -la /config/
+      ls -la /html/
+    
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /config
+    - name: html
+      mountPath: /html
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+  
+  # Init 2: Wait for health (simulado)
+  - name: wait-for-health
+    image: busybox:1.35
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Init 2: Verificando dependencias..."
+      echo "════════════════════════════════════════════════════════"
+      
+      # Simular health check de servicios externos
+      echo "Verificando servicio externo..."
+      sleep 3
+      
+      echo "✅ Todas las dependencias están listas"
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MAIN CONTAINER: Web Application
+  # ═══════════════════════════════════════════════════════════════════════════
+  containers:
+  
+  - name: web
+    image: nginx:1.25-alpine
+    ports:
+    - containerPort: 80
+      name: http
+      protocol: TCP
+    
+    # Usar config generada por init container
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+      readOnly: true
+    - name: html
+      mountPath: /usr/share/nginx/html
+      readOnly: true
+    - name: logs
+      mountPath: /var/log/nginx
+    
+    # Health checks
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 80
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SIDECAR 1: Log Processor
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: log-processor
+    image: busybox:1.35
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Log Processor iniciado"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Esperar a que nginx cree logs
+      while [ ! -f /var/log/nginx/access.log ]; do
+        sleep 2
+      done
+      
+      echo "✅ Logs detectados, procesando..."
+      
+      # Procesar logs en tiempo real
+      tail -f /var/log/nginx/access.log | while read line; do
+        # Contar requests por segundo
+        echo "[LOG_PROCESSOR] $(date '+%H:%M:%S') - Request: $line"
+        
+        # En producción: enviar a Elasticsearch, Splunk, etc.
+      done
+    
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+      readOnly: true
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SIDECAR 2: Metrics Exporter
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: metrics-exporter
+    image: nginx/nginx-prometheus-exporter:0.11
+    args:
+    - -nginx.scrape-uri=http://localhost:80/stub_status
+    
+    ports:
+    - containerPort: 9113
+      name: metrics
+      protocol: TCP
+    
+    # Health check para exporter
+    livenessProbe:
+      httpGet:
+        path: /metrics
+        port: 9113
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VOLUMES
+  # ═══════════════════════════════════════════════════════════════════════════
+  volumes:
+  
+  # Config generada por init container
+  - name: nginx-config
+    emptyDir: {}
+  
+  # HTML content
+  - name: html
+    emptyDir: {}
+  
+  # Logs compartidos
+  - name: logs
+    emptyDir:
+      sizeLimit: "1Gi"  # Limitar tamaño de logs
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 101  # nginx user
+    fsGroup: 101
+  
+  restartPolicy: Always
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# SERVICE para exponer el Pod
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: fullstack-app-service
+  labels:
+    app: fullstack
+spec:
+  selector:
+    app: fullstack
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: http
+  - name: metrics
+    protocol: TCP
+    port: 9113
+    targetPort: metrics
+  type: ClusterIP
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# TESTING COMPLETO
+# ════════════════════════════════════════════════════════════════════════════
+#
+# 1. Aplicar todo:
+#    kubectl apply -f multi-container-full.yaml
+#
+# 2. Ver progreso de init containers:
+#    kubectl get pod fullstack-app -w
+#    # Init:0/2 → Init:1/2 → Init:2/2 → Running
+#
+# 3. Ver logs de cada init container:
+#    kubectl logs fullstack-app -c config-generator
+#    kubectl logs fullstack-app -c wait-for-health
+#
+# 4. Ver logs de containers principales:
+#    kubectl logs fullstack-app -c web
+#    kubectl logs fullstack-app -c log-processor
+#    kubectl logs fullstack-app -c metrics-exporter
+#
+# 5. Ver TODOS los logs (stern):
+#    stern fullstack-app
+#
+# 6. Probar la aplicación:
+#    kubectl port-forward fullstack-app 8080:80
+#    curl http://localhost:8080
+#    curl http://localhost:8080/health
+#
+# 7. Ver métricas de Prometheus:
+#    kubectl port-forward fullstack-app 9113:9113
+#    curl http://localhost:9113/metrics
+#
+# 8. Generar tráfico y ver logs procesándose:
+#    # Terminal 1:
+#    kubectl port-forward fullstack-app 8080:80
+#    while true; do curl -s http://localhost:8080 > /dev/null; sleep 1; done
+#    
+#    # Terminal 2:
+#    kubectl logs -f fullstack-app -c log-processor
+#
+# 9. Verificar recursos por container:
+#    kubectl top pod fullstack-app --containers
+#
+# 10. Ver configuración completa:
+#     kubectl get pod fullstack-app -o yaml
+#
+# 11. Verificar volumes compartidos:
+#     # Config volume
+#     kubectl exec fullstack-app -c web -- cat /etc/nginx/nginx.conf
+#     
+#     # HTML volume
+#     kubectl exec fullstack-app -c web -- cat /usr/share/nginx/html/index.html
+#     
+#     # Logs volume
+#     kubectl exec fullstack-app -c web -- ls -la /var/log/nginx
+#     kubectl exec fullstack-app -c log-processor -- ls -la /var/log/nginx
+#
+# 12. Verificar comunicación localhost:
+#     # Web → Metrics exporter
+#     kubectl exec fullstack-app -c web -- wget -qO- http://localhost:9113/metrics
+#     
+#     # Metrics exporter → Web
+#     kubectl exec fullstack-app -c metrics-exporter -- wget -qO- http://localhost:80/health
+#
+# ════════════════════════════════════════════════════════════════════════════
+# RECURSOS TOTALES DEL POD
+# ════════════════════════════════════════════════════════════════════════════
+# CPU Requests:  100m + 50m + 250m + 50m + 50m = 500m (0.5 cores)
+# CPU Limits:    -    + -    + 500m + 100m + 100m = 700m (0.7 cores)
+# 
+# Memory Requests: 64Mi + 32Mi + 256Mi + 64Mi + 64Mi = 480Mi
+# Memory Limits:   -    + -    + 512Mi + 128Mi + 128Mi = 768Mi
+# ════════════════════════════════════════════════════════════════════════════
+# CONCEPTOS DEMOSTRADOS
+# ════════════════════════════════════════════════════════════════════════════
+# ✅ Init containers secuenciales (config-generator → wait-for-health)
+# ✅ Main container con probes
+# ✅ Multiple sidecars (logging + monitoring)
+# ✅ Shared volumes (config, html, logs)
+# ✅ Localhost communication (web ↔ metrics-exporter)
+# ✅ Resource limits por container
+# ✅ Security context
+# ✅ Health checks
+# ✅ Read-only mounts
+# ✅ Annotations para Prometheus
+# ════════════════════════════════════════════════════════════════════════════

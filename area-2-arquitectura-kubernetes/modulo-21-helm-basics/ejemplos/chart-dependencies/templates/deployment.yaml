@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-{{ .Values.app.name }}
+  labels:
+    app: {{ .Values.app.name }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: {{ .Values.app.name }}
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+        imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.app.service.port }}
+          name: http
+        
+        # Variables de entorno que conectan con los subcharts
+        env:
+        {{- if .Values.postgresql.enabled }}
+        - name: DATABASE_HOST
+          value: "{{ .Release.Name }}-postgresql"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_USER
+          value: {{ .Values.postgresql.auth.username | quote }}
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "{{ .Release.Name }}-postgresql"
+              key: password
+        - name: DATABASE_NAME
+          value: {{ .Values.postgresql.auth.database | quote }}
+        {{- end }}
+        
+        {{- if .Values.redis.enabled }}
+        - name: REDIS_HOST
+          value: "{{ .Release.Name }}-redis-master"
+        - name: REDIS_PORT
+          value: "6379"
+        {{- end }}
+        
+        resources:
+          {{- toYaml .Values.app.resources | nindent 10 }}
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5

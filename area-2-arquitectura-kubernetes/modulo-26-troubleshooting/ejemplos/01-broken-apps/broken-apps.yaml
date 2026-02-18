@@ -1,0 +1,449 @@
+# ============================================================================
+# BROKEN APPS - Aplicaciones con Errores Intencionales
+# ============================================================================
+# Este archivo contiene pods con errores comunes que encontrarás en producción
+# y en el examen CKA. Intenta diagnosticar cada uno ANTES de mirar los comentarios.
+#
+# Uso:
+#   kubectl apply -f broken-apps.yaml
+#   kubectl get pods  # Verás varios estados de error
+#   kubectl describe pod <name>
+#   kubectl logs <name>
+# ============================================================================
+
+---
+# ============================================================================
+# 1. CrashLoopBackOff - Application Error
+# ============================================================================
+# ERROR: El comando intenta ejecutar un script que no existe
+# SÍNTOMA: Pod en CrashLoopBackOff
+# DIAGNÓSTICO: kubectl logs crashloop-app
+# FIX: Cambiar command a un comando válido
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashloop-app
+  labels:
+    app: broken
+    error-type: crashloop
+spec:
+  containers:
+  - name: app
+    image: busybox:1.28
+    command: ["/bin/sh"]
+    args: ["-c", "/nonexistent-script.sh"]  # ← Este script no existe
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 2. ImagePullBackOff - Image Does Not Exist
+# ============================================================================
+# ERROR: La imagen no existe en el registry
+# SÍNTOMA: Pod en ImagePullBackOff
+# DIAGNÓSTICO: kubectl describe pod imagepull-error
+# FIX: Corregir el nombre de la imagen
+apiVersion: v1
+kind: Pod
+metadata:
+  name: imagepull-error
+  labels:
+    app: broken
+    error-type: imagepull
+spec:
+  containers:
+  - name: app
+    image: nginx:this-tag-does-not-exist-12345  # ← Tag inválido
+    ports:
+    - containerPort: 80
+
+---
+# ============================================================================
+# 3. OOMKilled - Out of Memory
+# ============================================================================
+# ERROR: Memory limit muy bajo para la carga de trabajo
+# SÍNTOMA: Pod se reinicia constantemente, Exit Code 137
+# DIAGNÓSTICO: kubectl describe pod oomkilled-app | grep "Last State"
+# FIX: Aumentar memory limits
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oomkilled-app
+  labels:
+    app: broken
+    error-type: oomkilled
+spec:
+  containers:
+  - name: memory-hog
+    image: polinux/stress
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "150M", "--vm-hang", "1"]
+    resources:
+      limits:
+        memory: "50Mi"  # ← Muy poco para stress de 150M
+      requests:
+        memory: "20Mi"
+
+---
+# ============================================================================
+# 4. Init Container Failure
+# ============================================================================
+# ERROR: Init container espera un servicio que no existe
+# SÍNTOMA: Pod stuck en Init:0/1
+# DIAGNÓSTICO: kubectl describe pod init-failure
+# FIX: Crear el servicio "database" o cambiar el init container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-failure
+  labels:
+    app: broken
+    error-type: init-container
+spec:
+  initContainers:
+  - name: wait-for-db
+    image: busybox:1.28
+    command: ['sh', '-c']
+    args:
+    - |
+      until nslookup database.default.svc.cluster.local; do
+        echo "Waiting for database service..."
+        sleep 2
+      done
+  containers:
+  - name: app
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+
+---
+# ============================================================================
+# 5. Liveness Probe Failure
+# ============================================================================
+# ERROR: Liveness probe demasiado agresivo + endpoint incorrecto
+# SÍNTOMA: Pod se reinicia constantemente después de 15 segundos
+# DIAGNÓSTICO: kubectl describe pod liveness-failure | grep Liveness
+# FIX: Aumentar initialDelaySeconds y/o corregir path del probe
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-failure
+  labels:
+    app: broken
+    error-type: liveness-probe
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /healthz  # ← Este endpoint no existe en nginx default
+        port: 80
+      initialDelaySeconds: 5   # ← Muy corto
+      periodSeconds: 5
+      failureThreshold: 2      # Solo 2 fallos = 10 segundos
+
+---
+# ============================================================================
+# 6. Readiness Probe Never Ready
+# ============================================================================
+# ERROR: Readiness probe falla siempre, pod nunca recibe tráfico
+# SÍNTOMA: Pod Running pero no Ready (0/1)
+# DIAGNÓSTICO: kubectl describe pod readiness-failure | grep Readiness
+# FIX: Corregir el puerto del readiness probe
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-failure
+  labels:
+    app: broken
+    error-type: readiness-probe
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 8080  # ← Puerto incorrecto, nginx está en 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+
+---
+# ============================================================================
+# 7. Missing ConfigMap
+# ============================================================================
+# ERROR: Pod referencia un ConfigMap que no existe
+# SÍNTOMA: Pod en CreateContainerConfigError
+# DIAGNÓSTICO: kubectl describe pod missing-configmap
+# FIX: Crear el ConfigMap "app-config"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: missing-configmap
+  labels:
+    app: broken
+    error-type: missing-config
+spec:
+  containers:
+  - name: app
+    image: nginx:1.21
+    envFrom:
+    - configMapRef:
+        name: app-config  # ← Este ConfigMap no existe
+    ports:
+    - containerPort: 80
+
+---
+# ============================================================================
+# 8. Missing Secret
+# ============================================================================
+# ERROR: Pod referencia un Secret que no existe
+# SÍNTOMA: Pod en CreateContainerConfigError
+# DIAGNÓSTICO: kubectl describe pod missing-secret
+# FIX: Crear el Secret "db-credentials"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: missing-secret
+  labels:
+    app: broken
+    error-type: missing-secret
+spec:
+  containers:
+  - name: app
+    image: nginx:1.21
+    env:
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials  # ← Este Secret no existe
+          key: password
+    ports:
+    - containerPort: 80
+
+---
+# ============================================================================
+# 9. Wrong Command Arguments
+# ============================================================================
+# ERROR: Command/args incorrectos hacen que el container falle
+# SÍNTOMA: CrashLoopBackOff
+# DIAGNÓSTICO: kubectl logs wrong-command
+# FIX: Corregir el comando
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wrong-command
+  labels:
+    app: broken
+    error-type: wrong-command
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    command: ["nginx"]
+    args: ["-invalid-flag"]  # ← Flag inválido
+    ports:
+    - containerPort: 80
+
+---
+# ============================================================================
+# 10. Resource Limits Too Low (CPU Throttling)
+# ============================================================================
+# ERROR: CPU limit muy bajo causa throttling extremo
+# SÍNTOMA: Pod muy lento, high CPU throttling
+# DIAGNÓSTICO: kubectl top pod cpu-throttle
+# FIX: Aumentar CPU limits
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-throttle
+  labels:
+    app: broken
+    error-type: cpu-throttle
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args: ["--cpu", "2"]
+    resources:
+      limits:
+        cpu: "100m"  # ← Muy bajo para 2 CPU workers
+      requests:
+        cpu: "50m"
+
+---
+# ============================================================================
+# 11. Volume Mount Path Error
+# ============================================================================
+# ERROR: volumeMount path no existe en container
+# SÍNTOMA: Pod puede estar Running pero app no funciona
+# DIAGNÓSTICO: kubectl exec volume-mount-error -- ls /wrong/path
+# FIX: Corregir mountPath o crear directorio en container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-mount-error
+  labels:
+    app: broken
+    error-type: volume-mount
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    volumeMounts:
+    - name: config
+      mountPath: /etc/nginx/conf.d/default.conf  # ← Archivo, no directorio
+      subPath: default.conf
+    ports:
+    - containerPort: 80
+  volumes:
+  - name: config
+    emptyDir: {}  # ← emptyDir vacío, no tiene el archivo
+
+---
+# ============================================================================
+# 12. Application Listening on Wrong Port
+# ============================================================================
+# ERROR: App escucha en puerto diferente al declarado en containerPort
+# SÍNTOMA: Service no funciona, connection refused
+# DIAGNÓSTICO: kubectl exec wrong-port -- netstat -tlnp
+# FIX: Corregir containerPort o configurar app para usar puerto correcto
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wrong-port
+  labels:
+    app: web
+    error-type: wrong-port
+spec:
+  containers:
+  - name: python-app
+    image: python:3.9-slim
+    command: ["python", "-m", "http.server", "8000"]  # ← App en 8000
+    ports:
+    - containerPort: 80  # ← Declarado como 80
+
+---
+# ============================================================================
+# FIX EXAMPLES (Commented Out)
+# ============================================================================
+# Descomenta estos para ver las versiones corregidas
+
+# # 1. CrashLoopBackOff - FIXED
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: crashloop-app-fixed
+# spec:
+#   containers:
+#   - name: app
+#     image: busybox:1.28
+#     command: ["/bin/sh"]
+#     args: ["-c", "while true; do echo 'Running...'; sleep 30; done"]
+
+# # 2. ImagePullBackOff - FIXED
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: imagepull-fixed
+# spec:
+#   containers:
+#   - name: app
+#     image: nginx:1.21  # Tag válido
+#     ports:
+#     - containerPort: 80
+
+# # 3. OOMKilled - FIXED
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: oomkilled-fixed
+# spec:
+#   containers:
+#   - name: memory-hog
+#     image: polinux/stress
+#     command: ["stress"]
+#     args: ["--vm", "1", "--vm-bytes", "150M", "--vm-hang", "1"]
+#     resources:
+#       limits:
+#         memory: "200Mi"  # Suficiente para 150M + overhead
+#       requests:
+#         memory: "150Mi"
+
+# # 5. Liveness Probe - FIXED
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: liveness-fixed
+# spec:
+#   containers:
+#   - name: nginx
+#     image: nginx:1.21
+#     ports:
+#     - containerPort: 80
+#     livenessProbe:
+#       httpGet:
+#         path: /  # Path válido
+#         port: 80
+#       initialDelaySeconds: 30  # Más tiempo para iniciar
+#       periodSeconds: 10
+#       failureThreshold: 3
+
+# # 7. Missing ConfigMap - FIXED
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: app-config
+# data:
+#   APP_ENV: "production"
+#   LOG_LEVEL: "info"
+# ---
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: configmap-fixed
+# spec:
+#   containers:
+#   - name: app
+#     image: nginx:1.21
+#     envFrom:
+#     - configMapRef:
+#         name: app-config
+#     ports:
+#     - containerPort: 80
+
+---
+# ============================================================================
+# TROUBLESHOOTING COMMANDS
+# ============================================================================
+# Usa estos comandos para diagnosticar cada pod:
+
+# Ver todos los pods
+# kubectl get pods
+
+# Ver detalles y eventos
+# kubectl describe pod <pod-name>
+
+# Ver logs
+# kubectl logs <pod-name>
+# kubectl logs <pod-name> --previous  # Del container crasheado
+
+# Ver configuración completa
+# kubectl get pod <pod-name> -o yaml
+
+# Exec para debugging
+# kubectl exec -it <pod-name> -- sh
+
+# Ver recursos
+# kubectl top pod <pod-name>
+
+# Ver eventos
+# kubectl get events --field-selector involvedObject.name=<pod-name>
+
+# Delete para limpiar
+# kubectl delete -f broken-apps.yaml

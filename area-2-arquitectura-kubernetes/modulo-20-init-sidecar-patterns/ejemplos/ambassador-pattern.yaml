@@ -1,0 +1,344 @@
+# ════════════════════════════════════════════════════════════════════════════
+# EJEMPLO 5: Ambassador Pattern - Redis Proxy
+# ════════════════════════════════════════════════════════════════════════════
+#
+# DESCRIPCIÓN:
+#   Sidecar ambassador que actúa como proxy entre la aplicación y Redis externo.
+#   La app conecta a localhost:6379, el ambassador redirige a Redis real.
+#
+# CASO DE USO:
+#   - Simplificar configuración de app (siempre localhost)
+#   - Cambiar backend sin modificar app
+#   - Agregar retry logic, connection pooling, etc.
+#   - Abstracción de networking
+#
+# PRERREQUISITOS:
+#   # Crear Redis external:
+#   kubectl run redis --image=redis:7-alpine
+#   kubectl expose pod redis --port=6379
+#
+# APLICAR:
+#   kubectl apply -f ambassador-pattern.yaml
+#
+# VERIFICAR:
+#   kubectl get pod app-with-proxy
+#   kubectl logs app-with-proxy -c app
+#   kubectl logs app-with-proxy -c redis-proxy
+#   kubectl exec app-with-proxy -c app -- redis-cli -h localhost ping
+#
+# LIMPIAR:
+#   kubectl delete -f ambassador-pattern.yaml
+#   kubectl delete pod redis
+#   kubectl delete service redis
+#
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-proxy
+  labels:
+    app: redis-demo
+    pattern: ambassador
+  annotations:
+    description: "Ambassador pattern para proxy a Redis"
+spec:
+  
+  containers:
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MAIN CONTAINER: Application (conecta a localhost:6379)
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: app
+    image: redis:7-alpine
+    
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Aplicación iniciada"
+      echo "Conectando a Redis via Ambassador (localhost:6379)"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Esperar a que proxy esté listo
+      echo "Esperando a que Redis proxy esté disponible..."
+      sleep 5
+      
+      # Test de conexión
+      echo "Probando conexión a Redis..."
+      if redis-cli -h localhost -p 6379 PING > /dev/null 2>&1; then
+        echo "✅ Conexión exitosa a Redis via Ambassador"
+      else
+        echo "❌ Falló conexión a Redis"
+        exit 1
+      fi
+      
+      # Operaciones de prueba
+      echo ""
+      echo "Realizando operaciones Redis:"
+      echo "────────────────────────────────────────────────────────"
+      
+      # SET key
+      redis-cli -h localhost SET mykey "Hello from Ambassador pattern"
+      echo "SET mykey 'Hello from Ambassador pattern'"
+      
+      # GET key
+      VALUE=$(redis-cli -h localhost GET mykey)
+      echo "GET mykey: $VALUE"
+      
+      # INCR counter
+      redis-cli -h localhost SET counter 0
+      for i in $(seq 1 5); do
+        COUNT=$(redis-cli -h localhost INCR counter)
+        echo "INCR counter: $COUNT"
+        sleep 2
+      done
+      
+      echo "────────────────────────────────────────────────────────"
+      echo "Todas las operaciones completadas exitosamente"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Mantener container corriendo
+      tail -f /dev/null
+    
+    env:
+    - name: REDIS_HOST
+      value: "localhost"  # ← Ambassador en mismo Pod
+    
+    - name: REDIS_PORT
+      value: "6379"
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # AMBASSADOR CONTAINER: Redis Proxy (HAProxy)
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: redis-proxy
+    image: haproxy:2.8-alpine
+    
+    ports:
+    - containerPort: 6379
+      name: redis
+      protocol: TCP
+    
+    # Configuración de HAProxy inline
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Redis Proxy (Ambassador) iniciando..."
+      echo "════════════════════════════════════════════════════════"
+      
+      # Generar haproxy.cfg
+      cat > /usr/local/etc/haproxy/haproxy.cfg <<'EOF'
+      global
+          log stdout format raw local0
+          maxconn 256
+      
+      defaults
+          mode tcp
+          timeout connect 5s
+          timeout client 30s
+          timeout server 30s
+          log global
+      
+      frontend redis-frontend
+          bind *:6379
+          default_backend redis-backend
+          log global
+      
+      backend redis-backend
+          balance roundrobin
+          option tcp-check
+          tcp-check connect
+          
+          # Redis server externo
+          server redis1 redis.default.svc.cluster.local:6379 check inter 2s fall 3 rise 2
+      EOF
+      
+      echo "✅ Configuración generada:"
+      cat /usr/local/etc/haproxy/haproxy.cfg
+      echo ""
+      echo "Iniciando HAProxy en puerto 6379..."
+      echo "════════════════════════════════════════════════════════"
+      
+      # Iniciar HAProxy
+      haproxy -f /usr/local/etc/haproxy/haproxy.cfg
+    
+    # Health check
+    livenessProbe:
+      tcpSocket:
+        port: 6379
+      initialDelaySeconds: 10
+      periodSeconds: 30
+    
+    readinessProbe:
+      tcpSocket:
+        port: 6379
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+  
+  restartPolicy: Always
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# VARIANTE: Ambassador con NGINX Stream Module
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-redis-proxy-config
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    
+    stream {
+        upstream redis_backend {
+            server redis.default.svc.cluster.local:6379 max_fails=3 fail_timeout=30s;
+        }
+        
+        server {
+            listen 6379;
+            proxy_pass redis_backend;
+            proxy_timeout 30s;
+            proxy_connect_timeout 5s;
+        }
+    }
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-nginx-proxy
+  labels:
+    app: redis-demo
+    pattern: ambassador-nginx
+spec:
+  containers:
+  
+  - name: app
+    image: redis:7-alpine
+    command:
+    - sh
+    - -c
+    - |
+      sleep 5
+      redis-cli -h localhost PING
+      echo "✅ Redis via NGINX proxy funcionando"
+      tail -f /dev/null
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+  
+  - name: nginx-proxy
+    image: nginx:1.25-alpine
+    ports:
+    - containerPort: 6379
+    volumeMounts:
+    - name: nginx-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+  
+  volumes:
+  - name: nginx-config
+    configMap:
+      name: nginx-redis-proxy-config
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# TESTING
+# ════════════════════════════════════════════════════════════════════════════
+#
+# 1. Crear Redis externo primero:
+#    kubectl run redis --image=redis:7-alpine
+#    kubectl expose pod redis --port=6379
+#
+# 2. Verificar Redis está running:
+#    kubectl get pod redis
+#    kubectl exec redis -- redis-cli PING
+#
+# 3. Aplicar Pod con Ambassador:
+#    kubectl apply -f ambassador-pattern.yaml
+#
+# 4. Ver logs del proxy iniciando:
+#    kubectl logs app-with-proxy -c redis-proxy
+#
+# 5. Ver logs de la app conectando:
+#    kubectl logs app-with-proxy -c app
+#
+#    Expected output:
+#    ════════════════════════════════════════════════════════
+#    Aplicación iniciada
+#    Conectando a Redis via Ambassador (localhost:6379)
+#    ════════════════════════════════════════════════════════
+#    ✅ Conexión exitosa a Redis via Ambassador
+#    
+#    Realizando operaciones Redis:
+#    ────────────────────────────────────────────────────────
+#    SET mykey 'Hello from Ambassador pattern'
+#    GET mykey: Hello from Ambassador pattern
+#    INCR counter: 1
+#    INCR counter: 2
+#
+# 6. Probar manualmente desde dentro del Pod:
+#    kubectl exec app-with-proxy -c app -- redis-cli -h localhost PING
+#    kubectl exec app-with-proxy -c app -- redis-cli -h localhost GET mykey
+#
+# 7. Ver que app conecta a localhost (no sabe de Redis externo):
+#    kubectl exec app-with-proxy -c app -- netstat -an | grep 6379
+#    # Verás conexión a 127.0.0.1:6379
+#
+# 8. Simular cambio de backend (sin modificar app):
+#    # Crear nuevo Redis
+#    kubectl run redis2 --image=redis:7-alpine
+#    kubectl expose pod redis2 --port=6379
+#    
+#    # Modificar configuración del proxy (via edit)
+#    kubectl edit pod app-with-proxy
+#    # Cambiar: redis.default.svc.cluster.local → redis2.default.svc.cluster.local
+#
+# ════════════════════════════════════════════════════════════════════════════
+# BENEFICIOS DEL AMBASSADOR PATTERN
+# ════════════════════════════════════════════════════════════════════════════
+# ✅ App siempre conecta a localhost → configuración simple
+# ✅ Cambiar backend sin modificar código de app
+# ✅ Agregar features en proxy: retry, timeout, load balancing
+# ✅ Logging y monitoring centralizado en proxy
+# ✅ Security: app no necesita conocer credentials externas
+# ✅ Testing: fácil mockear backend en desarrollo
+# ════════════════════════════════════════════════════════════════════════════
+# CASOS DE USO REALES
+# ════════════════════════════════════════════════════════════════════════════
+# - Proxy a databases: PostgreSQL, MySQL, MongoDB
+# - API Gateway local: proxy a múltiples APIs externas
+# - Service mesh: Envoy/Istio usa este patrón
+# - Cloud services: proxy a S3, DynamoDB, etc.
+# - Legacy apps: sin modificar código, agregar features modernas
+# ════════════════════════════════════════════════════════════════════════════

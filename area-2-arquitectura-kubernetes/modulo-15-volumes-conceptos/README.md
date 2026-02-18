@@ -1,6 +1,219 @@
 # Módulo 15: Volúmenes en Kubernetes - Conceptos Fundamentales
 
-## 📋 Índice
+## 📋 Objetivos de Aprendizaje
+
+Al completar este módulo, serás capaz de:
+
+### 🎯 Objetivos Fundamentos
+- Comprender qué son los volúmenes y por qué son necesarios
+- Diferenciar aplicaciones stateless vs stateful
+- Entender el ciclo de vida de los volúmenes
+- Conocer el problema de los sistemas de archivos efímeros
+- Comprender la abstracción de almacenamiento en Kubernetes
+
+### 🎯 Objetivos Técnicos (Conceptuales)
+- Identificar tipos básicos de volúmenes (emptyDir, hostPath, cloud volumes)
+- Comprender la abstracción PV/PVC (PersistentVolume y PersistentVolumeClaim)
+- Conocer los modos de acceso (ReadWriteOnce, ReadOnlyMany, ReadWriteMany)
+- Entender las políticas de recuperación (Retain, Delete, Recycle)
+- Familiarizarse con StorageClasses
+
+### 🎯 Objetivos de Diseño
+- Decidir cuándo usar cada tipo de volumen
+- Elegir modos de acceso apropiados según el caso de uso
+- Seleccionar políticas de recuperación según requisitos
+- Diseñar arquitecturas de almacenamiento para aplicaciones stateful
+
+### 🎯 Objetivos Profesionales
+- Prepararse para escenarios CKA/CKAD sobre volúmenes
+- Evaluar trade-offs entre tipos de almacenamiento
+- Comprender conceptos antes de implementación práctica (Módulo 16)
+
+---
+
+## ✅ Prerrequisitos
+
+Antes de comenzar este módulo, debes:
+
+### Conocimientos Previos
+- ✅ **Módulo 04**: Pods y contenedores
+- ✅ **Módulo 05**: Gestión de Pods (lifecycle)
+- ✅ **Módulo 07**: Deployments (aplicaciones stateless)
+- ✅ Conceptos básicos de sistemas de archivos
+- ✅ Comprensión de persistencia de datos
+
+### Verificación de Entorno
+```bash
+# Verificar acceso al clúster
+kubectl cluster-info
+
+# Verificar Pods en ejecución
+kubectl get pods
+
+# (Opcional) Ver StorageClasses disponibles
+kubectl get storageclass
+```
+
+**Nota**: Este módulo es **conceptual**. El Módulo 16 cubre la implementación práctica en Azure AKS.
+
+---
+
+## 🗺️ Estructura del Módulo
+
+| Sección | Contenido | Duración | Tipo |
+|---------|-----------|----------|------|
+| **1** | Introducción a Volúmenes | 25 min | 📖 Teoría |
+| **2** | Stateless vs Stateful | 20 min | 📖 Teoría + 🎨 Diagramas |
+| **3** | Ciclo de Vida de Volúmenes | 25 min | 📖 Teoría |
+| **4** | Tipos Básicos (emptyDir, hostPath) | 30 min | 📖 Teoría + 💡 Ejemplos conceptuales |
+| **5** | Cloud Volumes (Azure Disk/Files) | 20 min | 📖 Teoría |
+| **6** | PV y PVC (Abstracción) | 40 min | 📖 Teoría + 🎨 Diagramas |
+| **7** | Reclaim Policies | 20 min | 📖 Teoría |
+| **8** | Access Modes | 25 min | 📖 Teoría + 📊 Tablas |
+| **9** | StorageClasses (Conceptos) | 20 min | 📖 Teoría |
+| **10** | Troubleshooting (Conceptual) | 15 min | 🐛 Diagnóstico |
+| **Total** | | **~4 horas** | |
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (2-3 días)
+**Perfil**: Primera vez con volúmenes en Kubernetes
+**Enfoque**: Comprensión de conceptos fundamentales
+
+**Día 1** (1.5 horas):
+- ✅ ¿Qué son los volúmenes? (problema del almacenamiento efímero)
+- ✅ Stateless vs Stateful (aplicaciones y sus necesidades)
+- ✅ Ciclo de vida de volúmenes
+
+**Día 2** (1.5 horas):
+- ✅ Tipos básicos: emptyDir (compartir entre contenedores)
+- ✅ Tipos básicos: hostPath (acceder a nodo)
+- ✅ Cloud volumes (Azure Disk, Azure Files conceptual)
+
+**Día 3** (2 horas):
+- ✅ PV y PVC (abstracción, separación admin/usuario)
+- ✅ Access Modes (RWO, ROX, RWX)
+- ✅ Reclaim Policies (Retain, Delete, Recycle)
+- ✅ StorageClasses (provisioning dinámico)
+
+---
+
+### 🟡 Ruta Intermedia (1-2 días)
+**Perfil**: Familiarizado con Docker volumes, nuevos conceptos de K8s
+**Enfoque**: Abstracción PV/PVC y diseño de arquitecturas
+
+**Día 1** (2 horas):
+- ✅ Repaso rápido: Volúmenes efímeros vs persistentes
+- ✅ Todos los tipos de volúmenes (emptyDir, hostPath, cloud)
+- ✅ Abstracción PV/PVC completa
+- ✅ StorageClasses y provisioning dinámico
+
+**Día 2** (1.5 horas):
+- ✅ Access Modes en detalle (casos de uso)
+- ✅ Reclaim Policies (escenarios producción)
+- ✅ Decisiones de diseño (cuándo usar qué)
+- ✅ Preparación para implementación práctica (Módulo 16)
+
+---
+
+### 🔴 Ruta Certificación CKA/CKAD (2-3 horas)
+**Perfil**: Preparación para examen, enfoque en conceptos clave
+**Enfoque**: Teoría esencial, memorización de tipos y modos
+
+**Bloque 1** (1 hora):
+- ✅ Volúmenes efímeros (emptyDir) vs persistentes (PV/PVC)
+- ✅ PV y PVC: relación, binding, lifecycle
+- ✅ Access Modes: ReadWriteOnce, ReadOnlyMany, ReadWriteMany
+- ✅ Reclaim Policies: Retain, Delete, Recycle
+
+**Bloque 2** (1 hora):
+- ✅ StorageClasses: dynamic provisioning
+- ✅ Tipos de volúmenes comunes (emptyDir, hostPath, cloud)
+- ✅ Troubleshooting conceptual (Pending PVC, binding issues)
+
+**Bloque 3** (30-60 min):
+- ✅ Escenarios de examen (identificar tipo de volumen apropiado)
+- ✅ Relación PV/PVC/Pod
+- ✅ Repaso de conceptos clave para implementación (Módulo 16)
+
+---
+
+## 🔗 Relación con Módulo 16
+
+**⚠️ IMPORTANTE**: Este módulo (15) cubre **conceptos fundamentales**. El **Módulo 16** cubre **implementación práctica en Azure AKS**.
+
+```
+┌────────────────────────────────────────────────────────┐
+│  Módulo 15: Conceptos Fundamentales                    │
+│  (Este módulo - TEORÍA)                                │
+│                                                        │
+│  ✅ ¿Qué son los volúmenes?                            │
+│  ✅ Tipos de volúmenes (conceptos)                     │
+│  ✅ PV/PVC (abstracción)                               │
+│  ✅ Access Modes (teoría)                              │
+│  ✅ Reclaim Policies (concepto)                        │
+│  ✅ StorageClasses (qué son)                           │
+│                                                        │
+│  📚 SIN YAMLs complejos de producción                  │
+│  📚 SIN comandos kubectl detallados                    │
+│  📚 SIN troubleshooting práctico                       │
+└────────────────────────────────────────────────────────┘
+                         ↓
+                  Continúa con...
+                         ↓
+┌────────────────────────────────────────────────────────┐
+│  Módulo 16: Implementación Práctica en Azure AKS       │
+│  (Siguiente módulo - PRÁCTICA)                         │
+│                                                        │
+│  ✅ YAMLs completos de PV/PVC                          │
+│  ✅ Comandos kubectl detallados                        │
+│  ✅ Provisioning dinámico en AKS                       │
+│  ✅ Azure Disk y Azure Files hands-on                  │
+│  ✅ Troubleshooting práctico                           │
+│  ✅ Laboratorios completos                             │
+└────────────────────────────────────────────────────────┘
+```
+
+**Flujo recomendado**:
+1. **Módulo 15**: Entender CONCEPTOS (qué, por qué, cuándo)
+2. **Módulo 16**: Implementar PRÁCTICA (cómo, troubleshoot, labs)
+
+---
+
+## 📁 Organización de Recursos
+
+**⚠️ Nota**: Este módulo NO tiene carpetas `ejemplos/` ni `laboratorios/` porque es conceptual. Toda la práctica está en el Módulo 16.
+
+```
+modulo-15-volumes-conceptos/
+├── README.md                          # ← Estás aquí
+└── RESUMEN-MODULO.md                  # Guía de estudio conceptual
+```
+
+---
+
+## 🎓 Metodología de Aprendizaje
+
+Este módulo sigue una progresión **conceptual pura**:
+
+1. **📖 Teoría Fundamental** → ¿Qué son los volúmenes y por qué existen?
+2. **🎨 Diagramas** → Visualización de arquitecturas y flujos
+3. **📊 Tablas Comparativas** → Decisiones de diseño (cuándo usar qué)
+4. **💡 Ejemplos Conceptuales** → Snippets simples para ilustrar conceptos
+5. **🔗 Preparación para Práctica** → Base para el Módulo 16
+
+**⚠️ NO incluye**:
+- ❌ YAMLs complejos de producción
+- ❌ Laboratorios hands-on (están en Módulo 16)
+- ❌ Troubleshooting práctico con kubectl (Módulo 16)
+
+**Recomendación**: Lee este módulo completo para entender conceptos, luego pasa al Módulo 16 para implementar.
+
+---
+
+## 📋 Índice de Contenido
 
 1. [Introducción a los Volúmenes](#introducción-a-los-volúmenes)
 2. [Aplicaciones Stateless vs Stateful](#aplicaciones-stateless-vs-stateful)

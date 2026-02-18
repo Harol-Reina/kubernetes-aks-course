@@ -1,0 +1,37 @@
+✅ Chart {{ .Chart.Name }} instalado exitosamente!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+📋 Para obtener la IP del servicio:
+
+{{- if eq .Values.service.type "ClusterIP" }}
+
+  kubectl port-forward -n {{ .Release.Namespace }} \
+    svc/{{ .Release.Name }}-{{ .Chart.Name }}-service {{ .Values.service.port }}:{{ .Values.service.port }}
+  
+  Luego visita: http://localhost:{{ .Values.service.port }}
+
+{{- else if eq .Values.service.type "NodePort" }}
+
+  export NODE_PORT=$(kubectl get -n {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" svc {{ .Release.Name }}-{{ .Chart.Name }}-service)
+  export NODE_IP=$(kubectl get nodes -o jsonpath="{.items[0].status.addresses[0].address}")
+  
+  echo "URL: http://$NODE_IP:$NODE_PORT"
+
+{{- else if eq .Values.service.type "LoadBalancer" }}
+
+  export SERVICE_IP=$(kubectl get svc -n {{ .Release.Namespace }} {{ .Release.Name }}-{{ .Chart.Name }}-service \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  
+  echo "URL: http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- end }}
+
+📊 Para ver el estado:
+  helm status {{ .Release.Name }}
+  
+📝 Para ver los pods:
+  kubectl get pods -n {{ .Release.Namespace }} -l release={{ .Release.Name }}
+
+🔄 Para actualizar:
+  helm upgrade {{ .Release.Name }} ./{{ .Chart.Name }} -f custom-values.yaml

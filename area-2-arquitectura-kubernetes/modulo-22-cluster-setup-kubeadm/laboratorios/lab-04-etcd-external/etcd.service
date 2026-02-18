@@ -1,0 +1,242 @@
+# etcd Cluster Configuration Template
+# 
+# Este archivo es una plantilla para configurar etcd como servicio systemd
+# Úsalo como base para cada nodo etcd del cluster
+#
+# Instrucciones:
+# 1. Copiar este archivo a cada nodo etcd
+# 2. Modificar las variables según el nodo (ETCD_NAME, INTERNAL_IP)
+# 3. Copiar a /etc/systemd/system/etcd.service
+# 4. sudo systemctl daemon-reload && sudo systemctl enable etcd && sudo systemctl start etcd
+
+#---------------------------------------------------------------------
+# VARIABLES A CONFIGURAR (CAMBIAR SEGÚN NODO)
+#---------------------------------------------------------------------
+
+# Nodo etcd-01:
+# ETCD_NAME="etcd-01"
+# INTERNAL_IP="192.168.1.201"
+
+# Nodo etcd-02:
+# ETCD_NAME="etcd-02"
+# INTERNAL_IP="192.168.1.202"
+
+# Nodo etcd-03:
+# ETCD_NAME="etcd-03"
+# INTERNAL_IP="192.168.1.203"
+
+# Cluster completo (MISMO EN TODOS LOS NODOS):
+# INITIAL_CLUSTER="etcd-01=https://192.168.1.201:2380,etcd-02=https://192.168.1.202:2380,etcd-03=https://192.168.1.203:2380"
+
+#---------------------------------------------------------------------
+# ARCHIVO SYSTEMD UNIT - etcd.service
+#---------------------------------------------------------------------
+
+[Unit]
+Description=etcd key-value store
+Documentation=https://github.com/etcd-io/etcd
+After=network.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=root
+ExecStart=/usr/local/bin/etcd \
+  --name ${ETCD_NAME} \
+  --data-dir /var/lib/etcd \
+  \
+  # Network configuration
+  --listen-peer-urls https://${INTERNAL_IP}:2380 \
+  --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \
+  --advertise-client-urls https://${INTERNAL_IP}:2379 \
+  --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \
+  \
+  # Cluster configuration
+  --initial-cluster ${INITIAL_CLUSTER} \
+  --initial-cluster-state new \
+  --initial-cluster-token etcd-cluster-1 \
+  \
+  # TLS peer (communication between etcd members)
+  --peer-client-cert-auth \
+  --peer-trusted-ca-file /etc/etcd/ca.pem \
+  --peer-cert-file /etc/etcd/etcd.pem \
+  --peer-key-file /etc/etcd/etcd-key.pem \
+  \
+  # TLS client (API Server → etcd)
+  --client-cert-auth \
+  --trusted-ca-file /etc/etcd/ca.pem \
+  --cert-file /etc/etcd/etcd.pem \
+  --key-file /etc/etcd/etcd-key.pem \
+  \
+  # Performance tuning (opcional)
+  --heartbeat-interval 100 \
+  --election-timeout 1000 \
+  --max-request-bytes 1572864 \
+  --quota-backend-bytes 8589934592 \
+  \
+  # Logging
+  --log-level info \
+  --log-outputs stderr
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Security
+# Hardening options (opcional para producción)
+# NoNewPrivileges=true
+# PrivateTmp=true
+# ProtectSystem=strict
+# ProtectHome=true
+# ReadWritePaths=/var/lib/etcd
+
+[Install]
+WantedBy=multi-user.target
+
+#---------------------------------------------------------------------
+# PARÁMETROS EXPLICADOS
+#---------------------------------------------------------------------
+
+# --name: Nombre único del nodo en el cluster
+# --data-dir: Directorio para datos persistentes (DEBE SER SSD)
+
+# --listen-peer-urls: URL donde escucha para comunicación con otros etcd
+#   Formato: https://IP:2380 (puerto 2380 para peers)
+
+# --listen-client-urls: URLs donde escucha requests de clientes (API Server)
+#   Múltiples URLs separadas por coma: IP:2379 + localhost:2379
+
+# --advertise-client-urls: URL que etcd anuncia a clientes
+#   Debe ser alcanzable desde control planes
+
+# --initial-advertise-peer-urls: URL que etcd anuncia a otros peers
+#   Debe ser alcanzable desde otros nodos etcd
+
+# --initial-cluster: Lista de TODOS los miembros del cluster inicial
+#   Formato: "name1=url1,name2=url2,name3=url3"
+#   DEBE SER IDÉNTICO EN TODOS LOS NODOS
+
+# --initial-cluster-state: Estado inicial del cluster
+#   "new" para cluster nuevo
+#   "existing" para añadir nodo a cluster existente
+
+# --initial-cluster-token: Token único para este cluster
+#   Previene que nodos de diferentes clusters se unan accidentalmente
+
+# --peer-client-cert-auth: Habilita autenticación TLS mutua entre peers
+# --peer-trusted-ca-file: CA para validar certificados peer
+# --peer-cert-file: Certificado TLS del peer
+# --peer-key-file: Private key del certificado peer
+
+# --client-cert-auth: Requiere certificado de clientes (API Server)
+# --trusted-ca-file: CA para validar certificados de cliente
+# --cert-file: Certificado TLS del servidor
+# --key-file: Private key del certificado servidor
+
+# --heartbeat-interval: Intervalo de heartbeat en milisegundos (default: 100ms)
+#   Aumentar en redes con alta latencia
+
+# --election-timeout: Timeout para elección de líder (default: 1000ms)
+#   Debe ser > 5 × heartbeat-interval
+
+# --max-request-bytes: Tamaño máximo de request (default: 1.5MB)
+#   Aumentar si hay errores "request is too large"
+
+# --quota-backend-bytes: Tamaño máximo de DB (default: 2GB)
+#   Ajustar según necesidades (8GB común para producción)
+
+#---------------------------------------------------------------------
+# EJEMPLO COMPLETO PARA CADA NODO
+#---------------------------------------------------------------------
+
+# ========== etcd-01 (192.168.1.201) ==========
+# [Unit]
+# Description=etcd
+# Documentation=https://github.com/etcd-io/etcd
+# After=network.target
+# 
+# [Service]
+# Type=notify
+# ExecStart=/usr/local/bin/etcd \
+#   --name etcd-01 \
+#   --data-dir /var/lib/etcd \
+#   --listen-peer-urls https://192.168.1.201:2380 \
+#   --listen-client-urls https://192.168.1.201:2379,https://127.0.0.1:2379 \
+#   --advertise-client-urls https://192.168.1.201:2379 \
+#   --initial-advertise-peer-urls https://192.168.1.201:2380 \
+#   --initial-cluster etcd-01=https://192.168.1.201:2380,etcd-02=https://192.168.1.202:2380,etcd-03=https://192.168.1.203:2380 \
+#   --initial-cluster-state new \
+#   --initial-cluster-token etcd-cluster-1 \
+#   --client-cert-auth \
+#   --trusted-ca-file /etc/etcd/ca.pem \
+#   --cert-file /etc/etcd/etcd.pem \
+#   --key-file /etc/etcd/etcd-key.pem \
+#   --peer-client-cert-auth \
+#   --peer-trusted-ca-file /etc/etcd/ca.pem \
+#   --peer-cert-file /etc/etcd/etcd.pem \
+#   --peer-key-file /etc/etcd/etcd-key.pem
+# Restart=on-failure
+# RestartSec=5
+# 
+# [Install]
+# WantedBy=multi-user.target
+
+# ========== etcd-02 (192.168.1.202) ==========
+# [Unit]
+# Description=etcd
+# Documentation=https://github.com/etcd-io/etcd
+# After=network.target
+# 
+# [Service]
+# Type=notify
+# ExecStart=/usr/local/bin/etcd \
+#   --name etcd-02 \
+#   --data-dir /var/lib/etcd \
+#   --listen-peer-urls https://192.168.1.202:2380 \
+#   --listen-client-urls https://192.168.1.202:2379,https://127.0.0.1:2379 \
+#   --advertise-client-urls https://192.168.1.202:2379 \
+#   --initial-advertise-peer-urls https://192.168.1.202:2380 \
+#   --initial-cluster etcd-01=https://192.168.1.201:2380,etcd-02=https://192.168.1.202:2380,etcd-03=https://192.168.1.203:2380 \
+#   --initial-cluster-state new \
+#   --initial-cluster-token etcd-cluster-1 \
+#   --client-cert-auth \
+#   --trusted-ca-file /etc/etcd/ca.pem \
+#   --cert-file /etc/etcd/etcd.pem \
+#   --key-file /etc/etcd/etcd-key.pem \
+#   --peer-client-cert-auth \
+#   --peer-trusted-ca-file /etc/etcd/ca.pem \
+#   --peer-cert-file /etc/etcd/etcd.pem \
+#   --peer-key-file /etc/etcd/etcd-key.pem
+# Restart=on-failure
+# RestartSec=5
+# 
+# [Install]
+# WantedBy=multi-user.target
+
+# ========== etcd-03 (192.168.1.203) ==========
+# (Igual que arriba, cambiar name y IPs por 192.168.1.203)
+
+#---------------------------------------------------------------------
+# TROUBLESHOOTING
+#---------------------------------------------------------------------
+
+# Ver logs del servicio:
+# sudo journalctl -u etcd -f
+
+# Verificar estado:
+# sudo systemctl status etcd
+
+# Restart:
+# sudo systemctl restart etcd
+
+# Verificar miembros del cluster:
+# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+#   --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/etcd.pem --key=/etc/etcd/etcd-key.pem \
+#   member list
+
+# Health check:
+# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+#   --cacert=/etc/etcd/ca.pem --cert=/etc/etcd/etcd.pem --key=/etc/etcd/etcd-key.pem \
+#   endpoint health

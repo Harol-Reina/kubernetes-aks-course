@@ -1,18 +1,266 @@
 # 🏗️ Módulo 02: Arquitectura de Cluster Kubernetes
 
-**Duración**: 60 minutos  
-**Modalidad**: Teórico-Práctico  
-**Dificultad**: Intermedio
+> **Componentes Técnicos del Cluster**: Entender cómo funciona Kubernetes por dentro - Control Plane, Workers, y la orquestación de todo el sistema.
 
-## 🎯 Objetivos del Módulo
+---
+
+## 📋 Objetivos de Aprendizaje
 
 Al completar este módulo serás capaz de:
 
-- ✅ **Identificar todos los componentes** del Control Plane
-- ✅ **Entender la arquitectura** de Worker Nodes
-- ✅ **Explicar la comunicación** entre componentes
-- ✅ **Diagnosticar problemas** básicos de cluster
-- ✅ **Visualizar el flujo** de requests en Kubernetes
+### 🎓 Objetivos Conceptuales
+- **Arquitectura de alto nivel**: Visualizar y explicar la estructura completa de un cluster K8s
+- **Control Plane vs Workers**: Distinguir claramente los roles y responsabilidades
+- **Flujo de requests**: Entender el ciclo de vida de una petición en K8s
+- **Componentes esenciales**: Conocer cada pieza del sistema y su función
+
+### 🛠️ Objetivos Técnicos
+- **Identificar componentes del Control Plane**: API Server, etcd, Scheduler, Controllers
+- **Conocer componentes de Worker Nodes**: kubelet, kube-proxy, container runtime
+- **Entender comunicación**: Cómo interactúan todos los componentes entre sí
+- **Diagnosticar problemas básicos**: Usar kubectl para verificar estado de componentes
+- **Arquitectura HA**: Comprender multi-master y tolerancia a fallos
+
+### 🔍 Objetivos de Troubleshooting
+- **Verificar salud del cluster**: kubectl get nodes, componentstatuses
+- **Diagnosticar problemas de Control Plane**: Logs de API server, scheduler
+- **Identificar problemas de Workers**: Estado de kubelet, pods en nodos
+- **Entender puntos de fallo**: Qué sucede si falla cada componente
+
+### 🏢 Objetivos Profesionales
+- **Diseñar clusters**: Decidir arquitectura según requisitos (HA, escala)
+- **Planear infraestructura**: Dimensionamiento de Control Plane y Workers
+- **Preparación para certificaciones**: CKA (componentes), CKAD (contexto)
+- **Conversaciones técnicas**: Hablar con confianza sobre arquitectura K8s
+
+---
+
+## ✅ Prerrequisitos
+
+### Conocimientos Previos
+- ✅ **Módulo 01 completado**: Entender QUÉ es K8s y POR QUÉ existe
+- ✅ **Conceptos de redes**: IPs, puertos, APIs REST
+- ✅ **Arquitecturas distribuidas**: Cliente-servidor, bases de datos
+- ✅ **Linux básico**: Procesos, servicios, systemd
+
+### Mindset Necesario
+- 🧠 **Paciencia**: Esta es la parte más técnica hasta ahora
+- 🧠 **Curiosidad por detalles**: Entender "cómo funciona" internamente
+- 🧠 **Pensamiento sistémico**: Ver K8s como sistema distribuido complejo
+
+### Herramientas (Opcional para este módulo)
+- 🔧 **kubectl** (si quieres explorar en cluster real)
+- 🔧 **Minikube** (se instalará en Módulo 03)
+- 📝 **Diagrama mental**: Papel y lápiz para dibujar arquitectura
+
+### Verificación
+Este módulo es principalmente teórico. Si tienes acceso a un cluster:
+```bash
+# Ver componentes del Control Plane (si tienes acceso)
+kubectl get componentstatuses
+
+# Ver nodos del cluster
+kubectl get nodes
+
+# Ver pods del sistema
+kubectl get pods -n kube-system
+```
+
+---
+
+## 🗺️ Estructura del Módulo
+
+### Contenido Teórico (60-90 minutos)
+1. **Arquitectura General** (15 min) - Vista de alto nivel del cluster
+2. **Control Plane Detallado** (20 min) - kube-apiserver, etcd, scheduler, controllers
+3. **Worker Nodes Detallado** (15 min) - kubelet, kube-proxy, runtime
+4. **Flujo de Comunicación** (15 min) - Cómo interactúan los componentes
+5. **Alta Disponibilidad** (10 min) - Multi-master, tolerancia a fallos
+6. **Addons del Sistema** (10 min) - DNS, Dashboard, Metrics Server
+
+### Ejemplos Visuales (5 directorios)
+- 📁 **01-arquitectura-general/** - Diagramas de cluster completo
+- 📁 **02-control-plane/** - Componentes master en detalle
+- 📁 **03-worker-nodes/** - Arquitectura de workers
+- 📁 **04-alta-disponibilidad/** - HA con múltiples masters
+- 📁 **05-addons/** - Componentes opcionales
+
+### Laboratorios (conceptuales)
+- 🔬 **Exploración de componentes**: Inspeccionar componentes en cluster real
+- 🔬 **Análisis de logs**: Ver logs de API server y kubelet
+- 🔬 **Verificación de salud**: Comandos para diagnóstico
+
+---
+
+## 📚 Rutas de Estudio Recomendadas
+
+### 🟢 Ruta Principiante (Primera vez con arquitectura distribuida)
+**Tiempo**: 2-3 horas (lectura + diagramas + notas)
+```
+Día 1: Arquitectura General (45 min)
+  ├─ Sección 1: Vista de alto nivel
+  ├─ Ver diagramas en 01-arquitectura-general/
+  └─ Dibujar tu propia versión de la arquitectura
+
+Día 1: Control Plane (45 min)
+  ├─ Sección 2: Componentes del Control Plane
+  ├─ Ver diagramas en 02-control-plane/
+  └─ Hacer lista de qué hace cada componente
+
+Día 2: Worker Nodes y Comunicación (60 min)
+  ├─ Sección 3: Worker Nodes
+  ├─ Sección 4: Flujo de comunicación
+  ├─ Ver diagramas en 03-worker-nodes/
+  └─ Trazar flujo de un "kubectl create pod"
+
+Día 2: HA y Repaso (30 min)
+  ├─ Sección 5: Alta disponibilidad
+  ├─ RESUMEN-MODULO.md completo
+  └─ Responder preguntas de repaso
+```
+
+### 🟡 Ruta Intermedia (Ya conoces sistemas distribuidos)
+**Tiempo**: 90-120 minutos
+```
+Sesión Única:
+  ├─ Lectura completa enfocada (60 min)
+  │   ├─ Identificar componentes clave
+  │   ├─ Entender flujo de comunicación
+  │   └─ Ver todos los diagramas
+  │
+  ├─ Análisis de HA (20 min)
+  │   └─ Arquitectura multi-master
+  │
+  └─ RESUMEN-MODULO.md (10 min)
+      └─ Cheat sheet de componentes
+```
+
+### 🔴 Ruta Certificación (CKA/CKAD)
+**Tiempo**: 45-60 minutos
+```
+Estrategia:
+  ├─ RESUMEN-MODULO.md primero (20 min)
+  │   ├─ Componentes esenciales
+  │   ├─ Comandos de diagnóstico
+  │   └─ Cheat sheet
+  │
+  ├─ Sección 2 y 3 (Control Plane + Workers) (20 min)
+  │   └─ Enfoque en qué hace cada componente
+  │
+  └─ Comandos prácticos (10 min)
+      ├─ kubectl get componentstatuses
+      ├─ kubectl get nodes
+      └─ kubectl logs <componente>
+
+Memorizar para examen:
+  - Componentes Control Plane: apiserver, etcd, scheduler, controller-manager
+  - Componentes Workers: kubelet, kube-proxy, runtime
+  - Puerto API server: 6443
+  - etcd: puerto 2379
+```
+
+---
+
+## 📁 Organización de Recursos
+
+### Carpeta `ejemplos/`
+```
+ejemplos/
+├── 01-arquitectura-general/
+│   ├── README.md                      # Explicación arquitectura completa
+│   ├── cluster-overview.png           # Vista general del cluster
+│   └── componentes-interaccion.png    # Cómo se comunican componentes
+│
+├── 02-control-plane/
+│   ├── README.md                      # Detalles Control Plane
+│   ├── kube-apiserver.png             # API Server en detalle
+│   ├── etcd-cluster.png               # etcd distribuido
+│   ├── scheduler-workflow.png         # Flujo del scheduler
+│   └── controllers.png                # Tipos de controllers
+│
+├── 03-worker-nodes/
+│   ├── README.md                      # Arquitectura de workers
+│   ├── node-components.png            # Componentes de un nodo
+│   ├── kubelet-workflow.png           # Flujo del kubelet
+│   └── kube-proxy-networking.png      # Networking con kube-proxy
+│
+├── 04-alta-disponibilidad/
+│   ├── README.md                      # HA explicado
+│   ├── multi-master.png               # Múltiples Control Planes
+│   ├── etcd-ha.png                    # etcd con quorum
+│   └── load-balancer.png              # LB frente a API servers
+│
+└── 05-addons/
+    ├── README.md                      # Addons del sistema
+    ├── coredns.png                    # DNS interno
+    ├── metrics-server.png             # Recolección de métricas
+    └── dashboard.png                  # Kubernetes Dashboard
+```
+
+---
+
+## 🎯 Metodología de Aprendizaje
+
+Este módulo es **70% teórico, 30% visual**:
+
+### Distribución de Contenido
+```
+📖 Teoría arquitectura        50%  ██████████▓░░░░░░░░░
+🎨 Diagramas y visuales        30%  ██████▓░░░░░░░░░░░░░
+🔍 Análisis y exploración      20%  ████▓░░░░░░░░░░░░░░░
+```
+
+### Enfoque Pedagógico
+1. **Capas progresivas**: De general a específico
+   - Vista de alto nivel → Control Plane → Workers → Comunicación
+2. **Analogías**: Comparar con sistemas conocidos
+   - API Server = Recepcionista de hospital
+   - etcd = Base de datos central
+   - Scheduler = Gerente asignando tareas
+3. **Diagramas abundantes**: Una imagen vale más que mil palabras
+4. **Sin práctica hands-on**: Eso viene en Módulo 03+
+
+### Flujo de Trabajo
+```
+1. Lee sección teórica → 2. Ve diagrama correspondiente → 3. Toma notas
+                ↓
+4. Dibuja tu propia versión → 5. Continúa siguiente sección
+                ↓
+6. Repasa RESUMEN-MODULO.md → 7. Preguntas de repaso
+```
+
+---
+
+## 🔗 Conexión con Otros Módulos
+
+### Este Módulo te Prepara Para
+- ➡️ **Módulo 03**: Instalación de Minikube (verás componentes en acción)
+- ➡️ **Módulo 04+**: Creación de recursos (entenderás dónde viven)
+- ➡️ **Módulo 08-09**: Networking (kube-proxy, Services, Ingress)
+- ➡️ **Módulo 17-18**: RBAC (API Server, autenticación)
+
+### Relación con Módulo Anterior
+```
+Módulo 01: ¿QUÉ es K8s? ¿POR QUÉ existe?
+              ↓
+Módulo 02: ¿CÓMO funciona? (arquitectura) ← ESTÁS AQUÍ
+              ↓
+Módulo 03: Instalación (ver arquitectura real)
+```
+
+---
+
+## 🎯 Objetivos del Módulo (Expandido)
+
+Al completar este módulo serás capaz de:
+
+- ✅ **Identificar todos los componentes** del Control Plane y explicar su función
+- ✅ **Entender la arquitectura** de Worker Nodes y cómo ejecutan workloads
+- ✅ **Explicar la comunicación** entre componentes (API Server como centro)
+- ✅ **Diagnosticar problemas básicos** usando kubectl para verificar estado
+- ✅ **Visualizar el flujo** completo de un request (kubectl → API → Scheduler → kubelet → Pod)
+- ✅ **Comprender Alta Disponibilidad** con múltiples masters y etcd distribuido
+- ✅ **Reconocer addons** esenciales (CoreDNS, Metrics Server, Dashboard)
 
 ---
 
@@ -542,7 +790,7 @@ graph TB
 - **Funciones de prioridad**: 10+ algoritmos de scoring
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│  ┌─────────────────────────────────────────────────────────────────────────────────────┐│
+│  ┌────────────────────────────────────────────────────────────────────────────────────┐ │
 │  │                           📊 SCORING PHASE (Priorities)                            │ │
 │  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
 │  │  │⚖️ Load Balancing│ │📏 Resource Util │ │🎯 Affinity Pref │ │🌍 Zone Spread   │   │ │
@@ -703,79 +951,79 @@ graph TB
 **Función**: Conjunto de control loops que mantienen el estado deseado del cluster
 **🔄 Control Loop Pattern (Reconciliation)**:
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                          🎮 CONTROLLER MANAGER - CONTROL LOOPS                         │
-│                                                                                         │
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                          🎮 CONTROLLER MANAGER - CONTROL LOOPS                           │
+│                                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                              🔄 RECONCILIATION PATTERN                             │ │
+│  │                              🔄 RECONCILIATION PATTERN                              │ │
 │  │                                                                                     │ │
-│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐          │ │
-│  │  │👁️ Watch API │───►│🎯 Desired   │───►│📊 Current   │───►│🔄 Reconcile │          │ │
-│  │  │   Events    │    │   State     │    │   State     │    │   Actions   │          │ │
-│  │  │             │    │             │    │             │    │             │          │ │
-│  │  │- Create     │    │- Spec       │    │- Status     │    │- Create     │          │ │
-│  │  │- Update     │    │- Replicas: 3│    │- Ready: 2   │    │- Update     │          │ │
-│  │  │- Delete     │    │- Image      │    │- Conditions │    │- Delete     │          │ │
-│  │  │- Error      │    │- Resources  │    │- Metrics    │    │- Scale      │          │ │
-│  │  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘          │ │
+│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐           │ │
+│  │  │👁️ Watch API │───►│🎯 Desired   │───►│📊 Current   │───►│🔄 Reconcile │           │ │
+│  │  │   Events    │    │   State     │    │   State     │    │   Actions   │           │ │
+│  │  │             │    │             │    │             │    │             │           │ │
+│  │  │- Create     │    │- Spec       │    │- Status     │    │- Create     │           │ │
+│  │  │- Update     │    │- Replicas: 3│    │- Ready: 2   │    │- Update     │           │ │
+│  │  │- Delete     │    │- Image      │    │- Conditions │    │- Delete     │           │ │
+│  │  │- Error      │    │- Resources  │    │- Metrics    │    │- Scale      │           │ │
+│  │  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘           │ │
 │  │          ▲                                                        │                 │ │
 │  │          │                                                        ▼                 │ │
 │  │          └────────────────────────── CONTINUOUS LOOP ─────────────┘                 │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
+│                                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                            🚀 WORKLOAD CONTROLLERS                                 │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │📦 Deployment    │ │📋 ReplicaSet    │ │🎫 Job           │ │⏰ CronJob       │   │ │
-│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │   │ │
-│  │  │                 │ │                 │ │                 │ │                 │   │ │
-│  │  │🔄 Rolling Update│ │📊 Scale Up/Down │ │✅ Completion    │ │📅 Schedule      │   │ │
-│  │  │📚 Revisions     │ │🔄 Pod Recreation│ │🔁 Retry Logic   │ │📈 History Mgmt  │   │ │
-│  │  │⏪ Rollback      │ │⚖️ Load Balance  │ │⏸️ Parallelism   │ │🕐 Timezone      │   │ │
-│  │  │🎯 Strategy      │ │🏥 Health Check  │ │🔒 Security Ctx  │ │🚫 Suspend       │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                            🚀 WORKLOAD CONTROLLERS                                  │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │📦 Deployment    │ │📋 ReplicaSet    │ │🎫 Job           │ │⏰ CronJob       │    │ │
+│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │    │ │
+│  │  │                 │ │                 │ │                 │ │                 │    │ │
+│  │  │🔄 Rolling Update│ │📊 Scale Up/Down │ │✅ Completion    │ │📅 Schedule      │    │ │
+│  │  │📚 Revisions     │ │🔄 Pod Recreation│ │🔁 Retry Logic   │ │📈 History Mgmt  │    │ │
+│  │  │⏪ Rollback      │ │⚖️ Load Balance  │ │⏸️ Parallelism   │ │🕐 Timezone      │    │ │
+│  │  │🎯 Strategy      │ │🏥 Health Check  │ │🔒 Security Ctx  │ │🚫 Suspend       │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
+│                                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                           🖥️ INFRASTRUCTURE CONTROLLERS                            │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │🖥️ Node          │ │🔄 NodeLifecycle │ │🌐 Service       │ │🔗 Endpoint      │   │ │
-│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │   │ │
-│  │  │                 │ │                 │ │                 │ │                 │   │ │
-│  │  │💓 Health Mon    │ │🟢 Ready/NotReady│ │⚖️ Load Balancer │ │🎯 Service Disc  │   │ │
-│  │  │⏰ Lease Mgmt    │ │🏷️ Taint Mgmt    │ │🌐 ClusterIP     │ │📍 Pod IP Track  │   │ │
-│  │  │🚫 Eviction      │ │👥 Pod Eviction  │ │🔄 Sync External │ │🔍 Health Check  │   │ │
-│  │  │📊 Conditions    │ │🕐 Grace Period  │ │📡 External IP   │ │📊 Ready Count   │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                           🖥️ INFRASTRUCTURE CONTROLLERS                             │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │🖥️ Node          │ │🔄 NodeLifecycle │ │🌐 Service       │ │🔗 Endpoint      │    │ │
+│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │    │ │
+│  │  │                 │ │                 │ │                 │ │                 │    │ │
+│  │  │💓 Health Mon    │ │🟢 Ready/NotReady│ │⚖️ Load Balancer │ │🎯 Service Disc  │    │ │
+│  │  │⏰ Lease Mgmt    │ │🏷️ Taint Mgmt    │ │🌐 ClusterIP     │ │📍 Pod IP Track  │    │ │
+│  │  │🚫 Eviction      │ │👥 Pod Eviction  │ │🔄 Sync External │ │🔍 Health Check  │    │ │
+│  │  │📊 Conditions    │ │🕐 Grace Period  │ │📡 External IP   │ │📊 Ready Count   │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
+│                                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                            🔐 SECURITY & ACCESS CONTROLLERS                        │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │👤 ServiceAccount│ │🛡️ RBAC          │ │📁 Namespace     │ │🎫 Token         │   │ │
-│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │   │ │
-│  │  │                 │ │                 │ │                 │ │                 │   │ │
-│  │  │🔑 Token Mgmt    │ │👥 Role Mgmt     │ │🔄 Lifecycle     │ │⏰ Rotation      │   │ │
-│  │  │🔐 Secret Inject │ │🔐 Permission    │ │🧹 Cleanup       │ │🚫 Expiration    │   │ │
-│  │  │🔗 RBAC Integr   │ │📋 Updates       │ │🏁 Finalizers    │ │🔐 Auto-mount    │   │ │
-│  │  │📊 Auto-creation │ │🔍 Access Control│ │🗑️ Resource Del  │ │📊 Usage Track   │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                            🔐 SECURITY & ACCESS CONTROLLERS                         │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │👤 ServiceAccount│ │🛡️ RBAC          │ │📁 Namespace     │ │🎫 Token         │    │ │
+│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │    │ │
+│  │  │                 │ │                 │ │                 │ │                 │    │ │
+│  │  │🔑 Token Mgmt    │ │👥 Role Mgmt     │ │🔄 Lifecycle     │ │⏰ Rotation      │    │ │
+│  │  │🔐 Secret Inject │ │🔐 Permission    │ │🧹 Cleanup       │ │🚫 Expiration    │    │ │
+│  │  │🔗 RBAC Integr   │ │📋 Updates       │ │🏁 Finalizers    │ │🔐 Auto-mount    │    │ │
+│  │  │📊 Auto-creation │ │🔍 Access Control│ │🗑️ Resource Del  │ │📊 Usage Track   │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
+│                                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                           💾 STORAGE & RESOURCE CONTROLLERS                        │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │💾 PersistentVol │ │📊 ResourceQuota │ │🚫 LimitRange    │ │🗂️ CSI           │   │ │
-│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │   │ │
-│  │  │                 │ │                 │ │                 │ │                 │   │ │
-│  │  │🔗 Volume Bind   │ │📈 Usage Track   │ │⚖️ Resource Limit│ │🔌 Driver Mgmt   │   │ │
-│  │  │🏭 Provisioning  │ │🚫 Limit Enforce │ │🔍 Validation    │ │📦 Volume Attach │   │ │
-│  │  │📊 Storage Class │ │📊 Reporting     │ │📋 Default Set   │ │🔄 Mount/Unmount │   │ │
-│  │  │🔄 Status Update │ │🔔 Alerts        │ │🎯 Policy Apply  │ │🛠️ Capabilities  │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                           💾 STORAGE & RESOURCE CONTROLLERS                         │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │💾 PersistentVol │ │📊 ResourceQuota │ │🚫 LimitRange    │ │🗂️ CSI           │    │ │
+│  │  │   Controller    │ │   Controller    │ │   Controller    │ │   Controller    │    │ │
+│  │  │                 │ │                 │ │                 │ │                 │    │ │
+│  │  │🔗 Volume Bind   │ │📈 Usage Track   │ │⚖️ Resource Limit│ │🔌 Driver Mgmt   │    │ │
+│  │  │🏭 Provisioning  │ │🚫 Limit Enforce │ │🔍 Validation    │ │📦 Volume Attach │    │ │
+│  │  │📊 Storage Class │ │📊 Reporting     │ │📋 Default Set   │ │🔄 Mount/Unmount │    │ │
+│  │  │🔄 Status Update │ │🔔 Alerts        │ │🎯 Policy Apply  │ │🛠️ Capabilities  │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+│                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Ejemplo de Controller en acción:**
@@ -913,54 +1161,54 @@ graph TB
 
 **☁️ Integración con Proveedores de Nube:**
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                         ☁️ CLOUD CONTROLLER MANAGER                                    │
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                         ☁️ CLOUD CONTROLLER MANAGER                                      │
+│                                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                           🖥️ NODE LIFECYCLE MANAGEMENT                              │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │🚀 Provisioning  │ │💀 Termination   │ │💓 Health Mon    │ │📈 Auto-scaling  │    │ │
+│  │  │   - Instance Sz │ │   - Graceful    │ │   - Node Ready  │ │   - Scale Up    │    │ │
+│  │  │   - AMI/Image   │ │   - Drain Pods  │ │   - Resource    │ │   - Scale Down  │    │ │
+│  │  │   - Security Gr │ │   - Cleanup     │ │   - Network     │ │   - Triggers    │    │ │
+│  │  │   - Tagging     │ │   - Spot Handle │ │   - Storage     │ │   - Policies    │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                         ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                           🛣️ NETWORK & ROUTING MANAGEMENT                           │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │🌐 Route Tables  │ │🔥 Firewall      │ │🏢 VPC/VNet      │ │📡 DNS           │    │ │
+│  │  │   - Pod CIDR    │ │   - Security Gr │ │   - Subnets     │ │   - Service     │    │ │
+│  │  │   - Service     │ │   - Network ACL │ │   - Peering     │ │   - Discovery   │    │ │
+│  │  │   - External    │ │   - Ingress     │ │   - Gateways    │ │   - External    │    │ │
+│  │  │   - Multi-zone  │ │   - Egress      │ │   - NAT         │ │   - Resolution  │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                         ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                           🌐 SERVICE & LOAD BALANCER MANAGEMENT                     │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │⚖️ Load Balancer │ │🔍 Health Checks │ │📊 Traffic Dist  │ │🔐 SSL/TLS       │    │ │
+│  │  │   - External LB │ │   - HTTP/TCP    │ │   - Round Robin │ │   - Cert Mgmt   │    │ │
+│  │  │   - Internal LB │ │   - Custom      │ │   - Weighted    │ │   - Termination │    │ │
+│  │  │   - Layer 4/7   │ │   - Endpoints   │ │   - Geolocation │ │   - SNI         │    │ │
+│  │  │   - Multi-zone  │ │   - Failover    │ │   - Sticky Sess │ │   - Auto-renew  │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                         ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                            💾 STORAGE & VOLUME MANAGEMENT                           │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │🏭 Dynamic Prov  │ │📸 Snapshots     │ │🔄 Backup        │ │📊 Storage Class │    │ │
+│  │  │   - PV Creation │ │   - Point-time  │ │   - Automated   │ │   - Performance │    │ │
+│  │  │   - Auto-attach │ │   - Incremental │ │   - Retention   │ │   - Encryption  │    │ │
+│  │  │   - Mount/Unmnt │ │   - Cross-region│ │   - Restore     │ │   - Replication │    │ │
+│  │  │   - Resize      │ │   - Scheduling  │ │   - Compliance  │ │   - Access Mode │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                           🖥️ NODE LIFECYCLE MANAGEMENT                             │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │🚀 Provisioning  │ │💀 Termination   │ │💓 Health Mon    │ │📈 Auto-scaling  │   │ │
-│  │  │   - Instance Sz │ │   - Graceful    │ │   - Node Ready  │ │   - Scale Up    │   │ │
-│  │  │   - AMI/Image   │ │   - Drain Pods  │ │   - Resource    │ │   - Scale Down  │   │ │
-│  │  │   - Security Gr │ │   - Cleanup     │ │   - Network     │ │   - Triggers    │   │ │
-│  │  │   - Tagging     │ │   - Spot Handle │ │   - Storage     │ │   - Policies    │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
-│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
-│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                           🛣️ NETWORK & ROUTING MANAGEMENT                          │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │🌐 Route Tables  │ │🔥 Firewall      │ │🏢 VPC/VNet      │ │📡 DNS           │   │ │
-│  │  │   - Pod CIDR    │ │   - Security Gr │ │   - Subnets     │ │   - Service     │   │ │
-│  │  │   - Service     │ │   - Network ACL │ │   - Peering     │ │   - Discovery   │   │ │
-│  │  │   - External    │ │   - Ingress     │ │   - Gateways    │ │   - External    │   │ │
-│  │  │   - Multi-zone  │ │   - Egress      │ │   - NAT         │ │   - Resolution  │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
-│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
-│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                           🌐 SERVICE & LOAD BALANCER MANAGEMENT                    │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │⚖️ Load Balancer │ │🔍 Health Checks │ │📊 Traffic Dist  │ │🔐 SSL/TLS       │   │ │
-│  │  │   - External LB │ │   - HTTP/TCP    │ │   - Round Robin │ │   - Cert Mgmt   │   │ │
-│  │  │   - Internal LB │ │   - Custom      │ │   - Weighted    │ │   - Termination │   │ │
-│  │  │   - Layer 4/7   │ │   - Endpoints   │ │   - Geolocation │ │   - SNI         │   │ │
-│  │  │   - Multi-zone  │ │   - Failover    │ │   - Sticky Sess │ │   - Auto-renew  │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
-│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
-│  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                            💾 STORAGE & VOLUME MANAGEMENT                          │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │🏭 Dynamic Prov  │ │📸 Snapshots     │ │🔄 Backup        │ │📊 Storage Class │   │ │
-│  │  │   - PV Creation │ │   - Point-time  │ │   - Automated   │ │   - Performance │   │ │
-│  │  │   - Auto-attach │ │   - Incremental │ │   - Retention   │ │   - Encryption  │   │ │
-│  │  │   - Mount/Unmnt │ │   - Cross-region│ │   - Restore     │ │   - Replication │   │ │
-│  │  │   - Resize      │ │   - Scheduling  │ │   - Compliance  │ │   - Access Mode │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
-│  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Responsabilidades por Cloud Provider:**
@@ -1155,65 +1403,65 @@ graph TB
 
 **🔄 Ciclo de Vida Completo de un Pod:**
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                               🤖 kubelet POD LIFECYCLE                                  │
-│                                                                                         │
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                               🤖 kubelet POD LIFECYCLE                                   │
+│                                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                            📥 POD SPECIFICATION PROCESSING                         │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │📋 Manifest      │ │🔍 Validation    │ │📊 Resource      │ │🔐 Security      │   │ │
-│  │  │   Reception     │ │   - Schema      │ │   Allocation    │ │   Context       │   │ │
-│  │  │   - API Watch   │ │   - Semantic    │ │   - CPU/Memory  │ │   - User/Group  │   │ │
-│  │  │   - Config File │ │   - Policy      │ │   - Storage     │ │   - Capabilities│   │ │
-│  │  │   - Static Pods │ │   - Admission   │ │   - Network     │ │   - SELinux     │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                            📥 POD SPECIFICATION PROCESSING                          │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │📋 Manifest      │ │🔍 Validation    │ │📊 Resource      │ │🔐 Security      │    │ │
+│  │  │   Reception     │ │   - Schema      │ │   Allocation    │ │   Context       │    │ │
+│  │  │   - API Watch   │ │   - Semantic    │ │   - CPU/Memory  │ │   - User/Group  │    │ │
+│  │  │   - Config File │ │   - Policy      │ │   - Storage     │ │   - Capabilities│    │ │
+│  │  │   - Static Pods │ │   - Admission   │ │   - Network     │ │   - SELinux     │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
+│                                         ▼                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                              🔄 INITIALIZATION PHASE                               │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │🌐 Network Setup │ │💾 Volume Mount  │ │🔧 Init Container│ │📋 Environment   │   │ │
-│  │  │   - Pod IP      │ │   - PV Binding  │ │   - Pre-work    │ │   - ConfigMaps  │   │ │
-│  │  │   - DNS Config  │ │   - Mount Points│ │   - Dependencies│ │   - Secrets     │   │ │
-│  │  │   - Network Pol │ │   - Permissions │ │   - Setup Tasks │ │   - Variables   │   │ │
-│  │  │   - CNI Plugin  │ │   - Encryption  │ │   - Exit Codes  │ │   - Service Acc │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                              🔄 INITIALIZATION PHASE                                │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │🌐 Network Setup │ │💾 Volume Mount  │ │🔧 Init Container│ │📋 Environment   │    │ │
+│  │  │   - Pod IP      │ │   - PV Binding  │ │   - Pre-work    │ │   - ConfigMaps  │    │ │
+│  │  │   - DNS Config  │ │   - Mount Points│ │   - Dependencies│ │   - Secrets     │    │ │
+│  │  │   - Network Pol │ │   - Permissions │ │   - Setup Tasks │ │   - Variables   │    │ │
+│  │  │   - CNI Plugin  │ │   - Encryption  │ │   - Exit Codes  │ │   - Service Acc │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
+│                                         ▼                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                             🚀 CONTAINER EXECUTION                                 │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │📥 Image Pull    │ │🐳 Container     │ │💓 Health Checks │ │📊 Resource      │   │ │
-│  │  │   - Registry    │ │   Creation      │ │   - Liveness    │ │   Monitoring    │   │ │
-│  │  │   - Auth        │ │   - Runtime     │ │   - Readiness   │ │   - CPU Usage   │   │ │
-│  │  │   - Layers      │ │   - Security    │ │   - Startup     │ │   - Memory      │   │ │
-│  │  │   - Caching     │ │   - Namespaces  │ │   - Custom      │ │   - Disk I/O    │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                             🚀 CONTAINER EXECUTION                                  │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │📥 Image Pull    │ │🐳 Container     │ │💓 Health Checks │ │📊 Resource      │    │ │
+│  │  │   - Registry    │ │   Creation      │ │   - Liveness    │ │   Monitoring    │    │ │
+│  │  │   - Auth        │ │   - Runtime     │ │   - Readiness   │ │   - CPU Usage   │    │ │
+│  │  │   - Layers      │ │   - Security    │ │   - Startup     │ │   - Memory      │    │ │
+│  │  │   - Caching     │ │   - Namespaces  │ │   - Custom      │ │   - Disk I/O    │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
+│                                         ▼                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                              📊 MONITORING & REPORTING                             │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │💓 Status Report │ │📝 Event Gen     │ │🔔 Alerts        │ │📈 Metrics       │   │ │
-│  │  │   - Pod Status  │ │   - Lifecycle   │ │   - Failures    │ │   - Performance │   │ │
-│  │  │   - Node Health │ │   - Errors      │ │   - Resource    │ │   - Availability│   │ │
-│  │  │   - Conditions  │ │   - Warnings    │ │   - Threshold   │ │   - Utilization │   │ │
-│  │  │   - Heartbeat   │ │   - Audit       │ │   - SLA         │ │   - Trends      │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                              📊 MONITORING & REPORTING                              │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │💓 Status Report │ │📝 Event Gen     │ │🔔 Alerts        │ │📈 Metrics       │    │ │
+│  │  │   - Pod Status  │ │   - Lifecycle   │ │   - Failures    │ │   - Performance │    │ │
+│  │  │   - Node Health │ │   - Errors      │ │   - Resource    │ │   - Availability│    │ │
+│  │  │   - Conditions  │ │   - Warnings    │ │   - Threshold   │ │   - Utilization │    │ │
+│  │  │   - Heartbeat   │ │   - Audit       │ │   - SLA         │ │   - Trends      │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                         ▼                                               │
+│                                         ▼                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                              🧹 CLEANUP & TERMINATION                              │ │
-│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │ │
-│  │  │⏹️ Graceful Stop │ │🗑️ Resource      │ │🧹 Garbage       │ │📋 Final Status  │   │ │
-│  │  │   - SIGTERM     │ │   Cleanup       │ │   Collection    │ │   - Exit Codes  │   │ │
-│  │  │   - Grace Period│ │   - Volumes     │ │   - Logs        │ │   - Timestamps  │   │ │
-│  │  │   - SIGKILL     │ │   - Network     │ │   - Images      │ │   - Conditions  │   │ │
-│  │  │   - Exit Hooks  │ │   - Storage     │ │   - Containers  │ │   - Events      │   │ │
-│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘   │ │
+│  │                              🧹 CLEANUP & TERMINATION                               │ │
+│  │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │ │
+│  │  │⏹️ Graceful Stop │ │🗑️ Resource      │ │🧹 Garbage       │ │📋 Final Status  │    │ │
+│  │  │   - SIGTERM     │ │   Cleanup       │ │   Collection    │ │   - Exit Codes  │    │ │
+│  │  │   - Grace Period│ │   - Volumes     │ │   - Logs        │ │   - Timestamps  │    │ │
+│  │  │   - SIGKILL     │ │   - Network     │ │   - Images      │ │   - Conditions  │    │ │
+│  │  │   - Exit Hooks  │ │   - Storage     │ │   - Containers  │ │   - Events      │    │ │
+│  │  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘    │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                         │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+│                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 #### **3.2 kube-proxy - Networking**

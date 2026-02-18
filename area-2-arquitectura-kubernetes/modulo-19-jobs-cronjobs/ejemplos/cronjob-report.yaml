@@ -1,0 +1,298 @@
+# ========================================
+# CronJob - Generación de Reportes
+# ========================================
+# 
+# Descripción:
+#   CronJob que genera reportes de ventas cada Lunes a las 8:00 AM
+#   y los envía por email.
+#
+# Uso:
+#   kubectl apply -f cronjob-report.yaml
+#   kubectl get cronjobs
+#   kubectl describe cronjob weekly-sales-report
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-sales-report
+  labels:
+    app: reporting
+    type: sales
+    frequency: weekly
+spec:
+  # Schedule: Lunes a las 8:00 AM
+  schedule: "0 8 * * 1"
+  
+  # Política de concurrencia
+  concurrencyPolicy: Replace  # Si anterior aún corre, cancelarlo y crear nuevo
+  
+  # Gestión de histórico
+  successfulJobsHistoryLimit: 4   # Últimos 4 reportes (1 mes)
+  failedJobsHistoryLimit: 2
+  
+  startingDeadlineSeconds: 600    # 10 minutos deadline
+  
+  jobTemplate:
+    spec:
+      backoffLimit: 1  # Solo 1 reintento (reportes no son críticos)
+      activeDeadlineSeconds: 900  # 15 minutos max
+      
+      template:
+        metadata:
+          labels:
+            app: reporting
+            type: sales
+        spec:
+          containers:
+          - name: report-generator
+            image: python:3.11-slim
+            command:
+            - python3
+            - -c
+            - |
+              import os
+              from datetime import datetime, timedelta
+              
+              print("="*60)
+              print("Weekly Sales Report Generator")
+              print("="*60)
+              
+              # Calcular semana anterior
+              today = datetime.now()
+              week_start = today - timedelta(days=7)
+              week_end = today
+              
+              print(f"Report Period: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}")
+              print()
+              
+              # Simular consulta a base de datos
+              print("[1/4] Connecting to database...")
+              import time
+              time.sleep(2)
+              
+              print("[2/4] Fetching sales data...")
+              time.sleep(3)
+              
+              # Simular generación de reporte
+              print("[3/4] Generating report...")
+              report = f"""
+              WEEKLY SALES REPORT
+              Period: {week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}
+              
+              Total Sales: $152,450.00
+              Total Orders: 1,247
+              Average Order: $122.25
+              Top Product: Widget Pro X
+              
+              Status: ✅ Target achieved (102% of goal)
+              """
+              print(report)
+              time.sleep(2)
+              
+              print("[4/4] Sending email...")
+              # En producción: usar SMTP o API de email
+              time.sleep(2)
+              
+              print("="*60)
+              print("✅ Report generated and sent successfully!")
+              print("="*60)
+            
+            env:
+            # Configuración de base de datos
+            - name: DB_HOST
+              value: "mysql-service"
+            - name: DB_NAME
+              value: "sales_db"
+            
+            # Configuración de email
+            - name: SMTP_SERVER
+              value: "smtp.gmail.com"
+            - name: SMTP_PORT
+              value: "587"
+            - name: EMAIL_TO
+              value: "manager@company.com"
+            - name: EMAIL_FROM
+              value: "reports@company.com"
+            
+            # Credenciales desde Secret
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+                  optional: true
+            
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smtp-credentials
+                  key: password
+                  optional: true
+            
+            resources:
+              requests:
+                cpu: "250m"
+                memory: "256Mi"
+              limits:
+                cpu: "500m"
+                memory: "512Mi"
+          
+          restartPolicy: OnFailure
+
+---
+
+# ========================================
+# CronJob - Limpieza de Logs Antiguos
+# ========================================
+# 
+# Descripción:
+#   CronJob que elimina logs antiguos el primer día de cada mes.
+#   Mantiene últimos 90 días de logs.
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-old-logs
+  labels:
+    app: maintenance
+    type: cleanup
+spec:
+  # Schedule: Primer día del mes a las 3:00 AM
+  schedule: "0 3 1 * *"
+  
+  concurrencyPolicy: Forbid  # No permitir múltiples limpiezas
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600  # 1 hora max
+      
+      template:
+        spec:
+          containers:
+          - name: cleanup
+            image: busybox:1.35
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=========================================="
+              echo "Log Cleanup Job Started"
+              echo "Date: $(date)"
+              echo "=========================================="
+              
+              # Directorio de logs
+              LOG_DIR="/logs"
+              RETENTION_DAYS=90
+              
+              echo "Searching for logs older than ${RETENTION_DAYS} days..."
+              
+              # Encontrar y eliminar logs antiguos
+              DELETED=$(find ${LOG_DIR} -name "*.log" -mtime +${RETENTION_DAYS} -type f -print -delete | wc -l)
+              
+              echo "✅ Deleted ${DELETED} old log files"
+              
+              # Mostrar espacio liberado
+              echo ""
+              echo "Disk usage after cleanup:"
+              df -h ${LOG_DIR}
+              
+              echo "=========================================="
+              echo "Cleanup completed successfully!"
+              echo "=========================================="
+            
+            volumeMounts:
+            - name: log-storage
+              mountPath: /logs
+            
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "128Mi"
+              limits:
+                cpu: "200m"
+                memory: "256Mi"
+          
+          volumes:
+          - name: log-storage
+            persistentVolumeClaim:
+              claimName: logs-pvc
+          
+          restartPolicy: OnFailure
+
+---
+
+# ========================================
+# CronJob - Health Check Externo
+# ========================================
+# 
+# Descripción:
+#   CronJob que ejecuta health checks cada 5 minutos
+#   y notifica si hay problemas.
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: health-check
+  labels:
+    app: monitoring
+    type: health-check
+spec:
+  # Schedule: Cada 5 minutos
+  schedule: "*/5 * * * *"
+  
+  concurrencyPolicy: Replace  # Reemplazar si anterior está colgado
+  successfulJobsHistoryLimit: 1  # Solo último exitoso
+  failedJobsHistoryLimit: 3      # Últimos 3 fallos
+  
+  jobTemplate:
+    spec:
+      backoffLimit: 0  # No reintentar (health checks son frecuentes)
+      activeDeadlineSeconds: 60  # 1 minuto max
+      
+      template:
+        spec:
+          containers:
+          - name: health-checker
+            image: curlimages/curl:8.1.2
+            command:
+            - sh
+            - -c
+            - |
+              echo "Running health checks..."
+              
+              # Check API endpoint
+              if curl -f -s http://api-service:8080/health > /dev/null; then
+                echo "✅ API is healthy"
+              else
+                echo "❌ API is down!"
+                exit 1
+              fi
+              
+              # Check database
+              if curl -f -s http://db-proxy:8080/health > /dev/null; then
+                echo "✅ Database is healthy"
+              else
+                echo "❌ Database is down!"
+                exit 1
+              fi
+              
+              echo "All health checks passed!"
+            
+            resources:
+              requests:
+                cpu: "50m"
+                memory: "64Mi"
+              limits:
+                cpu: "100m"
+                memory: "128Mi"
+          
+          restartPolicy: Never

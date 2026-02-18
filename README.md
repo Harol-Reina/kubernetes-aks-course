@@ -111,6 +111,15 @@ Cada área incluye laboratorios hands-on donde aplicarás los conceptos aprendid
 - [**Glossario**](./recursos/glossario.md): Términos y conceptos clave
 - [**Recursos adicionales**](./recursos/): Enlaces, documentación y herramientas
 
+### 📋 Documentación del Curso
+
+- [**GUIA-ESTRUCTURA-MODULOS.md**](./GUIA-ESTRUCTURA-MODULOS.md): Estándares pedagógicos y estructura
+- [**ESTADO-CURSO.md**](./ESTADO-CURSO.md): Estado actual de completitud por módulo
+- [**PLAN-CERTIFICACIONES.md**](./PLAN-CERTIFICACIONES.md): Plan detallado para CKA, CKAD y AKS
+- [**ROADMAP-VISUAL.md**](./ROADMAP-VISUAL.md): Visualización del roadmap de certificaciones
+- [**RESUMEN-EJECUTIVO.md**](./RESUMEN-EJECUTIVO.md): Análisis ejecutivo y decisiones estratégicas
+- [**PLANTILLA-MODULOS.md**](./PLANTILLA-MODULOS.md): Plantillas para crear nuevos módulos
+
 ## 🚀 Cómo Empezar
 
 1. **Clona este repositorio**:
@@ -136,14 +145,25 @@ Cada área incluye laboratorios hands-on donde aplicarás los conceptos aprendid
 
 Al completar este curso estarás preparado para:
 
-- **Certified Kubernetes Administrator (CKA)**
-- **Azure Kubernetes Service (AKS) certifications**
-- **Certified Kubernetes Application Developer (CKAD)**
+- **✅ Certified Kubernetes Application Developer (CKAD)** - 95%+ cobertura
+- **⚠️ Certified Kubernetes Administrator (CKA)** - 85%+ cobertura (módulos avanzados en desarrollo)
+- **⚠️ Azure Kubernetes Service (AKS) Specialty** - 90%+ cobertura
+
+> 📋 **Ver [PLAN-CERTIFICACIONES.md](./PLAN-CERTIFICACIONES.md)** para roadmap detallado de completitud
+
+### Estado de Cobertura por Certificación
+
+| Certificación | Cobertura Actual | Módulos Completos | En Desarrollo |
+|---------------|------------------|-------------------|---------------|
+| **CKAD** | 85-90% ✅ | 18 módulos | Jobs, CronJobs, Helm |
+| **CKA** | 60-65% ⚠️ | 18 módulos | Cluster setup, Troubleshooting, Scheduling |
+| **AKS** | 70-75% ⚠️ | Áreas 3-4 | ACR profundo, Policy, Defender |
 
 ### Criterios de Evaluación
 - Laboratorios prácticos completados (70%)
 - Proyecto final (30%)
 - Participación en discusiones técnicas
+- Simulaciones de examen (recomendado)
 
 ## 🤝 Contribuciones
 

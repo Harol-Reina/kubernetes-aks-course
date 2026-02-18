@@ -1,0 +1,265 @@
+# ════════════════════════════════════════════════════════════════════════════
+# EJEMPLO 2: Init Container - Wait for Database
+# ════════════════════════════════════════════════════════════════════════════
+#
+# DESCRIPCIÓN:
+#   Init container que espera a que PostgreSQL esté disponible antes de
+#   iniciar la aplicación. Patrón wait-for con timeout.
+#
+# CASO DE USO:
+#   - Aplicaciones que dependen de bases de datos
+#   - Evitar CrashLoopBackOff por DB no disponible
+#   - Garantizar que dependencies estén listas
+#
+# PRERREQUISITOS:
+#   # Crear servicio de PostgreSQL:
+#   kubectl run postgres --image=postgres:15-alpine --env="POSTGRES_PASSWORD=secret"
+#   kubectl expose pod postgres --port=5432
+#
+# APLICAR:
+#   kubectl apply -f init-wait-database.yaml
+#
+# VERIFICAR:
+#   kubectl get pod app-wait-db -w
+#   kubectl logs app-wait-db -c wait-for-postgres
+#   kubectl logs app-wait-db -c app
+#
+# LIMPIAR:
+#   kubectl delete -f init-wait-database.yaml
+#   kubectl delete pod postgres
+#   kubectl delete service postgres
+#
+# ════════════════════════════════════════════════════════════════════════════
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-wait-db
+  labels:
+    app: myapp
+    pattern: wait-for-database
+  annotations:
+    description: "Wait-for pattern con timeout"
+spec:
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # INIT CONTAINER: Wait for PostgreSQL
+  # ═══════════════════════════════════════════════════════════════════════════
+  initContainers:
+  
+  - name: wait-for-postgres
+    image: busybox:1.35
+    
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Esperando a que PostgreSQL esté disponible..."
+      echo "Database Host: ${DATABASE_HOST}"
+      echo "Database Port: ${DATABASE_PORT}"
+      echo "Timeout: ${WAIT_TIMEOUT} segundos"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Timeout de 5 minutos (300 segundos)
+      TIMEOUT=${WAIT_TIMEOUT:-300}
+      ELAPSED=0
+      RETRY_INTERVAL=2
+      
+      # Loop hasta que DB esté disponible o timeout
+      until nc -z ${DATABASE_HOST} ${DATABASE_PORT} 2>/dev/null || [ $ELAPSED -ge $TIMEOUT ]; do
+        echo "⏳ [${ELAPSED}s/${TIMEOUT}s] PostgreSQL no disponible, reintentando en ${RETRY_INTERVAL}s..."
+        sleep $RETRY_INTERVAL
+        ELAPSED=$((ELAPSED + RETRY_INTERVAL))
+      done
+      
+      # Verificar si hubo timeout
+      if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo "════════════════════════════════════════════════════════"
+        echo "❌ TIMEOUT: PostgreSQL no disponible después de ${TIMEOUT}s"
+        echo "════════════════════════════════════════════════════════"
+        exit 1
+      fi
+      
+      echo "════════════════════════════════════════════════════════"
+      echo "✅ PostgreSQL está disponible!"
+      echo "Tiempo transcurrido: ${ELAPSED}s"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Verificaciones adicionales (opcional)
+      echo "Realizando verificación DNS..."
+      nslookup ${DATABASE_HOST} || echo "⚠️  DNS no resuelve (normal en algunos clusters)"
+      
+      echo "✅ Init container completado exitosamente"
+    
+    # Environment variables
+    env:
+    - name: DATABASE_HOST
+      value: "postgres.default.svc.cluster.local"
+    
+    - name: DATABASE_PORT
+      value: "5432"
+    
+    - name: WAIT_TIMEOUT
+      value: "300"  # 5 minutos
+    
+    # Resources
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+  
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MAIN CONTAINER: Application
+  # ═══════════════════════════════════════════════════════════════════════════
+  containers:
+  
+  - name: app
+    image: postgres:15-alpine
+    
+    # Simular app que conecta a DB
+    command:
+    - sh
+    - -c
+    - |
+      echo "════════════════════════════════════════════════════════"
+      echo "Aplicación iniciando..."
+      echo "Conectando a PostgreSQL en ${DATABASE_HOST}:${DATABASE_PORT}"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Test de conexión
+      export PGPASSWORD=${DATABASE_PASSWORD}
+      if psql -h ${DATABASE_HOST} -U postgres -d postgres -c "SELECT version();" > /dev/null 2>&1; then
+        echo "✅ Conexión a PostgreSQL exitosa!"
+        psql -h ${DATABASE_HOST} -U postgres -d postgres -c "SELECT version();"
+      else
+        echo "❌ ERROR: No se pudo conectar a PostgreSQL"
+        exit 1
+      fi
+      
+      echo "════════════════════════════════════════════════════════"
+      echo "Aplicación corriendo... (sleep infinito para demo)"
+      echo "════════════════════════════════════════════════════════"
+      
+      # Mantener container corriendo
+      tail -f /dev/null
+    
+    env:
+    - name: DATABASE_HOST
+      value: "postgres.default.svc.cluster.local"
+    
+    - name: DATABASE_PORT
+      value: "5432"
+    
+    - name: DATABASE_PASSWORD
+      value: "secret"  # En producción usar Secret
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  
+  restartPolicy: Always
+
+---
+
+# ════════════════════════════════════════════════════════════════════════════
+# TESTING SCENARIOS
+# ════════════════════════════════════════════════════════════════════════════
+#
+# ESCENARIO 1: Database disponible inmediatamente
+# -----------------------------------------------
+# 1. Crear PostgreSQL primero:
+#    kubectl run postgres --image=postgres:15-alpine --env="POSTGRES_PASSWORD=secret"
+#    kubectl expose pod postgres --port=5432
+#
+# 2. Aplicar este Pod:
+#    kubectl apply -f init-wait-database.yaml
+#
+# 3. Observar que init completa rápidamente:
+#    kubectl logs app-wait-db -c wait-for-postgres
+#
+# ESCENARIO 2: Database no disponible (timeout)
+# ----------------------------------------------
+# 1. Aplicar Pod SIN crear PostgreSQL:
+#    kubectl apply -f init-wait-database.yaml
+#
+# 2. Observar init container esperando:
+#    kubectl get pod app-wait-db -w
+#    # STATUS: Init:0/1
+#
+# 3. Ver logs mostrando reintentos:
+#    kubectl logs app-wait-db -c wait-for-postgres -f
+#
+# 4. Crear PostgreSQL mientras init espera:
+#    kubectl run postgres --image=postgres:15-alpine --env="POSTGRES_PASSWORD=secret"
+#    kubectl expose pod postgres --port=5432
+#
+# 5. Ver que init completa y app inicia:
+#    kubectl get pod app-wait-db -w
+#    # STATUS: Init:0/1 → Running
+#
+# ESCENARIO 3: Verificar timeout funciona
+# ----------------------------------------
+# 1. Modificar timeout a 30s:
+#    env:
+#    - name: WAIT_TIMEOUT
+#      value: "30"
+#
+# 2. Aplicar sin PostgreSQL:
+#    kubectl apply -f init-wait-database.yaml
+#
+# 3. Esperar 30s y ver que init falla:
+#    kubectl get pod app-wait-db
+#    # STATUS: Init:CrashLoopBackOff
+#
+# 4. Ver error de timeout en logs:
+#    kubectl logs app-wait-db -c wait-for-postgres --previous
+#
+# ════════════════════════════════════════════════════════════════════════════
+# VARIANTES COMUNES
+# ════════════════════════════════════════════════════════════════════════════
+#
+# VARIANTE 1: Múltiples dependencias
+# -----------------------------------
+# initContainers:
+# - name: wait-postgres
+#   command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 2; done']
+# - name: wait-redis
+#   command: ['sh', '-c', 'until nc -z redis 6379; do sleep 2; done']
+# - name: wait-api
+#   command: ['sh', '-c', 'until nc -z api-service 8080; do sleep 2; done']
+#
+# VARIANTE 2: DNS check en lugar de TCP
+# --------------------------------------
+# command:
+# - sh
+# - -c
+# - until nslookup postgres.default.svc.cluster.local; do sleep 2; done
+#
+# VARIANTE 3: HTTP health check
+# ------------------------------
+# command:
+# - sh
+# - -c
+# - |
+#   until wget -q --spider http://api-service:8080/health; do
+#     echo "API no disponible..."
+#     sleep 2
+#   done
+#
+# ════════════════════════════════════════════════════════════════════════════
+# NOTAS IMPORTANTES
+# ════════════════════════════════════════════════════════════════════════════
+# - SIEMPRE usar timeout en wait-for loops
+# - nc (netcat) verifica solo TCP, no valida autenticación
+# - Para producción, considerar usar InitContainer con imagen custom
+#   que incluya herramientas como psql, mysql, redis-cli
+# - Alternativa: usar wait-for-it.sh o dockerize
+# ════════════════════════════════════════════════════════════════════════════

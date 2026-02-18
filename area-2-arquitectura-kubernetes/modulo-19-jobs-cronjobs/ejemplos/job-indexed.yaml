@@ -1,0 +1,164 @@
+# ========================================
+# Job Indexed - Procesamiento Particionado
+# ========================================
+# 
+# Descripción:
+#   Job con índices (K8s 1.21+) donde cada Pod procesa
+#   un índice específico (0 a N-1).
+#   Útil para procesamiento de datos particionados.
+#
+# Uso:
+#   kubectl apply -f job-indexed.yaml
+#   kubectl get pods -l job-name=indexed-processor
+#   kubectl logs indexed-processor-0-xxxxx  # Ver logs del índice 0
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: indexed-processor
+  labels:
+    app: data-analytics
+    type: indexed
+spec:
+  # Modo Indexed (K8s 1.21+)
+  completionMode: Indexed   # ⭐ Activa modo indexed
+  completions: 5            # 5 índices: 0, 1, 2, 3, 4
+  parallelism: 2            # 2 workers simultáneos
+  
+  # Configuración estándar
+  backoffLimit: 3
+  activeDeadlineSeconds: 900  # 15 minutos max
+  
+  template:
+    spec:
+      containers:
+      - name: partition-processor
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # JOB_COMPLETION_INDEX es inyectado automáticamente
+          INDEX=${JOB_COMPLETION_INDEX:-0}
+          
+          echo "=========================================="
+          echo "Worker: $(hostname)"
+          echo "Processing partition: ${INDEX}"
+          echo "=========================================="
+          
+          # En producción: cada índice procesa un shard de datos
+          # Ejemplo: procesar archivos data_0.csv, data_1.csv, etc.
+          
+          # Simulación: cada índice procesa "su" archivo
+          echo "Descargando data_${INDEX}.csv desde S3..."
+          sleep 3
+          
+          echo "Procesando registros de partición ${INDEX}..."
+          for i in $(seq 1 5); do
+            echo "  - Registro ${i} de partición ${INDEX} procesado"
+            sleep 1
+          done
+          
+          echo "Guardando resultados de partición ${INDEX}..."
+          sleep 2
+          
+          echo "✅ Partición ${INDEX} completada exitosamente!"
+          exit 0
+        
+        env:
+        # JOB_COMPLETION_INDEX es inyectado automáticamente por K8s
+        - name: TOTAL_PARTITIONS
+          value: "5"
+        - name: BATCH_SIZE
+          value: "1000"
+        
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+      
+      restartPolicy: OnFailure
+
+---
+
+# ========================================
+# Job Indexed - Ejemplo Real (ETL)
+# ========================================
+# 
+# Descripción:
+#   Job indexed para ETL de datos particionados.
+#   Cada worker procesa un mes de datos (12 meses).
+#
+# ========================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etl-monthly-data
+  labels:
+    app: data-warehouse
+    type: etl
+    year: "2024"
+spec:
+  completionMode: Indexed
+  completions: 12           # 12 meses (índices 0-11)
+  parallelism: 4            # Procesar 4 meses simultáneamente
+  backoffLimit: 2
+  activeDeadlineSeconds: 7200  # 2 horas max
+  
+  template:
+    metadata:
+      labels:
+        job-name: etl-monthly-data
+    spec:
+      containers:
+      - name: etl-worker
+        image: python:3.11-slim
+        command:
+        - python3
+        - -c
+        - |
+          import os
+          import time
+          
+          # Índice del mes (0=Enero, 11=Diciembre)
+          month_index = int(os.getenv('JOB_COMPLETION_INDEX', 0))
+          month_name = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month_index]
+          
+          print(f"{'='*50}")
+          print(f"ETL Worker - Processing Month: {month_name} ({month_index+1})")
+          print(f"{'='*50}")
+          
+          # Simulación de ETL
+          print(f"[1/3] Extracting data for {month_name}...")
+          time.sleep(5)
+          
+          print(f"[2/3] Transforming data for {month_name}...")
+          time.sleep(5)
+          
+          print(f"[3/3] Loading data for {month_name} to warehouse...")
+          time.sleep(5)
+          
+          print(f"✅ ETL for {month_name} completed successfully!")
+        
+        env:
+        - name: YEAR
+          value: "2024"
+        - name: WAREHOUSE_URL
+          value: "postgresql://warehouse.example.com"
+        
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+      
+      restartPolicy: OnFailure

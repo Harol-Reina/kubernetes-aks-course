@@ -1,0 +1,239 @@
+# Configuración personalizada de Calico CNI
+# Basado en: https://docs.projectcalico.org/manifests/calico.yaml
+# Uso: kubectl apply -f calico-custom.yaml
+
+---
+# Source: calico/templates/calico-config.yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: calico-config
+  namespace: kube-system
+data:
+  # Configuración de red
+  veth_mtu: "1440"  # MTU - ajustar según red (1440 para overlays, 1500 para flat)
+  
+  # IP autodetection method
+  # Opciones: first-found, can-reach=DESTINATION, interface=INTERFACE-REGEX
+  calico_backend: "bird"  # BGP backend (bird o vxlan)
+  
+  # Cluster type - útil para configuraciones específicas
+  cluster_type: "k8s,bgp"
+  
+  # IPIP tunneling - usa IP-in-IP encapsulation
+  # Opciones: Always, CrossSubnet, Never
+  calico_ipv4pool_ipip: "CrossSubnet"  # Mejor performance que Always
+  
+  # VXLAN tunneling - alternativa a IPIP
+  calico_ipv4pool_vxlan: "Never"
+  
+  # NAT outgoing traffic
+  calico_ipv4pool_nat_outgoing: "true"
+  
+  # IP pool CIDR - DEBE coincidir con kubeadm --pod-network-cidr
+  calico_ipv4pool_cidr: "192.168.0.0/16"
+  
+  # Disable IPv6 (opcional)
+  calico_ipv6pool_cidr: "none"
+  
+  # Felix configuration (dataplane)
+  felix_ipinipmtu: "1440"
+  felix_vxlanmtu: "1410"
+  felix_wireguardmtu: "1420"
+  
+  # Logging level
+  felix_logseverityscreen: "info"  # debug, info, warning, error
+  
+  # Enable Prometheus metrics
+  felix_prometheusmetricsenabled: "true"
+  felix_prometheusmetricsport: "9091"
+  
+  # Network policy enforcement
+  felix_defaultendpointtohostaction: "ACCEPT"
+  
+---
+# Source: calico/templates/calico-ippool.yaml
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: default-ipv4-ippool
+spec:
+  cidr: 192.168.0.0/16  # Pod network CIDR
+  ipipMode: CrossSubnet   # IP-in-IP solo entre subnets diferentes
+  vxlanMode: Never        # No usar VXLAN
+  natOutgoing: true       # NAT para tráfico saliente
+  blockSize: 26           # Tamaño de bloque IP por nodo (/26 = 64 IPs)
+  nodeSelector: all()     # Aplicar a todos los nodos
+
+---
+# Source: calico/templates/calico-node.yaml
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: calico-node
+  namespace: kube-system
+  labels:
+    k8s-app: calico-node
+spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-node
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-node
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      hostNetwork: true  # REQUERIDO - usa host network
+      tolerations:
+        # Permitir en control plane
+        - effect: NoSchedule
+          operator: Exists
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      serviceAccountName: calico-node
+      terminationGracePeriodSeconds: 0
+      priorityClassName: system-node-critical
+      containers:
+        # Calico node container
+        - name: calico-node
+          image: docker.io/calico/node:v3.26.1
+          imagePullPolicy: IfNotPresent
+          env:
+            # Cluster type
+            - name: CLUSTER_TYPE
+              value: "k8s,bgp"
+            # Auto-detect IP method
+            - name: IP
+              value: "autodetect"
+            - name: IP_AUTODETECTION_METHOD
+              value: "first-found"  # O "interface=eth0" para específico
+            # Calico networking backend
+            - name: CALICO_IPV4POOL_CIDR
+              value: "192.168.0.0/16"
+            - name: CALICO_IPV4POOL_IPIP
+              value: "CrossSubnet"
+            - name: CALICO_IPV4POOL_VXLAN
+              value: "Never"
+            # Felix configuration
+            - name: FELIX_IPINIPMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: felix_ipinipmtu
+            - name: FELIX_LOGSEVERITYSCREEN
+              value: "info"
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+            - name: FELIX_PROMETHEUSMETRICSENABLED
+              value: "true"
+            # Kubernetes API location
+            - name: KUBERNETES_SERVICE_HOST
+              value: "kubernetes.default"
+            - name: KUBERNETES_SERVICE_PORT
+              value: "443"
+          securityContext:
+            privileged: true  # REQUERIDO para networking
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-live
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-ready
+            periodSeconds: 10
+            timeoutSeconds: 10
+          volumeMounts:
+            - mountPath: /lib/modules
+              name: lib-modules
+              readOnly: true
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+            - mountPath: /var/run/calico
+              name: var-run-calico
+            - mountPath: /var/lib/calico
+              name: var-lib-calico
+            - mountPath: /var/run/nodeagent
+              name: policysync
+      volumes:
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: var-run-calico
+          hostPath:
+            path: /var/run/calico
+        - name: var-lib-calico
+          hostPath:
+            path: /var/lib/calico
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        - name: policysync
+          hostPath:
+            type: DirectoryOrCreate
+            path: /var/run/nodeagent
+
+---
+# Configuración NetworkPolicy por defecto (opcional)
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-cluster-internal
+spec:
+  # Permitir todo el tráfico interno del cluster por defecto
+  order: 1000
+  ingress:
+  - action: Allow
+    source:
+      nets:
+      - 192.168.0.0/16  # Pod network
+      - 10.96.0.0/12    # Service network
+  egress:
+  - action: Allow
+
+---
+# NOTES:
+# 
+# 1. Instalación:
+#    kubectl apply -f calico-custom.yaml
+#
+# 2. Verificar instalación:
+#    kubectl get pods -n kube-system | grep calico
+#    kubectl get daemonset -n kube-system calico-node
+#    calicoctl node status  (requiere calicoctl instalado)
+#
+# 3. Troubleshooting:
+#    kubectl logs -n kube-system -l k8s-app=calico-node
+#    calicoctl get ippool -o wide
+#    calicoctl get nodes
+#
+# 4. Performance tuning:
+#    - MTU: Ajustar según infraestructura (1440 para overlays)
+#    - IPIP mode: CrossSubnet para mejor performance
+#    - Block size: /26 = 64 IPs por nodo (ajustar según escala)
+#
+# 5. Network Policies:
+#    - Calico soporta Kubernetes NetworkPolicy + Calico NetworkPolicy
+#    - GlobalNetworkPolicy aplica a todo el cluster

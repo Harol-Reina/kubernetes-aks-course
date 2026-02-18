@@ -1,0 +1,15 @@
+apiVersion: v2
+name: multi-tier-app
+description: Aplicación completa de 3 capas (frontend, backend, database)
+type: application
+version: 1.0.0
+appVersion: "2.0.0"
+
+maintainers:
+  - name: Platform Team
+    email: platform@example.com
+
+keywords:
+  - fullstack
+  - multi-tier
+  - production

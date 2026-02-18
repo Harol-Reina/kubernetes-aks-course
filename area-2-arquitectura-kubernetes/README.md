@@ -161,15 +161,19 @@ Al completar esta área, serás capaz de:
 ```
 📁 modulo-XX-nombre/
 ├── 📄 README.md (Teoría + conceptos)
-├── 📁 laboratorios/
-│   ├── lab-01-basico.md
-│   ├── lab-02-intermedio.md
-│   └── lab-03-avanzado.md
-├── 📁 ejemplos/
-│   ├── manifests/
-│   ├── scripts/
-│   └── configs/
-└── 📄 EJERCICIOS.md (Práctica adicional)
+├── � RESUMEN-MODULO.md (Resumen ejecutivo)
+├── �📁 laboratorios/
+│   ├── README.md (Índice de labs)
+│   ├── lab-01-nombre/
+│   │   ├── README.md
+│   │   ├── SETUP.md
+│   │   └── *.sh (scripts)
+│   └── lab-02-nombre/
+└── 📁 ejemplos/
+    ├── 01-basico/
+    │   └── *.yaml
+    ├── 02-intermedio/
+    └── 03-avanzado/
 ```
 
 ### **Flujo de aprendizaje:**

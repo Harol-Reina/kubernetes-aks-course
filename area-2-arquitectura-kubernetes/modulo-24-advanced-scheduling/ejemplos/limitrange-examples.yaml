@@ -1,0 +1,415 @@
+# ============================================
+# EJEMPLOS DE LIMITRANGE
+# ============================================
+
+# ------------------------------
+# Ejemplo 1: Container Limits
+# ------------------------------
+# Define límites para containers individuales
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: container-limits
+  namespace: development
+spec:
+  limits:
+  - type: Container
+    # Valores por defecto si no se especifican
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    # Requests por defecto si no se especifican
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    # Máximo permitido
+    max:
+      cpu: "2000m"
+      memory: "2Gi"
+    # Mínimo requerido
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    # Ratio máximo limits/requests (no más de 4x)
+    maxLimitRequestRatio:
+      cpu: "4"
+      memory: "4"
+
+---
+# ------------------------------
+# Ejemplo 2: Pod Limits
+# ------------------------------
+# Define límites para pods completos (suma de todos los containers)
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pod-limits
+  namespace: development
+spec:
+  limits:
+  - type: Pod
+    max:
+      cpu: "4000m"     # Pod completo no puede exceder 4 cores
+      memory: "8Gi"    # Pod completo no puede exceder 8 GB
+    min:
+      cpu: "100m"      # Pod debe solicitar al menos 100m
+      memory: "128Mi"  # Pod debe solicitar al menos 128Mi
+
+---
+# ------------------------------
+# Ejemplo 3: PVC Limits
+# ------------------------------
+# Define límites para PersistentVolumeClaims
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pvc-limits
+  namespace: development
+spec:
+  limits:
+  - type: PersistentVolumeClaim
+    max:
+      storage: "100Gi"  # PVC máximo 100 GB
+    min:
+      storage: "1Gi"    # PVC mínimo 1 GB
+
+---
+# ------------------------------
+# Ejemplo 4: LimitRange Combinado
+# ------------------------------
+# Combina límites para containers, pods y PVCs
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: combined-limits
+  namespace: production
+spec:
+  limits:
+  # Container limits
+  - type: Container
+    default:
+      cpu: "1000m"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    max:
+      cpu: "4000m"
+      memory: "8Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+    maxLimitRequestRatio:
+      cpu: "3"
+      memory: "2"
+  
+  # Pod limits
+  - type: Pod
+    max:
+      cpu: "8000m"
+      memory: "16Gi"
+  
+  # PVC limits
+  - type: PersistentVolumeClaim
+    max:
+      storage: "500Gi"
+    min:
+      storage: "5Gi"
+
+---
+# ------------------------------
+# Ejemplo 5: Micro Services Limits
+# ------------------------------
+# Optimizado para microservicios pequeños
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: microservices-limits
+  namespace: microservices
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "200m"
+      memory: "256Mi"
+    defaultRequest:
+      cpu: "50m"
+      memory: "64Mi"
+    max:
+      cpu: "500m"       # Microservicios no deben usar más de 500m
+      memory: "512Mi"
+    min:
+      cpu: "10m"
+      memory: "32Mi"
+
+---
+# ------------------------------
+# Ejemplo 6: Batch Processing Limits
+# ------------------------------
+# Para jobs que requieren más recursos
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: batch-limits
+  namespace: batch-processing
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "2000m"
+      memory: "4Gi"
+    defaultRequest:
+      cpu: "1000m"
+      memory: "2Gi"
+    max:
+      cpu: "8000m"      # Jobs pueden usar hasta 8 cores
+      memory: "16Gi"
+    min:
+      cpu: "500m"
+      memory: "1Gi"
+
+---
+# ------------------------------
+# Ejemplo 7: Development Environment
+# ------------------------------
+# Límites más flexibles para desarrollo
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: dev-team-a
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "2000m"
+      memory: "4Gi"
+    min:
+      cpu: "10m"
+      memory: "16Mi"
+    maxLimitRequestRatio:
+      cpu: "10"   # Ratio más permisivo para dev
+      memory: "5"
+
+---
+# ============================================
+# EJEMPLOS DE PODS - Con y Sin Recursos
+# ============================================
+
+# ------------------------------
+# Pod SIN resources definidos
+# ------------------------------
+# LimitRange aplicará defaults automáticamente
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-without-resources
+  namespace: development
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+# LimitRange aplicará:
+# requests: cpu=100m, memory=128Mi
+# limits: cpu=500m, memory=512Mi
+
+---
+# ------------------------------
+# Pod CON resources definidos
+# ------------------------------
+# Debe cumplir con min/max de LimitRange
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-resources
+  namespace: development
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "200m"      # Cumple min: 50m, max: 2000m
+        memory: "256Mi"  # Cumple min: 64Mi, max: 2Gi
+      limits:
+        cpu: "600m"      # Cumple max: 2000m
+        memory: "768Mi"  # Cumple max: 2Gi
+
+---
+# ------------------------------
+# Pod que VIOLA LimitRange
+# ------------------------------
+# Este pod será rechazado
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-violates-limits
+  namespace: development
+spec:
+  containers:
+  - name: greedy-app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "3000m"     # VIOLA max: 2000m
+        memory: "3Gi"    # VIOLA max: 2Gi
+      limits:
+        cpu: "5000m"     # VIOLA max: 2000m
+        memory: "5Gi"    # VIOLA max: 2Gi
+# Error: "limits.cpu: Invalid value: '5000m': must be less than or equal to 2000m"
+
+---
+# ------------------------------
+# Pod Multi-Container
+# ------------------------------
+# Cada container obtiene defaults
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+  namespace: development
+spec:
+  containers:
+  - name: web
+    image: nginx:1.25
+    # Obtiene defaults del LimitRange
+  
+  - name: sidecar
+    image: busybox
+    command: ["sh", "-c", "while true; do echo alive; sleep 30; done"]
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+
+---
+# ============================================
+# NAMESPACE CON LIMITRANGE COMPLETO
+# ============================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-backend
+
+---
+# LimitRange para team-backend
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: team-backend-limits
+  namespace: team-backend
+spec:
+  limits:
+  # Container constraints
+  - type: Container
+    default:
+      cpu: "1000m"
+      memory: "1Gi"
+      ephemeral-storage: "2Gi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+      ephemeral-storage: "500Mi"
+    max:
+      cpu: "4000m"
+      memory: "8Gi"
+      ephemeral-storage: "10Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+      ephemeral-storage: "100Mi"
+    maxLimitRequestRatio:
+      cpu: "4"
+      memory: "3"
+  
+  # Pod constraints
+  - type: Pod
+    max:
+      cpu: "8000m"
+      memory: "16Gi"
+      ephemeral-storage: "20Gi"
+  
+  # Storage constraints
+  - type: PersistentVolumeClaim
+    max:
+      storage: "200Gi"
+    min:
+      storage: "1Gi"
+
+---
+# ============================================
+# COMANDOS ÚTILES
+# ============================================
+
+# Ver LimitRanges en namespace:
+# kubectl get limitrange -n development
+
+# Detalles de un LimitRange:
+# kubectl describe limitrange container-limits -n development
+
+# Ver qué defaults se aplicarán:
+# kubectl describe limitrange -n development
+
+# Listar todos los LimitRanges del cluster:
+# kubectl get limitrange --all-namespaces
+
+# Crear LimitRange:
+# kubectl apply -f limitrange-examples.yaml
+
+# Verificar si pod cumple con LimitRange (dry-run):
+# kubectl apply -f pod.yaml --dry-run=server
+
+# Ver eventos de validación:
+# kubectl get events -n development --field-selector reason=FailedCreate
+
+# ============================================
+# QoS CLASSES RESULTANTES
+# ============================================
+
+# Guaranteed (requests == limits):
+# - Máxima prioridad en recursos
+# - Última en ser evicted
+
+# Burstable (requests < limits):
+# - Puede usar más recursos si disponibles
+# - Evicted si nodo bajo presión
+
+# BestEffort (sin requests/limits):
+# - Primera en ser evicted
+# - Solo con defaults de LimitRange
+
+# ============================================
+# BUENAS PRÁCTICAS
+# ============================================
+
+# 1. Siempre definir LimitRange en namespaces compartidos
+# 2. Usar junto con ResourceQuota para control completo
+# 3. defaultRequest más bajo que default (permite bursting)
+# 4. maxLimitRequestRatio razonable (2-4x)
+# 5. Diferentes LimitRanges para diferentes tipos de workloads
+# 6. Documentar razones de los límites elegidos
+# 7. Revisar y ajustar basado en métricas reales
+# 8. Considerar ephemeral-storage limits
+# 9. Probar con dry-run antes de aplicar
+# 10. Educar a equipos sobre cómo funcionan los defaults

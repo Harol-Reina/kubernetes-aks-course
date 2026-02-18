@@ -1,0 +1,25 @@
+replicaCount: 2
+
+image:
+  repository: nginx
+  tag: "1.21.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+database:
+  host: postgres
+  port: 5432
+  name: myapp
+
+hooks:
+  preInstall:
+    enabled: true
+  postInstall:
+    enabled: true
+  preUpgrade:
+    enabled: true
+  postUpgrade:
+    enabled: true

@@ -1,0 +1,92 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: critical-app-pdb
+  namespace: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: critical-app
+      tier: backend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: production
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: frontend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: database-pdb
+  namespace: production
+spec:
+  minAvailable: "50%"
+  selector:
+    matchLabels:
+      app: database
+      tier: data
+
+---
+# PDB para StatefulSet
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: elasticsearch-pdb
+  namespace: logging
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: elasticsearch
+
+---
+# PDB muy restrictivo (evitar drain)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-service-pdb
+  namespace: production
+spec:
+  minAvailable: "100%"  # Evita cualquier disrupción
+  selector:
+    matchLabels:
+      app: payment-service
+      critical: "true"
+
+---
+# PDB durante maintenance window
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-maintenance-pdb
+  namespace: production
+  annotations:
+    description: "Less restrictive PDB for maintenance windows"
+spec:
+  maxUnavailable: 2
+  selector:
+    matchLabels:
+      app: api-server
+
+---
+# PDB para DaemonSet (generalmente no necesario)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: monitoring-agent-pdb
+  namespace: monitoring
+spec:
+  maxUnavailable: 3  # Permitir hasta 3 nodos en mantenimiento simultáneo
+  selector:
+    matchLabels:
+      app: monitoring-agent
+      type: daemonset

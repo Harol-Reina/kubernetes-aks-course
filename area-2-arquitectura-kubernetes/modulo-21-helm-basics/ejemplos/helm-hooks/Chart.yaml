@@ -1,0 +1,6 @@
+apiVersion: v2
+name: helm-hooks
+description: Ejemplo de Helm Hooks (pre-install, post-install, pre-upgrade, etc)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

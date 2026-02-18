@@ -1,0 +1,334 @@
+# ============================================
+# EJEMPLO DE STATIC POD
+# Para /etc/kubernetes/manifests/
+# ============================================
+
+# Este archivo debe colocarse en el directorio de static pods
+# del kubelet (generalmente /etc/kubernetes/manifests/)
+# El kubelet lo detectará automáticamente y creará el pod
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: static-nginx
+  namespace: default
+  labels:
+    app: static-web
+    component: frontend
+    tier: web
+spec:
+  # Static pods no pueden usar:
+  # - Deployments, ReplicaSets, DaemonSets
+  # - PersistentVolumeClaims dinámicos
+  # - ServiceAccounts (en algunos casos)
+  
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+    
+    volumeMounts:
+    - name: html-content
+      mountPath: /usr/share/nginx/html
+    - name: nginx-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+    
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 10
+      periodSeconds: 10
+    
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+  
+  volumes:
+  - name: html-content
+    hostPath:
+      path: /data/static-web/html
+      type: DirectoryOrCreate
+  
+  - name: nginx-config
+    hostPath:
+      path: /data/static-web/nginx.conf
+      type: FileOrCreate
+  
+  # Static pods siempre usan hostNetwork o están en el nodo específico
+  hostNetwork: false
+  
+  # Política de restart
+  restartPolicy: Always
+  
+  # Priority (opcional)
+  priorityClassName: system-node-critical
+
+---
+# ============================================
+# EJEMPLO 2: Static Pod - kube-apiserver
+# (Simplificado, similar al real)
+# ============================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-apiserver
+  namespace: kube-system
+  labels:
+    component: kube-apiserver
+    tier: control-plane
+spec:
+  containers:
+  - name: kube-apiserver
+    image: registry.k8s.io/kube-apiserver:v1.28.0
+    command:
+    - kube-apiserver
+    - --advertise-address=192.168.1.100
+    - --allow-privileged=true
+    - --authorization-mode=Node,RBAC
+    - --client-ca-file=/etc/kubernetes/pki/ca.crt
+    - --enable-admission-plugins=NodeRestriction
+    - --etcd-servers=https://127.0.0.1:2379
+    - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+    - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+    - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+    - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
+    - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
+    - --service-account-key-file=/etc/kubernetes/pki/sa.pub
+    - --service-cluster-ip-range=10.96.0.0/12
+    - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+    - --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+    
+    volumeMounts:
+    - name: ca-certs
+      mountPath: /etc/ssl/certs
+      readOnly: true
+    - name: etc-ca-certificates
+      mountPath: /etc/ca-certificates
+      readOnly: true
+    - name: k8s-certs
+      mountPath: /etc/kubernetes/pki
+      readOnly: true
+    
+    livenessProbe:
+      httpGet:
+        path: /livez
+        port: 6443
+        scheme: HTTPS
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 15
+      failureThreshold: 8
+    
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: 6443
+        scheme: HTTPS
+      periodSeconds: 1
+      timeoutSeconds: 15
+      failureThreshold: 3
+  
+  volumes:
+  - name: ca-certs
+    hostPath:
+      path: /etc/ssl/certs
+      type: DirectoryOrCreate
+  - name: etc-ca-certificates
+    hostPath:
+      path: /etc/ca-certificates
+      type: DirectoryOrCreate
+  - name: k8s-certs
+    hostPath:
+      path: /etc/kubernetes/pki
+      type: DirectoryOrCreate
+  
+  hostNetwork: true
+  priorityClassName: system-node-critical
+
+---
+# ============================================
+# EJEMPLO 3: Static Pod - Monitoring Agent
+# ============================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-monitoring
+  namespace: kube-system
+  labels:
+    app: node-monitor
+    component: monitoring
+spec:
+  containers:
+  - name: node-exporter
+    image: prom/node-exporter:v1.6.1
+    args:
+    - --path.procfs=/host/proc
+    - --path.sysfs=/host/sys
+    - --path.rootfs=/host/root
+    - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    
+    ports:
+    - containerPort: 9100
+      protocol: TCP
+      name: metrics
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+    
+    volumeMounts:
+    - name: proc
+      mountPath: /host/proc
+      readOnly: true
+    - name: sys
+      mountPath: /host/sys
+      readOnly: true
+    - name: root
+      mountPath: /host/root
+      readOnly: true
+      mountPropagation: HostToContainer
+    
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+  
+  volumes:
+  - name: proc
+    hostPath:
+      path: /proc
+  - name: sys
+    hostPath:
+      path: /sys
+  - name: root
+    hostPath:
+      path: /
+  
+  hostNetwork: true
+  hostPID: true
+  
+  tolerations:
+  - operator: "Exists"  # Tolera todos los taints
+  
+  priorityClassName: system-node-critical
+
+---
+# ============================================
+# INSTRUCCIONES DE USO
+# ============================================
+
+# 1. ENCONTRAR EL DIRECTORIO DE STATIC PODS:
+#    ssh node01
+#    ps aux | grep kubelet | grep staticPodPath
+#    # O ver el config:
+#    cat /var/lib/kubelet/config.yaml | grep staticPodPath
+#    # Generalmente: /etc/kubernetes/manifests/
+
+# 2. CREAR EL STATIC POD:
+#    sudo cp static-pod-example.yaml /etc/kubernetes/manifests/static-nginx.yaml
+#    # El kubelet detectará el archivo y creará el pod automáticamente
+
+# 3. VERIFICAR EL POD:
+#    kubectl get pods -A | grep static-nginx
+#    # Nombre será: static-nginx-<nodename>
+
+# 4. VER DETALLES:
+#    kubectl describe pod static-nginx-node01 -n default
+
+# 5. INTENTAR ELIMINAR (NO FUNCIONARÁ vía kubectl):
+#    kubectl delete pod static-nginx-node01
+#    # El kubelet lo recreará inmediatamente
+
+# 6. ELIMINAR CORRECTAMENTE:
+#    ssh node01
+#    sudo rm /etc/kubernetes/manifests/static-nginx.yaml
+#    # Esperar 20-30 segundos
+#    kubectl get pods | grep static-nginx
+#    # Ya no aparecerá
+
+# 7. MODIFICAR STATIC POD:
+#    ssh node01
+#    sudo vi /etc/kubernetes/manifests/static-nginx.yaml
+#    # Kubelet detecta cambios y recrea el pod
+
+# ============================================
+# CARACTERÍSTICAS DE STATIC PODS
+# ============================================
+
+# ✅ Ventajas:
+# - No dependen del API server
+# - Gestionados directamente por kubelet
+# - Útiles para control plane components
+# - Siempre corren en el nodo específico
+# - Reinicio automático por kubelet
+
+# ❌ Limitaciones:
+# - No pueden usar controllers (Deployment, ReplicaSet)
+# - No pueden moverse entre nodos
+# - No soportan rolling updates
+# - Configuración manual en cada nodo
+# - No pueden usar algunos tipos de volumes (PVC dinámicos)
+
+# 🎯 Casos de uso:
+# - Control plane components (kube-apiserver, etcd)
+# - Node-specific monitoring agents
+# - Critical system services
+# - Bootstrap components
+
+# ============================================
+# TROUBLESHOOTING
+# ============================================
+
+# Pod no aparece:
+# 1. Verificar permisos del archivo (debe ser readable por kubelet)
+# 2. Verificar sintaxis YAML
+# 3. Ver logs del kubelet:
+#    journalctl -u kubelet -f
+
+# Pod en CrashLoopBackOff:
+# 1. Ver logs:
+#    kubectl logs static-nginx-node01
+# 2. Verificar imagen
+# 3. Verificar volumeMounts y hostPaths
+
+# Cambios no se aplican:
+# 1. Verificar que el archivo cambió en el nodo
+# 2. Esperar 20-30 segundos (kubelet poll interval)
+# 3. Reiniciar kubelet si es necesario:
+#    systemctl restart kubelet
+
+# ============================================
+# MIRROR PODS
+# ============================================
+
+# Los static pods crean "mirror pods" en el API server
+# - Visibles con kubectl get pods
+# - Nombre: <pod-name>-<node-name>
+# - Read-only desde API server
+# - No pueden ser eliminados vía kubectl
+# - Reflejan el estado del static pod real

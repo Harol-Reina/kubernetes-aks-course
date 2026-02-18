@@ -1,0 +1,79 @@
+{{/*
+Validar valores requeridos antes de renderizar templates
+*/}}
+{{- include "advanced-templates.validateValues" . }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "advanced-templates.fullname" . }}
+  labels:
+    {{- include "advanced-templates.labels" . | nindent 4 }}
+  {{- with (include "advanced-templates.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.app.autoscaling.enabled }}
+  replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "advanced-templates.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "advanced-templates.selectorLabels" . | nindent 8 }}
+        {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with (include "advanced-templates.annotations" .) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "advanced-templates.serviceAccountName" . }}
+      {{- include "advanced-templates.securityContext" . | nindent 6 }}
+      
+      containers:
+      - name: {{ .Values.app.name }}
+        image: {{ include "advanced-templates.image" . }}
+        imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+        
+        ports:
+        - name: {{ include "advanced-templates.portName" (dict "port" .Values.app.service.port "protocol" "TCP") }}
+          containerPort: {{ .Values.app.service.port }}
+          protocol: TCP
+        
+        {{- with .Values.app.env }}
+        env:
+        {{- include "advanced-templates.env" $ | nindent 8 }}
+        {{- end }}
+        
+        {{- with .Values.app.envFrom }}
+        envFrom:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        
+        {{- include "advanced-templates.resources" . | nindent 8 }}
+        {{- include "advanced-templates.livenessProbe" . | nindent 8 }}
+        {{- include "advanced-templates.readinessProbe" . | nindent 8 }}
+        
+        {{- if .Values.persistence.enabled }}
+        volumeMounts:
+        - name: data
+          mountPath: {{ .Values.persistence.mountPath }}
+        {{- end }}
+      
+      {{- if .Values.persistence.enabled }}
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ include "advanced-templates.pvcName" . }}
+      {{- end }}
+      
+      {{- include "advanced-templates.nodeSelector" . | nindent 6 }}
+      {{- include "advanced-templates.tolerations" . | nindent 6 }}
+      {{- include "advanced-templates.affinity" . | nindent 6 }}

@@ -1,0 +1,456 @@
+# ============================================================================
+# TROUBLESHOOTING TOOLS - Pods de Debugging
+# ============================================================================
+# Este archivo contiene pods útiles para troubleshooting y debugging.
+# Despliega estas herramientas cuando necesites diagnosticar problemas.
+#
+# Uso:
+#   kubectl apply -f troubleshooting-tools.yaml
+#   kubectl exec -it netshoot -- bash
+# ============================================================================
+
+---
+# ============================================================================
+# 1. netshoot - Swiss Army Knife para Network Debugging
+# ============================================================================
+# Contiene todas las herramientas de networking que necesitas:
+# - ping, traceroute, mtr, nmap
+# - curl, wget, httpie
+# - nslookup, dig, host
+# - netstat, ss, lsof, iftop
+# - tcpdump, ngrep
+# - iperf, ab (benchmarking)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot
+  labels:
+    app: debug-tools
+    tool: netshoot
+spec:
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 2. busybox - Lightweight Testing Tool
+# ============================================================================
+# Imagen pequeña con utilidades básicas:
+# - nslookup
+# - wget
+# - ping
+# - telnet
+# - nc (netcat)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+  labels:
+    app: debug-tools
+    tool: busybox
+spec:
+  containers:
+  - name: busybox
+    image: busybox:1.28
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 3. dnsutils - DNS Troubleshooting
+# ============================================================================
+# Herramientas especializadas en DNS:
+# - nslookup
+# - dig
+# - host
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dnsutils
+  labels:
+    app: debug-tools
+    tool: dnsutils
+spec:
+  containers:
+  - name: dnsutils
+    image: tutum/dnsutils
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 4. curl - HTTP Testing
+# ============================================================================
+# Solo curl, muy ligero para testing HTTP/HTTPS
+apiVersion: v1
+kind: Pod
+metadata:
+  name: curl
+  labels:
+    app: debug-tools
+    tool: curl
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 5. alpine - Shell con Package Manager
+# ============================================================================
+# Base Alpine con apk package manager para instalar lo que necesites
+apiVersion: v1
+kind: Pod
+metadata:
+  name: alpine
+  labels:
+    app: debug-tools
+    tool: alpine
+spec:
+  containers:
+  - name: alpine
+    image: alpine:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 6. ubuntu - Full Linux Environment
+# ============================================================================
+# Ubuntu completo para debugging avanzado
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu
+  labels:
+    app: debug-tools
+    tool: ubuntu
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu:22.04
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 7. Debug Pod con Host Network
+# ============================================================================
+# Para debugging de problemas a nivel de host networking
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot-hostnet
+  labels:
+    app: debug-tools
+    tool: netshoot-hostnet
+spec:
+  hostNetwork: true  # Usa network del host
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot
+    command: ["sleep", "infinity"]
+    securityContext:
+      privileged: true  # Acceso privilegiado
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 8. Debug Pod con Privilegios Elevados
+# ============================================================================
+# Para debugging que requiere acceso al sistema
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-debug
+  labels:
+    app: debug-tools
+    tool: privileged
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu:22.04
+    command: ["sleep", "infinity"]
+    securityContext:
+      privileged: true
+      capabilities:
+        add:
+        - SYS_ADMIN
+        - NET_ADMIN
+    volumeMounts:
+    - name: host-root
+      mountPath: /host
+      readOnly: true
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  volumes:
+  - name: host-root
+    hostPath:
+      path: /
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 9. Python Debug Pod
+# ============================================================================
+# Python con herramientas comunes para debugging de apps Python
+apiVersion: v1
+kind: Pod
+metadata:
+  name: python-debug
+  labels:
+    app: debug-tools
+    tool: python
+spec:
+  containers:
+  - name: python
+    image: python:3.11-slim
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# 10. Node.js Debug Pod
+# ============================================================================
+# Node.js con npm para debugging de apps JavaScript/TypeScript
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nodejs-debug
+  labels:
+    app: debug-tools
+    tool: nodejs
+spec:
+  containers:
+  - name: nodejs
+    image: node:18-slim
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  restartPolicy: Always
+
+---
+# ============================================================================
+# DEPLOYMENT - netshoot siempre disponible
+# ============================================================================
+# Deploy netshoot como Deployment para que esté siempre disponible
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debug-netshoot
+  labels:
+    app: debug-tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debug-netshoot
+  template:
+    metadata:
+      labels:
+        app: debug-netshoot
+    spec:
+      containers:
+      - name: netshoot
+        image: nicolaka/netshoot
+        command: ["sleep", "infinity"]
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+# Deploy all tools:
+# kubectl apply -f troubleshooting-tools.yaml
+
+# ============================================================================
+# NETWORK DEBUGGING
+# ============================================================================
+
+# Test DNS:
+# kubectl exec -it netshoot -- nslookup kubernetes.default
+# kubectl exec -it dnsutils -- dig kubernetes.default.svc.cluster.local
+
+# Test connectivity:
+# kubectl exec -it netshoot -- ping 8.8.8.8
+# kubectl exec -it netshoot -- curl http://service-name:8080
+
+# Check open ports:
+# kubectl exec -it netshoot -- netstat -tlnp
+# kubectl exec -it netshoot -- ss -tlnp
+
+# Trace route:
+# kubectl exec -it netshoot -- traceroute google.com
+# kubectl exec -it netshoot -- mtr google.com
+
+# Packet capture:
+# kubectl exec -it netshoot -- tcpdump -i any -nn port 80
+# kubectl exec -it netshoot -- tcpdump -i any -nn 'host 10.244.0.5'
+
+# ============================================================================
+# HTTP/API TESTING
+# ============================================================================
+
+# Simple GET:
+# kubectl exec -it curl -- curl http://service-name/api/health
+
+# POST with data:
+# kubectl exec -it netshoot -- curl -X POST http://api:8080/endpoint -d '{"key":"value"}'
+
+# With headers:
+# kubectl exec -it netshoot -- curl -H "Authorization: Bearer token" http://api:8080
+
+# Verbose output:
+# kubectl exec -it curl -- curl -v http://service-name
+
+# ============================================================================
+# DNS TROUBLESHOOTING
+# ============================================================================
+
+# Check DNS resolution:
+# kubectl exec -it dnsutils -- nslookup kubernetes.default
+# kubectl exec -it dnsutils -- nslookup service-name.namespace.svc.cluster.local
+
+# Detailed DNS query:
+# kubectl exec -it dnsutils -- dig kubernetes.default +short
+# kubectl exec -it dnsutils -- dig @10.96.0.10 service-name.default.svc.cluster.local
+
+# Check DNS config:
+# kubectl exec -it busybox -- cat /etc/resolv.conf
+
+# ============================================================================
+# PERFORMANCE TESTING
+# ============================================================================
+
+# HTTP load testing:
+# kubectl exec -it netshoot -- ab -n 1000 -c 10 http://service-name/
+
+# Network bandwidth:
+# kubectl exec -it netshoot -- iperf3 -c iperf-server
+
+# ============================================================================
+# FILE SYSTEM DEBUGGING
+# ============================================================================
+
+# Check mounts:
+# kubectl exec -it ubuntu -- df -h
+# kubectl exec -it ubuntu -- mount
+
+# Find files:
+# kubectl exec -it ubuntu -- find /app -name "*.log"
+
+# Check permissions:
+# kubectl exec -it ubuntu -- ls -la /data
+
+# ============================================================================
+# PROCESS DEBUGGING
+# ============================================================================
+
+# List processes:
+# kubectl exec -it ubuntu -- ps aux
+
+# Check resource usage:
+# kubectl exec -it ubuntu -- top
+
+# Check listening ports:
+# kubectl exec -it netshoot -- ss -tlnp
+
+# ============================================================================
+# ADVANCED DEBUGGING
+# ============================================================================
+
+# Debug with host network:
+# kubectl exec -it netshoot-hostnet -- ip addr
+# kubectl exec -it netshoot-hostnet -- iptables -L
+
+# Access host filesystem (from privileged pod):
+# kubectl exec -it privileged-debug -- ls /host/var/log
+# kubectl exec -it privileged-debug -- cat /host/etc/kubernetes/manifests/kube-apiserver.yaml
+
+# ============================================================================
+# CLEANUP
+# ============================================================================
+
+# Delete all debug tools:
+# kubectl delete -f troubleshooting-tools.yaml
+
+# Delete specific tool:
+# kubectl delete pod netshoot
