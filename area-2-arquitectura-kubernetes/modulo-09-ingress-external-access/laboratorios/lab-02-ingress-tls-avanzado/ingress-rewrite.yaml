@@ -1,0 +1,51 @@
+# Lab 02 - TLS Avanzado: Ingress con URL Rewriting (Regex)
+# Uso: kubectl apply -f ingress-rewrite.yaml
+#
+# Descripcion:
+#   Ingress que usa expresiones regulares para capturar y reescribir
+#   partes del path URL antes de enviarlas al backend. Permite exponer
+#   un servicio bajo un prefijo (/api) mientras el backend recibe
+#   las peticiones sin ese prefijo.
+#
+# Conceptos clave:
+#   - rewrite-target con grupos de captura: /api/users -> /users en el backend
+#   - use-regex: habilita expresiones regulares en los paths del Ingress
+#   - Grupos de captura: (.*)  captura todo despues del prefijo
+#   - Patron /api(/|$)(.*): coincide con /api, /api/, y /api/cualquier/path
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-apps-test.yaml del Lab 01 aplicado
+#   - Configurar DNS: echo "$NODE_IP api.example.com" | sudo tee -a /etc/hosts
+#
+# Verificacion:
+#   curl http://api.example.com/api/users   -> reescrito a /users en el backend
+#   curl http://api.example.com/api/        -> reescrito a / en el backend
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rewrite-ingress
+  annotations:
+    # $2 es el segundo grupo de captura: el path despues de /api
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # Habilitar expresiones regulares en paths
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      # Patron regex: /api seguido opcionalmente de / y cualquier subpath
+      # Grupo 1: (/|$) - slash o fin de string
+      # Grupo 2: (.*) - todo lo que sigue (se usa en rewrite-target)
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080

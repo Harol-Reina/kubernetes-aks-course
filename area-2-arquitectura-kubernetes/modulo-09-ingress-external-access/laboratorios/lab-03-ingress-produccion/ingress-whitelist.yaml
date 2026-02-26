@@ -1,0 +1,53 @@
+# Lab 03 - Produccion: Ingress con IP Whitelist
+# Uso: kubectl apply -f ingress-whitelist.yaml
+#
+# Descripcion:
+#   Ingress que restringe el acceso a un endpoint de administracion
+#   solo a IPs autorizadas. Cualquier peticion desde una IP fuera de
+#   la whitelist recibe un 403 Forbidden. Util para proteger paneles
+#   de admin, APIs internas, o endpoints sensibles.
+#
+# Conceptos clave:
+#   - whitelist-source-range: lista de rangos CIDR permitidos
+#   - Formato CIDR: IP/mascara (ej: 10.0.0.0/8 = toda la red 10.x.x.x)
+#   - /32 = una sola IP exacta
+#   - Se pueden combinar multiples rangos separados por coma
+#   - IPs no autorizadas reciben 403 Forbidden
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-canary.yaml aplicado (o cualquier backend disponible)
+#   - Configurar DNS: echo "$NODE_IP admin.example.com" | sudo tee -a /etc/hosts
+#
+# NOTA: Reemplazar $MY_IP con tu IP publica real antes de aplicar:
+#   export MY_IP=$(curl -s https://ifconfig.me)
+#   envsubst < ingress-whitelist.yaml | kubectl apply -f -
+#   O editar manualmente el campo whitelist-source-range
+#
+# Verificacion:
+#   curl http://admin.example.com  -> respuesta normal (desde IP autorizada)
+#   # Desde IP no autorizada -> 403 Forbidden
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-whitelist
+  annotations:
+    # Solo permitir acceso desde estas IPs/rangos
+    # Reemplazar 203.0.113.1 con tu IP publica real
+    nginx.ingress.kubernetes.io/whitelist-source-range: "203.0.113.1/32,10.0.0.0/8"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: admin.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-v1
+            port:
+              number: 80

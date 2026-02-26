@@ -1,0 +1,542 @@
+# ============================================================
+# ingress-lab.yaml
+# Ejercicio Resumen: Ingress - Todos los Patrones de Enrutamiento
+# Uso: kubectl apply -f ingress-lab.yaml
+# Duracion: ~60 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# patrones principales de Ingress en Kubernetes usando Minikube:
+#   - 4 backends con respuestas identificables
+#   - 4 Services ClusterIP como backends para Ingress
+#   - 6 Ingress resources demostrando 6 patrones diferentes
+#   - 1 Pod de prueba para verificar DNS y conectividad
+#
+# Prerequisito: Ingress Controller habilitado en Minikube
+#   minikube addons enable ingress
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE - Aislamiento del ejercicio
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-ingress
+
+---
+# =============================================================
+# 2) DEPLOYMENT: frontend-app (2 replicas)
+#    Simula un frontend web. Responde con "FRONTEND" y hostname.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-app
+  namespace: lab-ingress
+  labels:
+    app: frontend
+    tier: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+      tier: web
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>FRONTEND</h1><p>Pod: $POD_NAME</p>" > /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'
+
+---
+# =============================================================
+# 3) SERVICE: frontend-svc (ClusterIP)
+#    Backend interno para Ingress. No expone nada al exterior.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-svc
+  namespace: lab-ingress
+  labels:
+    app: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+    tier: web
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 4) DEPLOYMENT: api-app v1 (3 replicas)
+#    Simula una API estable (version 1). Responde con "API v1".
+#    Se usa como backend principal y en canary deployments.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app
+  namespace: lab-ingress
+  labels:
+    app: api
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: api
+        version: v1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>API v1</h1><p>Pod: $POD_NAME</p>" > /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'
+
+---
+# =============================================================
+# 5) SERVICE: api-svc (ClusterIP)
+#    Backend para la API v1. Selecciona solo Pods con version=v1.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc
+  namespace: lab-ingress
+  labels:
+    app: api
+    version: v1
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+    version: v1
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 6) DEPLOYMENT: api-app-v2 (2 replicas)
+#    Version nueva (canary) de la API. Responde con "API v2 CANARY".
+#    Se usa para demostrar canary deployments con Ingress.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app-v2
+  namespace: lab-ingress
+  labels:
+    app: api
+    version: v2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: api
+        version: v2
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>API v2 CANARY</h1><p>Pod: $POD_NAME</p>" > /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'
+
+---
+# =============================================================
+# 7) SERVICE: api-v2-svc (ClusterIP)
+#    Backend para la API v2 (canary). Selecciona solo version=v2.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-v2-svc
+  namespace: lab-ingress
+  labels:
+    app: api
+    version: v2
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+    version: v2
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 8) DEPLOYMENT: admin-app (1 replica)
+#    Simula un panel de administracion. Responde con "ADMIN PANEL".
+#    Se usa para demostrar restriccion de acceso por IP.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-app
+  namespace: lab-ingress
+  labels:
+    app: admin
+    tier: management
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin
+      tier: management
+  template:
+    metadata:
+      labels:
+        app: admin
+        tier: management
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cat > /usr/share/nginx/html/index.html <<HTML
+          <h1>ADMIN PANEL</h1>
+          <p>Pod: $POD_NAME</p>
+          <p>Acceso restringido</p>
+          HTML
+          mkdir -p /usr/share/nginx/html/api/v1/users
+          echo '{"users":["alice","bob"]}' > /usr/share/nginx/html/api/v1/users/index.html
+          mkdir -p /usr/share/nginx/html/api/v1/health
+          echo '{"status":"ok"}' > /usr/share/nginx/html/api/v1/health/index.html
+          exec nginx -g 'daemon off;'
+
+---
+# =============================================================
+# 9) SERVICE: admin-svc (ClusterIP)
+#    Backend para el admin panel.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-svc
+  namespace: lab-ingress
+  labels:
+    app: admin
+spec:
+  type: ClusterIP
+  selector:
+    app: admin
+    tier: management
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 10) INGRESS: path-routing
+#     Patron: ENRUTAMIENTO POR PATH
+#
+#     Un solo host (demo.lab) con multiples paths:
+#       /frontend  →  frontend-svc
+#       /api       →  api-svc
+#
+#     La anotacion rewrite-target elimina el prefijo antes de
+#     enviar al backend: /frontend/page → /page
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-routing
+  namespace: lab-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: demo.lab
+    http:
+      paths:
+      - path: /frontend
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-svc
+            port:
+              number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 11) INGRESS: host-routing-frontend
+#     Patron: ENRUTAMIENTO POR HOST (Virtual Hosting)
+#
+#     Cada dominio apunta a un Service diferente:
+#       frontend.lab  →  frontend-svc
+#
+#     Permite multiples apps en la misma IP publica.
+#     Requiere configurar DNS o /etc/hosts.
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: host-routing-frontend
+  namespace: lab-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: frontend.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 12) INGRESS: host-routing-api
+#     Patron: ENRUTAMIENTO POR HOST (Virtual Hosting)
+#
+#       api.lab  →  api-svc
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: host-routing-api
+  namespace: lab-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 13) INGRESS: canary-production
+#     Patron: CANARY DEPLOYMENT (Ingress principal)
+#
+#     Dirige TODO el trafico de canary.lab a la version estable (v1).
+#     Este es el Ingress "base" — sin anotaciones canary.
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-production
+  namespace: lab-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 14) INGRESS: canary-new
+#     Patron: CANARY DEPLOYMENT (Ingress canary, 20% trafico)
+#
+#     Desvía un 20% del trafico de canary.lab a la version v2.
+#     Anotaciones clave:
+#       canary: "true"     → marca como Ingress canary
+#       canary-weight: "20" → porcentaje de trafico (0-100)
+#
+#     Se puede ajustar sin downtime:
+#       kubectl patch ingress canary-new -n lab-ingress \
+#         -p '{"metadata":{"annotations":{
+#           "nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-new
+  namespace: lab-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-v2-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 15) INGRESS: rate-limited
+#     Patron: RATE LIMITING
+#
+#     Limita peticiones a 5 por segundo y 10 conexiones simultaneas.
+#     Protege contra abuso y sobrecarga del backend.
+#     Al exceder el limite retorna 503 Service Unavailable.
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rate-limited
+  namespace: lab-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: limited.lab
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 16) INGRESS: rewrite-demo
+#     Patron: URL REWRITING con expresiones regulares
+#
+#     Reescribe /api/v1/* → /* antes de enviar al backend.
+#     Ejemplo: /api/v1/users → /users en admin-svc
+#
+#     Grupos de captura regex:
+#       $1 = (/|$)     → slash o fin de string
+#       $2 = (.*)       → todo lo que sigue (se envia al backend)
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rewrite-demo
+  namespace: lab-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: rewrite.lab
+    http:
+      paths:
+      - path: /api/v1(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: admin-svc
+            port:
+              number: 80
+
+---
+# =============================================================
+# 17) POD DE PRUEBA: test-tools
+#     Pod con curl y nslookup para verificar Ingress desde
+#     dentro del cluster. Util para debugging.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tools
+  namespace: lab-ingress
+  labels:
+    role: test
+spec:
+  containers:
+  - name: tools
+    image: curlimages/curl:latest
+    command: ['sleep', '3600']
+  restartPolicy: Never

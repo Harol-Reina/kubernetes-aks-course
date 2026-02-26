@@ -1,36 +1,79 @@
 # Laboratorio 01: Fundamentos de Ingress
 
-**Duración estimada**: 40-45 minutos  
-**Nivel**: Básico  
-**Prerequisitos**: Cluster Kubernetes funcional (minikube, kind, k3s o cloud)
-
-## Objetivos
-
-Al completar este laboratorio, serás capaz de:
-
-✅ Instalar nginx ingress controller con Helm  
-✅ Crear deployments y services de prueba  
-✅ Configurar Ingress con path-based routing  
-✅ Configurar Ingress con host-based routing  
-✅ Verificar el funcionamiento con curl  
-✅ Configurar DNS local con /etc/hosts  
-✅ Troubleshootar problemas comunes de Ingress
+**Duracion estimada:** 40-45 minutos
+**Nivel:** Basico
+**Objetivo:** Instalar un Ingress Controller, desplegar apps de prueba y configurar enrutamiento por path y por host
 
 ---
 
-## Parte 1: Instalación del Ingress Controller (10 min)
+## Tecnicas y Conceptos Utilizados
 
-### Paso 1.1: Instalar Helm (si no está instalado)
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Ingress Controller** | Componente que implementa las reglas Ingress. NGINX Ingress Controller es el mas popular. Se instala con Helm y crea un pod que escucha trafico HTTP/HTTPS y lo enruta a los backends |
+| **Path-Based Routing** | Enrutamiento basado en la ruta URL. Permite que un solo punto de entrada dirija `/app1` a un servicio y `/app2` a otro. Usa `pathType: Prefix` para coincidir con subpaths |
+| **Host-Based Routing** | Enrutamiento basado en el header `Host` HTTP (virtual hosting). Permite que `app1.example.com` y `app2.example.com` compartan la misma IP pero vayan a backends diferentes |
+| **Rewrite Target** | Anotacion que reescribe el path antes de enviarlo al backend. Ej: `/app1/page` se convierte en `/page` para que el backend no necesite conocer el prefijo |
+| **IngressClass** | Recurso que identifica que Ingress Controller procesa un Ingress. Permite tener multiples controllers en el mismo cluster |
+| **ClusterIP como backend** | Los Services tipo ClusterIP sirven como backends internos para Ingress. El Ingress Controller se comunica con ellos dentro del cluster |
+
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Parte | Descripcion |
+|---------|-------|-------------|
+| `deployment-apps-test.yaml` | 2 | Dos apps de prueba (app1, app2) con Deployments y Services ClusterIP |
+| `ingress-path-based.yaml` | 3 | Ingress con enrutamiento por path: /app1 y /app2 a diferentes backends |
+| `ingress-host-based.yaml` | 4 | Ingress con enrutamiento por host: app1.example.com y app2.example.com |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster de Kubernetes funcional (minikube, kind, k3s o cloud)
+- kubectl configurado
+- Helm instalado
+
+### Verificacion del entorno
+
+```bash
+# Verificar cluster
+kubectl cluster-info
+
+# Verificar nodos
+kubectl get nodes
+
+# Verificar Helm
+helm version
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
+```
+
+---
+
+## Parte 1: Instalacion del Ingress Controller (10 min)
+
+### Paso 1.1: Instalar Helm (si no esta instalado)
 
 ```bash
 # Linux
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-# Verificar instalación
+# Verificar instalacion
 helm version
 ```
 
-### Paso 1.2: Añadir repositorio de ingress-nginx
+### Paso 1.2: Anadir repositorio de ingress-nginx
 
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -49,7 +92,7 @@ helm install nginx-ingress ingress-nginx/ingress-nginx \
   --set controller.ingressClass=nginx
 ```
 
-### Paso 1.4: Verificar instalación
+### Paso 1.4: Verificar instalacion
 
 ```bash
 # Ver pods del ingress controller
@@ -67,86 +110,27 @@ export NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].a
 echo "Ingress URL: http://$NODE_IP:$NODE_PORT"
 ```
 
-**Verificación**: Deberías ver el pod `nginx-ingress-controller-*` en estado `Running`.
+**Verificacion**: Deberias ver el pod `nginx-ingress-controller-*` en estado `Running`.
 
 ---
 
 ## Parte 2: Crear Aplicaciones de Prueba (5 min)
 
-### Paso 2.1: Aplicar deployments de ejemplo
+### Paso 2.1: Revisar y aplicar deployments de ejemplo
+
+Revisa el archivo `deployment-apps-test.yaml` antes de aplicarlo:
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app1
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: app1
-  template:
-    metadata:
-      labels:
-        app: app1
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.25-alpine
-        ports:
-        - containerPort: 80
-        command: ["/bin/sh", "-c"]
-        args:
-          - echo '<h1>APP 1</h1><p>Pod: '$(hostname)'</p>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: servicio-app1
-spec:
-  selector:
-    app: app1
-  ports:
-    - port: 8080
-      targetPort: 80
-  type: ClusterIP
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app2
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: app2
-  template:
-    metadata:
-      labels:
-        app: app2
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.25-alpine
-        ports:
-        - containerPort: 80
-        command: ["/bin/sh", "-c"]
-        args:
-          - echo '<h1>APP 2</h1><p>Pod: '$(hostname)'</p>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: servicio-app2
-spec:
-  selector:
-    app: app2
-  ports:
-    - port: 8080
-      targetPort: 80
-  type: ClusterIP
-EOF
+cat deployment-apps-test.yaml
+```
+
+Puntos clave del manifiesto:
+- **2 Deployments**: app1 y app2, cada uno con 2 replicas
+- **2 Services ClusterIP**: servicio-app1 y servicio-app2 (puerto 8080 -> 80)
+- **Respuestas identificables**: cada app genera HTML con su nombre y hostname del Pod
+
+```bash
+kubectl apply -f deployment-apps-test.yaml
 ```
 
 ### Paso 2.2: Verificar recursos creados
@@ -156,40 +140,36 @@ kubectl get deployments,services,pods
 kubectl get endpoints servicio-app1 servicio-app2
 ```
 
+**Salida esperada:**
+```
+NAME                   READY   UP-TO-DATE   AVAILABLE
+deployment.apps/app1   2/2     2            2
+deployment.apps/app2   2/2     2            2
+
+NAME                    TYPE        CLUSTER-IP      PORT(S)
+service/servicio-app1   ClusterIP   10.96.x.x       8080/TCP
+service/servicio-app2   ClusterIP   10.96.x.x       8080/TCP
+```
+
 ---
 
 ## Parte 3: Ingress Path-Based Routing (10 min)
 
-### Paso 3.1: Crear Ingress por path
+### Paso 3.1: Revisar y crear Ingress por path
+
+Revisa el archivo `ingress-path-based.yaml`:
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: path-based-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  ingressClassName: nginx
-  rules:
-  - http:
-      paths:
-      - path: /app1
-        pathType: Prefix
-        backend:
-          service:
-            name: servicio-app1
-            port:
-              number: 8080
-      - path: /app2
-        pathType: Prefix
-        backend:
-          service:
-            name: servicio-app2
-            port:
-              number: 8080
-EOF
+cat ingress-path-based.yaml
+```
+
+Puntos clave del manifiesto:
+- **rewrite-target**: `/` reescribe el path (elimina /app1, /app2)
+- **pathType Prefix**: coincide con /app1 y todos sus subpaths
+- **Dos reglas de path**: /app1 -> servicio-app1, /app2 -> servicio-app2
+
+```bash
+kubectl apply -f ingress-path-based.yaml
 ```
 
 ### Paso 3.2: Verificar Ingress
@@ -204,11 +184,11 @@ kubectl describe ingress path-based-ingress
 ```bash
 # Probar app1
 curl http://$NODE_IP:$NODE_PORT/app1
-# Debería mostrar: APP 1
+# Deberia mostrar: APP 1
 
 # Probar app2
 curl http://$NODE_IP:$NODE_PORT/app2
-# Debería mostrar: APP 2
+# Deberia mostrar: APP 2
 
 # Probar path inexistente (404)
 curl http://$NODE_IP:$NODE_PORT/app3
@@ -218,40 +198,21 @@ curl http://$NODE_IP:$NODE_PORT/app3
 
 ## Parte 4: Ingress Host-Based Routing (10 min)
 
-### Paso 4.1: Crear Ingress por host
+### Paso 4.1: Revisar y crear Ingress por host
+
+Revisa el archivo `ingress-host-based.yaml`:
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: host-based-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: app1.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: servicio-app1
-            port:
-              number: 8080
-  - host: app2.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: servicio-app2
-            port:
-              number: 8080
-EOF
+cat ingress-host-based.yaml
+```
+
+Puntos clave del manifiesto:
+- **Dos reglas de host**: app1.example.com y app2.example.com
+- **Virtual hosting**: multiples dominios en la misma IP/puerto
+- **Cada host** tiene su propio conjunto de paths y backend
+
+```bash
+kubectl apply -f ingress-host-based.yaml
 ```
 
 ### Paso 4.2: Configurar DNS local
@@ -300,7 +261,7 @@ kubectl logs -n ingress-nginx deployment/nginx-ingress-controller --tail=50
 # Verificar
 kubectl get endpoints servicio-app1
 
-# Si está vacío, verificar:
+# Si esta vacio, verificar:
 kubectl get pods -l app=app1
 kubectl describe service servicio-app1
 ```
@@ -310,19 +271,9 @@ kubectl describe service servicio-app1
 ## Limpieza
 
 ```bash
-# Eliminar Ingress
-kubectl delete ingress path-based-ingress host-based-ingress
-
-# Eliminar apps
-kubectl delete deployment app1 app2
-kubectl delete service servicio-app1 servicio-app2
-
-# Limpiar /etc/hosts
-sudo sed -i '/app1.example.com/d' /etc/hosts
-sudo sed -i '/app2.example.com/d' /etc/hosts
-
-# Opcional: Desinstalar ingress controller
-# helm uninstall nginx-ingress -n ingress-nginx
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
 ```
 
 ---
@@ -330,7 +281,7 @@ sudo sed -i '/app2.example.com/d' /etc/hosts
 ## Checklist de Completado
 
 - [ ] Ingress controller instalado y funcionando
-- [ ] Apps de prueba desplegadas
+- [ ] Apps de prueba desplegadas con archivos YAML
 - [ ] Path-based routing funciona (/app1, /app2)
 - [ ] Host-based routing funciona (app1.example.com)
 - [ ] DNS local configurado correctamente
@@ -338,6 +289,10 @@ sudo sed -i '/app2.example.com/d' /etc/hosts
 
 ---
 
-## Próximos Pasos
+## Proximos Pasos
 
-➡️ [Lab 02: Ingress con TLS y Configuraciones Avanzadas](lab-02-ingress-tls-avanzado.md)
+1. **[Lab 02: Ingress con TLS y Configuraciones Avanzadas](../lab-02-ingress-tls-avanzado/)**
+   - Certificados TLS autofirmados
+   - Wildcard multi-host
+   - URL rewriting con regex
+   - CORS

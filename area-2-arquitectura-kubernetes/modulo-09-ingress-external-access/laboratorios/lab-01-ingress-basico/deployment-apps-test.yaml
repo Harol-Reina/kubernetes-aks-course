@@ -1,0 +1,104 @@
+# Lab 01 - Ingress Basico: Deployments y Services de Prueba
+# Uso: kubectl apply -f deployment-apps-test.yaml
+#
+# Descripcion:
+#   Crea dos aplicaciones de prueba (app1 y app2) con sus respectivos
+#   Services ClusterIP. Cada app es un nginx:alpine que genera una pagina
+#   HTML mostrando su nombre y el hostname del Pod. Estas apps sirven como
+#   backends para probar las reglas de enrutamiento de Ingress.
+#
+# Conceptos clave:
+#   - Deployments con replicas para alta disponibilidad
+#   - Services ClusterIP como backends internos para Ingress
+#   - Labels para seleccion de Pods por el Service
+#   - Comando personalizado para generar respuestas identificables
+#
+# Recursos creados:
+#   - Deployment app1 (2 replicas)
+#   - Service servicio-app1 (ClusterIP, puerto 8080 -> 80)
+#   - Deployment app2 (2 replicas)
+#   - Service servicio-app2 (ClusterIP, puerto 8080 -> 80)
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app1
+  labels:
+    app: app1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app1
+  template:
+    metadata:
+      labels:
+        app: app1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        command: ["/bin/sh", "-c"]
+        args:
+          - echo '<h1>APP 1</h1><p>Pod: '$(hostname)'</p>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servicio-app1
+  labels:
+    app: app1
+spec:
+  selector:
+    app: app1
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app2
+  labels:
+    app: app2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app2
+  template:
+    metadata:
+      labels:
+        app: app2
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        command: ["/bin/sh", "-c"]
+        args:
+          - echo '<h1>APP 2</h1><p>Pod: '$(hostname)'</p>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servicio-app2
+  labels:
+    app: app2
+spec:
+  selector:
+    app: app2
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 80
+  type: ClusterIP

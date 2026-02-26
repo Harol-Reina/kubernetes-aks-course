@@ -1,0 +1,58 @@
+# Lab 01 - Ingress Basico: Enrutamiento por Host (Host-Based Routing)
+# Uso: kubectl apply -f ingress-host-based.yaml
+#
+# Descripcion:
+#   Ingress que enruta trafico HTTP a diferentes backends segun el nombre
+#   de host (dominio). Las peticiones a app1.example.com van a servicio-app1
+#   y las peticiones a app2.example.com van a servicio-app2. Simula un
+#   escenario donde multiples aplicaciones comparten la misma IP publica.
+#
+# Conceptos clave:
+#   - Host-based routing: enrutamiento basado en el header Host HTTP
+#   - Virtual hosting: multiples dominios en una sola IP/puerto
+#   - Cada regla host define su propio conjunto de paths
+#   - Requiere configuracion DNS o /etc/hosts para pruebas locales
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-apps-test.yaml aplicado
+#   - Configurar /etc/hosts:
+#     echo "$NODE_IP app1.example.com app2.example.com" | sudo tee -a /etc/hosts
+#
+# Verificacion:
+#   curl -H "Host: app1.example.com" http://$NODE_IP:$NODE_PORT  -> APP 1
+#   curl -H "Host: app2.example.com" http://$NODE_IP:$NODE_PORT  -> APP 2
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: host-based-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  # Trafico para app1.example.com -> servicio-app1
+  - host: app1.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+  # Trafico para app2.example.com -> servicio-app2
+  - host: app2.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080

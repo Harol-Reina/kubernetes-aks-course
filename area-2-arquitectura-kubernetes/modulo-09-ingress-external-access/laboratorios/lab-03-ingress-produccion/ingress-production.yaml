@@ -1,0 +1,41 @@
+# Lab 03 - Produccion: Ingress Principal (Version Estable)
+# Uso: kubectl apply -f ingress-production.yaml
+#
+# Descripcion:
+#   Ingress principal que dirige todo el trafico de app.example.com
+#   a la version estable (v1) de la aplicacion. Este Ingress funciona
+#   como la regla "por defecto" y recibe el 100% del trafico a menos
+#   que exista un Ingress canary activo que desvie un porcentaje.
+#
+# Conceptos clave:
+#   - Ingress principal: regla base que recibe todo el trafico
+#   - Separacion de concerns: produccion y canary en Ingress independientes
+#   - Sin anotaciones canary: esto lo marca como el Ingress "principal"
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-canary.yaml aplicado
+#   - Configurar DNS: echo "$NODE_IP app.example.com" | sudo tee -a /etc/hosts
+#
+# Verificacion:
+#   curl http://app.example.com  -> VERSION 1 (100% sin canary activo)
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: production
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-v1
+            port:
+              number: 80

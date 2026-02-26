@@ -1,0 +1,55 @@
+# Lab 01 - Ingress Basico: Enrutamiento por Path (Path-Based Routing)
+# Uso: kubectl apply -f ingress-path-based.yaml
+#
+# Descripcion:
+#   Ingress que enruta trafico HTTP a diferentes backends segun el path
+#   de la URL. Las peticiones a /app1 se dirigen a servicio-app1 y las
+#   peticiones a /app2 se dirigen a servicio-app2. Usa rewrite-target
+#   para eliminar el prefijo del path antes de enviar al backend.
+#
+# Conceptos clave:
+#   - Path-based routing: enrutamiento basado en la ruta URL
+#   - pathType Prefix: coincide con el path y sus subpaths
+#   - rewrite-target: reescribe el path antes de enviarlo al backend
+#     (ej: /app1/page -> /page en el backend)
+#   - ingressClassName: selecciona que Ingress Controller procesa este recurso
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-apps-test.yaml aplicado
+#
+# Verificacion:
+#   curl http://$NODE_IP:$NODE_PORT/app1  -> APP 1
+#   curl http://$NODE_IP:$NODE_PORT/app2  -> APP 2
+#   curl http://$NODE_IP:$NODE_PORT/app3  -> 404 Not Found
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-based-ingress
+  annotations:
+    # Reescribe el path: /app1/* -> /* en el backend
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # /app1 y subpaths -> servicio-app1:8080
+      - path: /app1
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+      # /app2 y subpaths -> servicio-app2:8080
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080

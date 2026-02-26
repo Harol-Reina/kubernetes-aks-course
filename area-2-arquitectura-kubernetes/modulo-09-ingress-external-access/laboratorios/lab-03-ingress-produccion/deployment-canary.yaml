@@ -1,0 +1,116 @@
+# Lab 03 - Produccion: Deployments para Canary Release (v1 + v2)
+# Uso: kubectl apply -f deployment-canary.yaml
+#
+# Descripcion:
+#   Crea dos versiones de una aplicacion (v1 estable y v2 canary) con sus
+#   respectivos Services. Cada version muestra una pagina HTML diferente
+#   para poder distinguir visualmente que version responde. Los Services
+#   separados permiten al Ingress Controller dirigir porcentajes de
+#   trafico a cada version.
+#
+# Conceptos clave:
+#   - Canary release: desplegar nueva version para un % pequeno de trafico
+#   - Labels de version: distinguir Pods v1 de v2 con label "version"
+#   - Services independientes: cada version tiene su propio Service para
+#     que el Ingress pueda dirigir trafico selectivamente
+#   - Rollback rapido: si v2 falla, se elimina el Ingress canary sin afectar v1
+#
+# Recursos creados:
+#   - Deployment app-v1 (3 replicas, version: v1)
+#   - Service app-v1 (selector: app=myapp, version=v1)
+#   - Deployment app-v2 (3 replicas, version: v2)
+#   - Service app-v2 (selector: app=myapp, version=v2)
+#
+# Namespace: default
+---
+# Version 1 - Estable (recibe la mayoria del trafico)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-v1
+  labels:
+    app: myapp
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: v1
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        command: ["/bin/sh", "-c"]
+        args:
+          - echo '<h1>VERSION 1</h1>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-v1
+  labels:
+    app: myapp
+    version: v1
+spec:
+  selector:
+    app: myapp
+    version: v1
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+# Version 2 - Canary (recibe un % pequeno del trafico para validacion)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-v2
+  labels:
+    app: myapp
+    version: v2
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: v2
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        command: ["/bin/sh", "-c"]
+        args:
+          - echo '<h1>VERSION 2 - NEW</h1>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-v2
+  labels:
+    app: myapp
+    version: v2
+spec:
+  selector:
+    app: myapp
+    version: v2
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

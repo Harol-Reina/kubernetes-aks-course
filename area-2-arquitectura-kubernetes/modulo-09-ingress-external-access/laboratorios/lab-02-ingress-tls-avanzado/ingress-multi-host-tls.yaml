@@ -1,0 +1,69 @@
+# Lab 02 - TLS Avanzado: Ingress Multi-Host con Certificado Wildcard
+# Uso: kubectl apply -f ingress-multi-host-tls.yaml
+#
+# Descripcion:
+#   Ingress que sirve multiples dominios (app1.example.com, app2.example.com)
+#   usando un unico certificado wildcard (*.example.com). Demuestra como
+#   un solo certificado puede proteger todos los subdominios, reduciendo
+#   la complejidad de gestion de certificados en produccion.
+#
+# Conceptos clave:
+#   - Certificado wildcard: un certificado para *.example.com cubre todos los subdominios
+#   - subjectAltName (SAN): extension que lista dominios adicionales cubiertos
+#   - Multi-host TLS: un bloque tls con multiples hosts comparten el mismo certificado
+#   - Consolidacion: reduce el numero de Secrets TLS necesarios
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - Crear certificado wildcard y Secret:
+#     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#       -keyout wildcard.key -out wildcard.crt \
+#       -subj "/CN=*.example.com/O=MyOrg" \
+#       -addext "subjectAltName=DNS:*.example.com,DNS:example.com"
+#     kubectl create secret tls wildcard-tls --cert=wildcard.crt --key=wildcard.key
+#   - deployment-apps-test.yaml del Lab 01 aplicado
+#
+# Verificacion:
+#   curl -k https://app1.example.com  -> APP 1
+#   curl -k https://app2.example.com  -> APP 2
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-host-tls-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  # Un solo bloque TLS con wildcard cubre multiples hosts
+  tls:
+  - hosts:
+    - app1.example.com
+    - app2.example.com
+    - api.example.com
+    secretName: wildcard-tls
+  rules:
+  # app1.example.com -> servicio-app1
+  - host: app1.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080
+  # app2.example.com -> servicio-app2
+  - host: app2.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app2
+            port:
+              number: 8080

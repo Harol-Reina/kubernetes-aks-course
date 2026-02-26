@@ -1,97 +1,97 @@
-# 🌍 Laboratorios - Ingress y Acceso Externo
+# Laboratorios - Ingress y Acceso Externo
 
-Este módulo contiene laboratorios prácticos para dominar Ingress y acceso externo en Kubernetes.
+Este modulo contiene laboratorios practicos para dominar Ingress y acceso externo en Kubernetes.
 
-## 📋 Índice de Laboratorios
+## Indice de Laboratorios
 
-### [Lab 01: Ingress Básico](./lab-01-ingress-basico/)
-**Duración:** 60-75 minutos | **Dificultad:** ⭐⭐☆☆☆
+### [Lab 01: Ingress Basico](./lab-01-ingress-basico/)
+**Duracion:** 40-45 minutos | **Dificultad:** Basico
 
-Introducción a Ingress y configuración básica.
+Introduccion a Ingress: instalacion del controller, apps de prueba, y enrutamiento por path y por host.
 
-**Objetivos:**
-- Instalar Ingress Controller (NGINX)
-- Crear recursos Ingress básicos
-- Configurar reglas de enrutamiento
-- Probar acceso HTTP
+**Archivos YAML:**
+- `deployment-apps-test.yaml` - Deployments y Services de prueba (app1, app2)
+- `ingress-path-based.yaml` - Enrutamiento por path (/app1, /app2)
+- `ingress-host-based.yaml` - Enrutamiento por host (app1.example.com)
 
 ---
 
 ### [Lab 02: Ingress TLS Avanzado](./lab-02-ingress-tls-avanzado/)
-**Duración:** 90-120 minutos | **Dificultad:** ⭐⭐⭐⭐☆
+**Duracion:** 50-60 minutos | **Dificultad:** Intermedio
 
-Configuración de HTTPS y características avanzadas.
+Configuracion de HTTPS, certificados wildcard, URL rewriting con regex, y CORS.
 
-**Objetivos:**
-- Configurar TLS/SSL
-- Generar certificados
-- Path-based routing
-- Host-based routing
-
----
-
-### [Lab 03: Ingress en Producción](./lab-03-ingress-produccion/)
-**Duración:** 120-150 minutos | **Dificultad:** ⭐⭐⭐⭐⭐
-
-Best practices y configuración para producción.
-
-**Objetivos:**
-- Rate limiting
-- Authentication
-- Monitoreo y logging
-- High availability
+**Archivos YAML:**
+- `ingress-tls-single.yaml` - TLS para un solo host con redireccion HTTP->HTTPS
+- `ingress-multi-host-tls.yaml` - Multi-host con certificado wildcard
+- `ingress-rewrite.yaml` - URL rewriting con expresiones regulares
+- `ingress-cors.yaml` - CORS para peticiones cross-origin
 
 ---
 
-## 🎯 Ruta de Aprendizaje Recomendada
+### [Lab 03: Ingress en Produccion](./lab-03-ingress-produccion/)
+**Duracion:** 60-70 minutos | **Dificultad:** Avanzado
 
-1. **Nivel Básico** → Lab 01 (Ingress básico)
-2. **Nivel Intermedio** → Lab 02 (TLS avanzado)
-3. **Nivel Avanzado** → Lab 03 (Producción)
+Best practices de produccion: canary deployments, rate limiting, IP whitelist, alta disponibilidad y monitoreo.
 
-**Tiempo total estimado:** 5-6 horas
+**Archivos YAML:**
+- `deployment-canary.yaml` - Deployments v1 (estable) y v2 (canary)
+- `ingress-production.yaml` - Ingress principal (100% trafico a v1)
+- `ingress-canary.yaml` - Ingress canary (20% trafico a v2)
+- `ingress-rate-limit.yaml` - Rate limiting (5 rps, 10 conexiones)
+- `ingress-whitelist.yaml` - Restriccion de acceso por IP
+- `pdb-ingress-nginx.yaml` - PodDisruptionBudget para el controller
 
-## 📚 Conceptos Clave
+---
 
-### Ingress vs Service
-- **Service**: Expone pods dentro del cluster
-- **Ingress**: Expone HTTP/HTTPS al exterior
-- **Ingress Controller**: Implementa las reglas de Ingress
+### [Lab Resumen: Todos los Patrones de Ingress](./lab-resumen-ingress/)
+**Duracion:** 60 minutos | **Dificultad:** Repaso integral | **Plataforma:** Minikube
 
-### Ingress Controllers Populares
-- NGINX Ingress Controller
-- Traefik
-- HAProxy
-- AWS ALB Ingress Controller
+Un solo YAML despliega 4 backends + 6 Ingress resources para practicar todos los patrones de enrutamiento de un vistazo.
 
-### Características de Ingress
-- Path-based routing (`/api` → service-api)
-- Host-based routing (`api.example.com` → service-api)
-- TLS/SSL termination
-- Load balancing
+**Archivo YAML:**
+- `ingress-lab.yaml` - Todo el lab en un archivo: namespace, deployments, services, ingress, pod de prueba
 
-## ⚠️ Antes de Comenzar
+**Patrones cubiertos:**
+Path-based routing, Host-based routing, Canary deployment, Rate limiting, URL rewriting, TLS termination
+
+---
+
+## Ruta de Aprendizaje Recomendada
+
+1. **Nivel Basico** -> Lab 01 (Ingress basico)
+2. **Nivel Intermedio** -> Lab 02 (TLS avanzado)
+3. **Nivel Avanzado** -> Lab 03 (Produccion)
+4. **Repaso integral** -> Lab Resumen (todos los patrones en 1 hora con Minikube)
+
+**Tiempo total estimado:** 3.5-4.5 horas
+
+## Enfoque Declarativo
+
+Todos los laboratorios usan archivos YAML documentados en lugar de YAML inline. Cada archivo incluye:
+- Descripcion del recurso y su proposito
+- Conceptos clave explicados en los comentarios
+- Prerequisitos y comandos de verificacion
+- Namespace donde se crea el recurso
+
+## Antes de Comenzar
 
 ```bash
-# Habilitar Ingress addon en Minikube
-minikube addons enable ingress
-
-# Verificar Ingress Controller
-kubectl get pods -n ingress-nginx
-
 # Verificar cluster
 kubectl cluster-info
+
+# Verificar archivos YAML disponibles en cada lab
+ls lab-01-ingress-basico/*.yaml
+ls lab-02-ingress-tls-avanzado/*.yaml
+ls lab-03-ingress-produccion/*.yaml
 ```
 
-## 🧹 Limpieza
+## Limpieza
+
+Cada laboratorio incluye un script `cleanup.sh` con limpieza especifica:
 
 ```bash
 cd lab-XX-nombre
+chmod +x cleanup.sh
 ./cleanup.sh
 ```
-
-## 💡 Tips
-
-- Usa `/etc/hosts` para pruebas locales
-- Verifica logs del Ingress Controller si hay problemas
-- TLS requiere certificados válidos en producción

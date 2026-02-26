@@ -1,0 +1,59 @@
+# Lab 03 - Produccion: Ingress Canary (Version Nueva, 20% del Trafico)
+# Uso: kubectl apply -f ingress-canary.yaml
+#
+# Descripcion:
+#   Ingress canary que desvía un 20% del trafico de app.example.com
+#   a la version v2 de la aplicacion. NGINX Ingress Controller usa las
+#   anotaciones canary para dividir el trafico entre el Ingress principal
+#   y este Ingress canary de forma transparente para el cliente.
+#
+# Conceptos clave:
+#   - canary: "true" marca este Ingress como canary (no es el principal)
+#   - canary-weight: porcentaje de trafico (0-100) dirigido a este backend
+#   - El Ingress canary DEBE tener el mismo host que el principal
+#   - Se puede ajustar el peso dinamicamente con kubectl patch:
+#     kubectl patch ingress canary -p \
+#       '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
+#
+# Otros modos de canary (alternativos a canary-weight):
+#   - canary-by-header: dirigir por header HTTP personalizado
+#   - canary-by-cookie: dirigir por cookie especifica
+#   - canary-by-header-value: dirigir por valor especifico del header
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-canary.yaml aplicado
+#   - ingress-production.yaml aplicado (Ingress principal para v1)
+#
+# Verificacion:
+#   # Generar 100 requests y contar distribucion
+#   for i in {1..100}; do
+#     curl -s http://app.example.com | grep -o "VERSION [12]"
+#   done | sort | uniq -c
+#   # Esperado: ~80 VERSION 1, ~20 VERSION 2
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary
+  annotations:
+    # Marcar como Ingress canary
+    nginx.ingress.kubernetes.io/canary: "true"
+    # 20% del trafico va a esta version
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+spec:
+  ingressClassName: nginx
+  rules:
+  # DEBE coincidir con el host del Ingress principal
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-v2
+            port:
+              number: 80

@@ -1,0 +1,51 @@
+# Lab 03 - Produccion: Ingress con Rate Limiting
+# Uso: kubectl apply -f ingress-rate-limit.yaml
+#
+# Descripcion:
+#   Ingress que limita la tasa de peticiones por segundo y conexiones
+#   simultaneas a una API. Protege el backend contra abuso, DDoS basico,
+#   y sobrecarga. Cuando se excede el limite, NGINX retorna 503
+#   (Service Temporarily Unavailable).
+#
+# Conceptos clave:
+#   - limit-rps: maximo de peticiones por segundo por IP cliente
+#   - limit-connections: maximo de conexiones simultaneas por IP
+#   - Rate limiting se aplica por IP de origen (X-Forwarded-For)
+#   - Respuesta 503 cuando se excede el limite (configurable)
+#   - Burst: NGINX permite un pequeno exceso temporal antes de limitar
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-canary.yaml aplicado (o cualquier backend disponible)
+#   - Configurar DNS: echo "$NODE_IP api.example.com" | sudo tee -a /etc/hosts
+#
+# Verificacion:
+#   # Enviar 20 requests rapidos (varios deben retornar 503)
+#   for i in {1..20}; do
+#     curl -s -o /dev/null -w "%{http_code}\n" http://api.example.com
+#   done
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rate-limited-api
+  annotations:
+    # Maximo 5 requests por segundo por IP
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    # Maximo 10 conexiones simultaneas por IP
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-v1
+            port:
+              number: 80

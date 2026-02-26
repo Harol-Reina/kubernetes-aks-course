@@ -1,0 +1,52 @@
+# Lab 02 - TLS Avanzado: Ingress con CORS (Cross-Origin Resource Sharing)
+# Uso: kubectl apply -f ingress-cors.yaml
+#
+# Descripcion:
+#   Ingress configurado para permitir peticiones cross-origin (CORS).
+#   Necesario cuando un frontend en un dominio (ej: frontend.com)
+#   necesita hacer peticiones AJAX/fetch a una API en otro dominio
+#   (ej: api.example.com). Sin CORS, los navegadores bloquean estas
+#   peticiones por seguridad (Same-Origin Policy).
+#
+# Conceptos clave:
+#   - CORS: mecanismo que permite a un servidor indicar que origenes pueden
+#     acceder a sus recursos desde un navegador
+#   - enable-cors: activa los headers CORS en las respuestas
+#   - cors-allow-origin: dominios permitidos ("*" = todos, NO recomendado en produccion)
+#   - cors-allow-methods: metodos HTTP permitidos (GET, POST, OPTIONS, etc.)
+#   - Preflight request: peticion OPTIONS que el navegador envia antes de la real
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - deployment-apps-test.yaml del Lab 01 aplicado
+#
+# Verificacion:
+#   curl -H "Origin: https://frontend.com" -I http://api.example.com
+#   # Buscar en la respuesta: Access-Control-Allow-Origin: *
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cors-ingress
+  annotations:
+    # Habilitar CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    # Origenes permitidos (* = todos, usar dominio especifico en produccion)
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    # Metodos HTTP permitidos en peticiones cross-origin
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080

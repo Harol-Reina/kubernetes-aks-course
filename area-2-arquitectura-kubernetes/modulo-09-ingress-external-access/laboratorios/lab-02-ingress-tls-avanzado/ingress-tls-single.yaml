@@ -1,0 +1,58 @@
+# Lab 02 - TLS Avanzado: Ingress con TLS para un Solo Host
+# Uso: kubectl apply -f ingress-tls-single.yaml
+#
+# Descripcion:
+#   Ingress configurado con terminacion TLS/SSL para un unico dominio
+#   (app.example.com). Utiliza un Secret TLS que contiene el certificado
+#   y la clave privada. Fuerza redireccion HTTP -> HTTPS para garantizar
+#   que todo el trafico sea cifrado.
+#
+# Conceptos clave:
+#   - TLS termination: el Ingress Controller descifra HTTPS y envia HTTP al backend
+#   - Secret tipo kubernetes.io/tls: almacena certificado (tls.crt) y clave (tls.key)
+#   - ssl-redirect: redirige automaticamente HTTP a HTTPS (308 Permanent Redirect)
+#   - force-ssl-redirect: fuerza HTTPS incluso cuando el Ingress Controller
+#     esta detras de un balanceador L4
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX instalado
+#   - Crear certificado y Secret TLS:
+#     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#       -keyout tls.key -out tls.crt -subj "/CN=app.example.com/O=MyOrg"
+#     kubectl create secret tls tls-secret --cert=tls.crt --key=tls.key
+#   - deployment-apps-test.yaml del Lab 01 aplicado (o backends equivalentes)
+#
+# Verificacion:
+#   curl -k https://app.example.com             -> APP 1 (via HTTPS)
+#   curl -I http://app.example.com              -> 308 Permanent Redirect
+#   openssl s_client -connect app.example.com:443 -servername app.example.com
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-ingress
+  annotations:
+    # Redirigir HTTP -> HTTPS automaticamente
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Forzar HTTPS incluso detras de balanceador L4
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  # Configuracion TLS: asocia dominio con Secret que contiene certificado
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: tls-secret
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: servicio-app1
+            port:
+              number: 8080

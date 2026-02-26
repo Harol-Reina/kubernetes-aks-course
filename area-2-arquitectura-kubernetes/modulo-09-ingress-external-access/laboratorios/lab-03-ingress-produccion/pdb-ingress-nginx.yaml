@@ -1,0 +1,40 @@
+# Lab 03 - Produccion: PodDisruptionBudget para Ingress Controller
+# Uso: kubectl apply -f pdb-ingress-nginx.yaml
+#
+# Descripcion:
+#   PodDisruptionBudget (PDB) que garantiza que al menos 2 replicas
+#   del Ingress Controller NGINX esten disponibles en todo momento.
+#   Protege contra interrupciones durante mantenimiento de nodos,
+#   upgrades del cluster, o drain de nodos.
+#
+# Conceptos clave:
+#   - PodDisruptionBudget: limita cuantos Pods pueden estar no disponibles
+#     simultaneamente durante disrupciones voluntarias
+#   - minAvailable: minimo de Pods que DEBEN estar running
+#   - Disrupciones voluntarias: drain de nodo, upgrade, scaling down
+#   - NO protege contra disrupciones involuntarias (crashes, OOM)
+#   - Requiere multiples replicas del Ingress Controller (minimo 3 recomendado)
+#
+# Prerequisitos:
+#   - Ingress Controller NGINX con 3+ replicas:
+#     helm upgrade nginx-ingress ingress-nginx/ingress-nginx \
+#       --namespace ingress-nginx --reuse-values \
+#       --set controller.replicaCount=3
+#
+# Verificacion:
+#   kubectl get pdb -n ingress-nginx
+#   kubectl describe pdb ingress-nginx-pdb -n ingress-nginx
+#
+# Namespace: ingress-nginx
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ingress-nginx-pdb
+  namespace: ingress-nginx
+spec:
+  # Minimo 2 replicas siempre disponibles
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
