@@ -1,105 +1,91 @@
-# 📦 Laboratorios - Namespaces y Organización
+# Laboratorios - Namespaces y Organizacion
 
-Este módulo contiene laboratorios prácticos para dominar Namespaces y organización de recursos en Kubernetes.
+Este modulo contiene laboratorios practicos para dominar Namespaces y organizacion de recursos en Kubernetes.
 
-## 📋 Índice de Laboratorios
+## Indice de Laboratorios
 
-### [Lab 01: Namespaces Básico](./lab-01-namespaces-basico/)
-**Duración:** 45-60 minutos | **Dificultad:** ⭐⭐☆☆☆
+### [Lab 01: Namespaces Basico](./lab-01-namespaces-basico/)
+**Duracion:** 35-40 minutos | **Dificultad:** Basico
 
-Introducción a namespaces y su uso básico.
+Creacion de namespaces, contextos de kubectl, despliegue multi-namespace y DNS cross-namespace.
 
-**Objetivos:**
-- Crear y eliminar namespaces
-- Listar recursos por namespace
-- Cambiar contexto entre namespaces
-- Comprender namespace default
+**Archivos YAML:**
+- `namespace-production.yaml` - Namespace con labels y annotations
+- `webapp.yaml` - Deployment + Service reutilizable con `-n`
 
 ---
 
 ### [Lab 02: Quotas y Limits](./lab-02-quotas-limits/)
-**Duración:** 75-90 minutos | **Dificultad:** ⭐⭐⭐☆☆
+**Duracion:** 45-50 minutos | **Dificultad:** Intermedio
 
-Implementación de ResourceQuotas y LimitRanges.
+ResourceQuota para limitar recursos agregados, LimitRange para defaults y rangos por container.
 
-**Objetivos:**
-- Configurar ResourceQuotas
-- Implementar LimitRanges
-- Limitar recursos por namespace
-- Prevenir abuso de recursos
-
----
-
-### [Lab 03: Multi-tenancy](./lab-03-multi-tenancy/)
-**Duración:** 90-120 minutos | **Dificultad:** ⭐⭐⭐⭐☆
-
-Implementación de multi-tenancy con namespaces.
-
-**Objetivos:**
-- Diseñar arquitectura multi-tenant
-- Aislamiento de recursos
-- Network policies por namespace
-- Best practices de organización
+**Archivos YAML:**
+- `resourcequota-compute.yaml` - Quota de CPU, memoria, pods, services
+- `limitrange-compute.yaml` - Defaults, min, max y ratios por container
+- `resourcequota-besteffort.yaml` - Quota con scope BestEffort
 
 ---
 
-## 🎯 Ruta de Aprendizaje Recomendada
+### [Lab 03: Multi-Tenancy](./lab-03-multi-tenancy/)
+**Duracion:** 50-60 minutos | **Dificultad:** Avanzado
 
-1. **Nivel Básico** → Lab 01 (Namespaces básico)
-2. **Nivel Intermedio** → Lab 02 (Quotas y Limits)
-3. **Nivel Avanzado** → Lab 03 (Multi-tenancy)
+Arquitectura multi-tenant con RBAC, NetworkPolicies y aislamiento completo entre tenants.
 
-**Tiempo total estimado:** 4-5 horas
+**Archivos YAML:**
+- `tenant-setup.yaml` - 3 namespaces con ResourceQuota y LimitRange
+- `tenant-rbac.yaml` - ServiceAccount, Role y RoleBinding por tenant
+- `networkpolicy-deny-all.yaml` - Default deny all (reutilizable con `-n`)
+- `networkpolicy-allow-same-ns.yaml` - Allow intra-namespace (reutilizable con `-n`)
 
-## 📚 Conceptos Clave
+---
 
-### ¿Qué son los Namespaces?
-- Aislamiento lógico de recursos
-- No aislamiento físico (networking, storage)
-- Organización y control de acceso
-- Multi-tenancy básico
+### [Lab Resumen: Namespaces Completo](./lab-resumen-namespaces/)
+**Duracion:** 60 minutos | **Dificultad:** Repaso integral | **Plataforma:** Minikube
 
-### Namespaces del Sistema
-- `default`: Namespace por defecto
-- `kube-system`: Componentes del sistema
-- `kube-public`: Recursos públicos
-- `kube-node-lease`: Node heartbeats
+Un solo YAML despliega 3 namespaces con deployments, quotas, limits, RBAC y NetworkPolicies para practicar todos los conceptos de un vistazo.
 
-### ResourceQuota
-Limita recursos agregados en un namespace:
-- CPU total
-- Memoria total
-- Número de objetos (pods, services, etc.)
+**Archivo YAML:**
+- `namespaces-lab.yaml` - Todo el lab en un archivo
 
-### LimitRange
-Define límites por recurso individual:
-- CPU/memoria por container
-- CPU/memoria por pod
-- Storage por PVC
+**Conceptos cubiertos:**
+Namespaces, DNS cross-namespace, ResourceQuota, LimitRange, RBAC, NetworkPolicy
 
-## ⚠️ Antes de Comenzar
+---
+
+## Ruta de Aprendizaje Recomendada
+
+1. **Nivel Basico** -> Lab 01 (Namespaces basico)
+2. **Nivel Intermedio** -> Lab 02 (Quotas y Limits)
+3. **Nivel Avanzado** -> Lab 03 (Multi-tenancy)
+4. **Repaso integral** -> Lab Resumen (todos los conceptos en 1 hora con Minikube)
+
+**Tiempo total estimado:** 3.5-4 horas
+
+## Enfoque Declarativo
+
+Todos los laboratorios usan archivos YAML documentados. Cada archivo incluye:
+- Descripcion del recurso y su proposito
+- Conceptos clave explicados en los comentarios
+- Prerequisitos y comandos de verificacion
+- Namespace donde se crea el recurso
+
+## Antes de Comenzar
 
 ```bash
-# Ver namespaces existentes
+kubectl cluster-info
 kubectl get namespaces
-
-# Ver recursos en un namespace
-kubectl get all -n kube-system
-
-# Configurar namespace por defecto
-kubectl config set-context --current --namespace=dev
+ls lab-01-namespaces-basico/*.yaml
+ls lab-02-quotas-limits/*.yaml
+ls lab-03-multi-tenancy/*.yaml
 ```
 
-## 🧹 Limpieza
+## Limpieza
+
+Cada laboratorio incluye un script `cleanup.sh` con limpieza especifica:
 
 ```bash
 cd lab-XX-nombre
+chmod +x cleanup.sh
 ./cleanup.sh
 ```
-
-## 💡 Best Practices
-
-- Usa namespaces para separar entornos (dev, staging, prod)
-- Implementa ResourceQuotas en producción
-- Nunca uses `default` namespace en producción
-- Combina con RBAC para control de acceso

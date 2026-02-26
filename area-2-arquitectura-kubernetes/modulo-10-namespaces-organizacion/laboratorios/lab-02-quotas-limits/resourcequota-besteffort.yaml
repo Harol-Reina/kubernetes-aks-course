@@ -1,0 +1,32 @@
+# Lab 02 - Quotas y Limits: ResourceQuota con Scope BestEffort
+# Uso: kubectl apply -f resourcequota-besteffort.yaml
+#
+# Descripcion:
+#   ResourceQuota con scope BestEffort que solo aplica a pods que NO
+#   tienen requests ni limits definidos (QoS class BestEffort). Permite
+#   limitar cuantos pods "sin garantias" pueden existir, mientras los
+#   pods con requests/limits son controlados por la quota principal.
+#
+# Conceptos clave:
+#   - Scopes: filtran a QUE pods aplica la quota
+#   - BestEffort: pods sin ningun request/limit (los primeros en ser evicted)
+#   - Burstable: pods con al menos un request pero no todos los limits
+#   - Guaranteed: pods donde request == limit para CPU y memoria
+#   - Una quota con scope NO puede limitar recursos de computo
+#     (solo puede limitar conteo de objetos como pods)
+#
+# Verificacion:
+#   kubectl describe resourcequota besteffort-quota -n dev-limited
+#
+# Namespace: dev-limited
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: besteffort-quota
+  namespace: dev-limited
+spec:
+  hard:
+    pods: "2"                  # Maximo 2 pods BestEffort
+  scopes:
+  - BestEffort                 # Solo aplica a pods sin requests/limits

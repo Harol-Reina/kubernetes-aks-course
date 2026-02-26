@@ -1,0 +1,34 @@
+# Lab 01 - Namespaces Basico: Namespace de Produccion (Declarativo)
+# Uso: kubectl apply -f namespace-production.yaml
+#
+# Descripcion:
+#   Crea un namespace de produccion con labels y annotations que siguen
+#   las best practices de organizacion. Los labels permiten filtrar y
+#   seleccionar namespaces programaticamente. Las annotations almacenan
+#   metadata informativa (SLA, descripcion) que no se usa para seleccion.
+#
+# Conceptos clave:
+#   - Creacion declarativa: reproducible, versionable en Git
+#   - Labels: pares clave=valor para filtrado (kubectl get ns -l environment=prod)
+#   - Annotations: metadata libre, no indexada, para documentacion
+#   - critical: "true" se usa como label para identificar namespaces criticos
+#
+# Verificacion:
+#   kubectl describe namespace production
+#   kubectl get ns -l environment=prod
+#   kubectl get ns -l critical=true
+#
+# Limpieza:
+#   kubectl delete namespace production
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    environment: prod
+    team: platform
+    critical: "true"
+  annotations:
+    description: "Production environment"
+    sla: "99.9% uptime"

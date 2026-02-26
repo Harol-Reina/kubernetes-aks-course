@@ -1,0 +1,154 @@
+# Lab 03 - Multi-Tenancy: Configuracion de 3 Tenants
+# Uso: kubectl apply -f tenant-setup.yaml
+#
+# Descripcion:
+#   Crea la infraestructura completa para 3 tenants (company-a, company-b,
+#   company-c). Cada tenant recibe su propio namespace con ResourceQuota
+#   y LimitRange identicos. Esto garantiza aislamiento de recursos y
+#   evita que un tenant consuma recursos de otro.
+#
+# Conceptos clave:
+#   - Namespace por tenant: aislamiento logico de recursos
+#   - Labels de isolation: permiten aplicar politicas por label selector
+#   - ResourceQuota por tenant: limita CPU, memoria y objetos por namespace
+#   - LimitRange por tenant: aplica defaults y rangos por container
+#   - Misma configuracion para todos: equidad entre tenants
+#
+# Recursos creados (por cada tenant):
+#   - 1 Namespace con labels tenant e isolation
+#   - 1 ResourceQuota (4 CPU req, 8Gi mem req, 20 pods, 10 services)
+#   - 1 LimitRange (defaults: 500m/512Mi, max: 2 CPU/4Gi)
+#
+# Verificacion:
+#   kubectl get ns -l isolation=strict
+#   kubectl describe resourcequota -n tenant-company-a
+#   kubectl describe limitrange -n tenant-company-a
+---
+# =====================================================
+# TENANT: company-a
+# =====================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-company-a
+  labels:
+    tenant: company-a
+    isolation: strict
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: tenant-company-a
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+    services: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tenant-limits
+  namespace: tenant-company-a
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    max:
+      cpu: "2"
+      memory: "4Gi"
+---
+# =====================================================
+# TENANT: company-b
+# =====================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-company-b
+  labels:
+    tenant: company-b
+    isolation: strict
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: tenant-company-b
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+    services: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tenant-limits
+  namespace: tenant-company-b
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    max:
+      cpu: "2"
+      memory: "4Gi"
+---
+# =====================================================
+# TENANT: company-c
+# =====================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-company-c
+  labels:
+    tenant: company-c
+    isolation: strict
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-quota
+  namespace: tenant-company-c
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"
+    services: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tenant-limits
+  namespace: tenant-company-c
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    max:
+      cpu: "2"
+      memory: "4Gi"

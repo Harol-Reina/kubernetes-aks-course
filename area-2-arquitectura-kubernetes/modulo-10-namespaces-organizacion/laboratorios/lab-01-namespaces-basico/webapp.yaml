@@ -1,0 +1,69 @@
+# Lab 01 - Namespaces Basico: Deployment + Service Multi-Namespace
+# Uso: kubectl apply -f webapp.yaml -n <namespace>
+#
+# Descripcion:
+#   Deployment de webapp con nginx y su Service ClusterIP. No especifica
+#   namespace en el manifiesto para poder desplegarse en cualquier namespace
+#   usando el flag -n. Permite demostrar que el MISMO recurso puede existir
+#   en multiples namespaces de forma independiente y aislada.
+#
+# Conceptos clave:
+#   - Sin namespace en metadata: se aplica al namespace del contexto o flag -n
+#   - Mismo nombre en diferentes namespaces: recursos completamente independientes
+#   - DNS cambia segun namespace: webapp.development vs webapp.production
+#   - Resource requests/limits: buena practica para cualquier deployment
+#
+# Ejemplos de uso multi-namespace:
+#   kubectl apply -f webapp.yaml -n development
+#   kubectl apply -f webapp.yaml -n staging
+#   kubectl apply -f webapp.yaml -n production
+#   kubectl scale deployment webapp --replicas=5 -n production
+#
+# Verificacion:
+#   kubectl get deployments --all-namespaces -l app=webapp
+#   kubectl get svc --all-namespaces -l app=webapp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  labels:
+    app: webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  labels:
+    app: webapp
+spec:
+  type: ClusterIP
+  selector:
+    app: webapp
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80

@@ -1,0 +1,40 @@
+# Lab 03 - Multi-Tenancy: NetworkPolicy Allow Same Namespace
+# Uso: kubectl apply -f networkpolicy-allow-same-ns.yaml -n <namespace>
+#
+# Descripcion:
+#   NetworkPolicy que permite trafico de entrada SOLO desde pods del
+#   MISMO namespace. Combinada con deny-all-ingress, logra aislamiento
+#   completo entre namespaces: pods pueden comunicarse entre si dentro
+#   del namespace, pero no pueden recibir trafico de otros namespaces.
+#
+# Conceptos clave:
+#   - podSelector: {} selecciona todos los pods (a quienes proteger)
+#   - ingress.from.podSelector: {} permite trafico desde cualquier pod
+#     del MISMO namespace (no especifica namespaceSelector = solo local)
+#   - Esta politica se SUMA a deny-all-ingress (son aditivas)
+#   - Resultado: trafico intra-namespace permitido, cross-namespace bloqueado
+#
+# Orden de aplicacion:
+#   1. Primero aplicar deny-all-ingress.yaml (bloquea todo)
+#   2. Luego aplicar esta politica (permite solo intra-namespace)
+#
+# Aplicar a cada namespace de tenant:
+#   kubectl apply -f networkpolicy-allow-same-ns.yaml -n tenant-company-a
+#   kubectl apply -f networkpolicy-allow-same-ns.yaml -n tenant-company-b
+#   kubectl apply -f networkpolicy-allow-same-ns.yaml -n tenant-company-c
+#
+# NOTA: No especifica namespace para poder reutilizarse con -n
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+spec:
+  # Aplica a todos los pods del namespace
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  # Permitir trafico desde cualquier pod del MISMO namespace
+  - from:
+    - podSelector: {}

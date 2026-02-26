@@ -1,0 +1,443 @@
+# ============================================================
+# namespaces-lab.yaml
+# Ejercicio Resumen: Namespaces - Todos los Conceptos de Organizacion
+# Uso: kubectl apply -f namespaces-lab.yaml
+# Duracion: ~60 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# conceptos principales de Namespaces en Kubernetes usando Minikube:
+#   - 3 namespaces (dev, staging, prod) con labels
+#   - Deployments y Services en cada namespace
+#   - ResourceQuota y LimitRange en dev y prod
+#   - RBAC (ServiceAccount, Role, RoleBinding) en dev
+#   - NetworkPolicy deny-all + allow-same-ns en prod
+#   - Pod de prueba para DNS y conectividad
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-ns-dev (Desarrollo)
+#    Namespace para el equipo de desarrollo con quotas y RBAC.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-ns-dev
+  labels:
+    env: dev
+    team: developers
+    lab: namespaces-resumen
+
+---
+# =============================================================
+# 2) NAMESPACE: lab-ns-staging (Staging)
+#    Namespace intermedio sin restricciones adicionales.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-ns-staging
+  labels:
+    env: staging
+    team: qa
+    lab: namespaces-resumen
+
+---
+# =============================================================
+# 3) NAMESPACE: lab-ns-prod (Produccion)
+#    Namespace critico con quotas, limits y network policies.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-ns-prod
+  labels:
+    env: prod
+    team: platform
+    critical: "true"
+    lab: namespaces-resumen
+  annotations:
+    sla: "99.9% uptime"
+    contact: "platform@company.com"
+
+---
+# =============================================================
+# 4) DEPLOYMENT + SERVICE: webapp en dev (2 replicas)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: lab-ns-dev
+  labels:
+    app: webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>WEBAPP</h1><p>Pod: $POD_NAME</p><p>Namespace: $NAMESPACE</p>" > /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: lab-ns-dev
+  labels:
+    app: webapp
+spec:
+  selector:
+    app: webapp
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 5) DEPLOYMENT + SERVICE: webapp en staging (2 replicas)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: lab-ns-staging
+  labels:
+    app: webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>WEBAPP</h1><p>Pod: $POD_NAME</p><p>Namespace: $NAMESPACE</p>" > /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: lab-ns-staging
+  labels:
+    app: webapp
+spec:
+  selector:
+    app: webapp
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 6) DEPLOYMENT + SERVICE: webapp en prod (3 replicas)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: lab-ns-prod
+  labels:
+    app: webapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>WEBAPP</h1><p>Pod: $POD_NAME</p><p>Namespace: $NAMESPACE</p>" > /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: lab-ns-prod
+  labels:
+    app: webapp
+spec:
+  selector:
+    app: webapp
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 7) RESOURCEQUOTA: dev (limita recursos del namespace dev)
+#
+#    Limita el total de CPU, memoria y pods que pueden existir.
+#    Pods sin requests/limits seran rechazados (ver LimitRange).
+# =============================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: lab-ns-dev
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+    pods: "10"
+    services: "5"
+
+---
+# =============================================================
+# 8) LIMITRANGE: dev (defaults y rangos por container)
+#
+#    Aplica defaults automaticamente a pods sin requests/limits.
+#    Evita que se rechacen por falta de requests cuando hay quota.
+# =============================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: lab-ns-dev
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "100m"
+      memory: "128Mi"
+    defaultRequest:
+      cpu: "50m"
+      memory: "64Mi"
+    max:
+      cpu: "500m"
+      memory: "512Mi"
+    min:
+      cpu: "25m"
+      memory: "32Mi"
+
+---
+# =============================================================
+# 9) RESOURCEQUOTA: prod (mas estricta que dev)
+# =============================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: lab-ns-prod
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi
+    limits.cpu: "4"
+    limits.memory: 4Gi
+    pods: "20"
+    services: "10"
+
+---
+# =============================================================
+# 10) LIMITRANGE: prod
+# =============================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: prod-limits
+  namespace: lab-ns-prod
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "200m"
+      memory: "256Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "1"
+      memory: "1Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+
+---
+# =============================================================
+# 11) RBAC: ServiceAccount + Role + RoleBinding para dev
+#
+#     El dev-admin puede gestionar recursos en lab-ns-dev
+#     pero NO puede acceder a lab-ns-staging ni lab-ns-prod.
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dev-admin
+  namespace: lab-ns-dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dev-admin-role
+  namespace: lab-ns-dev
+rules:
+- apiGroups: ["", "apps", "batch"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-admin-binding
+  namespace: lab-ns-dev
+subjects:
+- kind: ServiceAccount
+  name: dev-admin
+  namespace: lab-ns-dev
+roleRef:
+  kind: Role
+  name: dev-admin-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# =============================================================
+# 12) NETWORKPOLICY: deny-all en prod
+#     Bloquea todo el trafico de entrada a pods de produccion.
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: lab-ns-prod
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+---
+# =============================================================
+# 13) NETWORKPOLICY: allow-same-namespace en prod
+#     Permite trafico solo entre pods del mismo namespace.
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: lab-ns-prod
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+
+---
+# =============================================================
+# 14) POD DE PRUEBA: test-tools en dev
+#     Para probar DNS cross-namespace y conectividad.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tools
+  namespace: lab-ns-dev
+  labels:
+    role: test
+spec:
+  containers:
+  - name: tools
+    image: alpine:3.19
+    command: ['sleep', '3600']
+    resources:
+      requests:
+        cpu: "25m"
+        memory: "32Mi"
+      limits:
+        cpu: "50m"
+        memory: "64Mi"
+  restartPolicy: Never

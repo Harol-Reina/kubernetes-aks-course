@@ -1,0 +1,39 @@
+# Lab 02 - Quotas y Limits: ResourceQuota de Computo
+# Uso: kubectl apply -f resourcequota-compute.yaml
+#
+# Descripcion:
+#   ResourceQuota que limita los recursos agregados (totales) que pueden
+#   consumirse en el namespace dev-limited. Controla CPU, memoria, cantidad
+#   de pods, services y PVCs. Cuando una quota esta activa, TODOS los pods
+#   deben especificar requests y limits o seran rechazados.
+#
+# Conceptos clave:
+#   - ResourceQuota: limita el TOTAL de recursos en un namespace (no por pod)
+#   - requests.cpu/memory: suma de todos los requests de todos los pods
+#   - limits.cpu/memory: suma de todos los limits de todos los pods
+#   - pods: numero maximo de pods que pueden existir
+#   - Efecto colateral: cuando hay quota, pods SIN requests/limits son rechazados
+#     (solucionar con LimitRange que pone defaults)
+#
+# Verificacion:
+#   kubectl describe resourcequota compute-quota -n dev-limited
+#   kubectl describe ns dev-limited | grep -A 15 "Resource Quotas"
+#
+# Namespace: dev-limited (debe existir antes de aplicar)
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: dev-limited
+spec:
+  hard:
+    # Limites de computo agregados
+    requests.cpu: "2"          # Total CPU requests de todos los pods
+    requests.memory: 4Gi       # Total memory requests de todos los pods
+    limits.cpu: "4"            # Total CPU limits de todos los pods
+    limits.memory: 8Gi         # Total memory limits de todos los pods
+    # Limites de cantidad de objetos
+    pods: "5"                  # Maximo 5 pods en el namespace
+    services: "3"              # Maximo 3 services
+    persistentvolumeclaims: "2" # Maximo 2 PVCs

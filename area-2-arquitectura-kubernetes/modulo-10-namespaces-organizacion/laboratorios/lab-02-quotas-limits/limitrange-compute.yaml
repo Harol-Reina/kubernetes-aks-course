@@ -1,0 +1,56 @@
+# Lab 02 - Quotas y Limits: LimitRange para Containers
+# Uso: kubectl apply -f limitrange-compute.yaml
+#
+# Descripcion:
+#   LimitRange que establece defaults, minimos, maximos y ratios para
+#   cada container y pod individual en el namespace. A diferencia de
+#   ResourceQuota (que limita el total), LimitRange controla CADA recurso
+#   individualmente. Aplica defaults automaticamente a pods sin requests/limits.
+#
+# Conceptos clave:
+#   - default: limits asignados si el container no especifica limits
+#   - defaultRequest: requests asignados si el container no especifica requests
+#   - max/min: rango permitido para cada container individual
+#   - maxLimitRequestRatio: ratio maximo entre limit y request (ej: 4 = limit
+#     puede ser hasta 4x el request. Evita overcommit excesivo)
+#   - type Container: aplica a cada container dentro del pod
+#   - type Pod: aplica al pod completo (suma de todos sus containers)
+#
+# Ejemplo de ratio:
+#   Si ratio CPU = 4 y request = 100m, el limit maximo es 400m
+#   Si pides request=100m y limit=600m -> ratio=6 -> RECHAZADO
+#
+# Verificacion:
+#   kubectl describe limitrange compute-limits -n dev-limited
+#
+# Namespace: dev-limited
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: compute-limits
+  namespace: dev-limited
+spec:
+  limits:
+  # Limites por Container individual
+  - type: Container
+    max:
+      cpu: "1"               # Maximo 1 core por container
+      memory: "1Gi"          # Maximo 1Gi por container
+    min:
+      cpu: "50m"             # Minimo 50m por container
+      memory: "64Mi"         # Minimo 64Mi por container
+    default:
+      cpu: "300m"            # Limit default si no se especifica
+      memory: "256Mi"
+    defaultRequest:
+      cpu: "100m"            # Request default si no se especifica
+      memory: "128Mi"
+    maxLimitRequestRatio:
+      cpu: "4"               # Limit puede ser max 4x el request
+      memory: "4"
+  # Limites por Pod (suma de todos los containers)
+  - type: Pod
+    max:
+      cpu: "2"               # Maximo 2 cores por pod completo
+      memory: "2Gi"          # Maximo 2Gi por pod completo

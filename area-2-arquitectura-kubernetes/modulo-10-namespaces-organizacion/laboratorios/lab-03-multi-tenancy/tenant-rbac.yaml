@@ -1,0 +1,128 @@
+# Lab 03 - Multi-Tenancy: RBAC por Tenant (Role + RoleBinding)
+# Uso: kubectl apply -f tenant-rbac.yaml
+#
+# Descripcion:
+#   Configura control de acceso por namespace para cada tenant. Crea
+#   un ServiceAccount, un Role con permisos completos en su namespace,
+#   y un RoleBinding que los conecta. Cada tenant-admin puede gestionar
+#   recursos en su namespace pero NO puede acceder a otros namespaces.
+#
+# Conceptos clave:
+#   - ServiceAccount: identidad para procesos/usuarios dentro del namespace
+#   - Role (no ClusterRole): permisos limitados a UN namespace
+#   - RoleBinding: conecta ServiceAccount con Role en el mismo namespace
+#   - Principio de minimo privilegio: acceso solo donde se necesita
+#   - apiGroups ["", "apps", "batch"]: core, apps (Deployments), batch (Jobs)
+#   - resources ["*"]: todos los recursos de esos API groups
+#   - verbs ["*"]: todas las operaciones (get, list, create, delete, etc.)
+#
+# Verificacion:
+#   # Puede crear pods en su namespace
+#   kubectl auth can-i create pods \
+#     --as=system:serviceaccount:tenant-company-a:tenant-admin \
+#     -n tenant-company-a
+#   # No puede crear pods en otro namespace
+#   kubectl auth can-i create pods \
+#     --as=system:serviceaccount:tenant-company-a:tenant-admin \
+#     -n tenant-company-b
+#
+# Prerequisito: tenant-setup.yaml aplicado
+---
+# =====================================================
+# RBAC: company-a
+# =====================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tenant-admin
+  namespace: tenant-company-a
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tenant-admin-role
+  namespace: tenant-company-a
+rules:
+- apiGroups: ["", "apps", "batch"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tenant-admin-binding
+  namespace: tenant-company-a
+subjects:
+- kind: ServiceAccount
+  name: tenant-admin
+  namespace: tenant-company-a
+roleRef:
+  kind: Role
+  name: tenant-admin-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# =====================================================
+# RBAC: company-b
+# =====================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tenant-admin
+  namespace: tenant-company-b
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tenant-admin-role
+  namespace: tenant-company-b
+rules:
+- apiGroups: ["", "apps", "batch"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tenant-admin-binding
+  namespace: tenant-company-b
+subjects:
+- kind: ServiceAccount
+  name: tenant-admin
+  namespace: tenant-company-b
+roleRef:
+  kind: Role
+  name: tenant-admin-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# =====================================================
+# RBAC: company-c
+# =====================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tenant-admin
+  namespace: tenant-company-c
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tenant-admin-role
+  namespace: tenant-company-c
+rules:
+- apiGroups: ["", "apps", "batch"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tenant-admin-binding
+  namespace: tenant-company-c
+subjects:
+- kind: ServiceAccount
+  name: tenant-admin
+  namespace: tenant-company-c
+roleRef:
+  kind: Role
+  name: tenant-admin-role
+  apiGroup: rbac.authorization.k8s.io

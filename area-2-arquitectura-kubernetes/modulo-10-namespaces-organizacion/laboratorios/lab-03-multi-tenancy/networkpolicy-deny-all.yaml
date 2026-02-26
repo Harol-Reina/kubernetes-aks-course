@@ -1,0 +1,33 @@
+# Lab 03 - Multi-Tenancy: NetworkPolicy Default Deny All Ingress
+# Uso: kubectl apply -f networkpolicy-deny-all.yaml -n <namespace>
+#
+# Descripcion:
+#   NetworkPolicy que bloquea TODO el trafico de entrada (ingress) a
+#   todos los pods del namespace. Es la base de una estrategia de
+#   seguridad "default deny": primero bloquear todo, luego permitir
+#   explicitamente solo lo necesario con politicas adicionales.
+#
+# Conceptos clave:
+#   - podSelector: {} (vacio) selecciona TODOS los pods del namespace
+#   - policyTypes: [Ingress] indica que esta politica controla trafico entrante
+#   - Sin reglas de ingress = denegar todo el trafico de entrada
+#   - Default deny es la base de zero-trust networking
+#   - El trafico de SALIDA (egress) no se ve afectado por esta politica
+#
+# Aplicar a cada namespace de tenant:
+#   kubectl apply -f networkpolicy-deny-all.yaml -n tenant-company-a
+#   kubectl apply -f networkpolicy-deny-all.yaml -n tenant-company-b
+#   kubectl apply -f networkpolicy-deny-all.yaml -n tenant-company-c
+#
+# NOTA: No especifica namespace para poder reutilizarse con -n
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+spec:
+  # Selecciona TODOS los pods del namespace
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  # Sin reglas de ingress = denegar todo
