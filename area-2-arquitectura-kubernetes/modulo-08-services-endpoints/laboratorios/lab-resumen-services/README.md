@@ -84,7 +84,7 @@ spec:
 
 ```
 ┌──────────────────┬────────────┬──────────────┬────────────────┬─────────────────────┐
-│ Tipo             │ ClusterIP  │ LoadBalancer  │ Headless       │ ExternalName        │
+│ Tipo             │ ClusterIP  │ LoadBalancer │ Headless       │ ExternalName        │
 ├──────────────────┼────────────┼──────────────┼────────────────┼─────────────────────┤
 │ IP Virtual       │ Si         │ Si + publica │ No (None)      │ No                  │
 │ DNS devuelve     │ ClusterIP  │ ClusterIP    │ IPs de Pods    │ CNAME externo       │
@@ -259,29 +259,29 @@ ClusterIP, LoadBalancer y Headless comparten los mismos Endpoints porque usan el
 ## Resumen Visual
 
 ```
-                         ┌───────────────────────────────────────┐
-                         │           CLUSTER KUBERNETES          │
-                         │                                       │
-  ┌─────────────────┐    │  ┌─────────────┐    ┌──────────────┐ │
-  │  ExternalName   │────│──│ DNS CNAME   │    │  Pod-1       │ │
-  │ (solo DNS)      │    │  │ example.com │    │  10.244.0.5  │ │
-  └─────────────────┘    │  └─────────────┘    └──────┬───────┘ │
-                         │                            │         │
+                         ┌─────────────────────────────────────┐
+                         │           CLUSTER KUBERNETES        │
+                         │                                     │
+  ┌─────────────────┐    │  ┌─────────────┐    ┌──────────────┐│
+  │  ExternalName   │────│──│ DNS CNAME   │    │  Pod-1       ││
+  │ (solo DNS)      │    │  │ example.com │    │  10.244.0.5  ││
+  └─────────────────┘    │  └─────────────┘    └──────┬───────┘│
+                         │                            │        │
   ┌─────────────────┐    │  ┌─────────────┐          │         │
   │   ClusterIP     │────│──│ 10.96.X.X   │──────────┤         │
-  │ (IP interna)    │    │  │  kube-proxy  │    ┌─────┴────────┐│
-  └─────────────────┘    │  │  balancea    │    │  Pod-2       ││
+  │ (IP interna)    │    │  │  kube-proxy │    ┌─────┴────────┐│
+  └─────────────────┘    │  │  balancea   │    │  Pod-2       ││
                          │  └─────────────┘    │  10.244.0.6  ││
   ┌─────────────────┐    │  ┌─────────────┐    └──────┬───────┘│
   │  LoadBalancer   │────│──│ IP publica  │──────────┤         │
   │ (IP externa)    │    │  │ + ClusterIP │    ┌─────┴────────┐│
   └─────────────────┘    │  └─────────────┘    │  Pod-3       ││
-                         │                      │  10.244.0.7  ││
+                         │                     │  10.244.0.7  ││
   ┌─────────────────┐    │  ┌─────────────┐    └──────────────┘│
   │   Headless      │────│──│ DNS → IPs   │────── Pod-1,2,3    │
-  │ (sin ClusterIP) │    │  │ de cada Pod │    (cliente elige)  │
-  └─────────────────┘    │  └─────────────┘                     │
-                         └───────────────────────────────────────┘
+  │ (sin ClusterIP) │    │  │ de cada Pod │    (cliente elige) │
+  └─────────────────┘    │  └─────────────┘                    │
+                         └─────────────────────────────────────┘
 ```
 
 ---
