@@ -1,0 +1,35 @@
+# Ejercicio 3: externalTrafficPolicy: Cluster (Default)
+# Uso: kubectl apply -f webapp-cluster-policy.yaml
+#
+# Descripcion:
+#   Service NodePort con externalTrafficPolicy: Cluster (comportamiento por defecto).
+#   El trafico se balancea a TODOS los Pods del cluster, sin importar en que nodo
+#   se reciba la conexion. Esto puede causar un "hop extra" entre nodos.
+#
+# Comportamiento:
+#   - Balancea a TODOS los Pods (incluso en otros nodos)
+#   - Pierde IP origen del cliente (SNAT - Source NAT)
+#   - Funciona siempre, incluso si el nodo no tiene Pods del Service
+#   - Distribucion uniforme del trafico
+#
+# Comparar con: webapp-local-policy.yaml (externalTrafficPolicy: Local)
+# Relacion: Selecciona Pods de webapp-deployment.yaml
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-cluster-policy
+  labels:
+    policy: cluster
+spec:
+  type: NodePort
+  selector:
+    app: webapp
+    tier: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    nodePort: 30081
+  externalTrafficPolicy: Cluster    # Default - balancea a todos los Pods

@@ -1,0 +1,61 @@
+# Ejercicio 1: ClusterIP Basico - Deployment Backend
+# Uso: kubectl apply -f backend-deployment.yaml
+#
+# Descripcion:
+#   Deployment con 3 replicas de nginx:alpine que genera una pagina HTML
+#   mostrando el nombre del Pod y su IP. Permite visualizar el balanceo
+#   de carga cuando se accede a traves de un Service ClusterIP.
+#   Cada Pod se identifica con variables de entorno inyectadas via Downward API.
+#
+# Conceptos clave:
+#   - Downward API (fieldRef) para obtener metadata del Pod
+#   - Labels app + tier para seleccion precisa por Services
+#   - Named ports para referencia semantica en Services
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  labels:
+    app: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+      tier: api
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: api
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+
+        # Variables de entorno via Downward API
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        # Script para generar pagina con info del Pod
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "<h1>Backend API</h1>" > /usr/share/nginx/html/index.html
+          echo "<p>Pod: $POD_NAME</p>" >> /usr/share/nginx/html/index.html
+          echo "<p>IP: $POD_IP</p>" >> /usr/share/nginx/html/index.html
+          exec nginx -g 'daemon off;'

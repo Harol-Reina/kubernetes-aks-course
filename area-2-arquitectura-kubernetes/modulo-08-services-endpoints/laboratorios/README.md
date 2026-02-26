@@ -1,65 +1,55 @@
 # 🌐 Laboratorios - Services y Endpoints
 
-Este módulo contiene laboratorios prácticos para dominar Services y Endpoints en Kubernetes.
+Este modulo contiene laboratorios practicos para dominar Services y Endpoints en Kubernetes.
 
-## 📋 Índice de Laboratorios
+Todos los laboratorios utilizan un enfoque **100% declarativo** con archivos YAML documentados.
+
+## 📋 Indice de Laboratorios
 
 ### [Lab 01: ClusterIP Basics](./lab-01-clusterip-basics/)
-**Duración:** 60-75 minutos | **Dificultad:** ⭐⭐☆☆☆
+**Duracion:** 40 minutos | **Dificultad:** Basico
 
-Fundamentos de Services tipo ClusterIP.
+Fundamentos de Services tipo ClusterIP, Endpoints y DNS discovery.
 
-**Objetivos:**
-- Crear Services ClusterIP
-- Configurar selectors
-- Acceso interno entre pods
-- DNS interno de Kubernetes
+**Archivos YAML:** 3 | **Tecnicas:** ClusterIP, Endpoints automaticos, DNS discovery, balanceo de carga, readinessProbe, port-forward
 
 ---
 
 ### [Lab 02: NodePort y LoadBalancer](./lab-02-nodeport-loadbalancer/)
-**Duración:** 75-90 minutos | **Dificultad:** ⭐⭐⭐☆☆
+**Duracion:** 50 minutos | **Dificultad:** Intermedio
 
-Exposición de servicios al exterior del cluster.
+Exposicion de servicios al exterior del cluster con NodePort y LoadBalancer.
 
-**Objetivos:**
-- Crear Services NodePort
-- Configurar LoadBalancer
-- Exponer aplicaciones externamente
-- Comprender diferencias entre tipos
+**Archivos YAML:** 6 | **Tecnicas:** NodePort auto/custom, LoadBalancer, externalTrafficPolicy Cluster vs Local, healthCheckNodePort
 
 ---
 
 ### [Lab 03: Advanced Services](./lab-03-advanced-services/)
-**Duración:** 90-120 minutos | **Dificultad:** ⭐⭐⭐⭐☆
+**Duracion:** 60 minutos | **Dificultad:** Avanzado
 
-Características avanzadas de Services y Endpoints.
+Caracteristicas avanzadas de Services y Endpoints para produccion.
 
-**Objetivos:**
-- ExternalName Services
-- Headless Services
-- Endpoints manuales
-- Service discovery avanzado
+**Archivos YAML:** 13 | **Tecnicas:** ExternalName, Headless Services, Endpoints manuales, StatefulSet, migracion gradual, PDB, HPA, security context
 
 ---
 
 ## 🎯 Ruta de Aprendizaje Recomendada
 
-1. **Nivel Básico** → Lab 01 (ClusterIP)
+1. **Nivel Basico** → Lab 01 (ClusterIP)
 2. **Nivel Intermedio** → Lab 02 (NodePort/LoadBalancer)
 3. **Nivel Avanzado** → Lab 03 (Advanced)
 
-**Tiempo total estimado:** 4-5 horas
+**Tiempo total estimado:** 2.5 horas
 
 ## 📚 Tipos de Services
 
 ### ClusterIP (Default)
 - Acceso solo interno
 - IP virtual del cluster
-- DNS automático
+- DNS automatico
 
 ### NodePort
-- Expone en puerto del node
+- Expone en puerto del nodo
 - Rango: 30000-32767
 - Acceso externo limitado
 
@@ -88,7 +78,10 @@ kubectl get svc -n kube-system kube-dns
 
 ## 🧹 Limpieza
 
+Cada laboratorio incluye un script de limpieza:
+
 ```bash
 cd lab-XX-nombre
+chmod +x cleanup.sh
 ./cleanup.sh
 ```

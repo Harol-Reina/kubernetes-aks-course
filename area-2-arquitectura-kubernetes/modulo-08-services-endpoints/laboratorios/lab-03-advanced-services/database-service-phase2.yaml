@@ -1,0 +1,29 @@
+# Ejercicio 2: Migracion Gradual - Fase 2 (Servicio Interno)
+# Uso: kubectl apply -f database-service-phase2.yaml
+#
+# Descripcion:
+#   Service ClusterIP que reemplaza al ExternalName de Fase 1.
+#   Ahora apunta a Pods internos de PostgreSQL en lugar del RDS externo.
+#   El nombre del Service ("database") NO cambia, por lo que las aplicaciones
+#   que lo consumen siguen funcionando sin modificaciones.
+#
+# Patron de migracion:
+#   Fase 1: ExternalName → RDS externo (database-service-phase1.yaml)
+#   Fase 2: ClusterIP → Pods internos (este archivo)
+#   Ventaja: Zero-downtime migration — apps NO necesitan cambiar
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database       # MISMO nombre que Fase 1
+  labels:
+    phase: internal
+spec:
+  type: ClusterIP      # Cambio de ExternalName a ClusterIP
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432

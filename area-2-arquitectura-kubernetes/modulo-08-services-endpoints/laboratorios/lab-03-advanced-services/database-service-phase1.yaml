@@ -1,0 +1,25 @@
+# Ejercicio 2: Migracion Gradual - Fase 1 (Servicio Externo)
+# Uso: kubectl apply -f database-service-phase1.yaml
+#
+# Descripcion:
+#   Service ExternalName apuntando a una base de datos RDS en AWS.
+#   Representa la Fase 1 de una migracion gradual: el servicio esta
+#   hospedado externamente pero las apps lo acceden por nombre de Service.
+#   Para migrar a interno, solo se cambia el Service (ver database-service-phase2.yaml).
+#
+# Patron de migracion:
+#   Fase 1: ExternalName → mydb.abc123.us-east-1.rds.amazonaws.com (este archivo)
+#   Fase 2: ClusterIP → Pods internos de PostgreSQL (database-service-phase2.yaml)
+#   Las aplicaciones NO cambian — siempre usan "database" como hostname
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database
+  labels:
+    phase: external
+spec:
+  type: ExternalName
+  externalName: mydb.abc123.us-east-1.rds.amazonaws.com

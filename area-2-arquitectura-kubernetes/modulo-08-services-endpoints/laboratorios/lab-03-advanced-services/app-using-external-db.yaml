@@ -1,0 +1,51 @@
+# Ejercicio 4: App que consume la Base de Datos Externa
+# Uso: kubectl apply -f app-using-external-db.yaml
+#
+# Descripcion:
+#   Deployment que usa el Service "external-database" como hostname para
+#   conectarse a PostgreSQL. Demuestra que las apps pueden usar el nombre
+#   del Service sin saber si el backend es interno o externo.
+#   Ejecuta pg_isready periodicamente para verificar conectividad.
+#
+# Verificar comportamiento:
+#   kubectl logs -l app=myapp --tail=10
+#
+# Nota: La conexion fallara porque las IPs (192.168.100.10/11) son de ejemplo.
+#       El objetivo es demostrar el patron, no la conectividad real.
+#
+# Relacion: Usa external-database-service.yaml + external-database-endpoints.yaml
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-external-db
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: app
+        image: postgres:15-alpine
+        env:
+        - name: PGHOST
+          value: "external-database"    # Usa nombre del Service
+        - name: PGPORT
+          value: "5432"
+        - name: PGUSER
+          value: "postgres"
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            echo "Testing connection to external-database..."
+            pg_isready -h external-database -p 5432 || echo "DB not reachable"
+            sleep 30
+          done

@@ -1,0 +1,34 @@
+# Ejercicio 2: ClusterIP Basico - Service ClusterIP
+# Uso: kubectl apply -f backend-service.yaml
+#
+# Descripcion:
+#   Service tipo ClusterIP que expone los Pods del backend-deployment.
+#   Asigna una IP virtual estable dentro del cluster y crea registros DNS
+#   automaticos (backend-service.default.svc.cluster.local).
+#   Los Endpoints se generan automaticamente para Pods que coincidan con el selector.
+#
+# Conceptos clave:
+#   - ClusterIP es el tipo por defecto (puede omitirse)
+#   - El selector debe coincidir EXACTAMENTE con las labels de los Pods
+#   - targetPort: http referencia el named port del container
+#   - Los Endpoints se actualizan dinamicamente al escalar
+#
+# Relacion: Selecciona Pods de backend-deployment.yaml (app=backend, tier=api)
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  labels:
+    app: backend
+spec:
+  type: ClusterIP    # Puede omitirse (es el default)
+  selector:
+    app: backend
+    tier: api
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80          # Puerto del Service (donde escucha)
+    targetPort: http  # Named port del container

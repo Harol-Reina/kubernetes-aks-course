@@ -1,0 +1,36 @@
+# Ejercicio 6: Troubleshooting - Pod Not Ready
+# Uso: kubectl apply -f pod-not-ready.yaml
+#
+# Descripcion:
+#   Pod con labels que coinciden con el selector del Service, pero con un
+#   readinessProbe que FALLA intencionalmente (apunta a /nonexistent).
+#   Demuestra que Kubernetes NO envia trafico a Pods que no pasan el readiness check.
+#   El Pod aparecera como Running pero con READY 0/1.
+#
+# Conceptos clave:
+#   - readinessProbe determina si un Pod recibe trafico del Service
+#   - Pod Running != Pod Ready (diferencia critica)
+#   - kube-proxy excluye Pods not-ready de los Endpoints
+#   - Util para entender por que un Service no envia trafico a ciertos Pods
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-not-ready
+  labels:
+    app: backend
+    tier: api
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /nonexistent    # Path que NO existe - readiness fallara
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5

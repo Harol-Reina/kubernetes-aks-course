@@ -1,20 +1,41 @@
-# Laboratorio 01: ClusterIP Básico - Fundamentos de Services
+# Laboratorio 01: ClusterIP Basico - Fundamentos de Services
 
-**Duración estimada:** 40 minutos  
-**Nivel:** Básico  
+**Duracion estimada:** 40 minutos
+**Nivel:** Basico
 **Objetivo:** Comprender Services tipo ClusterIP, descubrimiento por DNS, y Endpoints
 
 ---
 
-## 📋 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
 
-Al completar este laboratorio, serás capaz de:
+| Tecnica | Descripcion |
+|---------|-------------|
+| **ClusterIP Service** | Tipo de Service por defecto. Asigna una IP virtual interna estable para acceder a un grupo de Pods. Solo accesible dentro del cluster |
+| **Endpoints automaticos** | Kubernetes crea y mantiene automaticamente la lista de IPs de Pods que coinciden con el selector del Service. Se actualizan al escalar |
+| **DNS Discovery** | CoreDNS crea registros automaticos para cada Service: `<service>.<namespace>.svc.cluster.local`. Metodo recomendado sobre variables de entorno |
+| **Balanceo de carga** | kube-proxy distribuye el trafico entre todos los Endpoints del Service usando iptables/IPVS. Distribucion aproximadamente uniforme |
+| **Downward API** | Mecanismo para inyectar metadata del Pod (nombre, IP, nodo) como variables de entorno usando `fieldRef` |
+| **readinessProbe** | Health check que determina si un Pod esta listo para recibir trafico. Pods not-ready se excluyen de los Endpoints |
+| **Port-Forward** | Herramienta de kubectl para acceder a Services/Pods desde la maquina local, util para debugging |
 
-- ✅ Crear Services tipo ClusterIP
-- ✅ Entender cómo funcionan los Endpoints automáticos
-- ✅ Usar descubrimiento por DNS para conectar Pods
-- ✅ Verificar balanceo de carga automático
-- ✅ Diagnosticar problemas básicos de Services
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `backend-deployment.yaml` | 1 | Deployment con 3 replicas nginx:alpine que muestra info del Pod |
+| `backend-service.yaml` | 2 | Service ClusterIP que expone el backend con selector app+tier |
+| `pod-not-ready.yaml` | 6 | Pod con readinessProbe fallida para demostrar exclusion de Endpoints |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `test-loadbalancing.sh` | Script para verificar distribucion de trafico entre Pods |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
 
 ---
 
@@ -22,9 +43,9 @@ Al completar este laboratorio, serás capaz de:
 
 - Cluster de Kubernetes funcional (minikube, kind, k3s, o cloud)
 - kubectl configurado
-- Conocimientos básicos de Pods y Deployments (módulos anteriores)
+- Conocimientos basicos de Pods y Deployments (modulos anteriores)
 
-### Verificación del entorno
+### Verificacion del entorno
 
 ```bash
 # Verificar cluster
@@ -35,66 +56,31 @@ kubectl get nodes
 
 # Verificar que puedes crear recursos
 kubectl auth can-i create services
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
 ```
 
 ---
 
-## 📚 Parte 1: Crear tu Primer Service ClusterIP
+## Parte 1: Crear tu Primer Service ClusterIP
 
-### Paso 1: Crear un Deployment
+### Paso 1: Revisar y aplicar el Deployment
 
-Primero necesitamos Pods para exponer vía Service.
+Revisa el archivo `backend-deployment.yaml` antes de aplicarlo:
 
 ```bash
-# Crear archivo backend-deployment.yaml
-cat > backend-deployment.yaml <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend-deployment
-  labels:
-    app: backend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: backend
-      tier: api
-  template:
-    metadata:
-      labels:
-        app: backend
-        tier: api
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - name: http
-          containerPort: 80
-        
-        # Configurar para identificar cada Pod
-        env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: POD_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIP
-        
-        # Script para mostrar info del Pod
-        command:
-        - /bin/sh
-        - -c
-        - |
-          echo "<h1>Backend API</h1>" > /usr/share/nginx/html/index.html
-          echo "<p>Pod: $POD_NAME</p>" >> /usr/share/nginx/html/index.html
-          echo "<p>IP: $POD_IP</p>" >> /usr/share/nginx/html/index.html
-          exec nginx -g 'daemon off;'
-EOF
+cat backend-deployment.yaml
+```
 
+Puntos clave del manifiesto:
+- **3 replicas** de nginx:alpine
+- **Labels duales**: `app: backend` y `tier: api` (el Service necesita ambas)
+- **Named port**: `http` en el container (permite referencia semantica)
+- **Downward API**: inyecta `POD_NAME` y `POD_IP` como variables de entorno
+- **Script de inicio**: genera HTML con info del Pod para verificar balanceo
+
+```bash
 # Aplicar
 kubectl apply -f backend-deployment.yaml
 
@@ -110,33 +96,24 @@ backend-deployment-def456             1/1     Running   10.1.2.4     node2
 backend-deployment-ghi789             1/1     Running   10.1.2.5     node3
 ```
 
-**🎯 Observa:** Cada Pod tiene IP diferente y puede estar en nodo diferente.
+**Observa:** Cada Pod tiene IP diferente y puede estar en nodo diferente.
 
 ---
 
-### Paso 2: Crear el Service ClusterIP
+### Paso 2: Revisar y crear el Service ClusterIP
+
+Revisa el archivo `backend-service.yaml`:
 
 ```bash
-# Crear archivo backend-service.yaml
-cat > backend-service.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-service
-  labels:
-    app: backend
-spec:
-  type: ClusterIP  # Puede omitirse (es el default)
-  selector:
-    app: backend
-    tier: api
-  ports:
-  - name: http
-    protocol: TCP
-    port: 80
-    targetPort: http
-EOF
+cat backend-service.yaml
+```
 
+Puntos clave del manifiesto:
+- **type: ClusterIP**: tipo por defecto (puede omitirse)
+- **selector**: requiere AMBAS labels `app: backend` Y `tier: api`
+- **targetPort: http**: referencia al named port del container
+
+```bash
 # Aplicar
 kubectl apply -f backend-service.yaml
 
@@ -150,7 +127,7 @@ NAME              TYPE        CLUSTER-IP     PORT(S)   AGE
 backend-service   ClusterIP   10.96.15.123   80/TCP    5s
 ```
 
-**🎯 Observa:** Se asignó una ClusterIP automáticamente (en este caso `10.96.15.123`).
+**Observa:** Se asigno una ClusterIP automaticamente (en este caso `10.96.15.123`).
 
 ---
 
@@ -181,14 +158,14 @@ Endpoints:         10.1.2.3:80,10.1.2.4:80,10.1.2.5:80
 Session Affinity:  None
 ```
 
-**🎯 Observa:**
+**Observa:**
 - ClusterIP: `10.96.15.123`
 - Endpoints: Las 3 IPs de los Pods
 - Coincide con las IPs que vimos en `kubectl get pods`
 
 ---
 
-## 📚 Parte 2: Entender Endpoints
+## Parte 2: Entender Endpoints
 
 ### Paso 4: Explorar Endpoints
 
@@ -211,19 +188,19 @@ NAME              ENDPOINTS                                   AGE
 backend-service   10.1.2.3:80,10.1.2.4:80,10.1.2.5:80         2m
 ```
 
-**🎯 Clave:** Los Endpoints se crearon AUTOMÁTICAMENTE porque:
+**Clave:** Los Endpoints se crearon AUTOMATICAMENTE porque:
 1. Service tiene `selector: app=backend, tier=api`
 2. Hay 3 Pods con esas labels
 3. Kubernetes crea Endpoint por cada Pod que coincide
 
 ---
 
-### Paso 5: Experimentar con Endpoints Dinámicos
+### Paso 5: Experimentar con Endpoints Dinamicos
 
-Vamos a escalar el Deployment y ver cómo los Endpoints se actualizan automáticamente.
+Vamos a escalar el Deployment y ver como los Endpoints se actualizan automaticamente.
 
 ```bash
-# Escalar a 5 réplicas
+# Escalar a 5 replicas
 kubectl scale deployment backend-deployment --replicas=5
 
 # Ver Pods (ahora 5)
@@ -232,32 +209,32 @@ kubectl get pods -l app=backend
 # Ver Endpoints (ahora 5 IPs)
 kubectl get endpoints backend-service
 
-# Escalar a 1 réplica
+# Escalar a 1 replica
 kubectl scale deployment backend-deployment --replicas=1
 
 # Ver Endpoints (ahora 1 IP)
 kubectl get endpoints backend-service
 
-# Volver a 3 réplicas
+# Volver a 3 replicas
 kubectl scale deployment backend-deployment --replicas=3
 ```
 
-**🎯 Observa:** Los Endpoints se actualizan AUTOMÁTICAMENTE conforme Pods se crean/eliminan.
+**Observa:** Los Endpoints se actualizan AUTOMATICAMENTE conforme Pods se crean/eliminan.
 
 ---
 
-## 📚 Parte 3: Descubrimiento por DNS
+## Parte 3: Descubrimiento por DNS
 
 ### Paso 6: Probar DNS desde otro Pod
 
-Kubernetes crea automáticamente registros DNS para los Services.
+Kubernetes crea automaticamente registros DNS para los Services.
 
 ```bash
 # Crear Pod de prueba
 kubectl run test-dns --rm -it --image=busybox --restart=Never -- sh
-
-# Dentro del Pod, ejecutar:
 ```
+
+Dentro del Pod, ejecutar:
 
 ```sh
 # Resolver DNS del Service (nombre corto)
@@ -269,7 +246,7 @@ nslookup backend-service.default.svc.cluster.local
 # Test HTTP
 wget -O- http://backend-service
 
-# Ver múltiples requests (balanceo)
+# Ver multiples requests (balanceo)
 for i in 1 2 3 4 5; do
   echo "Request $i:"
   wget -qO- http://backend-service | grep "Pod:"
@@ -303,9 +280,9 @@ Request 3:
 ...
 ```
 
-**🎯 Observa:**
+**Observa:**
 - DNS resuelve a la ClusterIP (`10.96.15.123`)
-- Cada request puede ir a diferente Pod (balanceo automático)
+- Cada request puede ir a diferente Pod (balanceo automatico)
 
 ---
 
@@ -341,20 +318,19 @@ wget -O- http://backend-service.default
 exit
 ```
 
-**🎯 Clave:** Formato DNS completo:
+**Clave:** Formato DNS completo:
 ```
 <service-name>.<namespace>.svc.cluster.local
 ```
 
 ---
 
-## 📚 Parte 4: Balanceo de Carga
+## Parte 4: Balanceo de Carga
 
-### Paso 8: Verificar Balanceo Automático
+### Paso 8: Verificar Balanceo Automatico
 
 ```bash
-# Script para ver balanceo en acción
-# Ver script: test-loadbalancing.sh
+# Ejecutar script de balanceo
 chmod +x test-loadbalancing.sh
 ./test-loadbalancing.sh
 ```
@@ -373,11 +349,11 @@ Counting requests per Pod:
   7 <p>Pod: backend-deployment-ghi789</p>
 ```
 
-**🎯 Observa:** Distribución aproximadamente uniforme (puede variar ligeramente).
+**Observa:** Distribucion aproximadamente uniforme (puede variar ligeramente).
 
 ---
 
-## 📚 Parte 5: Port-Forward para Testing Local
+## Parte 5: Port-Forward para Testing Local
 
 ### Paso 9: Acceder al Service desde tu Laptop
 
@@ -391,7 +367,7 @@ curl http://localhost:8080
 # Ver respuesta HTML
 curl http://localhost:8080 | grep -E "Pod:|IP:"
 
-# Hacer múltiples requests
+# Hacer multiples requests
 for i in {1..10}; do
   curl -s http://localhost:8080 | grep "Pod:"
 done
@@ -399,11 +375,11 @@ done
 # Ctrl+C en la terminal del port-forward para detener
 ```
 
-**🎯 Útil para:** Debugging, desarrollo local, testing rápido.
+**Util para:** Debugging, desarrollo local, testing rapido.
 
 ---
 
-## 📚 Parte 6: Troubleshooting Básico
+## Parte 6: Troubleshooting Basico
 
 ### Paso 10: Simular Problema - Pod Sin Label
 
@@ -417,24 +393,24 @@ kubectl run backend-wrong-label --image=nginx:alpine \
 # Ver Pods (ahora hay 4)
 kubectl get pods -l app=backend
 
-# Ver Endpoints (¡sigue siendo 3!)
+# Ver Endpoints (sigue siendo 3!)
 kubectl get endpoints backend-service
 
-# ¿Por qué? Ver labels del Pod problemático
+# Por que? Ver labels del Pod problematico
 kubectl get pod backend-wrong-label --show-labels
 ```
 
-**🎯 Observa:**
+**Observa:**
 - Pod tiene `app=backend` pero NO `tier=api`
 - Service selector requiere AMBAS labels: `app=backend` Y `tier=api`
 - Por eso NO aparece en Endpoints
 
-**Solución:**
+**Solucion:**
 ```bash
 # Agregar la label faltante
 kubectl label pod backend-wrong-label tier=api
 
-# Ahora sí aparece en Endpoints
+# Ahora si aparece en Endpoints
 kubectl get endpoints backend-service
 
 # Cleanup
@@ -445,39 +421,27 @@ kubectl delete pod backend-wrong-label
 
 ### Paso 11: Simular Problema - Pod Not Ready
 
-```bash
-# Crear Pod con readiness probe que falla
-cat > pod-not-ready.yaml <<'EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: backend-not-ready
-  labels:
-    app: backend
-    tier: api
-spec:
-  containers:
-  - name: nginx
-    image: nginx:alpine
-    ports:
-    - containerPort: 80
-    readinessProbe:
-      httpGet:
-        path: /nonexistent  # ← Path que NO existe
-        port: 80
-      initialDelaySeconds: 5
-      periodSeconds: 5
-EOF
+Revisa el archivo `pod-not-ready.yaml`:
 
+```bash
+cat pod-not-ready.yaml
+```
+
+Puntos clave del manifiesto:
+- **Labels correctas**: `app: backend` y `tier: api` (coinciden con el selector)
+- **readinessProbe fallida**: apunta a `/nonexistent` que no existe
+- El Pod estara Running pero NOT Ready (0/1)
+
+```bash
 kubectl apply -f pod-not-ready.yaml
 
-# Ver estado del Pod (READY será 0/1)
+# Ver estado del Pod (READY sera 0/1)
 kubectl get pod backend-not-ready
 
 # Ver Endpoints (NO incluye este Pod)
 kubectl get endpoints backend-service -o yaml
 
-# Ver por qué no está ready
+# Ver por que no esta ready
 kubectl describe pod backend-not-ready | grep -A 10 Conditions
 ```
 
@@ -487,10 +451,10 @@ NAME                 READY   STATUS    RESTARTS   AGE
 backend-not-ready    0/1     Running   0          30s
 ```
 
-**🎯 Clave:**
-- Pod está `Running` pero NOT `Ready` (0/1)
+**Clave:**
+- Pod esta `Running` pero NOT `Ready` (0/1)
 - **NO aparece en Endpoints** porque readiness probe falla
-- kube-proxy NO envía tráfico a Pods not ready
+- kube-proxy NO envia trafico a Pods not ready
 
 **Cleanup:**
 ```bash
@@ -499,14 +463,14 @@ kubectl delete pod backend-not-ready
 
 ---
 
-## 📚 Parte 7: Variables de Entorno (Legacy)
+## Parte 7: Variables de Entorno (Legacy)
 
 ### Paso 12: Ver Variables de Entorno
 
-Kubernetes inyecta variables de entorno para Services (método legacy).
+Kubernetes inyecta variables de entorno para Services (metodo legacy).
 
 ```bash
-# Crear Pod DESPUÉS del Service
+# Crear Pod DESPUES del Service
 kubectl run env-test --rm -it --image=busybox --restart=Never -- sh
 ```
 
@@ -514,7 +478,7 @@ kubectl run env-test --rm -it --image=busybox --restart=Never -- sh
 # Ver variables del backend-service
 env | grep BACKEND_SERVICE
 
-# Deberías ver:
+# Deberias ver:
 # BACKEND_SERVICE_SERVICE_HOST=10.96.15.123
 # BACKEND_SERVICE_SERVICE_PORT=80
 # BACKEND_SERVICE_PORT=tcp://10.96.15.123:80
@@ -523,24 +487,24 @@ env | grep BACKEND_SERVICE
 exit
 ```
 
-**🎯 Nota:** DNS es el método RECOMENDADO. Variables de entorno solo para compatibilidad legacy.
+**Nota:** DNS es el metodo RECOMENDADO. Variables de entorno solo para compatibilidad legacy.
 
 ---
 
-## 🎓 Desafíos Adicionales
+## Desafios Adicionales
 
-### Desafío 1: Service con Múltiples Puertos
+### Desafio 1: Service con Multiples Puertos
 
-Modifica el Service para exponer puerto 8080 además de 80.
+Modifica el Service para exponer puerto 8080 ademas de 80.
 
 <details>
-<summary>💡 Pista</summary>
+<summary>Pista</summary>
 
-Usa la sección `ports` con múltiples entradas, cada una con `name` único.
+Usa la seccion `ports` con multiples entradas, cada una con `name` unico.
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
 ```yaml
 apiVersion: v1
@@ -563,18 +527,18 @@ spec:
 
 ---
 
-### Desafío 2: Session Affinity
+### Desafio 2: Session Affinity
 
 Configura el Service para que el mismo cliente siempre vaya al mismo Pod.
 
 <details>
-<summary>💡 Pista</summary>
+<summary>Pista</summary>
 
 Usa `sessionAffinity: ClientIP` en el spec del Service.
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
 ```yaml
 apiVersion: v1
@@ -596,89 +560,76 @@ spec:
 
 Test:
 ```bash
-# Múltiples requests desde el mismo Pod deben ir al mismo backend
+# Multiples requests desde el mismo Pod deben ir al mismo backend
 kubectl run test --rm -it --image=curlimages/curl --restart=Never -- sh
 # for i in {1..10}; do curl http://backend-service-sticky | grep Pod; done
-# Debería ver siempre el MISMO Pod
+# Deberia ver siempre el MISMO Pod
 ```
 </details>
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
-# Eliminar recursos creados
-kubectl delete deployment backend-deployment
-kubectl delete service backend-service
-kubectl delete namespace testing
-
-# Eliminar archivos
-rm -f backend-deployment.yaml backend-service.yaml test-loadbalancing.sh pod-not-ready.yaml
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
 ```
 
 ---
 
-## 📝 Resumen y Conceptos Clave
+## Resumen y Conceptos Clave
 
 ### Aprendiste:
 
-✅ **Service ClusterIP:**
-- IP interna estable para acceder a Pods efímeros
+**Service ClusterIP:**
+- IP interna estable para acceder a Pods efimeros
 - Solo accesible dentro del cluster
 - Tipo por defecto (`type: ClusterIP`)
 
-✅ **Endpoints:**
-- Se crean AUTOMÁTICAMENTE
+**Endpoints:**
+- Se crean AUTOMATICAMENTE
 - Rastrea Pods con labels que coinciden con `selector`
-- Se actualizan dinámicamente (scale up/down)
+- Se actualizan dinamicamente (scale up/down)
 - Solo incluye Pods `Ready`
 
-✅ **DNS Discovery:**
+**DNS Discovery:**
 - Mismo namespace: `<service-name>`
 - Otro namespace: `<service-name>.<namespace>`
 - FQDN completo: `<service-name>.<namespace>.svc.cluster.local`
 - **Recomendado sobre variables de entorno**
 
-✅ **Balanceo de Carga:**
-- Automático entre todos los Endpoints
+**Balanceo de Carga:**
+- Automatico entre todos los Endpoints
 - kube-proxy maneja reglas de iptables/IPVS
-- Distribución aproximadamente uniforme
+- Distribucion aproximadamente uniforme
 
-✅ **Troubleshooting:**
+**Troubleshooting:**
 - Verificar labels coinciden con selector
-- Verificar Pods están `Ready`
+- Verificar Pods estan `Ready`
 - Verificar Endpoints creados correctamente
 
 ---
 
-## 🔗 Siguientes Pasos
+## Siguientes Pasos
 
-Ahora que dominas ClusterIP, continúa con:
-
-1. **[Laboratorio 02: NodePort y LoadBalancer](lab-02-nodeport-loadbalancer.md)**
+1. **[Laboratorio 02: NodePort y LoadBalancer](../lab-02-nodeport-loadbalancer/)**
    - Acceso externo con NodePort
    - LoadBalancer en cloud
    - ExternalTrafficPolicy
 
-2. **[Ejemplos de Services](../ejemplos/README.md)**
+2. **[Ejemplos de Services](../../ejemplos/README.md)**
    - Revisar ejemplos avanzados
    - Session affinity
-   - Múltiples puertos
-
-3. **[README del Módulo](../README.md)**
-   - Teoría completa de Services
-   - kube-proxy en detalle
-   - Mejores prácticas
+   - Multiples puertos
 
 ---
 
-## ✅ Checklist de Verificación
-
-Antes de continuar, asegúrate de:
+## Checklist de Verificacion
 
 - [ ] Puedes crear un Service ClusterIP
-- [ ] Entiendes cómo funcionan los Endpoints
+- [ ] Entiendes como funcionan los Endpoints
 - [ ] Sabes usar DNS para descubrir Services
 - [ ] Puedes verificar balanceo de carga
 - [ ] Sabes diagnosticar Pods not ready
@@ -686,6 +637,5 @@ Antes de continuar, asegúrate de:
 
 ---
 
-**¡Felicidades!** Has completado el Laboratorio 01. 🎉
-
-Tienes las bases sólidas para trabajar con Services en Kubernetes.
+**Felicidades!** Has completado el Laboratorio 01.
+Tienes las bases solidas para trabajar con Services en Kubernetes.

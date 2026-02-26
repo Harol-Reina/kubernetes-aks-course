@@ -1,0 +1,33 @@
+# Ejercicio 4: Service SIN Selector para Endpoints Manuales
+# Uso: kubectl apply -f external-database-service.yaml
+#
+# Descripcion:
+#   Service ClusterIP SIN selector. Al no tener selector, Kubernetes
+#   NO crea Endpoints automaticamente. Los Endpoints deben crearse
+#   manualmente (ver external-database-endpoints.yaml).
+#   Util para integrar bases de datos u otros servicios externos al cluster.
+#
+# Conceptos clave:
+#   - Sin selector = sin Endpoints automaticos
+#   - Se necesita crear un objeto Endpoints con el MISMO nombre
+#   - Las apps usan el nombre del Service normalmente (transparente)
+#   - Responsabilidad del admin: mantener IPs actualizadas
+#   - Sin health checks automaticos para los endpoints externos
+#
+# Relacion: Requiere external-database-endpoints.yaml para tener Endpoints
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database
+  labels:
+    app: database
+    type: external
+spec:
+  type: ClusterIP
+  # SIN selector - Endpoints NO se crean automaticamente
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432

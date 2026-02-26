@@ -1,21 +1,45 @@
 # Laboratorio 02: NodePort y LoadBalancer - Acceso Externo
 
-**Duración estimada:** 50 minutos  
-**Nivel:** Intermedio  
+**Duracion estimada:** 50 minutos
+**Nivel:** Intermedio
 **Objetivo:** Dominar acceso externo con NodePort y LoadBalancer, comparar tipos de Services
 
 ---
 
-## 📋 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
 
-Al completar este laboratorio, serás capaz de:
+| Tecnica | Descripcion |
+|---------|-------------|
+| **NodePort Service** | Expone el Service en un puerto estatico (30000-32767) en TODOS los nodos del cluster. Accesible via `<node-ip>:<nodePort>`. Ideal para desarrollo y testing |
+| **NodePort auto-asignado** | Kubernetes elige un puerto libre del rango automaticamente. Evita conflictos entre Services |
+| **NodePort personalizado** | Se especifica un puerto fijo (`nodePort: 30080`). Util cuando firewalls o DNS necesitan un puerto predecible |
+| **LoadBalancer Service** | Provisiona automaticamente un balanceador externo en cloud (AWS ELB, Azure LB, GCP LB). Asigna IP publica. Cada Service = 1 LB |
+| **externalTrafficPolicy: Cluster** | Politica por defecto. Balancea a TODOS los Pods del cluster. Pierde IP origen del cliente (SNAT). Distribucion uniforme |
+| **externalTrafficPolicy: Local** | Solo envia trafico a Pods en el MISMO nodo. Preserva IP origen del cliente. Puede causar balanceo desigual |
+| **healthCheckNodePort** | Puerto especial creado automaticamente con policy Local para que LBs externos detecten nodos sin Pods |
 
-- ✅ Crear Services tipo NodePort para acceso externo
-- ✅ Entender el rango de puertos NodePort (30000-32767)
-- ✅ Configurar LoadBalancer Services en cloud
-- ✅ Comparar externalTrafficPolicy: Cluster vs Local
-- ✅ Troubleshoot problemas de acceso externo
-- ✅ Decidir cuándo usar cada tipo de Service
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `webapp-deployment.yaml` | 1 | Deployment con 3 replicas que muestra Pod name, IP y Node |
+| `webapp-nodeport-auto.yaml` | 1 | NodePort con puerto auto-asignado por Kubernetes |
+| `webapp-nodeport-custom.yaml` | 2 | NodePort con puerto fijo 30080 |
+| `webapp-cluster-policy.yaml` | 3 | NodePort con externalTrafficPolicy: Cluster |
+| `webapp-local-policy.yaml` | 3 | NodePort con externalTrafficPolicy: Local |
+| `webapp-loadbalancer.yaml` | 4 | LoadBalancer para cloud (AWS/GCP/Azure) |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `compare-policies.sh` | Compara externalTrafficPolicy Cluster vs Local |
+| `comparison-table.sh` | Tabla comparativa de los 4 tipos de Service |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
 
 ---
 
@@ -26,101 +50,43 @@ Al completar este laboratorio, serás capaz de:
 - (Opcional) Cluster en cloud (AWS EKS, GCP GKE, Azure AKS) para LoadBalancer
 - kubectl configurado
 
-### Verificación del entorno
+### Verificacion del entorno
 
 ```bash
 # Verificar acceso a nodos
 kubectl get nodes -o wide
 
-# Anotar EXTERNAL-IP de los nodos (usaremos esto más tarde)
+# Anotar EXTERNAL-IP de los nodos (usaremos esto mas tarde)
 kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="ExternalIP")].address}'
 echo
 
 # Si no hay EXTERNAL-IP, usar INTERNAL-IP
 kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'
 echo
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
 ```
 
 ---
 
-## 📚 Parte 1: Service NodePort Básico
+## Parte 1: Service NodePort Basico
 
-### Paso 1: Crear Deployment de Testing
+### Paso 1: Revisar y aplicar el Deployment
+
+Revisa el archivo `webapp-deployment.yaml`:
 
 ```bash
-# Deployment con identificación de Pods
-cat > webapp-deployment.yaml <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: webapp
-  labels:
-    app: webapp
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: webapp
-      tier: frontend
-  template:
-    metadata:
-      labels:
-        app: webapp
-        tier: frontend
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - name: http
-          containerPort: 80
-        
-        env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: POD_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIP
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        
-        command:
-        - /bin/sh
-        - -c
-        - |
-          cat > /usr/share/nginx/html/index.html <<'HTML'
-          <!DOCTYPE html>
-          <html>
-          <head><title>WebApp Demo</title></head>
-          <body>
-          <h1>NodePort Demo</h1>
-          <table border="1">
-            <tr><td><strong>Pod:</strong></td><td>POD_NAME_VAL</td></tr>
-            <tr><td><strong>Pod IP:</strong></td><td>POD_IP_VAL</td></tr>
-            <tr><td><strong>Node:</strong></td><td>NODE_NAME_VAL</td></tr>
-          </table>
-          </body>
-          </html>
-          HTML
-          sed -i "s/POD_NAME_VAL/$POD_NAME/g" /usr/share/nginx/html/index.html
-          sed -i "s/POD_IP_VAL/$POD_IP/g" /usr/share/nginx/html/index.html
-          sed -i "s/NODE_NAME_VAL/$NODE_NAME/g" /usr/share/nginx/html/index.html
-          exec nginx -g 'daemon off;'
-        
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "50m"
-          limits:
-            memory: "128Mi"
-            cpu: "100m"
-EOF
+cat webapp-deployment.yaml
+```
 
+Puntos clave del manifiesto:
+- **3 replicas** de nginx:alpine con info de Pod + Node
+- **Downward API**: inyecta `POD_NAME`, `POD_IP` y `NODE_NAME`
+- **Resource requests/limits**: best practice para produccion
+- **Named port http**: referencia semantica para Services
+
+```bash
 kubectl apply -f webapp-deployment.yaml
 
 # Verificar Pods en diferentes nodos
@@ -129,29 +95,19 @@ kubectl get pods -l app=webapp -o wide
 
 ---
 
-### Paso 2: Crear NodePort Service (Auto-assigned Port)
+### Paso 2: Crear NodePort con puerto auto-asignado
+
+Revisa el archivo `webapp-nodeport-auto.yaml`:
 
 ```bash
-# Service con puerto auto-asignado
-cat > webapp-nodeport-auto.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: webapp-nodeport-auto
-  labels:
-    app: webapp
-spec:
-  type: NodePort
-  selector:
-    app: webapp
-    tier: frontend
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-    # nodePort: omitido → Kubernetes asigna automáticamente
-EOF
+cat webapp-nodeport-auto.yaml
+```
 
+Puntos clave:
+- **type: NodePort**: expone en todos los nodos
+- **Sin nodePort especificado**: Kubernetes asigna automaticamente del rango 30000-32767
+
+```bash
 kubectl apply -f webapp-nodeport-auto.yaml
 
 # Ver Service
@@ -170,13 +126,13 @@ webapp-nodeport-auto    NodePort   10.96.123.45    <none>        80:31234/TCP   
 NodePort asignado: 31234
 ```
 
-**🎯 Observa:**
+**Observa:**
 - `PORT(S)`: `80:31234/TCP` → puerto 80 del Service mapeado a puerto 31234 del nodo
 - `EXTERNAL-IP`: `<none>` → NodePort no crea IP externa (usa IP del nodo)
 
 ---
 
-### Paso 3: Acceder vía NodePort
+### Paso 3: Acceder via NodePort
 
 ```bash
 # Obtener IP de un nodo
@@ -184,15 +140,11 @@ NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="
 echo "Node IP: $NODE_IP"
 echo "Accede en: http://$NODE_IP:$NODEPORT"
 
-# Test desde dentro del cluster (si tienes acceso SSH al nodo)
-# ssh $NODE_IP
-# curl http://localhost:$NODEPORT
-
-# Alternativamente, desde un Pod
+# Test desde un Pod
 kubectl run test-nodeport --rm -it --image=curlimages/curl --restart=Never -- \
   curl http://$NODE_IP:$NODEPORT
 
-# Múltiples requests para ver balanceo
+# Multiples requests para ver balanceo
 for i in {1..5}; do
   echo "Request $i:"
   kubectl run test-np-$i --rm --image=curlimages/curl --restart=Never -- \
@@ -201,33 +153,23 @@ done
 wait
 ```
 
-**🎯 Observa:**
-- Puedes acceder usando IP de CUALQUIER nodo (incluso si el Pod no está en ese nodo)
+**Observa:**
+- Puedes acceder usando IP de CUALQUIER nodo (incluso si el Pod no esta en ese nodo)
 - Balanceo funciona igual que ClusterIP
 
 ---
 
-### Paso 4: NodePort con Puerto Personalizado
+### Paso 4: NodePort con puerto personalizado
+
+Revisa el archivo `webapp-nodeport-custom.yaml`:
 
 ```bash
-# Service con puerto específico
-cat > webapp-nodeport-custom.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: webapp-nodeport-custom
-spec:
-  type: NodePort
-  selector:
-    app: webapp
-    tier: frontend
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-    nodePort: 30080  # Puerto fijo (debe estar en range 30000-32767)
-EOF
+cat webapp-nodeport-custom.yaml
+```
 
+Punto clave: `nodePort: 30080` — puerto fijo y predecible.
+
+```bash
 kubectl apply -f webapp-nodeport-custom.yaml
 
 # Verificar
@@ -240,37 +182,24 @@ NAME                      TYPE       CLUSTER-IP      PORT(S)        AGE
 webapp-nodeport-custom    NodePort   10.96.234.56    80:30080/TCP   5s
 ```
 
-**🎯 Ventaja:** Puerto conocido y predecible (`30080`)  
-**⚠️ Desventaja:** Puede conflictuar si ya está en uso
+**Ventaja:** Puerto conocido y predecible (`30080`)
+**Desventaja:** Puede conflictuar si ya esta en uso
 
 ---
 
-## 📚 Parte 2: ExternalTrafficPolicy
+## Parte 2: ExternalTrafficPolicy
 
 ### Paso 5: Cluster Policy (Default)
 
-```bash
-# Service con externalTrafficPolicy: Cluster
-cat > webapp-cluster-policy.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: webapp-cluster-policy
-  labels:
-    policy: cluster
-spec:
-  type: NodePort
-  selector:
-    app: webapp
-    tier: frontend
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-    nodePort: 30081
-  externalTrafficPolicy: Cluster  # Default
-EOF
+Revisa el archivo `webapp-cluster-policy.yaml`:
 
+```bash
+cat webapp-cluster-policy.yaml
+```
+
+Punto clave: `externalTrafficPolicy: Cluster` — balancea a TODOS los Pods.
+
+```bash
 kubectl apply -f webapp-cluster-policy.yaml
 ```
 
@@ -283,37 +212,24 @@ kubectl run test-cluster --rm -it --image=curlimages/curl --restart=Never -- \
   curl -s http://$NODE_IP:30081 | grep -E "Pod:|Node:"
 ```
 
-**🎯 Cluster Policy:**
-- ✅ Balancea a TODOS los Pods (incluso en otros nodos)
-- ❌ Pierde IP origen del cliente (SNAT)
-- ✅ Funciona siempre (incluso si nodo no tiene Pods)
+**Cluster Policy:**
+- Balancea a TODOS los Pods (incluso en otros nodos)
+- Pierde IP origen del cliente (SNAT)
+- Funciona siempre (incluso si nodo no tiene Pods)
 
 ---
 
 ### Paso 6: Local Policy
 
-```bash
-# Service con externalTrafficPolicy: Local
-cat > webapp-local-policy.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: webapp-local-policy
-  labels:
-    policy: local
-spec:
-  type: NodePort
-  selector:
-    app: webapp
-    tier: frontend
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-    nodePort: 30082
-  externalTrafficPolicy: Local  # Solo Pods locales
-EOF
+Revisa el archivo `webapp-local-policy.yaml`:
 
+```bash
+cat webapp-local-policy.yaml
+```
+
+Punto clave: `externalTrafficPolicy: Local` — solo Pods locales, preserva IP origen.
+
+```bash
 kubectl apply -f webapp-local-policy.yaml
 
 # Verificar health check port (solo con Local)
@@ -338,85 +254,43 @@ done
 wait
 ```
 
-**🎯 Local Policy:**
-- ✅ Preserva IP origen del cliente
-- ✅ Sin hop extra (siempre local)
-- ❌ Solo balancea a Pods en el MISMO nodo
-- ⚠️ Si nodo no tiene Pods, conexión falla
+**Local Policy:**
+- Preserva IP origen del cliente
+- Sin hop extra (siempre local)
+- Solo balancea a Pods en el MISMO nodo
+- Si nodo no tiene Pods, conexion falla
 
 ---
 
-### Paso 7: Comparar Ambas Policies
+### Paso 7: Comparar ambas policies
 
 ```bash
-# Script de comparación
-cat > compare-policies.sh <<'EOF'
-# !/bin/bash
-echo "=== externalTrafficPolicy Comparison ==="
-echo ""
-
-NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-
-echo "1. Cluster Policy (port 30081):"
-for i in {1..5}; do
-  kubectl run test-c-$RANDOM --rm --image=curlimages/curl --restart=Never -- \
-    curl -s http://$NODE_IP:30081 | grep "Node:" &
-done
-wait
-
-echo ""
-echo "2. Local Policy (port 30082):"
-for i in {1..5}; do
-  kubectl run test-l-$RANDOM --rm --image=curlimages/curl --restart=Never -- \
-    curl -s http://$NODE_IP:30082 2>&1 | grep -E "Node:|timeout" &
-done
-wait
-
-echo ""
-echo "Cluster Policy: Puede ir a Pods en cualquier nodo"
-echo "Local Policy: Solo Pods en el nodo $NODE_IP"
-EOF
-
+# Ejecutar script de comparacion
 chmod +x compare-policies.sh
 ./compare-policies.sh
 ```
 
 ---
 
-## 📚 Parte 3: LoadBalancer Service (Cloud)
+## Parte 3: LoadBalancer Service (Cloud)
 
-**⚠️ Esta sección requiere cluster en cloud (AWS, GCP, Azure).  
+**Esta seccion requiere cluster en cloud (AWS, GCP, Azure).
 Si usas minikube/kind, salta a Parte 4.**
 
 ### Paso 8: Crear LoadBalancer Service
 
-```bash
-# Service tipo LoadBalancer
-cat > webapp-loadbalancer.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: webapp-lb
-  labels:
-    app: webapp
-spec:
-  type: LoadBalancer
-  selector:
-    app: webapp
-    tier: frontend
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-  
-  # Opcional: Preservar IP origen
-  externalTrafficPolicy: Local
-  
-  # Opcional: Restringir IPs permitidas
-  # loadBalancerSourceRanges:
-  #   - "0.0.0.0/0"  # Todo el mundo (cambiar en prod)
-EOF
+Revisa el archivo `webapp-loadbalancer.yaml`:
 
+```bash
+cat webapp-loadbalancer.yaml
+```
+
+Puntos clave:
+- **type: LoadBalancer**: provisiona LB externo automaticamente
+- **externalTrafficPolicy: Local**: preserva IP del cliente
+- **loadBalancerSourceRanges**: (comentado) para restringir acceso por IP
+
+```bash
 kubectl apply -f webapp-loadbalancer.yaml
 
 # Ver Service (EXTERNAL-IP en <pending> inicialmente)
@@ -428,33 +302,33 @@ kubectl get service webapp-lb -w
 NAME        TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)        AGE
 webapp-lb   LoadBalancer   10.96.45.67    <pending>       80:31456/TCP   10s
 webapp-lb   LoadBalancer   10.96.45.67    203.0.113.50    80:31456/TCP   90s
-                                          ↑ IP pública asignada
+                                          ^ IP publica asignada
 ```
 
-**🎯 Observa:**
-- Toma ~1-3 minutos en asignar IP pública
-- Cloud provider crea balanceador automáticamente
-- También crea NodePort (31456) automáticamente
+**Observa:**
+- Toma ~1-3 minutos en asignar IP publica
+- Cloud provider crea balanceador automaticamente
+- Tambien crea NodePort (31456) automaticamente
 
 ---
 
-### Paso 9: Acceder vía LoadBalancer
+### Paso 9: Acceder via LoadBalancer
 
 ```bash
-# Obtener IP pública
+# Obtener IP publica
 LB_IP=$(kubectl get service webapp-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 echo "LoadBalancer IP: $LB_IP"
 
 # Test desde tu laptop
 curl http://$LB_IP
 
-# Múltiples requests
+# Multiples requests
 for i in {1..10}; do
   curl -s http://$LB_IP | grep "Pod:"
 done
 ```
 
-**🎯 Acceso público:** Cualquiera en Internet puede acceder (si firewall lo permite).
+**Acceso publico:** Cualquiera en Internet puede acceder (si firewall lo permite).
 
 ---
 
@@ -462,75 +336,28 @@ done
 
 **AWS:**
 ```bash
-# Listar Load Balancers creados por Kubernetes
 aws elbv2 describe-load-balancers \
   --query "LoadBalancers[?contains(LoadBalancerName, 'webapp')]"
-
-# Ver target groups
-aws elbv2 describe-target-groups \
-  --load-balancer-arn <arn-from-above>
 ```
 
 **GCP:**
 ```bash
-# Listar Load Balancers
 gcloud compute forwarding-rules list
-
-# Ver detalles
-gcloud compute forwarding-rules describe <nombre>
 ```
 
 **Azure:**
 ```bash
-# Listar Load Balancers
 az network lb list --output table
-
-# Ver backend pools
-az network lb address-pool list --lb-name <nombre> --resource-group <rg>
 ```
 
 ---
 
-## 📚 Parte 4: Comparación de Tipos de Service
+## Parte 4: Comparacion de Tipos de Service
 
-### Paso 11: Comparar los 3 Tipos Simultáneamente
+### Paso 11: Comparar los 3 tipos simultaneamente
 
 ```bash
-# Crear tabla comparativa
-cat > comparison-table.sh <<'EOF'
-# !/bin/bash
-echo "=========================================="
-echo "Service Types Comparison"
-echo "=========================================="
-printf "%-25s %-15s %-20s %-15s\n" "Service Name" "Type" "ClusterIP" "External Access"
-echo "------------------------------------------"
-
-SERVICES="backend-service webapp-nodeport-auto webapp-nodeport-custom webapp-lb"
-
-for SVC in $SERVICES; do
-  if kubectl get service $SVC &>/dev/null; then
-    TYPE=$(kubectl get service $SVC -o jsonpath='{.spec.type}')
-    CLUSTER_IP=$(kubectl get service $SVC -o jsonpath='{.spec.clusterIP}')
-    
-    case $TYPE in
-      ClusterIP)
-        ACCESS="Internal only"
-        ;;
-      NodePort)
-        NODEPORT=$(kubectl get service $SVC -o jsonpath='{.spec.ports[0].nodePort}')
-        ACCESS="<node-ip>:$NODEPORT"
-        ;;
-      LoadBalancer)
-        LB_IP=$(kubectl get service $SVC -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        ACCESS="${LB_IP:-<pending>}:80"
-        ;;
-    esac
-    
-    printf "%-25s %-15s %-20s %-15s\n" "$SVC" "$TYPE" "$CLUSTER_IP" "$ACCESS"
-  fi
-done
-EOF
-
+# Ejecutar tabla comparativa
 chmod +x comparison-table.sh
 ./comparison-table.sh
 ```
@@ -540,21 +367,19 @@ chmod +x comparison-table.sh
 ==========================================
 Service Types Comparison
 ==========================================
-Service Name              Type            ClusterIP            External Access
-------------------------------------------
-backend-service           ClusterIP       10.96.15.123         Internal only
-webapp-nodeport-auto      NodePort        10.96.123.45         <node-ip>:31234
-webapp-nodeport-custom    NodePort        10.96.234.56         <node-ip>:30080
-webapp-lb                 LoadBalancer    10.96.45.67          203.0.113.50:80
+TIPO                 ALCANCE         PUERTO               USO TIPICO
+==================================================================================
+ClusterIP            Interno         Cluster IP           Backend, DBs internas
+NodePort             Externo         30000-32767          Testing, desarrollo
+LoadBalancer         Externo         Asignado por Cloud   Apps publicas, produccion
+ExternalName         Externo         DNS CNAME            Migracion, servicios externos
 ```
 
 ---
 
-## 📚 Parte 5: Troubleshooting
+## Parte 5: Troubleshooting
 
 ### Paso 12: Problema - NodePort No Accesible
-
-Simular problema de firewall.
 
 ```bash
 # Verificar NodePort asignado
@@ -569,25 +394,20 @@ kubectl get endpoints webapp-nodeport-auto
 # Test conectividad desde dentro del cluster
 kubectl run test-internal --rm -it --image=curlimages/curl --restart=Never -- \
   curl http://webapp-nodeport-auto
-
-# Si falla desde fuera:
-# 1. Verificar firewall del nodo permite puerto NodePort
-# 2. En cloud: Security Groups / Firewall Rules
-# 3. On-premise: iptables rules
 ```
 
-**Checklist de diagnóstico:**
+**Checklist de diagnostico:**
 - [ ] Service existe y tiene tipo NodePort
-- [ ] Endpoints no vacíos (hay Pods ready)
+- [ ] Endpoints no vacios (hay Pods ready)
 - [ ] Firewall permite puerto NodePort (30000-32767)
 - [ ] kube-proxy running en nodos
 
 ---
 
-### Paso 13: Problema - LoadBalancer en <pending>
+### Paso 13: Problema - LoadBalancer en \<pending\>
 
 ```bash
-# Ver si está stuck en pending
+# Ver si esta stuck en pending
 kubectl get service webapp-lb
 
 # Ver eventos
@@ -597,27 +417,21 @@ kubectl describe service webapp-lb | grep -A 10 Events
 # 1. Cloud provider no configurado
 kubectl get nodes -o yaml | grep providerID
 
-# 2. Quotas excedidas
-# AWS: Verificar ELB quota
-# GCP: Verificar forwarding rules quota
-
+# 2. Quotas excedidas (verificar en consola del cloud)
 # 3. Permisos IAM insuficientes
-# Cluster necesita permisos para crear LB
-
-# 4. No es cluster de cloud (minikube, kind)
-# → Usar NodePort o MetalLB
+# 4. No es cluster de cloud (minikube, kind) → Usar NodePort o MetalLB
 ```
 
 ---
 
-## 🎓 Desafíos Adicionales
+## Desafios Adicionales
 
-### Desafío 1: Multi-Port NodePort
+### Desafio 1: Multi-Port NodePort
 
 Crea un NodePort Service con puertos HTTP (80) y HTTPS (443).
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
 ```yaml
 apiVersion: v1
@@ -642,18 +456,18 @@ spec:
 
 ---
 
-### Desafío 2: LoadBalancer Interno (Cloud)
+### Desafio 2: LoadBalancer Interno (Cloud)
 
-Crea un LoadBalancer que solo sea accesible dentro de la VPC (no público).
+Crea un LoadBalancer que solo sea accesible dentro de la VPC (no publico).
 
 <details>
-<summary>💡 Pista</summary>
+<summary>Pista</summary>
 
-Usa annotations específicas del cloud provider.
+Usa annotations especificas del cloud provider.
 </details>
 
 <details>
-<summary>✅ Solución AWS</summary>
+<summary>Solucion AWS</summary>
 
 ```yaml
 apiVersion: v1
@@ -674,58 +488,49 @@ spec:
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
-# Eliminar Services
-kubectl delete service webapp-nodeport-auto
-kubectl delete service webapp-nodeport-custom
-kubectl delete service webapp-cluster-policy
-kubectl delete service webapp-local-policy
-kubectl delete service webapp-lb
-
-# Eliminar Deployment
-kubectl delete deployment webapp
-
-# Eliminar archivos
-rm -f webapp-deployment.yaml webapp-*.yaml compare-policies.sh comparison-table.sh
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
 ```
 
 ---
 
-## 📝 Resumen y Conceptos Clave
+## Resumen y Conceptos Clave
 
 ### NodePort
 
-✅ **Características:**
+**Caracteristicas:**
 - Expone puerto en TODOS los nodos (range 30000-32767)
-- Accesible vía `<node-ip>:<nodePort>`
-- Crea ClusterIP también (acceso interno)
+- Accesible via `<node-ip>:<nodePort>`
+- Crea ClusterIP tambien (acceso interno)
 
-✅ **Cuándo usar:**
+**Cuando usar:**
 - Desarrollo/testing
 - Bare-metal clusters sin LoadBalancer
-- Detrás de LB externo (HAProxy, nginx)
+- Detras de LB externo (HAProxy, nginx)
 
-❌ **NO usar para:**
-- Producción pública directa
-- Múltiples servicios (range limitado)
+**NO usar para:**
+- Produccion publica directa
+- Multiples servicios (range limitado)
 
 ---
 
 ### LoadBalancer
 
-✅ **Características:**
-- Crea balanceador externo automáticamente
-- IP pública asignada
-- Integración con cloud provider
+**Caracteristicas:**
+- Crea balanceador externo automaticamente
+- IP publica asignada
+- Integracion con cloud provider
 
-✅ **Cuándo usar:**
-- Producción en cloud (AWS, GCP, Azure)
-- Necesitas IP pública estable
+**Cuando usar:**
+- Produccion en cloud (AWS, GCP, Azure)
+- Necesitas IP publica estable
 
-❌ **NO usar para:**
-- Múltiples servicios HTTP (costoso, usar Ingress)
+**NO usar para:**
+- Multiples servicios HTTP (costoso, usar Ingress)
 - Desarrollo local (sin cloud provider)
 
 ---
@@ -744,30 +549,29 @@ rm -f webapp-deployment.yaml webapp-*.yaml compare-policies.sh comparison-table.
 
 ---
 
-## 🔗 Siguientes Pasos
+## Siguientes Pasos
 
-1. **[Laboratorio 03: Services Avanzados](lab-03-advanced-services.md)**
+1. **[Laboratorio 03: Services Avanzados](../lab-03-advanced-services/)**
    - ExternalName
    - Headless Services
    - Endpoints manuales
-   - Best practices de producción
+   - Best practices de produccion
 
-2. **[Ejemplos Avanzados](../ejemplos/README.md)**
+2. **[Ejemplos Avanzados](../../ejemplos/README.md)**
    - LoadBalancer con annotations
    - ExternalTrafficPolicy en detalle
-   - Producción ready
 
 ---
 
-## ✅ Checklist de Verificación
+## Checklist de Verificacion
 
 - [ ] Puedes crear NodePort Services
 - [ ] Entiendes el range de puertos (30000-32767)
 - [ ] Sabes la diferencia entre Cluster y Local policy
 - [ ] (Opcional) Creaste LoadBalancer en cloud
 - [ ] Puedes diagnosticar problemas de acceso externo
-- [ ] Sabes cuándo usar cada tipo de Service
+- [ ] Sabes cuando usar cada tipo de Service
 
 ---
 
-**¡Excelente trabajo!** 🎉 Dominas acceso externo en Kubernetes.
+**Excelente trabajo!** Dominas acceso externo en Kubernetes.

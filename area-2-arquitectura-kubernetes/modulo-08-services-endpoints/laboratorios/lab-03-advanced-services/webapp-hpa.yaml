@@ -1,0 +1,50 @@
+# Ejercicio 6: HorizontalPodAutoscaler para Autoscaling
+# Uso: kubectl apply -f webapp-hpa.yaml
+#
+# Descripcion:
+#   HPA que escala automaticamente el webapp-deployment entre 5 y 20 replicas
+#   basado en utilizacion de CPU (70%) y memoria (80%).
+#   Requiere metrics-server instalado en el cluster.
+#
+# Conceptos clave:
+#   - Usa API autoscaling/v2 (soporta multiples metricas)
+#   - CPU averageUtilization: 70 → escala si CPU promedio > 70%
+#   - Memory averageUtilization: 80 → escala si memoria promedio > 80%
+#   - minReplicas: 5 → nunca menos de 5 Pods (minimo para HA)
+#   - maxReplicas: 20 → limite superior para controlar costos
+#   - Requiere que los Pods tengan resource requests definidos
+#
+# Prerequisito:
+#   kubectl create namespace production
+#   Metrics server: kubectl top pods (debe funcionar)
+#
+# Relacion: Escala production-deployment.yaml
+# Namespace: production
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: webapp-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: webapp-deployment
+
+  minReplicas: 5
+  maxReplicas: 20
+
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

@@ -1,0 +1,64 @@
+# Ejercicio 5: Service Production-Ready con Best Practices
+# Uso: kubectl apply -f production-service.yaml
+#
+# Descripcion:
+#   Service LoadBalancer con todas las best practices para produccion:
+#   - Labels completas (app, tier, environment, version)
+#   - Annotations para Prometheus scraping y documentacion
+#   - Multiples puertos (http, https, metrics)
+#   - externalTrafficPolicy: Local para preservar IP del cliente
+#   - sessionAffinity: ClientIP con timeout de 1 hora
+#
+# Conceptos clave:
+#   - annotations prometheus.io/* permiten auto-discovery por Prometheus
+#   - Named targetPorts (http-port, https-port) para desacoplar del numero
+#   - sessionAffinity: ClientIP asegura que el mismo cliente va al mismo Pod
+#   - sessionAffinityConfig.clientIP.timeoutSeconds: duracion del sticky session
+#
+# Prerequisito: kubectl create namespace production
+# Relacion: Selecciona Pods de production-deployment.yaml
+# Namespace: production
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-production
+  namespace: production
+
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+    version: v2.0.0
+
+  annotations:
+    description: "Production webapp with HA"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+    documentation.url: "https://docs.example.com/webapp"
+    team: "platform-engineering"
+
+spec:
+  type: LoadBalancer
+  selector:
+    app: webapp
+    tier: frontend
+    environment: production
+
+  ports:
+  - name: http
+    port: 80
+    targetPort: http-port
+  - name: https
+    port: 443
+    targetPort: https-port
+  - name: metrics
+    port: 9090
+    targetPort: metrics-port
+
+  externalTrafficPolicy: Local
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600

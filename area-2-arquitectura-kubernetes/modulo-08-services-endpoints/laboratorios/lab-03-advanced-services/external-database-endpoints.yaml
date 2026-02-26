@@ -1,0 +1,35 @@
+# Ejercicio 4: Endpoints Manuales para Base de Datos Externa
+# Uso: kubectl apply -f external-database-endpoints.yaml
+#
+# Descripcion:
+#   Objeto Endpoints creado manualmente para el Service "external-database".
+#   Apunta a IPs de bases de datos que estan FUERA del cluster Kubernetes.
+#   El nombre del Endpoints DEBE coincidir exactamente con el nombre del Service.
+#
+# Conceptos clave:
+#   - El nombre DEBE ser identico al Service (external-database)
+#   - addresses[].ip: IPs de los servidores externos
+#   - hostname: opcional, para identificacion en logs/debug
+#   - ports[].name: DEBE coincidir con el nombre del puerto en el Service
+#   - Responsabilidad del admin: actualizar IPs si cambian
+#   - Kubernetes NO hace health checks a estos endpoints
+#
+# Relacion: Complementa a external-database-service.yaml
+# Namespace: default
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: external-database    # MISMO nombre que el Service
+subsets:
+- addresses:
+  # IPs de bases de datos externas (ejemplo)
+  - ip: 192.168.100.10
+    hostname: db-primary
+  - ip: 192.168.100.11
+    hostname: db-replica
+
+  ports:
+  - name: postgres         # MISMO nombre que en el Service
+    port: 5432
+    protocol: TCP

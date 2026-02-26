@@ -1,0 +1,31 @@
+# Ejercicio 6: PodDisruptionBudget para Alta Disponibilidad
+# Uso: kubectl apply -f webapp-pdb.yaml
+#
+# Descripcion:
+#   PodDisruptionBudget que garantiza que siempre haya al menos 3 Pods
+#   disponibles del webapp-deployment durante disrupciones voluntarias
+#   (drain de nodos, upgrades del cluster, etc.).
+#   No protege contra disrupciones involuntarias (crash, OOM, hardware failure).
+#
+# Conceptos clave:
+#   - minAvailable: 3 → siempre mantener al menos 3 Pods running
+#   - Alternativa: maxUnavailable (maximo de Pods que pueden estar down)
+#   - Solo afecta disrupciones VOLUNTARIAS (kubectl drain, upgrades)
+#   - NO afecta disrupciones involuntarias (crash, OOM kill)
+#   - Kubernetes bloquea drain/eviction si violaria el PDB
+#
+# Prerequisito: kubectl create namespace production
+# Relacion: Aplica a Pods de production-deployment.yaml
+# Namespace: production
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webapp-pdb
+  namespace: production
+spec:
+  minAvailable: 3      # Siempre mantener al menos 3 Pods
+  selector:
+    matchLabels:
+      app: webapp
+      environment: production

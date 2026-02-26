@@ -1,0 +1,100 @@
+# Ejercicio 3: MySQL StatefulSet con Headless Service
+# Uso: kubectl apply -f mysql-statefulset.yaml
+#
+# Prerequisito: Crear secret primero:
+#   kubectl create secret generic mysql-secret --from-literal=root-password='MySecurePass123!'
+#
+# Descripcion:
+#   StatefulSet de 3 replicas de MySQL 8.0 que usa el Headless Service
+#   para DNS estable por Pod. Cada Pod tiene nombre predecible (mysql-0, mysql-1, mysql-2)
+#   y almacenamiento persistente independiente via volumeClaimTemplates.
+#
+# DNS de cada Pod:
+#   mysql-0.mysql-headless.default.svc.cluster.local
+#   mysql-1.mysql-headless.default.svc.cluster.local
+#   mysql-2.mysql-headless.default.svc.cluster.local
+#
+# Conceptos clave:
+#   - serviceName: mysql-headless → vincula con el Headless Service
+#   - Los Pods se crean en ORDEN (mysql-0, luego mysql-1, luego mysql-2)
+#   - volumeClaimTemplates: cada Pod obtiene su propio PVC
+#   - Liveness/readiness probes para health checks de MySQL
+#   - Secret para password seguro (no hardcodeado en el manifiesto)
+#
+# Relacion: Requiere mysql-headless-service.yaml y secret mysql-secret
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql-headless    # Apunta al Headless Service
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - name: mysql
+          containerPort: 3306
+
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: root-password
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
+        readinessProbe:
+          exec:
+            command:
+            - mysql
+            - -h
+            - localhost
+            - -e
+            - SELECT 1
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi

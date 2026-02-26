@@ -1,0 +1,34 @@
+# Ejercicio 1: NodePort con puerto auto-asignado
+# Uso: kubectl apply -f webapp-nodeport-auto.yaml
+#
+# Descripcion:
+#   Service tipo NodePort sin especificar nodePort, permitiendo que Kubernetes
+#   asigne automaticamente un puerto del rango 30000-32767.
+#   Expone el Service en TODOS los nodos del cluster en el puerto asignado.
+#   Tambien crea una ClusterIP para acceso interno.
+#
+# Conceptos clave:
+#   - NodePort expone en todos los nodos, no solo donde corren los Pods
+#   - Sin nodePort especificado = asignacion automatica (recomendado para evitar conflictos)
+#   - Acceso via <node-ip>:<nodePort> desde fuera del cluster
+#   - Incluye ClusterIP automaticamente (acceso interno tambien funciona)
+#
+# Relacion: Selecciona Pods de webapp-deployment.yaml
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-nodeport-auto
+  labels:
+    app: webapp
+spec:
+  type: NodePort
+  selector:
+    app: webapp
+    tier: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    # nodePort: omitido -> Kubernetes asigna automaticamente (30000-32767)

@@ -1,0 +1,34 @@
+# Ejercicio 3: Headless Service para MySQL StatefulSet
+# Uso: kubectl apply -f mysql-headless-service.yaml
+#
+# Descripcion:
+#   Service Headless (clusterIP: None) para un cluster de MySQL.
+#   A diferencia de un Service normal, no asigna ClusterIP.
+#   DNS retorna directamente las IPs de cada Pod individual.
+#   Cada Pod tiene un DNS unico: <pod-name>.<service-name>.<namespace>.svc.cluster.local
+#
+# Conceptos clave:
+#   - clusterIP: None → Headless Service (sin IP virtual)
+#   - DNS retorna TODAS las IPs de Pods (no una sola ClusterIP)
+#   - Cada Pod tiene DNS individual: mysql-0.mysql-headless, mysql-1.mysql-headless, etc.
+#   - publishNotReadyAddresses: true → incluye Pods not-ready en DNS (util para bootstrap)
+#   - Requerido por StatefulSets para DNS estable por Pod
+#
+# Relacion: Usado por mysql-statefulset.yaml (serviceName: mysql-headless)
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+  labels:
+    app: mysql
+spec:
+  clusterIP: None      # Headless - sin IP virtual
+  selector:
+    app: mysql
+  ports:
+  - name: mysql
+    port: 3306
+    targetPort: 3306
+  publishNotReadyAddresses: true    # Incluir Pods not-ready en DNS

@@ -1,0 +1,31 @@
+# Ejercicio 2: NodePort con puerto personalizado
+# Uso: kubectl apply -f webapp-nodeport-custom.yaml
+#
+# Descripcion:
+#   Service tipo NodePort con nodePort fijo en 30080.
+#   Ventaja: puerto conocido y predecible para configuraciones de firewall o DNS.
+#   Desventaja: puede conflictuar si otro Service ya usa ese puerto.
+#
+# Conceptos clave:
+#   - nodePort debe estar en el rango 30000-32767
+#   - Puerto fijo es util para entornos donde se necesita un puerto predecible
+#   - Si el puerto ya esta en uso, Kubernetes rechaza la creacion
+#   - En produccion, preferir auto-asignacion para evitar conflictos
+#
+# Relacion: Selecciona Pods de webapp-deployment.yaml
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-nodeport-custom
+spec:
+  type: NodePort
+  selector:
+    app: webapp
+    tier: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    nodePort: 30080    # Puerto fijo (debe estar en rango 30000-32767)

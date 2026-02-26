@@ -1,0 +1,32 @@
+# Ejercicio 2: Aplicacion que consume el Service "database"
+# Uso: kubectl apply -f app-using-db.yaml
+#
+# Descripcion:
+#   Deployment de una app que resuelve DNS del Service "database" cada 30 segundos.
+#   Se usa para demostrar que la misma app funciona tanto con ExternalName (Fase 1)
+#   como con ClusterIP (Fase 2) sin necesidad de cambiar la configuracion.
+#   Revisa los logs para ver a donde resuelve el DNS.
+#
+# Verificar comportamiento:
+#   kubectl logs -l app=backend --tail=5
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: app
+        image: busybox
+        command: ['sh', '-c', 'while true; do nslookup database; sleep 30; done']

@@ -1,0 +1,36 @@
+# Ejercicio 3: externalTrafficPolicy: Local
+# Uso: kubectl apply -f webapp-local-policy.yaml
+#
+# Descripcion:
+#   Service NodePort con externalTrafficPolicy: Local.
+#   Solo envia trafico a Pods que corren en el MISMO nodo donde se recibe la conexion.
+#   Preserva la IP origen del cliente (sin SNAT).
+#
+# Comportamiento:
+#   - Solo balancea a Pods en el MISMO nodo (sin hop extra)
+#   - Preserva IP origen del cliente (ideal para logging/auditing)
+#   - Si el nodo no tiene Pods del Service, la conexion FALLA
+#   - Kubernetes crea un healthCheckNodePort para que LBs externos detecten nodos sin Pods
+#   - Balanceo puede ser desigual (depende de distribucion de Pods por nodo)
+#
+# Comparar con: webapp-cluster-policy.yaml (externalTrafficPolicy: Cluster)
+# Relacion: Selecciona Pods de webapp-deployment.yaml
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-local-policy
+  labels:
+    policy: local
+spec:
+  type: NodePort
+  selector:
+    app: webapp
+    tier: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    nodePort: 30082
+  externalTrafficPolicy: Local    # Solo Pods locales - preserva IP origen

@@ -1,0 +1,136 @@
+# Ejercicio 5: Deployment Production-Ready con Best Practices
+# Uso: kubectl apply -f production-deployment.yaml
+#
+# Descripcion:
+#   Deployment de produccion con todas las best practices de Kubernetes:
+#   - RollingUpdate strategy con maxSurge/maxUnavailable
+#   - Pod anti-affinity para distribuir en diferentes nodos
+#   - Security context (non-root, read-only filesystem, drop ALL capabilities)
+#   - Resource requests/limits
+#   - Liveness + readiness probes
+#   - terminationGracePeriodSeconds para shutdown graceful
+#
+# Conceptos clave:
+#   - podAntiAffinity: preferredDuringScheduling distribuye Pods en nodos distintos
+#   - minReadySeconds: 30 → espera 30s antes de considerar Pod como disponible
+#   - revisionHistoryLimit: 10 → mantiene 10 revisiones para rollback
+#   - securityContext.runAsNonRoot: true → no permite ejecutar como root
+#   - readOnlyRootFilesystem: true → previene escritura en filesystem del container
+#
+# Prerequisito: kubectl create namespace production
+# Relacion: Expuesto por production-service.yaml
+# Namespace: production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-deployment
+  namespace: production
+
+  labels:
+    app: webapp
+    environment: production
+    version: v2.0.0
+
+spec:
+  replicas: 5
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+
+  minReadySeconds: 30
+  revisionHistoryLimit: 10
+
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+      environment: production
+
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+        environment: production
+        version: v2.0.0
+
+    spec:
+      # Pod Anti-Affinity (distribuir en diferentes nodos)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - webapp
+              topologyKey: kubernetes.io/hostname
+
+      # Security Context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+      - name: webapp
+        image: nginx:alpine
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http-port
+          containerPort: 80
+        - name: https-port
+          containerPort: 443
+        - name: metrics-port
+          containerPort: 9090
+
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+      terminationGracePeriodSeconds: 60

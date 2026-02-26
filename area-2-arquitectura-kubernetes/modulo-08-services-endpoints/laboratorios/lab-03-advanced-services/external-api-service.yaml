@@ -1,0 +1,29 @@
+# Ejercicio 1: ExternalName Service - API Externa
+# Uso: kubectl apply -f external-api-service.yaml
+#
+# Descripcion:
+#   Service tipo ExternalName que crea un alias DNS (CNAME) apuntando a
+#   api.github.com. Permite que los Pods accedan a servicios externos
+#   usando el nombre del Service en lugar de URLs hardcodeadas.
+#   No crea ClusterIP ni Endpoints — solo resolucion DNS.
+#
+# Conceptos clave:
+#   - ExternalName no tiene selector (no hay Pods asociados)
+#   - No tiene ClusterIP (resolucion puramente DNS via CNAME)
+#   - No tiene ports (se pueden agregar como documentacion)
+#   - Util para abstraer servicios externos y facilitar migraciones
+#   - Limitacion: solo funciona con DNS, no con IPs directas
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-api
+  labels:
+    type: externalname
+spec:
+  type: ExternalName
+  externalName: api.github.com
+  # NO tiene selector (no hay Pods)
+  # NO tiene ports (opcional, solo documentacion)

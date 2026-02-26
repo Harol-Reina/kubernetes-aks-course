@@ -1,53 +1,86 @@
-# Laboratorio 03: Services Avanzados - ExternalName, Headless y Producción
+# Laboratorio 03: Services Avanzados - ExternalName, Headless y Produccion
 
-**Duración estimada:** 60 minutos  
-**Nivel:** Avanzado  
-**Objetivo:** Dominar ExternalName, Headless Services, Endpoints manuales y best practices de producción
+**Duracion estimada:** 60 minutos
+**Nivel:** Avanzado
+**Objetivo:** Dominar ExternalName, Headless Services, Endpoints manuales y best practices de produccion
 
 ---
 
-## 📋 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
 
-Al completar este laboratorio, serás capaz de:
+| Tecnica | Descripcion |
+|---------|-------------|
+| **ExternalName Service** | Crea un alias DNS (CNAME) hacia un servicio externo. No tiene ClusterIP ni Endpoints. Util para abstraer servicios externos y facilitar migraciones |
+| **Migracion gradual** | Patron que cambia un Service de ExternalName a ClusterIP manteniendo el mismo nombre. Las apps no necesitan cambios — zero downtime |
+| **Headless Service** | Service con `clusterIP: None`. DNS retorna directamente las IPs de los Pods individuales. Requerido por StatefulSets para DNS estable por Pod |
+| **StatefulSet + Headless** | Combinacion que da a cada Pod un DNS unico y predecible: `<pod>.<service>`. Ideal para bases de datos con master-slave replication |
+| **Endpoints manuales** | Service sin selector + objeto Endpoints creado manualmente. Permite integrar servicios externos (databases, APIs legacy) con DNS de Kubernetes |
+| **PodDisruptionBudget** | Garantiza disponibilidad minima durante disrupciones voluntarias (drain, upgrades). Kubernetes bloquea operaciones que violarian el PDB |
+| **HorizontalPodAutoscaler** | Escala automaticamente el numero de replicas basado en metricas (CPU, memoria). Requiere metrics-server |
+| **Security Context** | Restricciones de seguridad: non-root, read-only filesystem, drop ALL capabilities. Best practice para produccion |
 
-- ✅ Usar ExternalName para integrar servicios externos
-- ✅ Configurar Headless Services con StatefulSets
-- ✅ Crear Endpoints manuales para backends no-Kubernetes
-- ✅ Implementar Services production-ready
-- ✅ Aplicar todas las mejores prácticas de Services
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `external-api-service.yaml` | 1 | ExternalName Service apuntando a api.github.com |
+| `database-service-phase1.yaml` | 2 | ExternalName apuntando a RDS (fase migracion) |
+| `database-service-phase2.yaml` | 2 | ClusterIP interno reemplazando ExternalName |
+| `app-using-db.yaml` | 2 | App que consume el Service "database" |
+| `mysql-headless-service.yaml` | 3 | Headless Service para MySQL (clusterIP: None) |
+| `mysql-statefulset.yaml` | 3 | StatefulSet de MySQL 3 replicas con PVC |
+| `external-database-service.yaml` | 4 | Service SIN selector para endpoints manuales |
+| `external-database-endpoints.yaml` | 4 | Endpoints manuales apuntando a IPs externas |
+| `app-using-external-db.yaml` | 4 | App que usa el Service con endpoints manuales |
+| `production-service.yaml` | 5 | Service production-ready con annotations y multi-port |
+| `production-deployment.yaml` | 5 | Deployment production-ready con security y probes |
+| `webapp-pdb.yaml` | 6 | PodDisruptionBudget (minAvailable: 3) |
+| `webapp-hpa.yaml` | 6 | HorizontalPodAutoscaler (CPU 70%, memoria 80%) |
 
 ---
 
 ## 🔧 Requisitos Previos
 
 - Laboratorios 01 y 02 completados
-- Conocimientos de StatefulSets (módulo anterior)
+- Conocimientos de StatefulSets (modulo anterior)
 - Cluster con soporte para PersistentVolumes (para StatefulSet)
+
+### Verificacion del entorno
+
+```bash
+# Verificar cluster
+kubectl cluster-info
+
+# Verificar PersistentVolume provisioner (para StatefulSet)
+kubectl get storageclass
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
+```
 
 ---
 
-## 📚 Parte 1: ExternalName Service
+## Parte 1: ExternalName Service
 
 ### Paso 1: Crear ExternalName Service
 
-Vamos a integrar una API externa usando ExternalName.
+Revisa el archivo `external-api-service.yaml`:
 
 ```bash
-# Service apuntando a API externa
-cat > external-api-service.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: external-api
-  labels:
-    type: externalname
-spec:
-  type: ExternalName
-  externalName: api.github.com
-  # NO tiene selector (no hay Pods)
-  # NO tiene ports (opcional, solo documentación)
-EOF
+cat external-api-service.yaml
+```
 
+Puntos clave:
+- **type: ExternalName**: solo resolucion DNS, no proxy
+- **externalName: api.github.com**: destino del CNAME
+- **Sin selector**: no hay Pods asociados
+- **Sin ClusterIP**: no se asigna IP virtual
+
+```bash
 kubectl apply -f external-api-service.yaml
 
 # Verificar Service (NO tiene ClusterIP)
@@ -63,7 +96,7 @@ NAME           TYPE           CLUSTER-IP   EXTERNAL-IP      PORT(S)   AGE
 external-api   ExternalName   <none>       api.github.com   <none>    10s
 ```
 
-**🎯 Observa:**
+**Observa:**
 - `CLUSTER-IP`: `<none>` (no se crea ClusterIP)
 - `EXTERNAL-IP`: `api.github.com` (CNAME destino)
 
@@ -80,125 +113,77 @@ kubectl run test-external --rm -it --image=busybox --restart=Never -- sh
 # DNS lookup del Service
 nslookup external-api
 
-# Debería resolver a CNAME: api.github.com
-# Server:    10.96.0.10
-# Name:      external-api
-# Address 1: external-api.default.svc.cluster.local
-# ↓ CNAME
-# api.github.com
+# Deberia resolver a CNAME: api.github.com
 
-# Test conexión HTTPS
+# Test conexion HTTPS
 wget --no-check-certificate -O- https://external-api 2>&1 | head -n 5
 
 exit
 ```
 
-**🎯 Observa:** DNS resuelve a `api.github.com`, no a IP directa.
+**Observa:** DNS resuelve a `api.github.com`, no a IP directa.
 
 ---
 
-### Paso 3: Caso de Uso - Migración Gradual
+### Paso 3: Caso de uso - Migracion Gradual
 
-Simular migración de servicio externo a interno.
+Simular migracion de servicio externo a interno.
+
+**FASE 1: Servicio externo (ExternalName)**
+
+Revisa `database-service-phase1.yaml` y `app-using-db.yaml`:
 
 ```bash
-# FASE 1: Servicio externo (ExternalName)
-cat > database-service-phase1.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: database
-  labels:
-    phase: external
-spec:
-  type: ExternalName
-  externalName: mydb.abc123.us-east-1.rds.amazonaws.com
-EOF
+cat database-service-phase1.yaml
+cat app-using-db.yaml
+```
 
+```bash
+# Aplicar Fase 1
 kubectl apply -f database-service-phase1.yaml
-
-# Deployment usando el Service
-cat > app-using-db.yaml <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-      - name: app
-        image: busybox
-        command: ['sh', '-c', 'while true; do nslookup database; sleep 30; done']
-EOF
-
 kubectl apply -f app-using-db.yaml
 
 # Ver logs (resuelve a RDS)
 kubectl logs -l app=backend --tail=5
 ```
 
-**Ahora migramos a PostgreSQL interno:**
+**FASE 2: Migrar a ClusterIP interno**
+
+Revisa `database-service-phase2.yaml`:
 
 ```bash
-# FASE 2: Cambiar a ClusterIP con Pods internos
-cat > database-service-phase2.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: database  # ← MISMO nombre
-  labels:
-    phase: internal
-spec:
-  type: ClusterIP  # ← Cambió de ExternalName
-  selector:
-    app: postgres
-  ports:
-  - port: 5432
-    targetPort: 5432
-EOF
+cat database-service-phase2.yaml
+```
 
+Punto clave: **MISMO nombre** "database" pero ahora type: ClusterIP con selector.
+
+```bash
+# Aplicar Fase 2 (reemplaza Fase 1)
 kubectl apply -f database-service-phase2.yaml
 
 # Ver logs de backend-app (ahora resuelve a ClusterIP)
 kubectl logs -l app=backend --tail=5
 ```
 
-**🎯 Ventaja:** Backend app NO cambia, solo el Service.
+**Ventaja:** Backend app NO cambia, solo el Service.
 
 ---
 
-## 📚 Parte 2: Headless Service con StatefulSet
+## Parte 2: Headless Service con StatefulSet
 
 ### Paso 4: Crear MySQL Cluster con Headless Service
 
-```bash
-# Headless Service (clusterIP: None)
-cat > mysql-headless-service.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql-headless
-  labels:
-    app: mysql
-spec:
-  clusterIP: None  # ← Headless
-  selector:
-    app: mysql
-  ports:
-  - name: mysql
-    port: 3306
-    targetPort: 3306
-  publishNotReadyAddresses: true
-EOF
+Revisa el archivo `mysql-headless-service.yaml`:
 
+```bash
+cat mysql-headless-service.yaml
+```
+
+Puntos clave:
+- **clusterIP: None**: Headless Service
+- **publishNotReadyAddresses: true**: incluye Pods not-ready en DNS
+
+```bash
 kubectl apply -f mysql-headless-service.yaml
 
 # Verificar (ClusterIP = None)
@@ -209,97 +194,32 @@ kubectl get service mysql-headless
 
 ### Paso 5: Crear StatefulSet de MySQL
 
+Primero crear el Secret, luego revisar y aplicar el StatefulSet:
+
 ```bash
-# Secret para MySQL
+# Crear Secret para MySQL
 kubectl create secret generic mysql-secret \
   --from-literal=root-password='MySecurePass123!'
 
-# StatefulSet
-cat > mysql-statefulset.yaml <<'EOF'
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: mysql
-spec:
-  serviceName: mysql-headless  # ← Apunta al Headless Service
-  replicas: 3
-  selector:
-    matchLabels:
-      app: mysql
-  template:
-    metadata:
-      labels:
-        app: mysql
-    spec:
-      containers:
-      - name: mysql
-        image: mysql:8.0
-        ports:
-        - name: mysql
-          containerPort: 3306
-        
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secret
-              key: root-password
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        
-        volumeMounts:
-        - name: data
-          mountPath: /var/lib/mysql
-        
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "200m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        
-        livenessProbe:
-          exec:
-            command:
-            - mysqladmin
-            - ping
-            - -h
-            - localhost
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        
-        readinessProbe:
-          exec:
-            command:
-            - mysql
-            - -h
-            - localhost
-            - -e
-            - SELECT 1
-          initialDelaySeconds: 10
-          periodSeconds: 5
-  
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 1Gi
-EOF
-
-kubectl apply -f mysql-statefulset.yaml
-
-# Ver Pods creándose en orden
-kubectl get pods -l app=mysql -w
-# Ctrl+C después de ver los 3 Pods
+# Revisar el StatefulSet
+cat mysql-statefulset.yaml
 ```
 
-**🎯 Observa:** Pods se crean en orden: mysql-0, luego mysql-1, luego mysql-2.
+Puntos clave:
+- **serviceName: mysql-headless**: vincula con el Headless Service
+- **replicas: 3**: mysql-0, mysql-1, mysql-2 (creados en orden)
+- **volumeClaimTemplates**: cada Pod obtiene su propio PVC
+- **Liveness/readiness probes**: health checks de MySQL
+
+```bash
+kubectl apply -f mysql-statefulset.yaml
+
+# Ver Pods creandose en orden
+kubectl get pods -l app=mysql -w
+# Ctrl+C despues de ver los 3 Pods
+```
+
+**Observa:** Pods se crean en orden: mysql-0, luego mysql-1, luego mysql-2.
 
 ---
 
@@ -318,7 +238,6 @@ kubectl run dns-test --rm -it --image=busybox --restart=Never -- sh
 nslookup mysql-headless
 
 # Output esperado:
-# Server:    10.96.0.10
 # Name:      mysql-headless
 # Address 1: 10.1.2.10 mysql-0.mysql-headless.default.svc.cluster.local
 # Address 2: 10.1.2.11 mysql-1.mysql-headless.default.svc.cluster.local
@@ -331,19 +250,19 @@ nslookup mysql-0.mysql-headless
 # Name:      mysql-0.mysql-headless
 # Address 1: 10.1.2.10 mysql-0.mysql-headless.default.svc.cluster.local
 
-# Conectar a Pod específico
+# Conectar a Pod especifico
 telnet mysql-0.mysql-headless 3306
 
 exit
 ```
 
-**🎯 Clave:**
+**Clave:**
 - Headless Service retorna IPs de Pods directamente (NO ClusterIP)
-- Cada Pod tiene DNS único: `<pod-name>.<service-name>`
+- Cada Pod tiene DNS unico: `<pod-name>.<service-name>`
 
 ---
 
-### Paso 7: Caso de Uso - Master-Slave Replication
+### Paso 7: Caso de uso - Master-Slave Replication
 
 ```bash
 # Conectar a mysql-0 (master)
@@ -355,49 +274,34 @@ INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob');
 SELECT * FROM users;
 "
 
-# Conectar a mysql-1 (slave, en configuración real)
+# Conectar a mysql-1 (slave, en configuracion real)
 kubectl exec -it mysql-1 -- mysql -u root -p'MySecurePass123!' -e "
 SHOW DATABASES;
 "
-
-# Desde app, conectar a master específico:
-# mysql://mysql-0.mysql-headless:3306/testdb
-# 
-# Lecturas balanceadas:
-# mysql://mysql-1.mysql-headless:3306/testdb
-# mysql://mysql-2.mysql-headless:3306/testdb
 ```
+
+Desde una app, conectar a master especifico:
+- Master: `mysql://mysql-0.mysql-headless:3306/testdb`
+- Lecturas: `mysql://mysql-1.mysql-headless:3306/testdb` o `mysql-2.mysql-headless`
 
 ---
 
-## 📚 Parte 3: Endpoints Manuales
+## Parte 3: Endpoints Manuales
 
 ### Paso 8: Service con Endpoints Manuales
 
-Integrar base de datos externa (fuera del cluster).
+Revisa el archivo `external-database-service.yaml`:
 
 ```bash
-# Service SIN selector
-cat > external-database-service.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: external-database
-  labels:
-    app: database
-    type: external
-spec:
-  type: ClusterIP
-  # SIN selector ← Endpoints NO se crean automáticamente
-  ports:
-  - name: postgres
-    port: 5432
-    targetPort: 5432
-EOF
+cat external-database-service.yaml
+```
 
+Punto clave: **Sin selector** — Kubernetes NO crea Endpoints automaticamente.
+
+```bash
 kubectl apply -f external-database-service.yaml
 
-# Verificar Endpoints (vacío)
+# Verificar Endpoints (vacio)
 kubectl get endpoints external-database
 # NAME                 ENDPOINTS   AGE
 # external-database    <none>      5s
@@ -407,27 +311,18 @@ kubectl get endpoints external-database
 
 ### Paso 9: Crear Endpoints Manuales
 
-```bash
-# Endpoints apuntando a IP externa
-cat > external-database-endpoints.yaml <<'EOF'
-apiVersion: v1
-kind: Endpoints
-metadata:
-  name: external-database  # ← MISMO nombre que Service
-subsets:
-- addresses:
-  # IPs de bases de datos externas (ejemplo)
-  - ip: 192.168.100.10
-    hostname: db-primary
-  - ip: 192.168.100.11
-    hostname: db-replica
-  
-  ports:
-  - name: postgres
-    port: 5432
-    protocol: TCP
-EOF
+Revisa el archivo `external-database-endpoints.yaml`:
 
+```bash
+cat external-database-endpoints.yaml
+```
+
+Puntos clave:
+- **Nombre IDENTICO al Service**: `external-database`
+- **addresses[].ip**: IPs de servidores externos
+- **ports[].name**: debe coincidir con el nombre del puerto en el Service
+
+```bash
 kubectl apply -f external-database-endpoints.yaml
 
 # Ver Endpoints (ahora poblados)
@@ -447,259 +342,70 @@ external-database    192.168.100.10:5432,192.168.100.11:5432     10s
 
 ### Paso 10: Usar desde Pods
 
-```bash
-# Deployment usando external-database
-cat > app-using-external-db.yaml <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app-external-db
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: myapp
-  template:
-    metadata:
-      labels:
-        app: myapp
-    spec:
-      containers:
-      - name: app
-        image: postgres:15-alpine
-        env:
-        - name: PGHOST
-          value: "external-database"  # ← Usa nombre del Service
-        - name: PGPORT
-          value: "5432"
-        - name: PGUSER
-          value: "postgres"
-        command:
-        - sh
-        - -c
-        - |
-          while true; do
-            echo "Testing connection to external-database..."
-            pg_isready -h external-database -p 5432 || echo "DB not reachable"
-            sleep 30
-          done
-EOF
+Revisa el archivo `app-using-external-db.yaml`:
 
+```bash
+cat app-using-external-db.yaml
+```
+
+```bash
 kubectl apply -f app-using-external-db.yaml
 
-# Ver logs (intentos de conexión)
+# Ver logs (intentos de conexion)
 kubectl logs -l app=myapp --tail=10
 ```
 
-**🎯 Ventaja:** App usa nombre de Service, no IPs hardcoded.
+**Ventaja:** App usa nombre de Service, no IPs hardcoded.
 
 ---
 
-## 📚 Parte 4: Production-Ready Service
+## Parte 4: Production-Ready Service
 
-### Paso 11: Service con Todas las Best Practices
+### Paso 11: Service con todas las Best Practices
 
 ```bash
-# Namespace de producción
+# Crear namespace de produccion
 kubectl create namespace production
-
-# Service production-ready
-cat > production-service.yaml <<'EOF'
-apiVersion: v1
-kind: Service
-metadata:
-  name: webapp-production
-  namespace: production
-  
-  labels:
-    app: webapp
-    tier: frontend
-    environment: production
-    version: v2.0.0
-  
-  annotations:
-    description: "Production webapp with HA"
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9090"
-    prometheus.io/path: "/metrics"
-    documentation.url: "https://docs.example.com/webapp"
-    team: "platform-engineering"
-
-spec:
-  type: LoadBalancer
-  selector:
-    app: webapp
-    tier: frontend
-    environment: production
-  
-  ports:
-  - name: http
-    port: 80
-    targetPort: http-port
-  - name: https
-    port: 443
-    targetPort: https-port
-  - name: metrics
-    port: 9090
-    targetPort: metrics-port
-  
-  externalTrafficPolicy: Local
-  sessionAffinity: ClientIP
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 3600
-EOF
-
-kubectl apply -f production-service.yaml
 ```
 
----
-
-### Paso 12: Deployment Production-Ready
+Revisa los archivos `production-service.yaml` y `production-deployment.yaml`:
 
 ```bash
-cat > production-deployment.yaml <<'EOF'
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: webapp-deployment
-  namespace: production
-  
-  labels:
-    app: webapp
-    environment: production
-    version: v2.0.0
+cat production-service.yaml
+cat production-deployment.yaml
+```
 
-spec:
-  replicas: 5
-  
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 2
-      maxUnavailable: 1
-  
-  minReadySeconds: 30
-  revisionHistoryLimit: 10
-  
-  selector:
-    matchLabels:
-      app: webapp
-      tier: frontend
-      environment: production
-  
-  template:
-    metadata:
-      labels:
-        app: webapp
-        tier: frontend
-        environment: production
-        version: v2.0.0
-    
-    spec:
-      # Pod Anti-Affinity (distribuir en diferentes nodos)
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - webapp
-              topologyKey: kubernetes.io/hostname
-      
-      # Security Context
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
-      
-      containers:
-      - name: webapp
-        image: nginx:alpine
-        imagePullPolicy: IfNotPresent
-        
-        ports:
-        - name: http-port
-          containerPort: 80
-        - name: https-port
-          containerPort: 443
-        - name: metrics-port
-          containerPort: 9090
-        
-        env:
-        - name: ENVIRONMENT
-          value: "production"
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "200m"
-        
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 80
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 80
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 2
-        
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-      
-      terminationGracePeriodSeconds: 60
-EOF
+Puntos clave del Service:
+- **Labels completas**: app, tier, environment, version
+- **Annotations Prometheus**: auto-discovery de metricas
+- **Multi-port**: http (80), https (443), metrics (9090)
+- **sessionAffinity: ClientIP**: sticky sessions
 
+Puntos clave del Deployment:
+- **Pod anti-affinity**: distribuir en diferentes nodos
+- **Security context**: non-root, read-only filesystem
+- **Liveness + readiness probes**: health checks
+- **Resource requests/limits**: control de recursos
+
+```bash
+kubectl apply -f production-service.yaml
 kubectl apply -f production-deployment.yaml
 
-# Ver distribución en nodos
+# Ver distribucion en nodos
 kubectl get pods -n production -o wide
 ```
 
 ---
 
-### Paso 13: PodDisruptionBudget
+### Paso 12: PodDisruptionBudget
+
+Revisa el archivo `webapp-pdb.yaml`:
 
 ```bash
-# Garantizar disponibilidad mínima
-cat > webapp-pdb.yaml <<'EOF'
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: webapp-pdb
-  namespace: production
-spec:
-  minAvailable: 3  # Siempre mantener 3 Pods
-  selector:
-    matchLabels:
-      app: webapp
-      environment: production
-EOF
+cat webapp-pdb.yaml
+```
 
+```bash
 kubectl apply -f webapp-pdb.yaml
 
 # Verificar PDB
@@ -709,40 +415,15 @@ kubectl describe pdb webapp-pdb -n production
 
 ---
 
-### Paso 14: HorizontalPodAutoscaler
+### Paso 13: HorizontalPodAutoscaler
+
+Revisa el archivo `webapp-hpa.yaml`:
 
 ```bash
-# Autoscaling basado en CPU
-cat > webapp-hpa.yaml <<'EOF'
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: webapp-hpa
-  namespace: production
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: webapp-deployment
-  
-  minReplicas: 5
-  maxReplicas: 20
-  
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-EOF
+cat webapp-hpa.yaml
+```
 
+```bash
 kubectl apply -f webapp-hpa.yaml
 
 # Ver HPA
@@ -752,51 +433,42 @@ kubectl describe hpa webapp-hpa -n production
 
 ---
 
-## 🎓 Desafíos Finales
+## Desafios Finales
 
-### Desafío 1: Migración Completa
+### Desafio 1: Migracion Completa
 
 Migra un servicio de ExternalName a ClusterIP con Pods internos, asegurando zero downtime.
 
-### Desafío 2: Multi-Region Database
+### Desafio 2: Multi-Region Database
 
-Configura Endpoints manuales apuntando a bases de datos en múltiples regiones (simula con diferentes IPs).
+Configura Endpoints manuales apuntando a bases de datos en multiples regiones (simula con diferentes IPs).
 
-### Desafío 3: Production Checklist
+### Desafio 3: Production Checklist
 
-Revisa el Service de producción y asegúrate que cumple TODAS las best practices del módulo.
+Revisa el Service de produccion y asegurate que cumple TODAS las best practices del modulo.
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
-# Eliminar namespace production (borra todo dentro)
-kubectl delete namespace production
-
-# Eliminar otros recursos
-kubectl delete statefulset mysql
-kubectl delete service mysql-headless external-api database external-database
-kubectl delete deployment backend-app app-using-db app-using-external-db app-external-db
-kubectl delete secret mysql-secret
-kubectl delete pvc -l app=mysql
-
-# Eliminar archivos
-rm -f *.yaml
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
 ```
 
 ---
 
-## 📝 Resumen Final del Módulo
+## Resumen Final del Modulo
 
 ### ExternalName
 
-✅ **Uso:**
-- Integración con servicios externos
-- Migración gradual (externo → interno)
-- Abstracción de endpoints
+**Uso:**
+- Integracion con servicios externos
+- Migracion gradual (externo → interno)
+- Abstraccion de endpoints
 
-⚠️ **Limitaciones:**
+**Limitaciones:**
 - Solo DNS CNAME (no IPs)
 - Sin health checks
 - Sin load balancing
@@ -805,12 +477,12 @@ rm -f *.yaml
 
 ### Headless Services
 
-✅ **Uso:**
+**Uso:**
 - StatefulSets (MySQL, MongoDB, Cassandra)
 - DNS por Pod individual
 - Master-slave replication
 
-🔑 **Características:**
+**Caracteristicas:**
 - `clusterIP: None`
 - DNS retorna IPs de Pods
 - Cliente responsable de balanceo
@@ -819,27 +491,27 @@ rm -f *.yaml
 
 ### Endpoints Manuales
 
-✅ **Uso:**
+**Uso:**
 - Integrar servicios externos (databases, APIs)
 - Legacy systems
 - Multi-datacenter
 
-⚠️ **Responsabilidad:**
+**Responsabilidad:**
 - Debes mantener IPs actualizadas
-- Sin health checks automáticos
+- Sin health checks automaticos
 - Sin auto-scaling
 
 ---
 
 ### Production Best Practices
 
-✅ **Checklist completo:**
+**Checklist completo:**
 - [ ] Type apropiado (LoadBalancer en cloud)
 - [ ] externalTrafficPolicy: Local (si necesitas IP)
 - [ ] sessionAffinity configurado si aplica
 - [ ] Labels y annotations completas
 - [ ] Monitoring integrado (Prometheus)
-- [ ] Múltiples réplicas (HA)
+- [ ] Multiples replicas (HA)
 - [ ] PodDisruptionBudget
 - [ ] HorizontalPodAutoscaler
 - [ ] Resource requests/limits
@@ -849,48 +521,47 @@ rm -f *.yaml
 
 ---
 
-## 🎯 Has Completado el Módulo 08!
+## Has Completado el Modulo 08!
 
 ### Dominaste:
 
-✅ **Services:**
+**Services:**
 - ClusterIP (interno)
 - NodePort (desarrollo)
-- LoadBalancer (producción cloud)
-- ExternalName (integración)
+- LoadBalancer (produccion cloud)
+- ExternalName (integracion)
 - Headless (stateful apps)
 
-✅ **Endpoints:**
-- Automáticos (con selector)
+**Endpoints:**
+- Automaticos (con selector)
 - Manuales (sin selector)
 - Troubleshooting
 
-✅ **DNS Discovery:**
+**DNS Discovery:**
 - Nombres de Services
 - Cross-namespace
 - FQDN completo
 
-✅ **Conceptos Avanzados:**
+**Conceptos Avanzados:**
 - externalTrafficPolicy
 - sessionAffinity
 - kube-proxy modes
-- Best practices de producción
+- Best practices de produccion
 
 ---
 
-## 🔗 Recursos Adicionales
+## Siguientes Pasos
 
-- **[README del Módulo](../README.md)** - Teoría completa
-- **[Ejemplos](../ejemplos/README.md)** - 13 ejemplos YAML
-- **[Laboratorio 01](lab-01-clusterip-basics.md)** - ClusterIP básico
-- **[Laboratorio 02](lab-02-nodeport-loadbalancer.md)** - NodePort y LoadBalancer
+- **[README del Modulo](../../README.md)** - Teoria completa
+- **[Ejemplos](../../ejemplos/README.md)** - 13 ejemplos YAML
+- **[Laboratorio 01](../lab-01-clusterip-basics/)** - ClusterIP basico
+- **[Laboratorio 02](../lab-02-nodeport-loadbalancer/)** - NodePort y LoadBalancer
 
-**Documentación oficial:**
+**Documentacion oficial:**
 - https://kubernetes.io/docs/concepts/services-networking/service/
 - https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
 
 ---
 
-**¡Felicidades por completar el módulo!** 🚀🎉
-
-Ahora estás listo para implementar Services en producción con confianza.
+**Felicidades por completar el modulo!**
+Ahora estas listo para implementar Services en produccion con confianza.
