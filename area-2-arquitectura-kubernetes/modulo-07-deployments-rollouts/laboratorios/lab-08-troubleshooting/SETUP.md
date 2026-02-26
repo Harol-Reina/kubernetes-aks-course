@@ -42,7 +42,7 @@ minikube   250m         12%    1024Mi          40%
 
 ```bash
 # Verificar archivos YAML del laboratorio
-ls -la /ruta/al/lab-08-troubleshooting/*.yaml
+ls -la *.yaml
 ```
 
 **Output esperado**:

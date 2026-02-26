@@ -363,6 +363,21 @@ kubectl scale deployment app-v2 --replicas=7
 kubectl get pods -l app=weighted-app -L version
 ```
 
+**Output esperado** (distribucion 30/70):
+```
+NAME                      READY   STATUS    RESTARTS   AGE   VERSION
+app-v1-xxxx-abc           1/1     Running   0          2m    v1
+app-v1-xxxx-def           1/1     Running   0          2m    v1
+app-v1-xxxx-ghi           1/1     Running   0          2m    v1
+app-v2-xxxx-jkl           1/1     Running   0          2m    v2
+app-v2-xxxx-mno           1/1     Running   0          2m    v2
+app-v2-xxxx-pqr           1/1     Running   0          2m    v2
+app-v2-xxxx-stu           1/1     Running   0          2m    v2
+app-v2-xxxx-vwx           1/1     Running   0          2m    v2
+app-v2-xxxx-yza           1/1     Running   0          2m    v2
+app-v2-xxxx-bcd           1/1     Running   0          2m    v2
+```
+
 ---
 
 ## Ejercicio 4: Canary con Health Checks y Auto-exclusion

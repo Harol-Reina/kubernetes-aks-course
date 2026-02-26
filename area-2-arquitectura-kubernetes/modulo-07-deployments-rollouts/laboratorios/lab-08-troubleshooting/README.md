@@ -439,6 +439,14 @@ service/frontend-service patched
 kubectl get endpoints frontend-service -n ecommerce-prod
 ```
 
+**Output esperado**:
+```
+NAME               ENDPOINTS                                            AGE
+frontend-service   172.17.0.20:80,172.17.0.21:80,172.17.0.22:80,...    15m
+```
+
+> **Nota**: Los endpoints ahora muestran las IPs de los Pods Green en lugar de los Blue.
+
 > **Rollback instantaneo si Green tiene problemas**:
 > ```bash
 > kubectl patch service frontend-service -n ecommerce-prod \

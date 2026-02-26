@@ -717,7 +717,7 @@ kubectl get pods -l app=nginx-recreate -w
 
 - [Laboratorio 1: Crear Deployments](../lab-01-crear-deployments/)
 - [Laboratorio 2: Rolling Updates](../lab-02-rolling-updates/)
-- [Laboratorio 3: Rollback y Versiones](../lab-03-rollback-versiones/)
+- [Laboratorio 3: Rollback y Versiones](../lab-03-rollback/)
 - [Ejemplos de Deployments](../../ejemplos/)
 - [README del modulo](../../README.md)
 
