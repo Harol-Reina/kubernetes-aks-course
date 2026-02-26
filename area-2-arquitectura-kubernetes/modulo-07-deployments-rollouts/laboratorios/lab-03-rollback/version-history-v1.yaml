@@ -1,0 +1,58 @@
+# Ejercicio 1: Historial de Revisiones - v1.0.0 (Release inicial)
+# Uso: kubectl apply -f version-history-v1.yaml
+#
+# Descripción:
+#   Deployment inicial con nginx:1.19 para explorar el historial de revisiones.
+#   - revisionHistoryLimit: 5 → Kubernetes mantiene hasta 5 ReplicaSets antiguos
+#   - Cada vez que aplicas un cambio, se crea una nueva revisión (ReplicaSet)
+#   - Las revisiones se usan para hacer rollback a versiones anteriores
+#   - change-cause documenta el propósito de cada revisión
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: version-history
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v1.0.0 - Release inicial con nginx 1.19"
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5    # Mantener 5 revisiones para rollback
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: version-history
+  template:
+    metadata:
+      labels:
+        app: version-history
+        version: "v1.0.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

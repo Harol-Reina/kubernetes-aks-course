@@ -17,12 +17,32 @@ Al completar este laboratorio, serás capaz de:
 4. Monitorear el progreso de un rollout
 5. Usar anotaciones `change-cause` para historial descriptivo
 6. Pausar y reanudar rollouts
+7. Gestionar actualizaciones de forma declarativa con archivos YAML
 
 ## 📚 Prerrequisitos
 
 - Laboratorio 1 completado
 - Conocimiento de Deployments básicos
 - Cluster de Kubernetes funcional
+
+## 📁 Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripción |
+|---------|-----------|-------------|
+| `rolling-demo-v1.yaml` | 1 | Deployment inicial con nginx:1.20 |
+| `rolling-demo-v2.yaml` | 1 | Actualización a nginx:1.21 |
+| `rolling-ha-v1.yaml` | 2 | Alta disponibilidad (maxUnavailable: 0) |
+| `rolling-ha-v2.yaml` | 2 | Update HA a nginx:1.21 |
+| `rolling-fast-v1.yaml` | 2 | Actualización rápida (maxUnavailable: 2) |
+| `rolling-fast-v2.yaml` | 2 | Update rápido a nginx:1.22 |
+| `recreate-demo-v1.yaml` | 3 | Estrategia Recreate con nginx:1.20 |
+| `recreate-demo-v2.yaml` | 3 | Update Recreate a nginx:1.21 |
+| `pause-demo-v1.yaml` | 4 | Demo pause/resume inicial |
+| `pause-demo-v2.yaml` | 4 | Múltiples cambios en un rollout |
+| `challenge-app-v1.yaml` | Desafío | Challenge deployment inicial |
+| `challenge-app-v2.yaml` | Desafío | Challenge actualizado |
 
 ## 🔧 Preparación del Entorno
 
@@ -35,71 +55,50 @@ kubectl config set-context --current --namespace=lab-rolling-updates
 kubectl config view --minify | grep namespace:
 ```
 
+**Output esperado**:
+```
+    namespace: lab-rolling-updates
+```
+
 ---
 
 ## Ejercicio 1: Rolling Update Básico (10 min)
 
-### Paso 1.1: Crear Deployment inicial
+### Paso 1.1: Revisar el manifiesto inicial
 
-Crea `rolling-demo.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: rolling-demo
-  annotations:
-    kubernetes.io/change-cause: "v1.0 - Deploy inicial con nginx 1.20"
-spec:
-  replicas: 5
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-  selector:
-    matchLabels:
-      app: rolling-demo
-  template:
-    metadata:
-      labels:
-        app: rolling-demo
-        version: "v1.0"
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.20-alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 5
-          periodSeconds: 2
-```
+Revisa el archivo `rolling-demo-v1.yaml` antes de aplicarlo:
 
 ```bash
-kubectl apply -f rolling-demo.yaml
+cat rolling-demo-v1.yaml
 ```
 
-### Paso 1.2: Verificar estado inicial
+Puntos clave del manifiesto:
+- **5 réplicas** de nginx:1.20-alpine
+- **Estrategia RollingUpdate** con `maxSurge: 1` y `maxUnavailable: 1`
+- **readinessProbe** para verificar que los Pods estén listos antes de aceptar tráfico
+- **change-cause** como anotación para el historial de revisiones
+
+### Paso 1.2: Aplicar Deployment inicial
+
+```bash
+kubectl apply -f rolling-demo-v1.yaml
+```
+
+**Output esperado**:
+```
+deployment.apps/rolling-demo created
+```
+
+### Paso 1.3: Verificar estado inicial
 
 ```bash
 # Ver Deployment
 kubectl get deployment rolling-demo
 
 # Ver ReplicaSet
-kubectl get replicaset
+kubectl get replicaset -l app=rolling-demo
 
-# Ver Pods con versión
+# Ver Pods con label de versión
 kubectl get pods -L version
 ```
 
@@ -113,21 +112,39 @@ rolling-demo-7d4f8c6b9f-jkl    1/1     Running   0          30s   v1.0
 rolling-demo-7d4f8c6b9f-mno    1/1     Running   0          30s   v1.0
 ```
 
-### Paso 1.3: Realizar rolling update
+### Paso 1.4: Comparar diferencias entre v1 y v2
+
+Antes de aplicar el update, revisa las diferencias entre ambos archivos:
+
+```bash
+diff rolling-demo-v1.yaml rolling-demo-v2.yaml
+```
+
+**Output esperado** (los cambios clave):
+```
+< kubernetes.io/change-cause: "v1.0 - Deploy inicial con nginx 1.20"
+> kubernetes.io/change-cause: "v2.0 - Actualizar nginx a 1.21"
+<     version: "v1.0"
+>     version: "v2.0"
+<     image: nginx:1.20-alpine
+>     image: nginx:1.21-alpine
+```
+
+### Paso 1.5: Realizar rolling update
 
 **Terminal 1** (monitoreo):
 ```bash
-kubectl get pods -w
+kubectl get pods -l app=rolling-demo -w
 ```
 
 **Terminal 2** (actualización):
 ```bash
-# Actualizar imagen a 1.21
-kubectl set image deployment/rolling-demo nginx=nginx:1.21-alpine
+kubectl apply -f rolling-demo-v2.yaml
+```
 
-# Agregar change-cause
-kubectl annotate deployment rolling-demo \
-  kubernetes.io/change-cause="v1.1 - Actualizar nginx a 1.21"
+**Output esperado en Terminal 2**:
+```
+deployment.apps/rolling-demo configured
 ```
 
 **Observación en Terminal 1**:
@@ -142,7 +159,7 @@ rolling-demo-8f5c9d7a8g-stu    0/1     Pending       0     0s   <- Siguiente nue
 ...
 ```
 
-### Paso 1.4: Ver historial
+### Paso 1.6: Ver historial de revisiones
 
 ```bash
 kubectl rollout history deployment rolling-demo
@@ -152,7 +169,23 @@ kubectl rollout history deployment rolling-demo
 ```
 REVISION  CHANGE-CAUSE
 1         v1.0 - Deploy inicial con nginx 1.20
-2         v1.1 - Actualizar nginx a 1.21
+2         v2.0 - Actualizar nginx a 1.21
+```
+
+### Paso 1.7: Verificar la nueva versión
+
+```bash
+# Verificar imagen en los Pods
+kubectl get pods -l app=rolling-demo -o jsonpath='{.items[0].spec.containers[0].image}'
+echo
+
+# Verificar label de versión
+kubectl get pods -l app=rolling-demo -L version
+```
+
+**Output esperado**:
+```
+nginx:1.21-alpine
 ```
 
 ### ✅ Verificación
@@ -177,55 +210,26 @@ Mínimo 4 Pods (5 deseados - 1 de maxUnavailable)
 
 ### Paso 2.1: Caso A - Alta disponibilidad (maxUnavailable: 0)
 
-Crea `rolling-ha.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: rolling-ha
-  annotations:
-    kubernetes.io/change-cause: "v1.0 - Configuración alta disponibilidad"
-spec:
-  replicas: 4
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0  # ¡NUNCA baja de 4 Pods!
-  selector:
-    matchLabels:
-      app: rolling-ha
-  template:
-    metadata:
-      labels:
-        app: rolling-ha
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.20-alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 3
-          periodSeconds: 2
-```
+Revisa el manifiesto de alta disponibilidad:
 
 ```bash
-kubectl apply -f rolling-ha.yaml
+cat rolling-ha-v1.yaml
+```
+
+Puntos clave:
+- `maxSurge: 1` → Permite hasta 5 Pods (4 + 1)
+- `maxUnavailable: 0` → **NUNCA** baja de 4 Pods disponibles
+
+```bash
+kubectl apply -f rolling-ha-v1.yaml
 
 # Esperar a que esté ready
 kubectl rollout status deployment rolling-ha
+```
+
+**Output esperado**:
+```
+deployment "rolling-ha" successfully rolled out
 ```
 
 ### Paso 2.2: Actualizar con maxUnavailable: 0
@@ -237,10 +241,7 @@ kubectl get pods -l app=rolling-ha -w
 
 **Terminal 2**:
 ```bash
-kubectl set image deployment/rolling-ha nginx=nginx:1.21-alpine
-
-kubectl annotate deployment rolling-ha \
-  kubernetes.io/change-cause="v1.1 - Update con maxUnavailable=0"
+kubectl apply -f rolling-ha-v2.yaml
 ```
 
 **Observación**:
@@ -248,7 +249,7 @@ kubectl annotate deployment rolling-ha \
 - Espera a que esté Ready
 - LUEGO termina 1 Pod viejo
 - Repite hasta terminar
-- ✅ Siempre hay 4 Pods disponibles
+- Siempre hay 4 Pods disponibles
 
 **Cálculo**:
 ```
@@ -258,52 +259,17 @@ maxUnavailable: 0 → Mínimo 4 Pods siempre
 
 ### Paso 2.3: Caso B - Actualización rápida (maxUnavailable: 2)
 
-Crea `rolling-fast.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: rolling-fast
-  annotations:
-    kubernetes.io/change-cause: "v1.0 - Configuración rápida"
-spec:
-  replicas: 6
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 2
-      maxUnavailable: 2  # Puede tener hasta 2 Pods down
-  selector:
-    matchLabels:
-      app: rolling-fast
-  template:
-    metadata:
-      labels:
-        app: rolling-fast
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.20-alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 3
-          periodSeconds: 2
-```
+Revisa las diferencias de estrategia entre ambos enfoques:
 
 ```bash
-kubectl apply -f rolling-fast.yaml
+# Comparar las estrategias
+diff <(grep -A5 'strategy:' rolling-ha-v1.yaml) <(grep -A5 'strategy:' rolling-fast-v1.yaml)
+```
+
+Aplica el Deployment rápido:
+
+```bash
+kubectl apply -f rolling-fast-v1.yaml
 kubectl rollout status deployment rolling-fast
 ```
 
@@ -316,10 +282,7 @@ kubectl get pods -l app=rolling-fast -w
 
 **Terminal 2**:
 ```bash
-kubectl set image deployment/rolling-fast nginx=nginx:1.22-alpine
-
-kubectl annotate deployment rolling-fast \
-  kubernetes.io/change-cause="v1.1 - Update rápido con maxUnavailable=2"
+kubectl apply -f rolling-fast-v2.yaml
 ```
 
 **Observación**:
@@ -337,8 +300,10 @@ maxUnavailable: 2 → Mínimo 4 Pods (6 - 2)
 ### Paso 2.5: Comparar tiempos
 
 ```bash
-# Ver duración del rollout
+# Ver eventos del rollout HA (lento)
 kubectl describe deployment rolling-ha | grep -A 5 Events
+
+# Ver eventos del rollout rápido
 kubectl describe deployment rolling-fast | grep -A 5 Events
 ```
 
@@ -368,50 +333,28 @@ Desarrollo/staging, o producción con tolerancia a downtime parcial, priorizando
 
 ## Ejercicio 3: Estrategia Recreate (10 min)
 
-### Paso 3.1: Crear Deployment con estrategia Recreate
-
-Crea `recreate-demo.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: recreate-demo
-  annotations:
-    kubernetes.io/change-cause: "v1.0 - Deploy con estrategia Recreate"
-spec:
-  replicas: 4
-  strategy:
-    type: Recreate  # ¡Sin rolling update!
-  selector:
-    matchLabels:
-      app: recreate-demo
-  template:
-    metadata:
-      labels:
-        app: recreate-demo
-        version: "v1.0"
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.20-alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-```
+### Paso 3.1: Revisar el manifiesto Recreate
 
 ```bash
-kubectl apply -f recreate-demo.yaml
+cat recreate-demo-v1.yaml
+```
+
+Punto clave: `strategy.type: Recreate` — no hay `rollingUpdate`, no hay `maxSurge`/`maxUnavailable`.
+
+### Paso 3.2: Crear Deployment con estrategia Recreate
+
+```bash
+kubectl apply -f recreate-demo-v1.yaml
 kubectl rollout status deployment recreate-demo
 ```
 
-### Paso 3.2: Actualizar con Recreate
+### Paso 3.3: Comparar diferencias antes de actualizar
+
+```bash
+diff recreate-demo-v1.yaml recreate-demo-v2.yaml
+```
+
+### Paso 3.4: Actualizar con Recreate
 
 **Terminal 1**:
 ```bash
@@ -420,10 +363,7 @@ kubectl get pods -l app=recreate-demo -w
 
 **Terminal 2**:
 ```bash
-kubectl set image deployment/recreate-demo nginx=nginx:1.21-alpine
-
-kubectl annotate deployment recreate-demo \
-  kubernetes.io/change-cause="v1.1 - Update con Recreate (downtime completo)"
+kubectl apply -f recreate-demo-v2.yaml
 ```
 
 **Observación en Terminal 1**:
@@ -452,7 +392,7 @@ recreate-demo-pqr   0/1     ContainerCreating   0     0s
 3. Luego se crean TODOS los Pods nuevos
 4. No hay Pods de versiones diferentes corriendo juntas
 
-### Paso 3.3: Verificar downtime
+### Paso 3.5: Verificar downtime
 
 ```bash
 kubectl describe deployment recreate-demo | grep -A 10 Events
@@ -469,15 +409,15 @@ Events:
 
 **Nota**: Hay un gap temporal entre el scale down y scale up.
 
-### Paso 3.4: Cuándo usar Recreate
+### Paso 3.6: Cuándo usar Recreate
 
-**✅ Casos de uso válidos**:
+**Casos de uso válidos**:
 - Aplicación NO soporta múltiples versiones simultáneas
 - Migración de base de datos incompatible
 - Cambios de schema que requieren downtime
 - Desarrollo/testing (no producción)
 
-**❌ NO usar Recreate si**:
+**NO usar Recreate si**:
 - Necesitas alta disponibilidad
 - Puedes hacer rolling updates
 - Estás en producción
@@ -503,58 +443,14 @@ kubectl get replicaset -l app=recreate-demo
 
 ### Paso 4.1: Crear Deployment para demo
 
-Crea `pause-demo.yaml`:
+Revisa el manifiesto con sus variables de entorno y recursos:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: pause-demo
-  annotations:
-    kubernetes.io/change-cause: "v1.0 - Demo pause/resume"
-spec:
-  replicas: 6
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: pause-demo
-  template:
-    metadata:
-      labels:
-        app: pause-demo
-        version: "v1.0"
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.20-alpine
-        ports:
-        - containerPort: 80
-        env:
-        - name: APP_VERSION
-          value: "v1.0"
-        - name: ENVIRONMENT
-          value: "development"
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 3
-          periodSeconds: 2
+```bash
+cat pause-demo-v1.yaml
 ```
 
 ```bash
-kubectl apply -f pause-demo.yaml
+kubectl apply -f pause-demo-v1.yaml
 kubectl rollout status deployment pause-demo
 ```
 
@@ -566,47 +462,55 @@ kubectl rollout pause deployment pause-demo
 
 **Output**: `deployment.apps/pause-demo paused`
 
-### Paso 4.3: Hacer múltiples cambios (mientras está pausado)
+### Paso 4.3: Revisar los cambios de v2
+
+Compara ambos archivos para ver los **4 cambios** que se aplicarán juntos:
 
 ```bash
-# Cambio 1: Actualizar imagen
-kubectl set image deployment/pause-demo nginx=nginx:1.23-alpine
-
-# Cambio 2: Actualizar variable de entorno
-kubectl set env deployment/pause-demo APP_VERSION=v2.0
-
-# Cambio 3: Aumentar recursos
-kubectl set resources deployment/pause-demo \
-  -c nginx \
-  --requests=cpu=200m,memory=128Mi \
-  --limits=cpu=500m,memory=256Mi
-
-# Cambio 4: Escalar
-kubectl scale deployment pause-demo --replicas=8
+diff pause-demo-v1.yaml pause-demo-v2.yaml
 ```
 
-### Paso 4.4: Verificar que NO se aplican cambios
+**Cambios en pause-demo-v2.yaml**:
+1. **Imagen**: nginx:1.20-alpine → nginx:1.23-alpine
+2. **Variable de entorno**: APP_VERSION v1.0 → v2.0
+3. **Recursos**: requests y limits aumentados
+4. **Réplicas**: 6 → 8
+
+### Paso 4.4: Aplicar cambios mientras está pausado
 
 ```bash
-# Ver Pods (siguen igual)
-kubectl get pods -l app=pause-demo
+kubectl apply -f pause-demo-v2.yaml
+```
 
-# Ver imagen en Deployment spec
+**Output**:
+```
+deployment.apps/pause-demo configured
+```
+
+### Paso 4.5: Verificar que NO se aplican cambios a los Pods
+
+```bash
+# Los Pods siguen con la versión anterior
+kubectl get pods -l app=pause-demo -L version
+
+# La spec del Deployment ya cambió
 kubectl get deployment pause-demo -o jsonpath='{.spec.template.spec.containers[0].image}'
+echo
 ```
 
 **Output**: `nginx:1.23-alpine` (cambió en spec)
 
 ```bash
-# Ver imagen en Pods reales
+# Pero los Pods reales NO cambiaron
 kubectl get pods -l app=pause-demo -o jsonpath='{.items[0].spec.containers[0].image}'
+echo
 ```
 
 **Output**: `nginx:1.20-alpine` (NO cambió en Pods)
 
-**Explicación**: Los cambios están en el Deployment spec, pero NO se han aplicado a los Pods.
+**Explicación**: Los cambios están en el Deployment spec, pero NO se han propagado a los Pods porque el rollout está **pausado**.
 
-### Paso 4.5: Reanudar el Deployment
+### Paso 4.6: Reanudar el Deployment
 
 **Terminal 1**:
 ```bash
@@ -616,45 +520,49 @@ kubectl get pods -l app=pause-demo -w
 **Terminal 2**:
 ```bash
 kubectl rollout resume deployment pause-demo
+```
 
-kubectl annotate deployment pause-demo \
-  kubernetes.io/change-cause="v2.0 - Múltiples cambios aplicados juntos"
+**Output**:
+```
+deployment.apps/pause-demo resumed
 ```
 
 **Observación**:
 - AHORA sí se inicia el rolling update
-- TODOS los cambios se aplican en UN solo rollout
+- TODOS los 4 cambios se aplican en UN solo rollout
 - Más eficiente que 4 rollouts separados
 
-### Paso 4.6: Verificar resultado
+### Paso 4.7: Verificar resultado
 
 ```bash
-# Ver Pods finales
+# Ver Pods finales (deben ser 8)
 kubectl get pods -l app=pause-demo
 ```
 
-**Output esperado**: 8 Pods (escalado a 8)
+**Output esperado**: 8 Pods (escalado de 6 a 8)
 
 ```bash
 # Verificar imagen
 kubectl get pods -l app=pause-demo -o jsonpath='{.items[0].spec.containers[0].image}'
+echo
 ```
 
-**Output**: `nginx:1.23-alpine` ✅
+**Output**: `nginx:1.23-alpine`
 
 ```bash
 # Verificar variable de entorno
 kubectl exec deployment/pause-demo -- env | grep APP_VERSION
 ```
 
-**Output**: `APP_VERSION=v2.0` ✅
+**Output**: `APP_VERSION=v2.0`
 
 ```bash
 # Verificar recursos
 kubectl get pods -l app=pause-demo -o jsonpath='{.items[0].spec.containers[0].resources}'
+echo
 ```
 
-**Output**: `{"limits":{"cpu":"500m","memory":"256Mi"},"requests":{"cpu":"200m","memory":"128Mi"}}` ✅
+**Output**: `{"limits":{"cpu":"500m","memory":"256Mi"},"requests":{"cpu":"200m","memory":"128Mi"}}`
 
 ### ✅ Verificación
 
@@ -662,7 +570,7 @@ kubectl get pods -l app=pause-demo -o jsonpath='{.items[0].spec.containers[0].re
 
 <details>
 <summary>Respuesta</summary>
-1 solo rollout (en lugar de 4 separados). Pause/Resume permite batch changes.
+1 solo rollout (en lugar de 4 separados). Pause/Resume permite agrupar múltiples cambios declarados en el YAML y aplicarlos en una sola operación de rollout.
 </details>
 
 ---
@@ -683,69 +591,57 @@ Crea un Deployment que cumpla:
 <details>
 <summary>Solución</summary>
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: challenge-app
-  annotations:
-    kubernetes.io/change-cause: "v1.0 - Challenge deployment"
-spec:
-  replicas: 10
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 3
-      maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: challenge-app
-  template:
-    metadata:
-      labels:
-        app: challenge-app
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.21-alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
-            memory: "128Mi"
-            cpu: "200m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 2
-          periodSeconds: 2
-```
+**Paso 1**: Aplicar la versión inicial:
 
 ```bash
-kubectl apply -f challenge.yaml
+kubectl apply -f challenge-app-v1.yaml
+kubectl rollout status deployment challenge-app
+```
+
+**Paso 2**: Revisar las diferencias antes de actualizar:
+
+```bash
+diff challenge-app-v1.yaml challenge-app-v2.yaml
+```
+
+**Paso 3**: Monitorear y actualizar:
+
+Terminal 1 (monitoreo):
+```bash
+kubectl get pods -l app=challenge-app -w
+```
+
+Terminal 2 (actualización):
+```bash
+kubectl apply -f challenge-app-v2.yaml
+```
+
+**Paso 4**: Verificar:
+
+```bash
+# Durante el update: máximo 13 Pods (10 + 3) y mínimo 10 Pods (10 - 0)
 kubectl rollout status deployment challenge-app
 
-# Actualizar (Terminal 1: watch, Terminal 2: update)
-# Terminal 1:
-kubectl get pods -l app=challenge-app -w
-
-# Terminal 2:
-kubectl set image deployment/challenge-app nginx=nginx:1.23-alpine
-kubectl annotate deployment challenge-app \
-  kubernetes.io/change-cause="v1.1 - Actualizado a nginx 1.23"
-
-# Verificar que durante el update había máximo 13 Pods (10 + 3)
-# y mínimo 10 Pods (10 - 0)
+# Verificar imagen final
+kubectl get pods -l app=challenge-app -o jsonpath='{.items[0].spec.containers[0].image}'
+echo
 ```
+
+**Output esperado**: `nginx:1.23-alpine`
+
 </details>
 
 ---
 
 ## 🧹 Limpieza
+
+Ejecuta el script de limpieza incluido:
+
+```bash
+./cleanup.sh
+```
+
+O manualmente:
 
 ```bash
 kubectl delete deployment --all -n lab-rolling-updates
@@ -759,24 +655,26 @@ kubectl config set-context --current --namespace=default
 
 En este laboratorio aprendiste:
 
-✅ **Rolling Updates**: Proceso gradual de actualización  
-✅ **maxSurge**: Pods extra permitidos durante update  
-✅ **maxUnavailable**: Pods que pueden estar down  
-✅ **Estrategia Recreate**: Downtime completo, todos los Pods reemplazados  
-✅ **Change-cause**: Annotations para historial descriptivo  
-✅ **Pause/Resume**: Aplicar múltiples cambios en un rollout  
-✅ **Trade-offs**: Disponibilidad vs Velocidad de actualización  
+- **Enfoque declarativo**: Todas las actualizaciones se gestionaron mediante archivos YAML versionados (v1 → v2)
+- **Rolling Updates**: Proceso gradual de actualización aplicando un nuevo manifiesto YAML
+- **maxSurge**: Pods extra permitidos durante update
+- **maxUnavailable**: Pods que pueden estar down
+- **Estrategia Recreate**: Downtime completo, todos los Pods reemplazados a la vez
+- **Change-cause**: Anotaciones en YAML para historial descriptivo
+- **Pause/Resume**: Pausar, aplicar un YAML con múltiples cambios, y reanudar en un rollout
+- **Trade-offs**: Disponibilidad vs Velocidad de actualización
+- **diff**: Comparar manifiestos antes de aplicar cambios
 
 ---
 
 ## 🔗 Recursos Relacionados
 
-- [Laboratorio 1: Crear Deployments](lab-01-crear-deployments.md)
-- [Laboratorio 3: Rollback y Versiones](lab-03-rollback-versiones.md)
-- [Ejemplos de Rolling Updates](../ejemplos/02-rolling-updates/)
-- [README del módulo](../README.md)
+- [Laboratorio 1: Crear Deployments](../lab-01-crear-deployments/)
+- [Laboratorio 3: Rollback y Versiones](../lab-03-rollback-versiones/)
+- [Ejemplos de Rolling Updates](../../ejemplos/02-rolling-updates/)
+- [README del módulo](../../README.md)
 
 ---
 
-**¡Excelente trabajo! 🚀**  
-Continúa con [Laboratorio 3: Rollback y Versiones](lab-03-rollback-versiones.md).
+**¡Excelente trabajo! 🚀**
+Continúa con [Laboratorio 3: Rollback y Versiones](../lab-03-rollback-versiones/).

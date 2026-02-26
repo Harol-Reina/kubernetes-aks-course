@@ -1,0 +1,66 @@
+# Ejercicio 4: Pausar y Reanudar Rollouts - Versión Inicial
+# Uso: kubectl apply -f pause-demo-v1.yaml
+#
+# Descripción:
+#   Deployment con 6 réplicas para demostrar pause/resume de rollouts.
+#   La técnica pause/resume permite:
+#     1. Pausar el Deployment (kubectl rollout pause)
+#     2. Aplicar MÚLTIPLES cambios vía YAML (imagen, env, recursos, réplicas)
+#     3. Reanudar (kubectl rollout resume) → UN SOLO rollout con todos los cambios
+#
+#   Ventaja: En lugar de 4 rollouts separados (uno por cada cambio),
+#   se ejecuta 1 solo rollout que aplica TODO junto.
+#
+#   Configuración:
+#     - maxSurge: 1, maxUnavailable: 0 → Alta disponibilidad
+#     - Variables de entorno: APP_VERSION=v1.0, ENVIRONMENT=development
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pause-demo
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Demo pause/resume"
+spec:
+  replicas: 6
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # 1 Pod extra durante el update
+      maxUnavailable: 0    # Siempre 6 Pods disponibles
+  selector:
+    matchLabels:
+      app: pause-demo
+  template:
+    metadata:
+      labels:
+        app: pause-demo
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.20-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.0"
+        - name: ENVIRONMENT
+          value: "development"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

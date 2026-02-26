@@ -1,0 +1,84 @@
+# Ejercicio 5: Workflow Completo - v2.0.0 (Major release ROTO)
+# Uso: kubectl apply -f versioned-app-v4-broken.yaml
+#
+# ⚠️  ESTE DEPLOYMENT FALLARÁ INTENCIONALMENTE
+#
+# Cambios respecto a v3:
+#   - image: nginx:1.21-alpine → nginx:fake-version-999 (NO EXISTE)
+#   - env APP_VERSION: "v1.1.1" → "v2.0.0"
+#   - env BUILD_NUMBER: "111" → "200"
+#   - label version: "v1.1.1" → "v2.0.0"
+#
+# Simula un major release que falla en producción.
+# Después de diagnosticar el fallo, hacer rollback a v1.1.1 (revisión 3):
+#   kubectl rollout undo deployment versioned-app --to-revision=3 -n lab-rollback
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: versioned-app
+  namespace: lab-rollback
+  labels:
+    app: versioned-app
+    environment: production
+  annotations:
+    kubernetes.io/change-cause: "v2.0.0 - MAJOR: API redesign (PROD-1004 - BROKEN)"
+    app.kubernetes.io/version: "2.0.0"
+    release.date: "2025-03-01"
+    jira.ticket: "PROD-1004"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: versioned-app
+  template:
+    metadata:
+      labels:
+        app: versioned-app
+        version: "v2.0.0"
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: app
+        image: nginx:fake-version-999   # ⚠️ IMAGEN QUE NO EXISTE
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v2.0.0"
+        - name: RELEASE_DATE
+          value: "2025-03-01"
+        - name: BUILD_NUMBER
+          value: "200"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

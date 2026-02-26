@@ -1,0 +1,72 @@
+# Ejercicio 3: Rollback de Deployment Fallido - Versión Estable
+# Uso: kubectl apply -f production-app-v1.yaml
+#
+# Descripción:
+#   Deployment productivo con configuración robusta:
+#   - revisionHistoryLimit: 10 → Amplio historial para rollback
+#   - maxUnavailable: 0 → NUNCA reduce Pods disponibles
+#   - livenessProbe + readinessProbe → Detección automática de fallos
+#   - Recursos generosos para producción
+#
+#   Este deployment simula un servicio estable en producción.
+#   En el siguiente paso, desplegaremos una versión "rota" (v2-broken)
+#   para practicar el diagnóstico y rollback.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: production-app
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v1.0.0 - Production stable release"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0    # Cero downtime garantizado
+  selector:
+    matchLabels:
+      app: production-app
+  template:
+    metadata:
+      labels:
+        app: production-app
+        version: "v1.0.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine    # Imagen VÁLIDA y estable
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        - name: RELEASE_DATE
+          value: "2025-01-01"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "200m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3

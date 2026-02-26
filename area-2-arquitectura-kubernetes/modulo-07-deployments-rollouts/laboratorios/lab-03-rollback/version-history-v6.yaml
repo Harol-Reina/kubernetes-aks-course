@@ -1,0 +1,61 @@
+# Ejercicio 1: Historial de Revisiones - v2.1.0 (Exceder revisionHistoryLimit)
+# Uso: kubectl apply -f version-history-v6.yaml
+#
+# Cambios respecto a v5:
+#   - image: nginx:1.23-alpine → nginx:alpine (latest)
+#   - env APP_VERSION: "v2.0.0" → "v2.1.0"
+#   - label version: "v2.0.0" → "v2.1.0"
+#
+# IMPORTANTE: Esta es la REVISIÓN 6.
+# Como revisionHistoryLimit es 5, al crear esta revisión Kubernetes
+# ELIMINA automáticamente el ReplicaSet más antiguo (revisión 1).
+# Solo se mantienen las revisiones 2, 3, 4, 5 y 6.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: version-history
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v2.1.0 - Latest nginx"
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: version-history
+  template:
+    metadata:
+      labels:
+        app: version-history
+        version: "v2.1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine         # Cambiado a latest
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v2.1.0"           # Cambiado de v2.0.0 a v2.1.0
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

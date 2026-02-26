@@ -1,0 +1,80 @@
+# Desafío Final: Simulación de Incidente - v3.3.0 (Versión ROTA)
+# Uso: kubectl apply -f critical-service-v2-broken.yaml
+#
+# ⚠️  ESTE DEPLOYMENT FALLARÁ INTENCIONALMENTE
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.21-alpine → nginx:nonexistent-tag (NO EXISTE)
+#   - env APP_VERSION: "v3.2.1" → "v3.3.0"
+#   - label version: "v3.2.1" → "v3.3.0"
+#   - Se añaden liveness/readiness probes más estrictas
+#
+# Escenario de incidente:
+#   - Son las 3 AM y recibes una alerta
+#   - El deploy v3.3.0 está fallando (ImagePullBackOff)
+#   - SLA: 99.9% uptime
+#   - Gracias a maxUnavailable: 0, no hay downtime
+#
+# Flujo de resolución:
+#   1. Diagnosticar: kubectl get pods -l app=critical-service
+#   2. Identificar: kubectl describe pod <pod-con-error>
+#   3. Rollback: kubectl rollout undo deployment critical-service
+#   4. Verificar: kubectl rollout status deployment critical-service
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-service
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v3.3.0 - BROKEN: new feature with bug (INC-9999)"
+spec:
+  replicas: 10
+  revisionHistoryLimit: 15
+  progressDeadlineSeconds: 180
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: critical-service
+  template:
+    metadata:
+      labels:
+        app: critical-service
+        version: "v3.3.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:nonexistent-tag   # ⚠️ IMAGEN QUE NO EXISTE
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v3.3.0"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2

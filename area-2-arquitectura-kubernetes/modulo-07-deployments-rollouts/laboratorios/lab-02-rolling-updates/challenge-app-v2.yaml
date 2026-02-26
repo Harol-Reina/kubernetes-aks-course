@@ -1,0 +1,58 @@
+# Desafío Final: Challenge App - Versión Actualizada
+# Uso: kubectl apply -f challenge-app-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.21-alpine → nginx:1.23-alpine
+#   - label version: "v1.0" → "v2.0"
+#   - change-cause actualizado
+#
+# Verificación durante el update:
+#   - Monitorear con: kubectl get pods -l app=challenge-app -w
+#   - Máximo Pods simultáneos: 13 (10 + maxSurge 3)
+#   - Mínimo Pods disponibles: 10 (10 - maxUnavailable 0)
+#   - El update crea hasta 3 Pods nuevos antes de terminar viejos
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: challenge-app
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Actualizado a nginx 1.23"
+spec:
+  replicas: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 3          # Permite hasta 3 Pods extra (máximo 13 total)
+      maxUnavailable: 0    # Garantiza 10 Pods siempre disponibles
+  selector:
+    matchLabels:
+      app: challenge-app
+  template:
+    metadata:
+      labels:
+        app: challenge-app
+        version: "v2.0"    # Cambiado de v1.0 a v2.0
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.23-alpine   # Cambiado de 1.21-alpine a 1.23-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 2
+          periodSeconds: 2

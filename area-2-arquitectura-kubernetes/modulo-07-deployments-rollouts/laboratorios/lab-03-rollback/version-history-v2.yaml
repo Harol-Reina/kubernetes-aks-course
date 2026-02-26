@@ -1,0 +1,59 @@
+# Ejercicio 1: Historial de Revisiones - v1.1.0 (Actualización menor)
+# Uso: kubectl apply -f version-history-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.19-alpine → nginx:1.20-alpine
+#   - env APP_VERSION: "v1.0.0" → "v1.1.0"
+#   - label version: "v1.0.0" → "v1.1.0"
+#   - change-cause actualizado
+#
+# Esta será la REVISIÓN 2 en el historial de rollout.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: version-history
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v1.1.0 - Actualización menor nginx 1.20"
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: version-history
+  template:
+    metadata:
+      labels:
+        app: version-history
+        version: "v1.1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.20-alpine    # Cambiado de 1.19 a 1.20
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.1.0"           # Cambiado de v1.0.0 a v1.1.0
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

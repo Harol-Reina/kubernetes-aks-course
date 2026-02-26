@@ -1,0 +1,61 @@
+# Ejercicio 2A: Alta Disponibilidad - Versión Inicial
+# Uso: kubectl apply -f rolling-ha-v1.yaml
+#
+# Descripción:
+#   Deployment configurado para MÁXIMA disponibilidad durante updates.
+#   - maxSurge: 1       → Permite hasta 5 Pods (4 + 1) durante el update
+#   - maxUnavailable: 0 → NUNCA baja de 4 Pods disponibles
+#
+#   Comportamiento durante update:
+#     1. Crea 1 Pod nuevo (surge)
+#     2. Espera a que esté READY
+#     3. SOLO ENTONCES termina 1 Pod viejo
+#     4. Repite → siempre hay 4 Pods sirviendo tráfico
+#
+#   Ideal para: Producción con alta disponibilidad crítica
+#   Trade-off: Update más lento (uno a uno)
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-ha
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Configuración alta disponibilidad"
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # Permite 1 Pod extra temporal
+      maxUnavailable: 0    # NUNCA reduce Pods disponibles
+  selector:
+    matchLabels:
+      app: rolling-ha
+  template:
+    metadata:
+      labels:
+        app: rolling-ha
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.20-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

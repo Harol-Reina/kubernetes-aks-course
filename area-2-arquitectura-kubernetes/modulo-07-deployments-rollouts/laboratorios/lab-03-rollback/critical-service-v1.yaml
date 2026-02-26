@@ -1,0 +1,62 @@
+# Desafío Final: Simulación de Incidente - v3.2.1 (Versión estable)
+# Uso: kubectl apply -f critical-service-v1.yaml
+#
+# Descripción:
+#   Deployment productivo estable que simula un servicio crítico.
+#   - 10 réplicas para alta disponibilidad
+#   - revisionHistoryLimit: 15 → Amplio historial
+#   - maxSurge: 2, maxUnavailable: 0 → Actualizaciones seguras
+#
+#   Escenario: Eres el SRE de turno. Este es el servicio estable en
+#   producción. Después de aplicar este archivo, desplegarás la versión
+#   "rota" (v2-broken) y practicarás el flujo completo de incidente:
+#   diagnóstico → rollback → verificación → documentación.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-service
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v3.2.1 - Stable production version"
+spec:
+  replicas: 10
+  revisionHistoryLimit: 15
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: critical-service
+  template:
+    metadata:
+      labels:
+        app: critical-service
+        version: "v3.2.1"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine    # Imagen VÁLIDA y estable
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v3.2.1"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 3

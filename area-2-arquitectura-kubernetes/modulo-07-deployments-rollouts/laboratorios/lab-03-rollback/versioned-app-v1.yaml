@@ -1,0 +1,80 @@
+# Ejercicio 5: Workflow Completo - v1.0.0 (Initial release)
+# Uso: kubectl apply -f versioned-app-v1.yaml
+#
+# Descripción:
+#   Deployment con versionado completo siguiendo mejores prácticas:
+#   - Annotations de metadata: version, release date, ticket JIRA
+#   - Labels semánticos: app, version, tier
+#   - Annotations de Prometheus para observabilidad
+#   - progressDeadlineSeconds: 300 → 5 minutos para rollout
+#   - revisionHistoryLimit: 10 → Amplio historial
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: versioned-app
+  namespace: lab-rollback
+  labels:
+    app: versioned-app
+    environment: production
+  annotations:
+    kubernetes.io/change-cause: "v1.0.0 - Initial release (2025-01-15)"
+    app.kubernetes.io/version: "1.0.0"
+    release.date: "2025-01-15"
+    jira.ticket: "PROD-1001"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: versioned-app
+  template:
+    metadata:
+      labels:
+        app: versioned-app
+        version: "v1.0.0"
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.20-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.0.0"
+        - name: RELEASE_DATE
+          value: "2025-01-15"
+        - name: BUILD_NUMBER
+          value: "100"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

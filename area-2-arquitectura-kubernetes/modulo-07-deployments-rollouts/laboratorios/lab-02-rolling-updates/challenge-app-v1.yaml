@@ -1,0 +1,55 @@
+# Desafío Final: Challenge App - Versión Inicial
+# Uso: kubectl apply -f challenge-app-v1.yaml
+#
+# Requisitos del desafío:
+#   - 10 réplicas con alta disponibilidad
+#   - maxSurge: 3       → Permite hasta 13 Pods (10 + 3) durante el update
+#   - maxUnavailable: 0 → NUNCA baja de 10 Pods disponibles
+#
+# Tarea: Después de aplicar este archivo, aplicar challenge-app-v2.yaml
+# y verificar que durante el update NUNCA baja de 10 Pods disponibles.
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: challenge-app
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Challenge deployment"
+spec:
+  replicas: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 3          # Permite hasta 3 Pods extra (máximo 13 total)
+      maxUnavailable: 0    # Garantiza 10 Pods siempre disponibles
+  selector:
+    matchLabels:
+      app: challenge-app
+  template:
+    metadata:
+      labels:
+        app: challenge-app
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 2
+          periodSeconds: 2

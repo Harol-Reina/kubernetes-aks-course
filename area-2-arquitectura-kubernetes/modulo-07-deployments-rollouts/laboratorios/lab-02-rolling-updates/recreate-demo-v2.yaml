@@ -1,0 +1,49 @@
+# Ejercicio 3: Estrategia Recreate - Versión Actualizada
+# Uso: kubectl apply -f recreate-demo-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.20-alpine → nginx:1.21-alpine
+#   - label version: "v1.0" → "v2.0"
+#   - change-cause actualizado
+#
+# Observar durante el update:
+#   - TODOS los Pods viejos se eliminan PRIMERO (Terminating)
+#   - Hay un período donde hay 0 Pods disponibles (DOWNTIME)
+#   - LUEGO se crean TODOS los Pods nuevos (ContainerCreating → Running)
+#   - Nunca hay Pods de v1.0 y v2.0 corriendo al mismo tiempo
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recreate-demo
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Update con Recreate (downtime completo)"
+spec:
+  replicas: 4
+  strategy:
+    type: Recreate         # Sin rolling update - downtime completo
+  selector:
+    matchLabels:
+      app: recreate-demo
+  template:
+    metadata:
+      labels:
+        app: recreate-demo
+        version: "v2.0"    # Cambiado de v1.0 a v2.0
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine   # Cambiado de 1.20-alpine a 1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

@@ -1,0 +1,67 @@
+# Ejercicio 4: Pausar y Reanudar Rollouts - Versión con Múltiples Cambios
+# Uso: kubectl apply -f pause-demo-v2.yaml (mientras el Deployment está PAUSADO)
+#
+# Cambios respecto a v1 (4 cambios en un solo archivo):
+#   1. image: nginx:1.20-alpine → nginx:1.23-alpine
+#   2. env APP_VERSION: "v1.0" → "v2.0"
+#   3. resources: requests cpu 100m→200m, memory 64Mi→128Mi
+#                 limits cpu 200m→500m, memory 128Mi→256Mi
+#   4. replicas: 6 → 8
+#
+# Flujo de trabajo:
+#   1. kubectl rollout pause deployment pause-demo    # Pausar
+#   2. kubectl apply -f pause-demo-v2.yaml            # Aplicar cambios (NO se ejecutan aún)
+#   3. kubectl rollout resume deployment pause-demo   # Reanudar → UN solo rollout
+#
+# Resultado: Los 4 cambios se aplican en UN solo rolling update,
+# en lugar de 4 rollouts separados. Más eficiente y predecible.
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pause-demo
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Múltiples cambios aplicados juntos (pause/resume)"
+spec:
+  replicas: 8              # Cambiado de 6 a 8 réplicas
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: pause-demo
+  template:
+    metadata:
+      labels:
+        app: pause-demo
+        version: "v2.0"    # Cambiado de v1.0 a v2.0
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.23-alpine   # Cambio 1: nginx 1.20 → 1.23
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v2.0"           # Cambio 2: v1.0 → v2.0
+        - name: ENVIRONMENT
+          value: "development"
+        resources:
+          requests:
+            memory: "128Mi"       # Cambio 3: 64Mi → 128Mi
+            cpu: "200m"           # Cambio 3: 100m → 200m
+          limits:
+            memory: "256Mi"       # Cambio 3: 128Mi → 256Mi
+            cpu: "500m"           # Cambio 3: 200m → 500m
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

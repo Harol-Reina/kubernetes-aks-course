@@ -1,0 +1,82 @@
+# Ejercicio 5: Workflow Completo - v1.1.1 (Hotfix / Patch)
+# Uso: kubectl apply -f versioned-app-v3.yaml
+#
+# Cambios respecto a v2:
+#   - env APP_VERSION: "v1.1.0" → "v1.1.1"
+#   - env BUILD_NUMBER: "110" → "111"
+#   - label version: "v1.1.0" → "v1.1.1"
+#   - Annotations de metadata actualizadas (date, ticket)
+#   - Misma imagen (hotfix de configuración, no de código)
+#
+# Simula un hotfix rápido para corregir un bug.
+# Esta será la "última versión buena conocida" para el rollback.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: versioned-app
+  namespace: lab-rollback
+  labels:
+    app: versioned-app
+    environment: production
+  annotations:
+    kubernetes.io/change-cause: "v1.1.1 - Hotfix: memory leak (PROD-1003)"
+    app.kubernetes.io/version: "1.1.1"
+    release.date: "2025-02-05"
+    jira.ticket: "PROD-1003"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: versioned-app
+  template:
+    metadata:
+      labels:
+        app: versioned-app
+        version: "v1.1.1"         # Cambiado de v1.1.0
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine   # Misma imagen (hotfix de config)
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.1.1"          # Cambiado
+        - name: RELEASE_DATE
+          value: "2025-02-05"      # Cambiado
+        - name: BUILD_NUMBER
+          value: "111"             # Cambiado
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

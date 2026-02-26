@@ -1,0 +1,81 @@
+# Ejercicio 5: Workflow Completo - v1.1.0 (Feature update)
+# Uso: kubectl apply -f versioned-app-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.20-alpine → nginx:1.21-alpine
+#   - env APP_VERSION: "v1.0.0" → "v1.1.0"
+#   - env BUILD_NUMBER: "100" → "110"
+#   - label version: "v1.0.0" → "v1.1.0"
+#   - Annotations de metadata actualizadas (date, ticket)
+#
+# Simula un release menor con nueva funcionalidad.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: versioned-app
+  namespace: lab-rollback
+  labels:
+    app: versioned-app
+    environment: production
+  annotations:
+    kubernetes.io/change-cause: "v1.1.0 - Feature: improved logging (PROD-1002)"
+    app.kubernetes.io/version: "1.1.0"
+    release.date: "2025-02-01"
+    jira.ticket: "PROD-1002"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: versioned-app
+  template:
+    metadata:
+      labels:
+        app: versioned-app
+        version: "v1.1.0"         # Cambiado de v1.0.0
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine   # Cambiado de 1.20
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v1.1.0"          # Cambiado
+        - name: RELEASE_DATE
+          value: "2025-02-01"      # Cambiado
+        - name: BUILD_NUMBER
+          value: "110"             # Cambiado
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

@@ -1,0 +1,74 @@
+# Ejercicio 4: progressDeadlineSeconds - Versión ROTA
+# Uso: kubectl apply -f auto-rollback-v2-broken.yaml
+#
+# ⚠️  ESTE DEPLOYMENT FALLARÁ INTENCIONALMENTE
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.21-alpine → nginx:invalid-image-404 (NO EXISTE)
+#   - label version: "v1.0" → "v2.0"
+#
+# Comportamiento esperado:
+#   1. Los nuevos Pods quedan en ImagePullBackOff
+#   2. El rollout no progresa
+#   3. Después de 120 segundos (progressDeadlineSeconds), Kubernetes marca
+#      el Deployment con condición: ProgressDeadlineExceeded
+#   4. kubectl rollout status mostrará:
+#      "error: deployment exceeded its progress deadline"
+#   5. Los Pods viejos (v1.0) SIGUEN corriendo (maxUnavailable: 0)
+#
+# Después de observar el timeout, hacer rollback manual:
+#   kubectl rollout undo deployment auto-rollback -n lab-rollback
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auto-rollback
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - BROKEN with invalid image"
+spec:
+  replicas: 3
+  progressDeadlineSeconds: 120    # Timeout: 2 minutos
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: auto-rollback
+  template:
+    metadata:
+      labels:
+        app: auto-rollback
+        version: "v2.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:invalid-image-404   # ⚠️ IMAGEN QUE NO EXISTE
+        ports:
+        - name: http
+          containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 3
+          failureThreshold: 2
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

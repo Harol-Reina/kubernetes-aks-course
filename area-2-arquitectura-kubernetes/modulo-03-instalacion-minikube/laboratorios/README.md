@@ -389,6 +389,7 @@ Marca los laboratorios a medida que los completas:
 - [ ] **Opcional**: Primera aplicación (`ejemplos/03-primeros-pasos/primera-app.sh`)
 - [ ] **Opcional**: Manifiestos YAML (`ejemplos/03-primeros-pasos/*.yaml`)
 - [ ] **Lab 06**: Configuración avanzada (solo si es necesario)
+- [ ] **Lab 07**: Cluster Multi-Nodo (k8s-lab con 4 nodos, taints, distribución de pods)
 
 ---
 
@@ -533,5 +534,14 @@ Los laboratorios fueron creados originalmente para configuraciones específicas.
 
 ---
 
-**Última actualización**: Noviembre 2024  
+### Lab 07: Cluster Multi-Nodo
+**Problema común**: "Exiting due to RSRC_INSUFFICIENT_CORES"
+```bash
+# Reducir recursos por nodo
+minikube start -p k8s-lab --nodes=3 --cpus=1 --memory=2048mb
+```
+
+---
+
+**Última actualización**: Febrero 2026
 **Mantenido por**: Equipo del curso de Kubernetes

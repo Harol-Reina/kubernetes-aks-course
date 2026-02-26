@@ -1,0 +1,77 @@
+# Ejercicio 3: Rollback de Deployment Fallido - Versión ROTA
+# Uso: kubectl apply -f production-app-v2-broken.yaml
+#
+# ⚠️  ESTE DEPLOYMENT FALLARÁ INTENCIONALMENTE
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.21-alpine → nginx:broken-tag-12345 (NO EXISTE)
+#   - env APP_VERSION: "v1.0.0" → "v2.0.0"
+#   - label version: "v1.0.0" → "v2.0.0"
+#
+# Comportamiento esperado al aplicar:
+#   1. Kubernetes intenta crear nuevos Pods con la imagen rota
+#   2. Los Pods quedan en estado ErrImagePull → ImagePullBackOff
+#   3. Gracias a maxUnavailable: 0, los Pods viejos SIGUEN corriendo
+#   4. La aplicación NO tiene downtime (los Pods v1.0.0 siguen sirviendo)
+#   5. El rollout queda ATASCADO esperando que los nuevos Pods estén Ready
+#
+# Solución: kubectl rollout undo deployment production-app -n lab-rollback
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: production-app
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v2.0.0 - BROKEN deployment"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0    # Protege los Pods existentes
+  selector:
+    matchLabels:
+      app: production-app
+  template:
+    metadata:
+      labels:
+        app: production-app
+        version: "v2.0.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:broken-tag-12345   # ⚠️ IMAGEN QUE NO EXISTE
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v2.0.0"
+        - name: RELEASE_DATE
+          value: "2025-02-01"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "200m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3

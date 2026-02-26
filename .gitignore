@@ -1,0 +1,10 @@
+# Presentaciones - ignorar PDFs y Markdown
+Presentaciones/*.pdf
+Presentaciones/*.md
+Presentaciones/*.py
+
+# Archivos de respaldo
+*.backup
+
+# Claude Code
+CLAUDE.md

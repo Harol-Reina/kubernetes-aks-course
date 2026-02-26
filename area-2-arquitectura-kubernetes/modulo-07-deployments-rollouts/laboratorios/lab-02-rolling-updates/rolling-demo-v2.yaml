@@ -1,0 +1,58 @@
+# Ejercicio 1: Rolling Update Básico - Versión Actualizada
+# Uso: kubectl apply -f rolling-demo-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.20-alpine → nginx:1.21-alpine
+#   - label version: "v1.0" → "v2.0"
+#   - change-cause actualizado para reflejar la nueva versión
+#
+# Al aplicar este archivo, Kubernetes ejecutará un rolling update automático:
+#   1. Crea 1 Pod nuevo con nginx:1.21 (maxSurge: 1)
+#   2. Espera a que pase el readinessProbe
+#   3. Termina 1 Pod viejo con nginx:1.20
+#   4. Repite hasta completar las 5 réplicas
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-demo
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Actualizar nginx a 1.21"
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # Máximo 1 Pod extra durante el update
+      maxUnavailable: 1    # Máximo 1 Pod no disponible durante el update
+  selector:
+    matchLabels:
+      app: rolling-demo
+  template:
+    metadata:
+      labels:
+        app: rolling-demo
+        version: "v2.0"    # Cambiado de v1.0 a v2.0
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine   # Cambiado de 1.20-alpine a 1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 2

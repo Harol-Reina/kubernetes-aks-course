@@ -1,0 +1,60 @@
+# Ejercicio 1: Historial de Revisiones - v2.0.0 (Major release)
+# Uso: kubectl apply -f version-history-v5.yaml
+#
+# Cambios respecto a v4:
+#   - image: nginx:1.22-alpine → nginx:1.23-alpine
+#   - env APP_VERSION: "v1.3.0" → "v2.0.0"
+#   - label version: "v1.3.0" → "v2.0.0"
+#
+# Esta será la REVISIÓN 5 en el historial.
+# Con revisionHistoryLimit: 5, esta es la última revisión que cabe
+# sin eliminar revisiones antiguas.
+#
+# Namespace: lab-rollback
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: version-history
+  namespace: lab-rollback
+  annotations:
+    kubernetes.io/change-cause: "v2.0.0 - Major release nginx 1.23"
+spec:
+  replicas: 4
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: version-history
+  template:
+    metadata:
+      labels:
+        app: version-history
+        version: "v2.0.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.23-alpine    # Cambiado de 1.22 a 1.23
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "v2.0.0"           # Cambiado de v1.3.0 a v2.0.0
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

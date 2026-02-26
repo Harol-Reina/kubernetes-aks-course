@@ -1,0 +1,57 @@
+# Ejercicio 2A: Alta Disponibilidad - Versión Actualizada
+# Uso: kubectl apply -f rolling-ha-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.20-alpine → nginx:1.21-alpine
+#   - label version: "v1.0" → "v2.0"
+#   - change-cause actualizado
+#
+# Observar durante el update:
+#   - Con maxUnavailable: 0, Kubernetes GARANTIZA que siempre hay 4 Pods Ready
+#   - Primero crea 1 Pod nuevo, espera Ready, luego termina 1 viejo
+#   - El update es MÁS LENTO pero con CERO reducción de capacidad
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-ha
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Update con maxUnavailable=0"
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # Permite 1 Pod extra temporal
+      maxUnavailable: 0    # NUNCA reduce Pods disponibles
+  selector:
+    matchLabels:
+      app: rolling-ha
+  template:
+    metadata:
+      labels:
+        app: rolling-ha
+        version: "v2.0"    # Cambiado de v1.0 a v2.0
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine   # Cambiado de 1.20-alpine a 1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2

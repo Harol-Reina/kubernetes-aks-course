@@ -1,0 +1,58 @@
+# Ejercicio 2B: Actualización Rápida - Versión Actualizada
+# Uso: kubectl apply -f rolling-fast-v2.yaml
+#
+# Cambios respecto a v1:
+#   - image: nginx:1.20-alpine → nginx:1.22-alpine
+#   - label version: "v1.0" → "v2.0"
+#   - change-cause actualizado
+#
+# Observar durante el update:
+#   - Con maxSurge: 2 y maxUnavailable: 2, el update es AGRESIVO
+#   - Crea hasta 2 Pods nuevos Y termina hasta 2 viejos simultáneamente
+#   - Comparar la velocidad con rolling-ha (mucho más rápido)
+#   - Disponibilidad mínima: 4 Pods (67% de 6)
+#
+# Namespace: lab-rolling-updates
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolling-fast
+  namespace: lab-rolling-updates
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Update rápido con maxSurge=2, maxUnavailable=2"
+spec:
+  replicas: 6
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2          # Permite hasta 2 Pods extra simultáneos
+      maxUnavailable: 2    # Tolera hasta 2 Pods no disponibles
+  selector:
+    matchLabels:
+      app: rolling-fast
+  template:
+    metadata:
+      labels:
+        app: rolling-fast
+        version: "v2.0"    # Cambiado de v1.0 a v2.0
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.22-alpine   # Cambiado de 1.20-alpine a 1.22-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 2
