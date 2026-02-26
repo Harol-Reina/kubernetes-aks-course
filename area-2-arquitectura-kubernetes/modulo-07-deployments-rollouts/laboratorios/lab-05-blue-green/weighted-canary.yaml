@@ -1,0 +1,108 @@
+# Ejercicio 3: Canary con Peso de Trafico - Multi-documento
+# Uso: kubectl apply -f weighted-canary.yaml
+#
+# Descripcion:
+#   Tres recursos en un solo archivo (multi-documento YAML separado por ---):
+#   1. app-v1: Deployment con 4 replicas (80% del trafico) usando nginx:1.20-alpine
+#   2. app-v2: Deployment con 1 replica  (20% del trafico) usando nginx:1.21-alpine
+#   3. weighted-app-service: Service ClusterIP que balancea trafico entre ambas versiones
+#
+#   Distribucion de trafico por replicas:
+#     4 v1 + 1 v2 = 80% v1 / 20% v2
+#     5 v1 + 5 v2 = 50% v1 / 50% v2
+#     3 v1 + 7 v2 = 30% v1 / 70% v2
+#
+# Namespace: lab-estrategias
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-v1
+  namespace: lab-estrategias
+  labels:
+    app: weighted-app
+    version: v1
+spec:
+  replicas: 4    # 80% del trafico
+  selector:
+    matchLabels:
+      app: weighted-app
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: weighted-app
+        version: v1
+        weight: "80"    # Label informativo - no afecta el balanceo real
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.20-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "1.0"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-v2
+  namespace: lab-estrategias
+  labels:
+    app: weighted-app
+    version: v2
+spec:
+  replicas: 1    # 20% del trafico
+  selector:
+    matchLabels:
+      app: weighted-app
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: weighted-app
+        version: v2
+        weight: "20"    # Label informativo - no afecta el balanceo real
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: APP_VERSION
+          value: "2.0"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weighted-app-service
+  namespace: lab-estrategias
+  labels:
+    app: weighted-app
+    role: weighted-traffic
+spec:
+  type: ClusterIP
+  selector:
+    app: weighted-app    # Selecciona AMBOS: v1 y v2
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

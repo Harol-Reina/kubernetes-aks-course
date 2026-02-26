@@ -1,0 +1,106 @@
+# Parte 6 - Paso 2: Deployment Green para Blue-Green Strategy
+# Uso: kubectl apply -f frontend-deployment-green.yaml
+#
+# Descripcion:
+#   Version Green del frontend para la estrategia Blue-Green.
+#   - Nombre: frontend-web-green (diferente al Blue: frontend-web)
+#   - Label version: green (permite al Service seleccionar esta version)
+#   - Imagen: nginx:1.22-alpine (version actualizada respecto al Blue)
+#   - APP_VERSION: 2.0.0
+#   - 5 replicas para igualar capacidad del Blue antes del switch
+#   - readOnlyRootFilesystem con volumen tmp requerido
+#
+# Namespace: ecommerce-prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-web-green
+  namespace: ecommerce-prod
+  labels:
+    app: frontend
+    component: web
+    tier: frontend
+    version: green
+  annotations:
+    kubernetes.io/change-cause: "Green deployment v2.0.0"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 5
+
+  selector:
+    matchLabels:
+      app: frontend
+      component: web
+      version: green
+
+  template:
+    metadata:
+      labels:
+        app: frontend
+        component: web
+        version: green
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.22-alpine   # Version actualizada (Green)
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 80
+
+        env:
+        - name: APP_VERSION
+          value: "2.0.0"
+        - name: ENVIRONMENT
+          value: "production"
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+
+      terminationGracePeriodSeconds: 30

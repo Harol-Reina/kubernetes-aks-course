@@ -1,0 +1,53 @@
+# Ejercicio 5: Deployment con selector mismatch (version corregida)
+# Uso: kubectl apply -f selector-mismatch-fixed.yaml
+#
+# Descripcion:
+#   Version corregida del selector-mismatch.yaml. El label "version: v1" ahora
+#   esta presente tanto en spec.selector.matchLabels como en spec.template.metadata.labels.
+#   - selector.matchLabels: app + version:v1 → igual que antes
+#   - template.metadata.labels: app + version:v1 → ahora coincide con el selector
+#   - Resultado: El Deployment se crea correctamente y los Pods inician
+#
+# Comparacion con la version rota:
+#   ANTES (roto):    template.labels = { app: my-app }
+#   AHORA (correcto): template.labels = { app: my-app, version: v1 }
+#
+# Problema corregido: Selector mismatch
+# Archivo original con error: selector-mismatch.yaml
+#
+# Namespace: lab-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selector-mismatch-app
+  namespace: lab-troubleshooting
+  labels:
+    app: selector-mismatch-app
+    tier: troubleshooting
+    category: selector-mismatch-fixed
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: my-app
+        version: v1      # Label agregado para que coincida con el selector
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

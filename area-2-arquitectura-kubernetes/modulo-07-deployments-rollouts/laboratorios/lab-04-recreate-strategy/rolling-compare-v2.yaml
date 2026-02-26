@@ -1,0 +1,54 @@
+# Ejercicio 2: Comparación con RollingUpdate - Versión Actualizada
+# Uso: kubectl apply -f rolling-compare-v2.yaml
+#
+# Descripción:
+#   Actualización del Deployment RollingUpdate a nginx:1.20-alpine.
+#   Observar diferencias con Recreate:
+#   - Los Pods se reemplazan gradualmente (maxSurge: 1, maxUnavailable: 1)
+#   - Nunca hay downtime completo
+#   - El update toma más tiempo pero es más seguro
+#
+# Namespace: lab-recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-rolling
+  namespace: lab-recreate
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Update a nginx 1.20 (RollingUpdate)"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nginx-rolling
+  template:
+    metadata:
+      labels:
+        app: nginx-rolling
+        version: "v2.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.20-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 2

@@ -1,0 +1,55 @@
+# Parte 5 - Paso 1: PodDisruptionBudgets para Alta Disponibilidad
+# Uso: kubectl apply -f pdb.yaml
+#
+# Descripcion:
+#   Tres PodDisruptionBudgets para garantizar disponibilidad durante
+#   mantenimiento, vaciado de nodos (drain) y actualizaciones del cluster.
+#
+#   frontend-pdb:
+#     - minAvailable: 3 → siempre al menos 3 Pods del frontend disponibles
+#   product-service-pdb:
+#     - maxUnavailable: 1 → permite solo 1 Pod no disponible a la vez
+#   order-service-pdb:
+#     - minAvailable: 2 → siempre al menos 2 Pods del order-service disponibles
+#
+# Namespace: ecommerce-prod
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: ecommerce-prod
+  labels:
+    app: frontend
+    component: web
+spec:
+  minAvailable: 3   # Con 5 replicas: permite interrumpir hasta 2 a la vez
+  selector:
+    matchLabels:
+      app: frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: product-service-pdb
+  namespace: ecommerce-prod
+  labels:
+    app: product-service
+spec:
+  maxUnavailable: 1   # Con 3 replicas: siempre al menos 2 disponibles
+  selector:
+    matchLabels:
+      app: product-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-service-pdb
+  namespace: ecommerce-prod
+  labels:
+    app: order-service
+spec:
+  minAvailable: 2   # Con 4 replicas: permite interrumpir hasta 2 a la vez
+  selector:
+    matchLabels:
+      app: order-service

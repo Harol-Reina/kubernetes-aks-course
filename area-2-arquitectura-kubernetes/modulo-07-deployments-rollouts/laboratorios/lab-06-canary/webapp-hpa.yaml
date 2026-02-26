@@ -1,0 +1,68 @@
+# Ejercicio 4: HorizontalPodAutoscaler v2
+# Uso: kubectl apply -f webapp-hpa.yaml
+#
+# Descripción:
+#   HPA v2 que escala el Deployment webapp-prod entre 3 y 10 réplicas
+#   basándose en dos métricas simultáneas:
+#   - CPU > 70% de utilización promedio → escalar
+#   - Memoria > 80% de utilización promedio → escalar
+#
+#   Comportamiento de escalado:
+#   - scaleUp:   sin ventana de estabilización, agresivo (max 100% o +2 pods cada 30s)
+#   - scaleDown: ventana de 5 minutos, conservador (máx 50% cada 60s)
+#
+#   Prerequisito: metrics-server habilitado
+#     minikube addons enable metrics-server
+#
+# Namespace: lab-production
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: webapp-hpa
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: webapp-prod
+
+  minReplicas: 3
+  maxReplicas: 10
+
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70   # Escalar cuando CPU promedio > 70%
+
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80   # Escalar cuando memoria promedio > 80%
+
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Esperar 5 min antes de reducir réplicas
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60    # Reducir máximo 50% de réplicas por minuto
+    scaleUp:
+      stabilizationWindowSeconds: 0    # Escalar inmediatamente ante carga
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30    # Duplicar réplicas máximo cada 30 segundos
+      - type: Pods
+        value: 2
+        periodSeconds: 30    # O agregar 2 pods cada 30 segundos
+      selectPolicy: Max      # Usar la política más agresiva de las dos

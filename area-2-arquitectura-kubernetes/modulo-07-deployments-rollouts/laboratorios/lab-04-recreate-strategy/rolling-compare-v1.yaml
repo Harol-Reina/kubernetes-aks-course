@@ -1,0 +1,53 @@
+# Ejercicio 2: Comparación con RollingUpdate
+# Uso: kubectl apply -f rolling-compare-v1.yaml
+#
+# Descripción:
+#   Deployment idéntico pero con estrategia RollingUpdate para comparar
+#   el comportamiento frente a Recreate:
+#   - RollingUpdate: Pods se reemplazan gradualmente, sin downtime
+#   - Recreate: Todos los Pods se eliminan primero, luego se crean nuevos
+#
+# Namespace: lab-recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-rolling
+  namespace: lab-recreate
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Deploy comparativo con RollingUpdate"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nginx-rolling
+  template:
+    metadata:
+      labels:
+        app: nginx-rolling
+        version: "v1.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 2

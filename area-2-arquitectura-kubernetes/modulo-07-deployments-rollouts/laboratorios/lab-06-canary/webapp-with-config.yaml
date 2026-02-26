@@ -1,0 +1,100 @@
+# Ejercicio 2: Deployment con ConfigMap y Secrets
+# Uso: kubectl apply -f webapp-with-config.yaml
+#
+# Descripción:
+#   Deployment de 3 réplicas que consume configuración desde:
+#   - ConfigMap webapp-config: variables LOG_FORMAT y MAX_CONNECTIONS (env vars)
+#     y archivo app.conf (montado como volumen en /etc/nginx/conf.d/)
+#   - Secret webapp-secrets: DATABASE_PASSWORD y API_KEY (env vars)
+#
+#   Prerequisito: aplicar primero webapp-configmap.yaml y crear el Secret:
+#     kubectl create secret generic webapp-secrets \
+#       --from-literal=database-password='P@ssw0rd123' \
+#       --from-literal=api-key='secret-api-key-12345'
+#
+# Namespace: lab-production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-with-config
+  namespace: lab-production
+  labels:
+    app: webapp-config
+    tier: frontend
+    environment: production
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Deploy con ConfigMap y Secrets"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp-config
+  template:
+    metadata:
+      labels:
+        app: webapp-config
+        tier: frontend
+        version: "1.0.0"
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:1.21-alpine
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+
+        # Variables desde ConfigMap (configMapKeyRef)
+        env:
+        - name: LOG_FORMAT
+          valueFrom:
+            configMapKeyRef:
+              name: webapp-config
+              key: LOG_FORMAT
+        - name: MAX_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: webapp-config
+              key: MAX_CONNECTIONS
+
+        # Variables desde Secret (secretKeyRef) — valores codificados en base64
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: database-password
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: api-key
+
+        # Volume mount para el archivo de configuración nginx
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/conf.d/
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+      volumes:
+      # ConfigMap montado como volumen — app.conf aparece como default.conf
+      - name: config
+        configMap:
+          name: webapp-config
+          items:
+          - key: app.conf
+            path: default.conf
+      - name: tmp
+        emptyDir: {}

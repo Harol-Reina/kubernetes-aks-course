@@ -1,0 +1,59 @@
+# Ejercicio 6: Deployment con problemas de permisos (version con error)
+# Uso: kubectl apply -f permission-issue.yaml
+#
+# Descripcion:
+#   Deployment con 2 replicas de nginx ejecutando como usuario no-root con
+#   readOnlyRootFilesystem pero sin volumenes escribibles. nginx necesita
+#   escribir en /var/cache/nginx, /var/run y /tmp durante su inicializacion.
+#   - runAsNonRoot: true    → El contenedor no puede ejecutarse como root
+#   - runAsUser: 1000       → Se ejecuta como UID 1000 (sin privilegios)
+#   - readOnlyRootFilesystem: true → No puede escribir en el filesystem del contenedor
+#   - Sin volumeMounts      → nginx no puede crear archivos temporales necesarios
+#   - Resultado: CrashLoopBackOff con mensajes "Permission denied" en los logs
+#
+# ESTE ARCHIVO CAUSA CrashLoopBackOff INTENCIONALMENTE.
+#
+# Problema que demuestra: CrashLoopBackOff por SecurityContext restrictivo sin volumenes
+# Solucion: Ver permission-issue-fixed.yaml
+#
+# Namespace: lab-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: permission-app
+  namespace: lab-troubleshooting
+  labels:
+    app: permission-app
+    tier: troubleshooting
+    category: permission-issue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: permission-app
+  template:
+    metadata:
+      labels:
+        app: permission-app
+        tier: troubleshooting
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000    # Usuario sin privilegios
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        securityContext:
+          readOnlyRootFilesystem: true   # nginx necesita escribir → causa Permission denied
+        # FALTA: volumeMounts para /var/cache/nginx, /var/run, /tmp

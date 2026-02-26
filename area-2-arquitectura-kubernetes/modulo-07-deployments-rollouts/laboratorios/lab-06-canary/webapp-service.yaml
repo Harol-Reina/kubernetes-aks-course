@@ -1,0 +1,49 @@
+# Ejercicio 3: Service Production-Ready
+# Uso: kubectl apply -f webapp-service.yaml
+#
+# Descripción:
+#   Service ClusterIP con sesiones pegajosas (sticky sessions) via ClientIP.
+#   Puertos nombrados que coinciden con los containerPort del Deployment:
+#   - http (80)   → apunta al puerto 'http' del contenedor
+#   - metrics (8080) → apunta al puerto 'metrics' del contenedor
+#
+#   sessionAffinity ClientIP garantiza que un cliente siempre sea dirigido
+#   al mismo Pod durante timeoutSeconds (10800s = 3 horas), útil para
+#   aplicaciones con estado de sesión en memoria.
+#
+# Namespace: lab-production
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+  annotations:
+    # Ejemplo de anotación para AWS NLB (referencia — no aplica en minikube)
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: ClusterIP
+
+  # Sticky sessions por IP de cliente
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 horas
+
+  selector:
+    app: webapp
+    tier: frontend
+
+  ports:
+  - name: http
+    port: 80
+    targetPort: http      # Referencia al puerto nombrado del contenedor
+    protocol: TCP
+  - name: metrics
+    port: 8080
+    targetPort: metrics   # Referencia al puerto nombrado del contenedor
+    protocol: TCP

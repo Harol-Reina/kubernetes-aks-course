@@ -1,0 +1,47 @@
+# Ejercicio 2: ConfigMap para Configuración Externalizada
+# Uso: kubectl apply -f webapp-configmap.yaml
+#
+# Descripción:
+#   ConfigMap con dos tipos de datos:
+#   - app.conf: archivo de configuración nginx (montado como volumen)
+#   - Variables clave-valor: LOG_FORMAT, MAX_CONNECTIONS, TIMEOUT
+#     (inyectadas como variables de entorno en el Deployment)
+#
+#   Separar configuración del código permite actualizar parámetros
+#   sin reconstruir la imagen. Los cambios en ConfigMap montados como
+#   volumen se propagan automáticamente (con delay de ~60s).
+#
+# Namespace: lab-production
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webapp-config
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+data:
+  # Archivo de configuración nginx — montado en /etc/nginx/conf.d/
+  app.conf: |
+    server {
+      listen 80;
+      server_name webapp.example.com;
+
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+      }
+
+      location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+      }
+    }
+
+  # Variables de configuración — inyectadas como env vars via configMapKeyRef
+  LOG_FORMAT: "json"
+  MAX_CONNECTIONS: "1000"
+  TIMEOUT: "30s"

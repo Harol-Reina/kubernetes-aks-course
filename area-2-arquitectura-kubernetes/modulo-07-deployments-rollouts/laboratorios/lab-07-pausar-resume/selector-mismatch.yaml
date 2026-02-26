@@ -1,0 +1,53 @@
+# Ejercicio 5: Deployment con selector mismatch (version con error)
+# Uso: kubectl apply -f selector-mismatch.yaml
+#
+# Descripcion:
+#   Deployment cuyo selector requiere el label "version: v1" en los Pods,
+#   pero el template de Pods NO incluye ese label. Kubernetes rechaza este
+#   manifiesto inmediatamente al aplicarlo, antes de crear ningun recurso.
+#   - selector.matchLabels incluye: app + version:v1
+#   - template.metadata.labels solo incluye: app (falta version:v1)
+#   - Resultado: Error de validacion al aplicar el manifiesto
+#
+# ESTE ARCHIVO FALLA INTENCIONALMENTE AL APLICARSE.
+# Error esperado: spec.template.metadata.labels: Invalid value: selector does not match template labels
+#
+# Problema que demuestra: Selector mismatch entre spec.selector y spec.template.metadata.labels
+# Solucion: Ver selector-mismatch-fixed.yaml
+#
+# Namespace: lab-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: selector-mismatch-app
+  namespace: lab-troubleshooting
+  labels:
+    app: selector-mismatch-app
+    tier: troubleshooting
+    category: selector-mismatch
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+      version: v1      # El selector exige este label en todos los Pods
+  template:
+    metadata:
+      labels:
+        app: my-app
+        # FALTA: version: v1  → El selector no coincide con los labels del template
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

@@ -1,0 +1,60 @@
+# Ejercicio 2: Canary Deployment - Deployment Canary (v2)
+# Uso: kubectl apply -f app-canary-v2.yaml
+#
+# Descripcion:
+#   Deployment canary con 1 replica que representa el 10% del trafico de produccion.
+#   - track: canary  → Label que diferencia Pods canary de los estables
+#   - version: "2.0" → Label adicional para visibilidad de version en kubectl
+#   - 1 replica de 10 totales = 10% del trafico inicial (con 9 replicas stable)
+#   - readinessProbe: Garantiza que el Pod canary pase health checks antes de recibir trafico
+#   - Para aumentar trafico: kubectl scale deployment app-canary --replicas=N
+#
+# Namespace: lab-estrategias
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-canary
+  namespace: lab-estrategias
+  labels:
+    app: canary-app
+    track: canary
+  annotations:
+    kubernetes.io/change-cause: "v2.0-canary - Nueva version en prueba"
+spec:
+  replicas: 1    # 10% del trafico (1 de 10 pods totales)
+  selector:
+    matchLabels:
+      app: canary-app
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: canary-app
+        track: canary
+        version: "2.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.22-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: VERSION
+          value: "2.0-canary"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3

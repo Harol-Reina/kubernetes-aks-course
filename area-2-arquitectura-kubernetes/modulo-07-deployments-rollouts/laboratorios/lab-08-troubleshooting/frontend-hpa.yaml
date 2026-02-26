@@ -1,0 +1,62 @@
+# Parte 4 - Paso 2: HPA del Frontend
+# Uso: kubectl apply -f frontend-hpa.yaml
+#
+# Descripcion:
+#   HorizontalPodAutoscaler para el Deployment frontend-web.
+#   - Rango: minReplicas=3, maxReplicas=15
+#   - Metrica CPU: escala cuando el uso promedio supera 70%
+#   - Metrica Memory: escala cuando el uso promedio supera 80%
+#   - Politica scaleDown: ventana de 300s, maximo 50% de reduccion por minuto
+#   - Politica scaleUp: sin ventana de estabilizacion, sube 100% o 3 Pods (el mayor)
+#
+# Namespace: ecommerce-prod
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: ecommerce-prod
+  labels:
+    app: frontend
+    component: web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend-web
+
+  minReplicas: 3
+  maxReplicas: 15
+
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70   # Escala si CPU promedio > 70%
+
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80   # Escala si Memory promedio > 80%
+
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Espera 5 min antes de reducir
+      policies:
+      - type: Percent
+        value: 50              # Reduce maximo 50% de replicas por minuto
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0     # Escala de inmediato
+      policies:
+      - type: Percent
+        value: 100             # Puede duplicar replicas por periodo
+        periodSeconds: 30
+      - type: Pods
+        value: 3               # O agregar hasta 3 Pods por periodo
+        periodSeconds: 30
+      selectPolicy: Max        # Usa la politica que genera mayor cambio

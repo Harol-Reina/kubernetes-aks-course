@@ -1,0 +1,32 @@
+# Ejercicio 1: Blue-Green Deployment - Service de Produccion
+# Uso: kubectl apply -f service-production.yaml
+#
+# Descripcion:
+#   Service de produccion que enruta el trafico externo a la version activa.
+#   - selector version: blue  → Apunta a la version Blue inicialmente
+#   - Para hacer el switch a Green: kubectl patch service app-production
+#       -p '{"spec":{"selector":{"version":"green"}}}'
+#   - Para rollback a Blue: kubectl patch service app-production
+#       -p '{"spec":{"selector":{"version":"blue"}}}'
+#   - nodePort: 30080  → Acceso externo via minikube service app-production
+#
+# Namespace: lab-estrategias
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-production
+  namespace: lab-estrategias
+  labels:
+    app: myapp
+    role: production
+spec:
+  type: NodePort
+  selector:
+    app: myapp
+    version: blue    # Cambiar a "green" para el switch de Blue-Green
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    nodePort: 30080

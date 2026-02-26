@@ -1,0 +1,49 @@
+# Ejercicio 3: Ingress con TLS y Rate Limiting
+# Uso: kubectl apply -f webapp-ingress.yaml
+#
+# Descripción:
+#   Ingress con ingress-nginx que incluye:
+#   - Redirección forzada a HTTPS
+#   - Rate limiting (100 req/s por IP)
+#   - TLS con cert-manager (letsencrypt-prod)
+#
+#   Prerequisito: tener instalado ingress-nginx controller y cert-manager.
+#   En minikube: minikube addons enable ingress
+#
+#   Para verificar si el Ingress Controller está disponible:
+#     kubectl get pods -n ingress-nginx
+#
+# Namespace: lab-production
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webapp-ingress
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: webapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: webapp-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - webapp.example.com
+    secretName: webapp-tls-cert

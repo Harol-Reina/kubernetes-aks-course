@@ -1,0 +1,197 @@
+# Ejercicio 1: Deployment Production-Ready Completo
+# Uso: kubectl apply -f production-deployment.yaml
+#
+# Descripción:
+#   Deployment con 5 réplicas con todas las best practices de producción:
+#   - Anti-affinity para distribuir pods entre nodos
+#   - Tolerations para nodos de producción
+#   - Security context con usuario no-root y filesystem de solo lectura
+#   - Readiness, Liveness y Startup probes configuradas
+#   - Resource requests y limits definidos
+#   - Lifecycle preStop para graceful shutdown
+#   - Variables de entorno con fieldRef (downward API)
+#   - Volúmenes emptyDir para paths que nginx necesita escribir
+#
+# Namespace: lab-production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-prod
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+  annotations:
+    kubernetes.io/change-cause: "Production release v1.0.0"
+    deployment.kubernetes.io/description: "Web application production deployment"
+spec:
+  # Número de réplicas para alta disponibilidad
+  replicas: 5
+  revisionHistoryLimit: 10
+
+  # Estrategia de actualización sin downtime
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2         # Máximo 2 pods adicionales durante update
+      maxUnavailable: 1   # Máximo 1 pod no disponible
+
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Anti-affinity para distribuir pods en diferentes nodos
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - webapp
+              topologyKey: kubernetes.io/hostname
+
+      # Tolerations para nodos con taint de producción
+      tolerations:
+      - key: "node-role"
+        operator: "Equal"
+        value: "production"
+        effect: "NoSchedule"
+
+      # Security context a nivel de Pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+
+      # Tiempo máximo para shutdown graceful
+      terminationGracePeriodSeconds: 30
+
+      containers:
+      - name: webapp
+        image: nginx:1.21-alpine
+        imagePullPolicy: IfNotPresent
+
+        # Puertos nombrados — referenciados en probes y Service
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+
+        # Variables de entorno: estáticas y dinámicas via Downward API
+        env:
+        - name: APP_VERSION
+          value: "1.0.0"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        # Recursos: requests para scheduling, limits para protección
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Readiness probe: cuándo el Pod puede recibir tráfico
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Liveness probe: cuándo reiniciar el contenedor
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Startup probe: tiempo de gracia para aplicaciones lentas
+        # 30 intentos * 5 segundos = 150 segundos máximo para arrancar
+        startupProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30
+
+        # Lifecycle hook: esperar antes de terminar para drenar conexiones
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+
+        # Security context del contenedor
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+        # Volúmenes para paths donde nginx necesita escribir
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+
+      # emptyDir en memoria para evitar escrituras en el filesystem del contenedor
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}

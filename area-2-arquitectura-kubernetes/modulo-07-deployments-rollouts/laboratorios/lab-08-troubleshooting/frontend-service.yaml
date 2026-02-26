@@ -1,0 +1,38 @@
+# Parte 2 - Paso 4: Service del Frontend
+# Uso: kubectl apply -f frontend-service.yaml
+#
+# Descripcion:
+#   Service ClusterIP para el frontend con sessionAffinity ClientIP.
+#   - Puertos nombrados: http (80 → port http) y metrics (9113 → port metrics)
+#   - sessionAffinity: ClientIP con timeout de 3600 segundos
+#   - Selector por app=frontend y component=web (version Blue por defecto)
+#
+# Namespace: ecommerce-prod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: ecommerce-prod
+  labels:
+    app: frontend
+    component: web
+    tier: frontend
+spec:
+  type: ClusterIP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+
+  selector:
+    app: frontend
+    component: web
+
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  - name: metrics
+    port: 9113
+    targetPort: metrics

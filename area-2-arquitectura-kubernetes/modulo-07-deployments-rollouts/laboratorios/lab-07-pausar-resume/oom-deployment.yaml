@@ -1,0 +1,54 @@
+# Ejercicio 3: Deployment que causa OOMKilled
+# Uso: kubectl apply -f oom-deployment.yaml
+#
+# Descripcion:
+#   Deployment con 2 replicas que ejecuta stress intentando usar 150M de memoria
+#   pero con un limite de solo 100Mi. El kernel OOM killer termina el proceso.
+#   - image: polinux/stress → Herramienta para generar carga de CPU/memoria
+#   - stress --vm-bytes 150M → Intenta reservar 150 MB de memoria
+#   - limits.memory: 100Mi → Kubernetes mata el contenedor al superar este limite
+#   - Resultado: Pods en CrashLoopBackOff con reason OOMKilled, exit code 137
+#
+# Problema que demuestra: OOMKilled / CrashLoopBackOff por recursos insuficientes
+# Solucion: kubectl set resources deployment oom-app --limits=memory=200Mi
+#
+# Namespace: lab-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-app
+  namespace: lab-troubleshooting
+  labels:
+    app: oom-app
+    tier: troubleshooting
+    category: oom-killed
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oom-app
+  template:
+    metadata:
+      labels:
+        app: oom-app
+        tier: troubleshooting
+    spec:
+      containers:
+      - name: memory-hog
+        image: polinux/stress
+        command: ["stress"]
+        args:
+        - "--vm"
+        - "1"
+        - "--vm-bytes"
+        - "150M"        # Intenta usar 150MB de memoria
+        - "--vm-hang"
+        - "1"
+        resources:
+          requests:
+            memory: "50Mi"
+            cpu: "100m"
+          limits:
+            memory: "100Mi"   # Limite insuficiente → OOMKilled cuando supere 100Mi
+            cpu: "200m"

@@ -1,0 +1,73 @@
+# Ejercicio 6: Deployment con problemas de permisos (version corregida)
+# Uso: kubectl apply -f permission-issue-fixed.yaml
+#
+# Descripcion:
+#   Version corregida del permission-issue.yaml. Se agregan volumenes emptyDir
+#   para los directorios donde nginx necesita escribir durante su inicializacion.
+#   - readOnlyRootFilesystem: true → Se mantiene la restriccion de seguridad
+#   - runAsNonRoot: true + runAsUser: 1000 → Se mantienen los controles de usuario
+#   - volumeMounts agregados para: /var/cache/nginx, /var/run, /tmp
+#   - Volumes emptyDir: Almacenamiento temporal en memoria para escrituras de nginx
+#   - Resultado: nginx puede inicializar correctamente, Pods en Running y Ready
+#
+# Comparacion con la version rota:
+#   ANTES (roto):    Sin volumeMounts → nginx no puede escribir → CrashLoopBackOff
+#   AHORA (correcto): emptyDir para paths de escritura → nginx inicia correctamente
+#
+# Problema corregido: CrashLoopBackOff por SecurityContext restrictivo
+# Archivo original con error: permission-issue.yaml
+#
+# Namespace: lab-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: permission-app
+  namespace: lab-troubleshooting
+  labels:
+    app: permission-app
+    tier: troubleshooting
+    category: permission-issue-fixed
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: permission-app
+  template:
+    metadata:
+      labels:
+        app: permission-app
+        tier: troubleshooting
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        securityContext:
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: cache           # nginx escribe archivos de cache aqui
+          mountPath: /var/cache/nginx
+        - name: run             # nginx escribe el PID y sockets aqui
+          mountPath: /var/run
+        - name: tmp             # Archivos temporales generales
+          mountPath: /tmp
+      volumes:
+      - name: cache
+        emptyDir: {}            # Almacenamiento temporal en el nodo (se borra al reiniciar el Pod)
+      - name: run
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}

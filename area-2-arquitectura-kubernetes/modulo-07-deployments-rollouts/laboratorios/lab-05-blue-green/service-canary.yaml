@@ -1,0 +1,31 @@
+# Ejercicio 2: Canary Deployment - Service Compartido
+# Uso: kubectl apply -f service-canary.yaml
+#
+# Descripcion:
+#   Service que enruta trafico a AMBOS Deployments (stable + canary) simultaneamente.
+#   - selector app: canary-app  → Selecciona TODOS los Pods con este label (stable Y canary)
+#   - La distribucion del trafico es proporcional al numero de replicas:
+#       * 9 stable + 1 canary = 90% stable, 10% canary
+#       * 6 stable + 2 canary = 75% stable, 25% canary
+#       * 5 stable + 5 canary = 50% stable, 50% canary
+#   - nodePort: 30082  → Puerto de acceso externo para pruebas de distribucion
+#
+# Namespace: lab-estrategias
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-canary-service
+  namespace: lab-estrategias
+  labels:
+    app: canary-app
+    role: canary-traffic
+spec:
+  type: NodePort
+  selector:
+    app: canary-app    # Selecciona AMBOS: stable (track=stable) y canary (track=canary)
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    nodePort: 30082

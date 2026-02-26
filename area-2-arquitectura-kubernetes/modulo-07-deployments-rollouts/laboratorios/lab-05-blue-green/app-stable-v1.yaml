@@ -1,0 +1,51 @@
+# Ejercicio 2: Canary Deployment - Deployment Estable (v1)
+# Uso: kubectl apply -f app-stable-v1.yaml
+#
+# Descripcion:
+#   Deployment estable con 9 replicas que representa el 90% del trafico de produccion.
+#   - track: stable  → Label que diferencia Pods estables de los canary
+#   - version: "1.0" → Label adicional para visibilidad de version en kubectl
+#   - 9 replicas de 10 totales = 90% del trafico cuando se añade 1 replica canary
+#   - El Service app-canary-service selecciona AMBOS (stable + canary) por app: canary-app
+#
+# Namespace: lab-estrategias
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-stable
+  namespace: lab-estrategias
+  labels:
+    app: canary-app
+    track: stable
+  annotations:
+    kubernetes.io/change-cause: "v1.0 - Version estable en produccion"
+spec:
+  replicas: 9    # 90% del trafico (9 de 10 pods totales)
+  selector:
+    matchLabels:
+      app: canary-app
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: canary-app
+        track: stable
+        version: "1.0"
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: VERSION
+          value: "1.0-stable"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

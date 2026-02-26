@@ -1,0 +1,55 @@
+# Parte 2 - Paso 1: ConfigMap del Frontend
+# Uso: kubectl apply -f frontend-configmap.yaml
+#
+# Descripcion:
+#   ConfigMap con la configuracion de nginx y la configuracion de la aplicacion.
+#   - nginx.conf: bloque server con proxy hacia api-gateway-service:8080,
+#                 endpoint /health para health checks y try_files para SPA routing
+#   - app-config.json: configuracion JSON de la aplicacion (apiUrl, environment, version, features)
+#
+# Namespace: ecommerce-prod
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: ecommerce-prod
+  labels:
+    app: frontend
+    component: web
+    tier: frontend
+data:
+  nginx.conf: |
+    server {
+      listen 80;
+      server_name ecommerce.example.com;
+
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+      }
+
+      location /api {
+        proxy_pass http://api-gateway-service:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+      }
+
+      location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+      }
+    }
+
+  app-config.json: |
+    {
+      "apiUrl": "http://api-gateway-service:8080",
+      "environment": "production",
+      "version": "1.0.0",
+      "features": {
+        "analytics": true,
+        "darkMode": true
+      }
+    }

@@ -1,0 +1,59 @@
+# Ejercicio 4: Canary Fallido - Demostracion de Auto-exclusion por Health Checks
+# Uso: kubectl apply -f canary-failing.yaml
+#
+# Descripcion:
+#   Deployment canary que FALLA intencionalmente los health checks para demostrar
+#   el mecanismo de auto-exclusion de Kubernetes.
+#   - image: busybox  → No tiene servidor HTTP, los health checks HTTP siempre fallan
+#   - command: sleep 3600  → El container arranca pero nunca pasa el readinessProbe
+#   - readinessProbe falla → Los Pods NUNCA se marcan como Ready
+#   - Pods no Ready → El Service health-app-service NO les envia trafico
+#   - Resultado: 100% del trafico continua llegando a app-stable-health (Pods Ready)
+#
+#   Este archivo debe aplicarse DESPUES de canary-with-health.yaml
+#   Aplicar: kubectl apply -f canary-failing.yaml
+#   Limpiar: kubectl delete -f canary-failing.yaml
+#
+# Namespace: lab-estrategias
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-canary-failing
+  namespace: lab-estrategias
+  labels:
+    app: health-app
+    track: canary
+spec:
+  replicas: 2    # 2 de 7 total = ~28% canary (pero nunca reciben trafico)
+  selector:
+    matchLabels:
+      app: health-app
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: health-app
+        track: canary
+    spec:
+      containers:
+      - name: app
+        image: busybox:latest    # Sin servidor HTTP - los health checks HTTP fallan
+        command: ['sh', '-c', 'sleep 3600']
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 2    # Falla rapido para demostrar el comportamiento

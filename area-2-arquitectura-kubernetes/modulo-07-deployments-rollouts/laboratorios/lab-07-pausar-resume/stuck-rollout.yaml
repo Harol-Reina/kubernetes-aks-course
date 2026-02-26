@@ -1,0 +1,64 @@
+# Ejercicio 4: Deployment con rollout muy lento (stuck rollout)
+# Uso: kubectl apply -f stuck-rollout.yaml
+#
+# Descripcion:
+#   Deployment con 5 replicas configurado para un rollout extremadamente lento.
+#   - minReadySeconds: 30 → Cada Pod nuevo debe estar Ready por 30 segundos antes de avanzar
+#   - maxUnavailable: 0   → No se puede bajar ninguna replica durante el update
+#   - initialDelaySeconds: 60 → La readiness probe no se ejecuta hasta 60 segundos despues
+#   - Resultado: Un rolling update de este deployment tarda varios minutos en completarse
+#   - Se puede observar como progresa lentamente con kubectl rollout status
+#
+# Para activar el rollout lento despues de aplicar el archivo inicial:
+#   kubectl set image deployment/stuck-rollout-app app=nginx:1.22-alpine
+#
+# Problema que demuestra: Rollout stuck / extremadamente lento
+# Solucion: Reducir minReadySeconds y initialDelaySeconds, o usar rollout pause/resume
+#
+# Namespace: lab-troubleshooting
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stuck-rollout-app
+  namespace: lab-troubleshooting
+  labels:
+    app: stuck-app
+    tier: troubleshooting
+    category: stuck-rollout
+spec:
+  replicas: 5
+  minReadySeconds: 30   # Pod debe estar Ready 30s antes de considerarse "disponible"
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0   # No tolera downtime → rollout muy conservador
+  selector:
+    matchLabels:
+      app: stuck-app
+  template:
+    metadata:
+      labels:
+        app: stuck-app
+        tier: troubleshooting
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 60   # Espera 60s antes de la primera probe → rollout lentisimo
+          periodSeconds: 10

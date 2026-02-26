@@ -1,0 +1,52 @@
+# Ejercicio 5: PodDisruptionBudgets para Alta Disponibilidad
+# Uso: kubectl apply -f webapp-pdb.yaml
+#
+# Descripción:
+#   Dos PodDisruptionBudgets con enfoques complementarios:
+#
+#   1. webapp-pdb (minAvailable: 2)
+#      Garantiza que siempre haya al menos 2 pods de webapp disponibles
+#      durante disrupciones voluntarias (drain de nodo, actualizaciones del cluster).
+#      Selector: app=webapp, tier=frontend
+#
+#   2. webapp-pdb-percentage (maxUnavailable: 25%)
+#      Limita la disrupción al 25% de los pods de webapp-config.
+#      Con 4 réplicas, máximo 1 pod puede estar no disponible.
+#      Selector: app=webapp-config
+#
+#   Los PDB protegen contra operaciones de mantenimiento del cluster
+#   pero NO protegen contra fallos de nodo involuntarios.
+#
+# Namespace: lab-production
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webapp-pdb
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+spec:
+  minAvailable: 2   # Mínimo 2 pods siempre disponibles durante disrupciones
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+---
+# PDB alternativo usando maxUnavailable en porcentaje
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webapp-pdb-percentage
+  namespace: lab-production
+  labels:
+    app: webapp-config
+    tier: frontend
+    environment: production
+spec:
+  maxUnavailable: "25%"  # Máximo 25% no disponible durante disrupciones
+  selector:
+    matchLabels:
+      app: webapp-config

@@ -1,0 +1,59 @@
+# Ejercicio 1: Blue-Green Deployment - Version Green (Nueva Version)
+# Uso: kubectl apply -f green-deployment.yaml
+#
+# Descripcion:
+#   Deployment de la version "Green" (nueva version) con 3 replicas de nginx:1.22-alpine.
+#   - version: green  → Label distinto al Blue, permite coexistencia sin conflictos
+#   - readinessProbe: Garantiza que los Pods esten listos antes de recibir trafico
+#   - Este Deployment no recibe trafico de produccion hasta que se hace el switch del Service
+#
+# Namespace: lab-estrategias
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-green
+  namespace: lab-estrategias
+  labels:
+    app: myapp
+    version: green
+  annotations:
+    kubernetes.io/change-cause: "v2.0-green - Nueva version con nginx 1.22"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+      version: green
+  template:
+    metadata:
+      labels:
+        app: myapp
+        version: green
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.22-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: VERSION
+          value: "v2.0-green"
+        - name: COLOR
+          value: "green"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3

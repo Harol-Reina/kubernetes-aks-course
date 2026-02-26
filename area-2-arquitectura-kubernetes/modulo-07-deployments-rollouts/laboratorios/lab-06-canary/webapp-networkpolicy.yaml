@@ -1,0 +1,77 @@
+# Ejercicio 7: NetworkPolicy para Seguridad de Red
+# Uso: kubectl apply -f webapp-networkpolicy.yaml
+#
+# Descripción:
+#   NetworkPolicy restrictiva de tipo deny-by-default para pods webapp.
+#   Solo permite tráfico explícitamente declarado:
+#
+#   Ingress permitido:
+#   - Desde namespace ingress-nginx en puerto 80 (tráfico HTTP del Ingress Controller)
+#   - Desde namespace monitoring en puerto 8080 (scraping de Prometheus)
+#
+#   Egress permitido:
+#   - Hacia kube-dns en puerto UDP/53 (resolución de nombres)
+#   - Hacia pods con tier=backend en puerto 8080 (llamadas a API interna)
+#
+#   Todo tráfico no listado es denegado implícitamente.
+#   Prerequisito: CNI compatible con NetworkPolicy (Calico, Cilium, Weave).
+#   Minikube con CNI por defecto NO aplica NetworkPolicies.
+#
+# Namespace: lab-production
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webapp-network-policy
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+spec:
+  podSelector:
+    matchLabels:
+      app: webapp
+
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Permitir tráfico HTTP desde el Ingress Controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+
+  # Permitir scraping de métricas desde Prometheus
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+
+  egress:
+  # Permitir resolución DNS (obligatorio para comunicación interna)
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Permitir llamadas al tier backend
+  - to:
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 8080

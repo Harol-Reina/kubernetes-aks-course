@@ -1,0 +1,38 @@
+# Ejercicio 6: ServiceMonitor para Prometheus
+# Uso: kubectl apply -f webapp-servicemonitor.yaml
+#
+# Descripción:
+#   ServiceMonitor del operador Prometheus (kube-prometheus-stack).
+#   Le indica a Prometheus que debe hacer scraping del endpoint /metrics
+#   en el puerto 'metrics' (8080) de todos los pods con label app=webapp,
+#   con intervalo de 30 segundos.
+#
+#   Prerequisito: tener instalado el Prometheus Operator:
+#     helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack
+#
+#   El puerto 'metrics' debe estar declarado en el Service (webapp-service.yaml).
+#   Las anotaciones prometheus.io/* en el Deployment son para el scraping
+#   por anotaciones (método alternativo sin ServiceMonitor).
+#
+# Namespace: lab-production
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webapp-monitor
+  namespace: lab-production
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+    # Este label debe coincidir con el selector del Prometheus CR
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: webapp
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http

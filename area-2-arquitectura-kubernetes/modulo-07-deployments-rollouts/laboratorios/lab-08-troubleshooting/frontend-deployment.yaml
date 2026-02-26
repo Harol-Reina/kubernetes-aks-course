@@ -1,0 +1,170 @@
+# Parte 2 - Paso 3: Deployment del Frontend (production-ready)
+# Uso: kubectl apply -f frontend-deployment.yaml
+#
+# Descripcion:
+#   Deployment completo del frontend con todas las mejores practicas de produccion:
+#   - 5 replicas con RollingUpdate (maxSurge:2, maxUnavailable:1)
+#   - Anti-affinity para distribuir Pods entre nodos
+#   - securityContext: runAsNonRoot, readOnlyRootFilesystem, capabilities drop ALL
+#   - Puertos nombrados: http (80) y metrics (9113)
+#   - Variables de entorno desde Secret (api-key) y fieldRef (POD_NAME)
+#   - Resource requests/limits configurados
+#   - Tres probes: startupProbe, readinessProbe, livenessProbe
+#   - preStop hook con sleep 15 para drenado graceful
+#   - Volumenes emptyDir para tmp, cache y run (requerido con readOnlyRootFilesystem)
+#   - terminationGracePeriodSeconds: 30
+#
+# Namespace: ecommerce-prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-web
+  namespace: ecommerce-prod
+  labels:
+    app: frontend
+    component: web
+    tier: frontend
+  annotations:
+    kubernetes.io/change-cause: "Initial production release v1.0.0"
+spec:
+  replicas: 5
+  revisionHistoryLimit: 10
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2          # Permite hasta 7 Pods durante el update
+      maxUnavailable: 1    # Minimo 4 Pods disponibles durante el update
+
+  selector:
+    matchLabels:
+      app: frontend
+      component: web
+
+  template:
+    metadata:
+      labels:
+        app: frontend
+        component: web
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9113"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - frontend
+              topologyKey: kubernetes.io/hostname
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        fsGroup: 101
+
+      containers:
+      - name: nginx
+        image: nginx:1.21-alpine
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 80
+        - name: metrics
+          containerPort: 9113
+
+        env:
+        - name: APP_VERSION
+          value: "1.0.0"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: frontend-secrets
+              key: api-key
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          failureThreshold: 30   # 150s maximo para arrancar
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/conf.d
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+
+      volumes:
+      - name: config
+        configMap:
+          name: frontend-config
+          items:
+          - key: nginx.conf
+            path: default.conf
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+
+      terminationGracePeriodSeconds: 30

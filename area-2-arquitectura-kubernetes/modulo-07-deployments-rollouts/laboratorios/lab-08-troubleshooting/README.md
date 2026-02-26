@@ -1,830 +1,596 @@
-# 🧪 Laboratorio 08: Proyecto Integrador - Deployment Completo
+# Laboratorio 08: Proyecto Integrador - Deployment Completo
 
-**Duración estimada**: 90 minutos  
-**Dificultad**: Avanzado  
-**Objetivo**: Diseñar e implementar un deployment production-ready completo integrando todos los conceptos del módulo
-
----
-
-## 📋 Escenario del Proyecto
-
-Eres el líder técnico de una aplicación web de e-commerce que necesita:
-
-- **Alta disponibilidad** (99.9% uptime)
-- **Escalado automático** según tráfico
-- **Deployments sin downtime**
-- **Rollback rápido** en caso de problemas
-- **Monitoreo y observabilidad**
-- **Seguridad** hardened
+**Duracion estimada**: 90 minutos
+**Dificultad**: Avanzado
+**Objetivo**: Disenar e implementar un deployment production-ready completo integrando todos los conceptos del modulo
 
 ---
 
-## 🎯 Parte 1: Arquitectura y Diseño (15 min)
+## Descripcion del Proyecto
 
-### **Paso 1: Definir arquitectura**
+Este laboratorio integrador pone en practica todos los conceptos del modulo de Deployments y Rollouts
+aplicandolos a una arquitectura de e-commerce realista. A lo largo de 8 partes progresivas desplegamos
+una aplicacion completa con frontend (5 replicas, security hardened), dos servicios backend con
+estrategias de update diferenciadas, escalado automatico via HPA, alta disponibilidad via PodDisruptionBudgets,
+una estrategia Blue-Green con switch de Service, y un ciclo completo de rollback.
+
+**Habilidades evaluadas del modulo**:
+- Deployments production-ready (ConfigMaps, Secrets, probes, securityContext, anti-affinity)
+- Estrategias de despliegue: RollingUpdate con parametros diferenciados por servicio
+- HPA con metricas de CPU y Memory y politicas de comportamiento
+- PodDisruptionBudgets para garantizar disponibilidad durante mantenimiento
+- Blue-Green deployment con switch instantaneo de Service selector
+- Rollback manual con `kubectl rollout undo` y auditoria de historial
+
+**Archivos YAML del laboratorio**:
+
+| Archivo | Recursos | Parte |
+|---------|----------|-------|
+| `frontend-configmap.yaml` | ConfigMap `frontend-config` | 2 |
+| `frontend-deployment.yaml` | Deployment `frontend-web` (5 replicas) | 2 |
+| `frontend-service.yaml` | Service `frontend-service` (ClusterIP) | 2 |
+| `frontend-hpa.yaml` | HPA `frontend-hpa` (min:3, max:15) | 4 |
+| `frontend-deployment-green.yaml` | Deployment `frontend-web-green` (Green v2.0.0) | 6 |
+| `backend-product-service.yaml` | Deployment + Service `product-service` | 3 |
+| `backend-order-service.yaml` | Deployment + Service `order-service` | 3 |
+| `pdb.yaml` | 3 PodDisruptionBudgets | 5 |
+
+---
+
+## Parte 1: Arquitectura y Diseno (15 min)
+
+### Paso 1: Crear namespace del proyecto
 
 ```bash
-# Crear namespace del proyecto
+# Crear namespace dedicado para el proyecto
 kubectl create namespace ecommerce-prod
+
+# Establecer como namespace activo
 kubectl config set-context --current --namespace=ecommerce-prod
 ```
 
-**Componentes a desplegar**:
-1. **Frontend**: 3 componentes (web, api-gateway, cdn)
-2. **Backend**: 2 servicios (product-service, order-service)
-3. **Base de datos**: Redis (cache)
+**Output esperado**:
+```
+namespace/ecommerce-prod created
+Context "minikube" modified.
+```
 
-### **Paso 2: Crear estructura de archivos**
+### Paso 2: Verificar namespace activo
 
 ```bash
-# Crear directorios
-mkdir -p proyecto-ecommerce/{frontend,backend,database,monitoring,manifests}
-
-cd proyecto-ecommerce
+kubectl config view --minify | grep namespace
 ```
+
+**Output esperado**:
+```
+    namespace: ecommerce-prod
+```
+
+**Componentes a desplegar**:
+- **Frontend**: Deployment `frontend-web` con ConfigMap, Secret, Service, HPA y PDB
+- **Backend**: `product-service` y `order-service` con estrategias diferenciadas
+- **Alta Disponibilidad**: PodDisruptionBudgets para todos los componentes
+- **Blue-Green**: Version Green del frontend lista para switch
 
 ---
 
-## 🎯 Parte 2: Frontend Deployment (20 min)
+## Parte 2: Frontend Deployment (20 min)
 
-### **Paso 1: Crear ConfigMap para frontend**
-
-Crea `frontend/configmap.yaml`:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: frontend-config
-  namespace: ecommerce-prod
-data:
-  nginx.conf: |
-    server {
-      listen 80;
-      server_name ecommerce.example.com;
-      
-      location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-      }
-      
-      location /api {
-        proxy_pass http://api-gateway-service:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-      }
-      
-      location /health {
-        access_log off;
-        return 200 "healthy\n";
-        add_header Content-Type text/plain;
-      }
-    }
-  
-  app-config.json: |
-    {
-      "apiUrl": "http://api-gateway-service:8080",
-      "environment": "production",
-      "version": "1.0.0",
-      "features": {
-        "analytics": true,
-        "darkMode": true
-      }
-    }
-```
-
-### **Paso 2: Crear Secrets para frontend**
+### Paso 1: Revisar y aplicar ConfigMap del frontend
 
 ```bash
-# Crear secrets
+# Revisar el contenido del ConfigMap antes de aplicar
+cat frontend-configmap.yaml
+
+# Aplicar ConfigMap
+kubectl apply -f frontend-configmap.yaml
+```
+
+**Output esperado**:
+```
+configmap/frontend-config created
+```
+
+```bash
+# Verificar que el ConfigMap fue creado correctamente
+kubectl get configmap frontend-config -n ecommerce-prod
+kubectl describe configmap frontend-config -n ecommerce-prod
+```
+
+**Output esperado de describe**:
+```
+Name:         frontend-config
+Namespace:    ecommerce-prod
+Data
+====
+app-config.json:  ...
+nginx.conf:       ...
+```
+
+### Paso 2: Crear Secrets para el frontend
+
+Los Secrets se crean de forma imperativa para evitar almacenar credenciales en YAML:
+
+```bash
 kubectl create secret generic frontend-secrets \
   --from-literal=api-key='prod-api-key-abc123' \
   --from-literal=analytics-token='GA-XXXXX-YY' \
   -n ecommerce-prod
 ```
 
-### **Paso 3: Deployment del frontend**
+**Output esperado**:
+```
+secret/frontend-secrets created
+```
 
-Crea `frontend/deployment.yaml`:
+### Paso 3: Revisar y desplegar el frontend
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend-web
-  namespace: ecommerce-prod
-  labels:
-    app: frontend
-    component: web
-    tier: frontend
-  annotations:
-    kubernetes.io/change-cause: "Initial production release v1.0.0"
-spec:
-  replicas: 5
-  revisionHistoryLimit: 10
-  
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 2
-      maxUnavailable: 1
-  
-  selector:
-    matchLabels:
-      app: frontend
-      component: web
-  
-  template:
-    metadata:
-      labels:
-        app: frontend
-        component: web
-        version: "1.0.0"
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9113"
-    spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - frontend
-              topologyKey: kubernetes.io/hostname
-      
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 101
-        fsGroup: 101
-      
-      containers:
-      - name: nginx
-        image: nginx:1.21-alpine
-        imagePullPolicy: IfNotPresent
-        
-        ports:
-        - name: http
-          containerPort: 80
-        - name: metrics
-          containerPort: 9113
-        
-        env:
-        - name: APP_VERSION
-          value: "1.0.0"
-        - name: ENVIRONMENT
-          value: "production"
-        - name: API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: frontend-secrets
-              key: api-key
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "500m"
-        
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: http
-          initialDelaySeconds: 10
-          periodSeconds: 10
-          timeoutSeconds: 5
-          successThreshold: 1
-          failureThreshold: 3
-        
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: http
-          initialDelaySeconds: 30
-          periodSeconds: 15
-          timeoutSeconds: 5
-          failureThreshold: 3
-        
-        startupProbe:
-          httpGet:
-            path: /health
-            port: http
-          initialDelaySeconds: 0
-          periodSeconds: 5
-          failureThreshold: 30
-        
-        lifecycle:
-          preStop:
-            exec:
-              command: ["/bin/sh", "-c", "sleep 15"]
-        
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-        
-        volumeMounts:
-        - name: config
-          mountPath: /etc/nginx/conf.d
-        - name: tmp
-          mountPath: /tmp
-        - name: cache
-          mountPath: /var/cache/nginx
-        - name: run
-          mountPath: /var/run
-      
-      volumes:
-      - name: config
-        configMap:
-          name: frontend-config
-          items:
-          - key: nginx.conf
-            path: default.conf
-      - name: tmp
-        emptyDir: {}
-      - name: cache
-        emptyDir: {}
-      - name: run
-        emptyDir: {}
-      
-      terminationGracePeriodSeconds: 30
+```bash
+# Revisar el Deployment antes de aplicar
+cat frontend-deployment.yaml
+
+# Aplicar Deployment
+kubectl apply -f frontend-deployment.yaml
+```
+
+**Output esperado**:
+```
+deployment.apps/frontend-web created
 ```
 
 ```bash
-# Aplicar
-kubectl apply -f frontend/configmap.yaml
-kubectl apply -f frontend/deployment.yaml
-
-# Verificar
+# Monitorear el rollout
 kubectl rollout status deployment/frontend-web -n ecommerce-prod
-kubectl get pods -l app=frontend -o wide
 ```
 
-### **Paso 4: Service para frontend**
-
-Crea `frontend/service.yaml`:
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend-service
-  namespace: ecommerce-prod
-  labels:
-    app: frontend
-spec:
-  type: ClusterIP
-  sessionAffinity: ClientIP
-  sessionAffinityConfig:
-    clientIP:
-      timeoutSeconds: 3600
-  
-  selector:
-    app: frontend
-    component: web
-  
-  ports:
-  - name: http
-    port: 80
-    targetPort: http
-  - name: metrics
-    port: 9113
-    targetPort: metrics
+**Output esperado**:
+```
+Waiting for deployment "frontend-web" rollout to finish: 0 of 5 updated replicas are available...
+deployment "frontend-web" successfully rolled out
 ```
 
 ```bash
-kubectl apply -f frontend/service.yaml
-kubectl get svc frontend-service
+# Verificar Pods distribuidos entre nodos
+kubectl get pods -l app=frontend -o wide -n ecommerce-prod
 ```
 
----
-
-## 🎯 Parte 3: Backend Services (20 min)
-
-### **Paso 1: Product Service**
-
-Crea `backend/product-service.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: product-service
-  namespace: ecommerce-prod
-  annotations:
-    kubernetes.io/change-cause: "Product service v1.0.0"
-spec:
-  replicas: 3
-  revisionHistoryLimit: 10
-  
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  
-  selector:
-    matchLabels:
-      app: product-service
-  
-  template:
-    metadata:
-      labels:
-        app: product-service
-        tier: backend
-        version: "1.0.0"
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.21-alpine  # Simula backend
-        ports:
-        - name: http
-          containerPort: 80
-        
-        env:
-        - name: SERVICE_NAME
-          value: "product-service"
-        - name: VERSION
-          value: "1.0.0"
-        
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "200m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        
-        readinessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        
-        livenessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 15
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: product-service
-  namespace: ecommerce-prod
-spec:
-  selector:
-    app: product-service
-  ports:
-  - port: 8080
-    targetPort: http
+**Output esperado**:
+```
+NAME                            READY   STATUS    RESTARTS   AGE   NODE
+frontend-web-7d9f8c5b4-abcde   1/1     Running   0          30s   minikube
+frontend-web-7d9f8c5b4-fghij   1/1     Running   0          30s   minikube
+...
 ```
 
-### **Paso 2: Order Service**
+### Paso 4: Revisar y crear el Service del frontend
 
-Crea `backend/order-service.yaml`:
+```bash
+# Revisar el Service antes de aplicar
+cat frontend-service.yaml
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: order-service
-  namespace: ecommerce-prod
-  annotations:
-    kubernetes.io/change-cause: "Order service v1.0.0"
-spec:
-  replicas: 4
-  revisionHistoryLimit: 10
-  
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 2
-      maxUnavailable: 1
-  
-  selector:
-    matchLabels:
-      app: order-service
-  
-  template:
-    metadata:
-      labels:
-        app: order-service
-        tier: backend
-        version: "1.0.0"
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.21-alpine
-        ports:
-        - name: http
-          containerPort: 80
-        
-        env:
-        - name: SERVICE_NAME
-          value: "order-service"
-        - name: VERSION
-          value: "1.0.0"
-        
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "200m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        
-        readinessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        
-        livenessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 15
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: order-service
-  namespace: ecommerce-prod
-spec:
-  selector:
-    app: order-service
-  ports:
-  - port: 8081
-    targetPort: http
+# Aplicar Service
+kubectl apply -f frontend-service.yaml
+```
+
+**Output esperado**:
+```
+service/frontend-service created
 ```
 
 ```bash
-# Aplicar backends
-kubectl apply -f backend/product-service.yaml
-kubectl apply -f backend/order-service.yaml
+# Verificar Service y endpoints
+kubectl get svc frontend-service -n ecommerce-prod
+kubectl get endpoints frontend-service -n ecommerce-prod
+```
 
-# Verificar
+**Output esperado**:
+```
+NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)           AGE
+frontend-service   ClusterIP   10.96.100.50    <none>        80/TCP,9113/TCP   15s
+```
+
+---
+
+## Parte 3: Backend Services (20 min)
+
+### Paso 1: Revisar y desplegar Product Service
+
+```bash
+# Revisar Deployment + Service antes de aplicar
+cat backend-product-service.yaml
+
+# Aplicar (crea tanto el Deployment como el Service)
+kubectl apply -f backend-product-service.yaml
+```
+
+**Output esperado**:
+```
+deployment.apps/product-service created
+service/product-service created
+```
+
+### Paso 2: Revisar y desplegar Order Service
+
+```bash
+# Revisar Deployment + Service antes de aplicar
+cat backend-order-service.yaml
+
+# Aplicar
+kubectl apply -f backend-order-service.yaml
+```
+
+**Output esperado**:
+```
+deployment.apps/order-service created
+service/order-service created
+```
+
+### Paso 3: Verificar backends
+
+```bash
+# Ver todos los Deployments del namespace
 kubectl get deployments -n ecommerce-prod
-kubectl get pods -l tier=backend
+
+# Ver Pods del backend con etiquetas
+kubectl get pods -l tier=backend -n ecommerce-prod
 ```
+
+**Output esperado**:
+```
+NAME               READY   UP-TO-DATE   AVAILABLE   AGE
+frontend-web       5/5     5            5           3m
+order-service      4/4     4            4           30s
+product-service    3/3     3            3           45s
+```
+
+> **Nota sobre estrategias diferenciadas**:
+> - `product-service`: `maxSurge:1, maxUnavailable:0` — zero-downtime, update conservador
+> - `order-service`: `maxSurge:2, maxUnavailable:1` — update mas rapido, acepta 1 Pod no disponible
 
 ---
 
-## 🎯 Parte 4: Escalado Automático (10 min)
+## Parte 4: Escalado Automatico (10 min)
 
-### **Paso 1: Habilitar metrics-server**
+### Paso 1: Habilitar metrics-server
 
 ```bash
 # En minikube
 minikube addons enable metrics-server
 
-# Verificar
+# Esperar a que metrics-server este listo (puede tardar 1-2 min)
 kubectl top nodes
 ```
 
-### **Paso 2: Crear HPA para frontend**
+**Output esperado**:
+```
+NAME       CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+minikube   200m         10%    900Mi           36%
+```
 
-Crea `frontend/hpa.yaml`:
+### Paso 2: Revisar y aplicar HPA
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: frontend-hpa
-  namespace: ecommerce-prod
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: frontend-web
-  
-  minReplicas: 3
-  maxReplicas: 15
-  
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-  
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-      - type: Percent
-        value: 50
-        periodSeconds: 60
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 30
-      - type: Pods
-        value: 3
-        periodSeconds: 30
-      selectPolicy: Max
+```bash
+# Revisar el HPA antes de aplicar
+cat frontend-hpa.yaml
+
+# Aplicar HPA
+kubectl apply -f frontend-hpa.yaml
+```
+
+**Output esperado**:
+```
+horizontalpodautoscaler.autoscaling/frontend-hpa created
 ```
 
 ```bash
-kubectl apply -f frontend/hpa.yaml
+# Verificar estado del HPA
 kubectl get hpa -n ecommerce-prod
 ```
 
+**Output esperado**:
+```
+NAME           REFERENCE                 TARGETS         MINPODS   MAXPODS   REPLICAS   AGE
+frontend-hpa   Deployment/frontend-web   5%/70%, 3%/80%  3         15        5          30s
+```
+
+> **Nota**: Si metrics-server no esta listo, TARGETS mostrara `<unknown>/70%`.
+> Espera 2-3 minutos y vuelve a ejecutar `kubectl get hpa`.
+
 ---
 
-## 🎯 Parte 5: Alta Disponibilidad (10 min)
+## Parte 5: Alta Disponibilidad (10 min)
 
-### **Paso 1: PodDisruptionBudget**
+### Paso 1: Revisar y aplicar PodDisruptionBudgets
 
-Crea `manifests/pdb.yaml`:
+```bash
+# Revisar los 3 PDBs antes de aplicar
+cat pdb.yaml
 
-```yaml
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: frontend-pdb
-  namespace: ecommerce-prod
-spec:
-  minAvailable: 3
-  selector:
-    matchLabels:
-      app: frontend
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: product-service-pdb
-  namespace: ecommerce-prod
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      app: product-service
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: order-service-pdb
-  namespace: ecommerce-prod
-spec:
-  minAvailable: 2
-  selector:
-    matchLabels:
-      app: order-service
+# Aplicar (crea los 3 PDBs en un solo comando)
+kubectl apply -f pdb.yaml
+```
+
+**Output esperado**:
+```
+poddisruptionbudget.policy/frontend-pdb created
+poddisruptionbudget.policy/product-service-pdb created
+poddisruptionbudget.policy/order-service-pdb created
 ```
 
 ```bash
-kubectl apply -f manifests/pdb.yaml
+# Verificar estado de los PDBs
 kubectl get pdb -n ecommerce-prod
 ```
 
+**Output esperado**:
+```
+NAME                  MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+frontend-pdb          3               N/A               2                     15s
+order-service-pdb     2               N/A               2                     15s
+product-service-pdb   N/A             1                 1                     15s
+```
+
+> **Interpretacion**:
+> - `frontend-pdb`: Con 5 replicas, permite interrumpir hasta 2 Pods simultaneamente
+> - `product-service-pdb`: Solo permite 1 Pod interrumpido a la vez
+> - `order-service-pdb`: Con 4 replicas, permite interrumpir hasta 2 Pods
+
 ---
 
-## 🎯 Parte 6: Blue-Green Deployment (15 min)
+## Parte 6: Blue-Green Deployment (15 min)
 
-### **Paso 1: Preparar deployment Blue (actual)**
+### Paso 1: Confirmar version Blue activa
 
-Ya tienes `frontend-web` como versión Blue.
+El Deployment `frontend-web` ya en ejecucion es la version Blue (nginx:1.21-alpine, v1.0.0).
 
-### **Paso 2: Crear versión Green**
+```bash
+# Verificar version Blue activa
+kubectl get deployment frontend-web -o jsonpath='{.spec.template.spec.containers[0].image}' -n ecommerce-prod
+```
 
-Crea `frontend/deployment-green.yaml`:
+**Output esperado**:
+```
+nginx:1.21-alpine
+```
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend-web-green
-  namespace: ecommerce-prod
-  labels:
-    version: green
-  annotations:
-    kubernetes.io/change-cause: "Green deployment v2.0.0"
-spec:
-  replicas: 5
-  selector:
-    matchLabels:
-      app: frontend
-      component: web
-      version: green
-  template:
-    metadata:
-      labels:
-        app: frontend
-        component: web
-        version: green
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.22-alpine  # Nueva versión
-        ports:
-        - name: http
-          containerPort: 80
-        env:
-        - name: APP_VERSION
-          value: "2.0.0"
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "500m"
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: http
-          initialDelaySeconds: 10
-          periodSeconds: 5
-        volumeMounts:
-        - name: tmp
-          mountPath: /tmp
-      volumes:
-      - name: tmp
-        emptyDir: {}
+### Paso 2: Revisar y desplegar version Green
+
+```bash
+# Revisar Deployment Green antes de aplicar
+cat frontend-deployment-green.yaml
+
+# Desplegar Green (no afecta al trafico actual)
+kubectl apply -f frontend-deployment-green.yaml
+```
+
+**Output esperado**:
+```
+deployment.apps/frontend-web-green created
 ```
 
 ```bash
-# Deploy Green
-kubectl apply -f frontend/deployment-green.yaml
-
-# Verificar ambas versiones
-kubectl get pods -l app=frontend -L version
+# Verificar que ambas versiones coexisten
+kubectl get pods -l app=frontend -L version -n ecommerce-prod
 ```
 
-### **Paso 3: Servicio de testing Green**
+**Output esperado**:
+```
+NAME                                  READY   STATUS    VERSION
+frontend-web-7d9f8c5b4-abcde         1/1     Running   1.0.0
+...
+frontend-web-green-6c8d9f3a2-vwxyz   1/1     Running   green
+...
+```
+
+### Paso 3: Crear Service temporal para testing de Green
 
 ```bash
-# Crear service temporal para testing
-kubectl expose deployment frontend-web-green --name=frontend-green-test --port=80 --target-port=http -n ecommerce-prod
+# Exponer Green con Service temporal para validacion
+kubectl expose deployment frontend-web-green \
+  --name=frontend-green-test \
+  --port=80 \
+  --target-port=http \
+  -n ecommerce-prod
+```
 
-# Probar Green
+**Output esperado**:
+```
+service/frontend-green-test exposed
+```
+
+```bash
+# Probar Green antes del switch (en background)
 kubectl port-forward svc/frontend-green-test 8081:80 -n ecommerce-prod &
-curl localhost:8081/health
+
+# Verificar que Green responde
+curl -s localhost:8081/health
 ```
 
-### **Paso 4: Switch a Green**
+**Output esperado**:
+```
+healthy
+```
+
+### Paso 4: Switch de trafico a Green
 
 ```bash
-# Ver selector actual
-kubectl get svc frontend-service -o yaml | grep -A 3 selector
-
-# Cambiar a Green
-kubectl patch service frontend-service -n ecommerce-prod -p '{"spec":{"selector":{"version":"green"}}}'
-
-# Verificar
-kubectl get endpoints frontend-service -n ecommerce-prod
-
-# Rollback instantáneo si hay problemas
-# kubectl patch service frontend-service -n ecommerce-prod -p '{"spec":{"selector":{"version":null}}}'
+# Ver selector actual del Service (apunta a version Blue)
+kubectl get svc frontend-service -o jsonpath='{.spec.selector}' -n ecommerce-prod
 ```
+
+**Output esperado**:
+```
+{"app":"frontend","component":"web"}
+```
+
+```bash
+# Agregar selector version:green para redirigir trafico a Green
+kubectl patch service frontend-service -n ecommerce-prod \
+  -p '{"spec":{"selector":{"app":"frontend","component":"web","version":"green"}}}'
+```
+
+**Output esperado**:
+```
+service/frontend-service patched
+```
+
+```bash
+# Verificar que endpoints ahora apuntan a Pods Green
+kubectl get endpoints frontend-service -n ecommerce-prod
+```
+
+> **Rollback instantaneo si Green tiene problemas**:
+> ```bash
+> kubectl patch service frontend-service -n ecommerce-prod \
+>   -p '{"spec":{"selector":{"app":"frontend","component":"web"}}}'
+> ```
 
 ---
 
-## 🎯 Parte 7: Implementar Rollback (10 min)
+## Parte 7: Implementar Rollback (10 min)
 
-### **Paso 1: Simular deployment problemático**
+### Paso 1: Simular deployment problematico en frontend-web
 
 ```bash
-# Actualizar frontend-web con imagen inválida
-kubectl set image deployment/frontend-web nginx=nginx:invalid-tag -n ecommerce-prod
-kubectl annotate deployment/frontend-web kubernetes.io/change-cause="v2.1.0 - PROBLEMA DETECTADO" --overwrite
+# Actualizar frontend-web con imagen invalida (simula error en produccion)
+kubectl set image deployment/frontend-web \
+  nginx=nginx:invalid-tag \
+  -n ecommerce-prod
+
+# Anotar el cambio para el historial
+kubectl annotate deployment/frontend-web \
+  kubernetes.io/change-cause="v2.1.0 - PROBLEMA DETECTADO" \
+  --overwrite \
+  -n ecommerce-prod
 ```
 
-### **Paso 2: Detectar y rollback**
+### Paso 2: Monitorear el problema (en segunda terminal)
 
 ```bash
-# Monitorear (en otra terminal)
-watch kubectl get pods -l app=frontend,component=web
+# En terminal 2: observar como los Pods nuevos fallan
+watch kubectl get pods -l app=frontend,component=web -n ecommerce-prod
+```
 
-# Ver historial
+**Output esperado en terminal 2** (Pods con imagen invalida en ErrImagePull):
+```
+NAME                             READY   STATUS             RESTARTS
+frontend-web-5b9c7f4d3-aaaaa    0/1     ErrImagePull       0
+frontend-web-7d9f8c5b4-bbbbb    1/1     Running            0
+...
+```
+
+### Paso 3: Revisar historial y hacer rollback
+
+```bash
+# En terminal 1: ver historial de revisiones
 kubectl rollout history deployment/frontend-web -n ecommerce-prod
+```
 
-# Rollback
+**Output esperado**:
+```
+REVISION  CHANGE-CAUSE
+1         Initial production release v1.0.0
+2         v2.1.0 - PROBLEMA DETECTADO
+```
+
+```bash
+# Ejecutar rollback a la ultima revision estable
 kubectl rollout undo deployment/frontend-web -n ecommerce-prod
+```
 
-# Verificar recuperación
+**Output esperado**:
+```
+deployment.apps/frontend-web rolled back
+```
+
+```bash
+# Verificar recuperacion
 kubectl rollout status deployment/frontend-web -n ecommerce-prod
 ```
 
+**Output esperado**:
+```
+deployment "frontend-web" successfully rolled out
+```
+
 ---
 
-## 🎯 Parte 8: Validación Final (10 min)
+## Parte 8: Validacion Final (10 min)
 
-### **Paso 1: Verificar todos los componentes**
+### Paso 1: Verificar todos los componentes
 
 ```bash
-# Ver todos los deployments
+# Resumen completo del namespace
 kubectl get deployments -n ecommerce-prod
-
-# Ver todos los pods
 kubectl get pods -n ecommerce-prod -o wide
-
-# Ver servicios
 kubectl get svc -n ecommerce-prod
-
-# Ver HPA
 kubectl get hpa -n ecommerce-prod
-
-# Ver PDB
 kubectl get pdb -n ecommerce-prod
+```
 
-# Ver historial de rollouts
+**Output esperado de get deployments**:
+```
+NAME                 READY   UP-TO-DATE   AVAILABLE   AGE
+frontend-web         5/5     5            5           25m
+frontend-web-green   5/5     5            5           10m
+order-service        4/4     4            4           20m
+product-service      3/3     3            3           20m
+```
+
+### Paso 2: Verificar historiales de rollout
+
+```bash
 kubectl rollout history deployment/frontend-web -n ecommerce-prod
 kubectl rollout history deployment/product-service -n ecommerce-prod
 kubectl rollout history deployment/order-service -n ecommerce-prod
 ```
 
-### **Paso 2: Generar reporte del proyecto**
+### Paso 3: Generar reporte del proyecto
 
 ```bash
 cat > proyecto-ecommerce-report.md << 'EOF'
-# 📊 Reporte del Proyecto E-commerce
+# Reporte del Proyecto E-commerce
 
-## ✅ Componentes Desplegados
+## Componentes Desplegados
 
 ### Frontend
-- **Deployment**: frontend-web (5 replicas)
-- **Version actual**: 1.0.0
-- **Service**: frontend-service (ClusterIP)
-- **HPA**: 3-15 replicas (CPU 70%, Memory 80%)
-- **PDB**: minAvailable=3
+- Deployment: frontend-web (5 replicas, nginx:1.21-alpine, v1.0.0)
+- Service: frontend-service (ClusterIP, sessionAffinity ClientIP)
+- HPA: frontend-hpa (min:3, max:15, CPU:70%, Memory:80%)
+- PDB: frontend-pdb (minAvailable:3)
 
 ### Backend
-- **Product Service**: 3 replicas
-- **Order Service**: 4 replicas
-- **PDB**: maxUnavailable=1 y minAvailable=2
+- Product Service: 3 replicas (maxSurge:1, maxUnavailable:0)
+- Order Service: 4 replicas (maxSurge:2, maxUnavailable:1)
+- PDB product-service: maxUnavailable:1
+- PDB order-service: minAvailable:2
 
-## 🎯 Características Implementadas
+## Caracteristicas Implementadas
 
 - [x] Rolling Updates sin downtime
 - [x] Health checks (readiness, liveness, startup)
 - [x] Resource limits configurados
-- [x] Escalado automático (HPA)
+- [x] Escalado automatico (HPA)
 - [x] Alta disponibilidad (PDB)
 - [x] Blue-Green deployment implementado
 - [x] Rollback strategy probada
 - [x] ConfigMaps y Secrets
-- [x] Security context hardened
-- [x] Anti-affinity para distribución
+- [x] Security context hardened (runAsNonRoot, readOnlyRootFilesystem)
+- [x] Anti-affinity para distribucion entre nodos
 
-## 📈 Métricas
+## Metricas del Despliegue
 
-- **Pods totales**: ~12-15
-- **Uptime esperado**: 99.9%
-- **Tiempo de rollback**: < 30 segundos
-- **Tiempo de scaling**: < 60 segundos
+- Pods totales: ~17 (5 frontend-blue + 5 frontend-green + 3 product + 4 order)
+- Uptime esperado: 99.9%
+- Tiempo de rollback: < 30 segundos
+- Tiempo de Blue-Green switch: < 1 segundo
 
-## 🔐 Seguridad
+## Seguridad
 
-- runAsNonRoot: true
+- runAsNonRoot: true (user 101)
 - readOnlyRootFilesystem: true
 - Capabilities dropped: ALL
-- Secrets para datos sensibles
-
-## ✅ Tests Realizados
-
-1. Rolling update exitoso
-2. Rollback a versión anterior
-3. Blue-Green switch
-4. Health checks funcionando
-5. HPA scaling (manual trigger)
-
-## 🚀 Próximos Pasos
-
-- Implementar Canary deployments
-- Agregar Ingress con TLS
-- Implementar NetworkPolicies
-- Agregar monitoreo con Prometheus
+- Secrets usados para datos sensibles (api-key, analytics-token)
 EOF
 
 cat proyecto-ecommerce-report.md
@@ -832,78 +598,78 @@ cat proyecto-ecommerce-report.md
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
-# Eliminar namespace completo
-kubectl delete namespace ecommerce-prod
-
-# Restaurar context
-kubectl config set-context --current --namespace=default
+# Ejecutar script de limpieza automatica
+./cleanup.sh
 ```
 
+El script elimina el namespace `ecommerce-prod` completo (todos los recursos),
+termina procesos port-forward activos y restaura el contexto al namespace `default`.
+
 ---
 
-## ✅ Checklist de Evaluación
+## Checklist de Evaluacion
 
 ### Requisitos Funcionales
-- [ ] Frontend deployment con 5 replicas
-- [ ] Backend services (product + order)
-- [ ] ConfigMaps para configuración
-- [ ] Secrets para datos sensibles
-- [ ] Services expuestos correctamente
+- [ ] Frontend Deployment con 5 replicas en estado Running
+- [ ] Backend services (product-service + order-service) desplegados
+- [ ] ConfigMap `frontend-config` aplicado con nginx.conf y app-config.json
+- [ ] Secret `frontend-secrets` creado con las claves correctas
+- [ ] Services expuestos con puertos nombrados
 
 ### Alta Disponibilidad
-- [ ] PodDisruptionBudgets configurados
-- [ ] HPA funcionando
-- [ ] Anti-affinity configurada
-- [ ] Múltiples replicas por servicio
+- [ ] Los 3 PodDisruptionBudgets configurados y mostrando ALLOWED DISRUPTIONS
+- [ ] HPA en estado activo con metricas visibles
+- [ ] Anti-affinity configurada en frontend-web
+- [ ] Multiples replicas por cada servicio
 
 ### Deployments
-- [ ] Rolling updates sin downtime
-- [ ] Rollback funcional
-- [ ] Blue-Green implementado
-- [ ] Change-cause annotations
+- [ ] Rolling updates sin downtime (diferencia entre product y order service)
+- [ ] Rollback ejecutado exitosamente con historial de revisiones
+- [ ] Blue-Green: ambas versiones desplegadas simultaneamente
+- [ ] Switch de Service hacia Green completado
+- [ ] Change-cause annotations en todos los Deployments
 
-### Health & Monitoring
-- [ ] Readiness probes configuradas
-- [ ] Liveness probes configuradas
-- [ ] Startup probes configuradas
-- [ ] Resource limits apropiados
+### Health y Monitoring
+- [ ] readinessProbe configurada en todos los contenedores
+- [ ] livenessProbe configurada en todos los contenedores
+- [ ] startupProbe configurada en frontend-web
+- [ ] Resource requests y limits definidos en todos los contenedores
 
 ### Seguridad
-- [ ] Security contexts configurados
-- [ ] runAsNonRoot habilitado
-- [ ] readOnlyRootFilesystem donde posible
-- [ ] Secrets usados para datos sensibles
+- [ ] securityContext con runAsNonRoot:true en frontend-web
+- [ ] readOnlyRootFilesystem:true con volumenes emptyDir para escritura
+- [ ] capabilities drop ALL
+- [ ] Secrets usados para datos sensibles (no variables de entorno literales)
 
 ---
 
-## 🎓 Criterios de Evaluación
+## Criterios de Evaluacion
 
 | Criterio | Peso | Puntos |
 |----------|------|--------|
-| **Deployments funcionando** | 20% | /20 |
-| **Alta disponibilidad (HPA, PDB)** | 20% | /20 |
-| **Rolling updates y rollback** | 20% | /20 |
-| **Blue-Green implementation** | 15% | /15 |
-| **Health checks configurados** | 10% | /10 |
-| **Security best practices** | 10% | /10 |
-| **Documentación y reporte** | 5% | /5 |
-| **TOTAL** | 100% | /100 |
+| Deployments funcionando (todas las replicas Ready) | 20% | /20 |
+| Alta disponibilidad (HPA activo, PDBs configurados) | 20% | /20 |
+| Rolling updates y rollback demostrados | 20% | /20 |
+| Blue-Green con switch de Service completado | 15% | /15 |
+| Health checks configurados en todos los componentes | 10% | /10 |
+| Security best practices aplicadas | 10% | /10 |
+| Documentacion (reporte generado) | 5% | /5 |
+| **TOTAL** | **100%** | **/100** |
 
 ---
 
-## 🎉 ¡Felicitaciones!
+## Felicitaciones
 
-Has completado el proyecto integrador del módulo de Deployments y Rollouts. Este proyecto demuestra:
+Has completado el proyecto integrador del modulo de Deployments y Rollouts. Este proyecto demuestra:
 
-- ✅ Dominio completo de Deployments
-- ✅ Estrategias avanzadas (Rolling, Blue-Green)
-- ✅ Alta disponibilidad en producción
-- ✅ Escalado automático
-- ✅ Rollback y recuperación
-- ✅ Best practices de seguridad
-- ✅ Configuración production-ready
+- Dominio completo de Deployments production-ready
+- Estrategias avanzadas de despliegue (Rolling, Blue-Green)
+- Alta disponibilidad con HPA y PDB
+- Rollback y recuperacion ante fallos
+- Best practices de seguridad (securityContext, Secrets, probes)
+- Configuracion lista para entornos de produccion
 
-**🎓 Estás listo para gestionar deployments en producción!**
+**Estas listo para gestionar deployments en produccion y para los examenes CKAD/CKA.**

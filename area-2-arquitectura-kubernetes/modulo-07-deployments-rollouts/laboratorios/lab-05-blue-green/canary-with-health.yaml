@@ -1,0 +1,85 @@
+# Ejercicio 4: Canary con Health Checks - Deployment Estable con Probes
+# Uso: kubectl apply -f canary-with-health.yaml
+#
+# Descripcion:
+#   Dos recursos en un solo archivo (multi-documento YAML separado por ---):
+#   1. app-stable-health: Deployment estable con 5 replicas, readinessProbe Y livenessProbe
+#   2. health-app-service: Service ClusterIP que enruta trafico al Deployment estable
+#
+#   Configuracion de health checks:
+#   - readinessProbe: Verifica disponibilidad antes de aceptar trafico
+#       * successThreshold: 2 → Requiere 2 checks OK consecutivos para marcar Ready
+#       * failureThreshold: 2 → Solo 2 fallos antes de quitar del balanceo
+#   - livenessProbe: Reinicia el container si deja de responder
+#       * initialDelaySeconds: 10 → Tiempo de gracia para el arranque
+#       * periodSeconds: 10       → Comprobacion cada 10 segundos
+#
+#   Junto con canary-failing.yaml demuestra como los health checks protegen el trafico.
+#
+# Namespace: lab-estrategias
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-stable-health
+  namespace: lab-estrategias
+  labels:
+    app: health-app
+    track: stable
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: health-app
+      track: stable
+  template:
+    metadata:
+      labels:
+        app: health-app
+        track: stable
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 2
+          failureThreshold: 2
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-app-service
+  namespace: lab-estrategias
+  labels:
+    app: health-app
+    role: production
+spec:
+  type: ClusterIP
+  selector:
+    app: health-app    # Selecciona stable Y canary (cuando se aplica canary-failing.yaml)
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

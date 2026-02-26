@@ -1,0 +1,52 @@
+# Ejercicio 1: Estrategia Recreate - Versión Actualizada
+# Uso: kubectl apply -f recreate-v2.yaml
+#
+# Descripción:
+#   Actualización del Deployment a nginx:1.20-alpine.
+#   Con estrategia Recreate, al aplicar este archivo:
+#   1. Kubernetes termina las 3 réplicas v1.0 simultáneamente
+#   2. Espera a que todas se eliminen
+#   3. Crea las 3 réplicas v2.0 nuevas
+#   Esto causa un periodo de downtime entre el paso 1 y 3.
+#
+# Namespace: lab-recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-recreate
+  namespace: lab-recreate
+  annotations:
+    kubernetes.io/change-cause: "v2.0 - Update a nginx 1.20 (Recreate)"
+spec:
+  replicas: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nginx-recreate
+  template:
+    metadata:
+      labels:
+        app: nginx-recreate
+        version: "v2.0"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.20-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 2
