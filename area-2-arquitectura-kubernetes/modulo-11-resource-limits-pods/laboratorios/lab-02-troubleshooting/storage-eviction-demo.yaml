@@ -1,0 +1,47 @@
+# Ejercicio 3: Storage Eviction Demo - Pod con Limite de Ephemeral Storage
+# Uso: kubectl apply -f storage-eviction-demo.yaml
+#
+# Descripcion:
+#   Pod que escribe 250MB en un volumen emptyDir con limite de 200Mi.
+#   El kubelet detecta la sobreescritura y evicta el Pod del nodo.
+#   A diferencia de OOMKilled, el Pod no se reinicia: queda en estado Evicted.
+#
+# Conceptos clave:
+#   - Ephemeral storage limits: gestionados por kubelet (no kernel)
+#   - emptyDir con sizeLimit: mejor practica para storage temporal
+#   - Estado Evicted: Pod eliminado del nodo, no reiniciado automaticamente
+#   - Limpiar Pods evicted: kubectl delete pods --field-selector=status.phase=Failed
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: storage-eviction-demo
+  labels:
+    lab: troubleshooting
+    exercise: "3"
+spec:
+  containers:
+  - name: writer
+    image: busybox:1.36
+    resources:
+      requests:
+        ephemeral-storage: "100Mi"
+      limits:
+        ephemeral-storage: "200Mi"  # Limite bajo
+    command:
+    - sh
+    - -c
+    - |
+      echo "Writing 250MB to exceed limit..."
+      dd if=/dev/zero of=/cache/bigfile bs=1M count=250
+      sleep 3600
+    volumeMounts:
+    - name: cache
+      mountPath: /cache
+
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: "200Mi"  # Best practice: siempre usar sizeLimit en emptyDir

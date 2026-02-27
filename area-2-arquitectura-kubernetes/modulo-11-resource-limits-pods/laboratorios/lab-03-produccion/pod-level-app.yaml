@@ -1,0 +1,63 @@
+# Ejercicio 4: Pod-level Resources (K8s 1.34+) - Presupuesto compartido para sidecars
+# Uso: kubectl apply -f pod-level-app.yaml
+#
+# Descripcion:
+#   Deployment con resources definidos a nivel de Pod (feature gate PodLevelResources).
+#   Todos los contenedores (app + 3 sidecars) comparten el presupuesto total del Pod
+#   sin necesidad de asignar recursos individualmente a cada sidecar. Simplifica
+#   la configuracion cuando los sidecars son de proposito general.
+#
+# Conceptos clave:
+#   - spec.template.spec.resources define el presupuesto total del Pod
+#   - Contenedores sin resources individuales comparten el presupuesto del Pod
+#   - Requiere feature gate PodLevelResources habilitado (K8s 1.34+)
+#   - Ideal para patrones service mesh con multiples sidecars genericos
+#
+# Namespace: production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-mesh-app
+  namespace: production
+  labels:
+    app: mesh
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mesh
+  template:
+    metadata:
+      labels:
+        app: mesh
+    spec:
+      # Pod-level resources: presupuesto total compartido (K8s 1.34+)
+      resources:
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "2Gi"
+
+      containers:
+      # Contenedor principal de la app
+      - name: app
+        image: nginx:1.25
+        # Sin resources individuales: comparte del presupuesto del Pod
+
+      # Sidecar 1: Envoy proxy (service mesh)
+      - name: envoy
+        image: envoyproxy/envoy:v1.28-latest
+        # Sin resources: comparte del presupuesto del Pod
+
+      # Sidecar 2: Log collector
+      - name: fluentbit
+        image: fluent/fluent-bit:2.2
+        # Sin resources: comparte del presupuesto del Pod
+
+      # Sidecar 3: Metrics exporter
+      - name: prometheus-exporter
+        image: prom/node-exporter:v1.7.0
+        # Sin resources: comparte del presupuesto del Pod

@@ -1,0 +1,67 @@
+# Ejercicio 6: Problem App - Aplicacion con OOM y CPU Throttling
+# Uso: kubectl apply -f problem-app.yaml
+#
+# Descripcion:
+#   Deployment con 5 replicas que simula una aplicacion en produccion con dos
+#   problemas simultaneos: el contenedor principal causa OOMKilled intentando
+#   usar 120M con limite de 100Mi, y el sidecar provoca CPU throttling
+#   intentando usar 2 CPUs con limite de 100m.
+#
+# Conceptos clave:
+#   - Diagnostico de problemas multiples en un mismo Pod
+#   - Contenedor principal con memory leak (OOMKilled)
+#   - Contenedor sidecar con CPU excesivo (throttling)
+#   - Troubleshooting sistematico: observar, diagnosticar, resolver
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: problem-app
+  labels:
+    lab: troubleshooting
+    exercise: "6"
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: problem
+  template:
+    metadata:
+      labels:
+        app: problem
+        lab: troubleshooting
+    spec:
+      containers:
+      # Contenedor principal con memory leak
+      - name: app
+        image: polinux/stress:1.0.4
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "50Mi"
+          limits:
+            cpu: "200m"
+            memory: "100Mi"
+        command: ["stress"]
+        args:
+        - "--vm"
+        - "1"
+        - "--vm-bytes"
+        - "120M"  # Excede el limite de 100Mi (OOMKilled)
+
+      # Contenedor sidecar con CPU stress
+      - name: logger
+        image: polinux/stress:1.0.4
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+        command: ["stress"]
+        args:
+        - "--cpu"
+        - "2"  # Causa throttling: intenta 2 CPUs con limite de 100m

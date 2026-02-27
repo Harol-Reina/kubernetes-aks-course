@@ -1,0 +1,51 @@
+# Ejercicio 3: HPA con multiples metricas - CPU y memoria simultaneamente
+# Uso: kubectl apply -f hpa-multi.yaml
+#
+# Descripcion:
+#   HorizontalPodAutoscaler que escala basandose en dos metricas simultaneas:
+#   CPU (70%) y memoria (80%). HPA calcula el numero de replicas necesario para
+#   cada metrica y escala al maximo de ambas, garantizando que ninguna metrica
+#   supere su umbral objetivo.
+#
+# Conceptos clave:
+#   - HPA usa MAX(replicas_por_cpu, replicas_por_memoria) para escalar
+#   - Multiples metricas Resource del tipo Utilization
+#   - Comportamiento conservador en scale down para evitar flapping
+#   - No compatible con VPA en el mismo Deployment (conflicto de recursos)
+#
+# Namespace: production
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-server-hpa-multi
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-server
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  # Metrica 1: CPU - escala cuando el promedio supera 70%
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+  # Metrica 2: Memoria - escala cuando el promedio supera 80%
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutos antes de scale down
+    scaleUp:
+      stabilizationWindowSeconds: 0    # Scale up inmediato

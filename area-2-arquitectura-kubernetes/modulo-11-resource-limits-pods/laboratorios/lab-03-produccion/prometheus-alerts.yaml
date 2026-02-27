@@ -1,0 +1,74 @@
+# Ejercicio 5: Alertas de Prometheus - Reglas para OOMKilled, throttling y Pending
+# Uso: kubectl apply -f prometheus-alerts.yaml
+#
+# Descripcion:
+#   ConfigMap con reglas de alerting de Prometheus para monitorear problemas
+#   comunes de resource management: Pods OOMKilled, CPU throttling alto, uso
+#   de memoria elevado, y Pods en estado Pending prolongado. Estas alertas
+#   permiten detectar problemas de resources antes de que afecten a usuarios.
+#
+# Conceptos clave:
+#   - ConfigMap en namespace monitoring para Prometheus Operator
+#   - Alertas de severidad critical y warning segun impacto
+#   - PromQL expressions para detectar OOMKill, throttling y Pending
+#   - Anotaciones summary y description para contexto en AlertManager
+#
+# Namespace: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alerts
+  namespace: monitoring
+data:
+  alerts.yaml: |
+    groups:
+    - name: resource-alerts
+      interval: 30s
+      rules:
+
+      # Alerta: Pod OOMKilled (critico - perdida de datos potencial)
+      - alert: PodOOMKilled
+        expr: |
+          sum(changes(kube_pod_container_status_restarts_total[5m])) by (pod, namespace) > 0
+          and
+          kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} was OOMKilled"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was terminated due to OOM"
+
+      # Alerta: CPU Throttling Alto (warning - degrada rendimiento)
+      - alert: HighCPUThrottling
+        expr: |
+          rate(container_cpu_cfs_throttled_seconds_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU throttling on {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} is being throttled {{ $value | humanizePercentage }}"
+
+      # Alerta: Memory Usage Alto (warning - riesgo de OOMKill proximo)
+      - alert: HighMemoryUsage
+        expr: |
+          (container_memory_working_set_bytes / container_spec_memory_limit_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit"
+
+      # Alerta: Pod Pending prolongado (warning - posible falta de recursos)
+      - alert: PodsPending
+        expr: |
+          kube_pod_status_phase{phase="Pending"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} is pending"
+          description: "Pod {{ $labels.pod }} has been pending for more than 10 minutes"

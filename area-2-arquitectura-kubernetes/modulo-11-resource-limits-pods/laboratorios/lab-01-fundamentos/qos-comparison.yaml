@@ -1,0 +1,77 @@
+# Ejercicio 2: Comparacion de QoS Classes - Los 3 tipos de calidad de servicio
+# Uso: kubectl apply -f qos-comparison.yaml
+#
+# Descripcion:
+#   Despliega tres Pods en paralelo, cada uno representando una QoS Class
+#   distinta: Guaranteed (request == limit), Burstable (request < limit) y
+#   BestEffort (sin resources definidos). Permite comparar el comportamiento
+#   del scheduler y el orden de eviction bajo presion de recursos.
+#
+# Conceptos clave:
+#   - QoS Guaranteed: maxima proteccion, request igual a limit en todos los contenedores
+#   - QoS Burstable: proteccion media, tiene requests pero request < limit
+#   - QoS BestEffort: minima proteccion, se evicted primero, sin resources
+#
+# Namespace: default
+---
+# Pod 1: QoS Guaranteed
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-guaranteed
+  labels:
+    app: qos-guaranteed
+    lab: fundamentos
+    exercise: "2"
+    qos: guaranteed
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"       # Igual a request -> Guaranteed
+        memory: "256Mi"   # Igual a request -> Guaranteed
+
+---
+# Pod 2: QoS Burstable
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-burstable
+  labels:
+    app: qos-burstable
+    lab: fundamentos
+    exercise: "2"
+    qos: burstable
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "128Mi"
+      limits:
+        cpu: "1"          # Mayor que request -> Burstable
+        memory: "512Mi"   # Mayor que request -> Burstable
+
+---
+# Pod 3: QoS BestEffort
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qos-besteffort
+  labels:
+    app: qos-besteffort
+    lab: fundamentos
+    exercise: "2"
+    qos: besteffort
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25
+    # Sin resources definidos -> BestEffort

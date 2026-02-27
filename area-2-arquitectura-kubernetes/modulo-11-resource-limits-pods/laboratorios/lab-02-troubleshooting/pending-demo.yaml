@@ -1,0 +1,44 @@
+# Ejercicio 4: Pending Demo - Deployment con Requests Excesivos
+# Uso: kubectl apply -f pending-demo.yaml
+#
+# Descripcion:
+#   Deployment con 10 replicas donde cada Pod solicita 4 CPU y 4Gi de memoria.
+#   La mayoria de Pods quedaran en estado Pending porque ningun nodo tiene
+#   suficientes recursos libres para satisfacer los requests declarados.
+#
+# Conceptos clave:
+#   - Requests son garantias: el scheduler solo asigna si hay recursos disponibles
+#   - Insufficient cpu/memory: mensaje del scheduler en kubectl describe pod
+#   - Diferencia entre Allocatable y Available en un nodo
+#   - Solucion: reducir requests, reducir replicas, o agregar nodos
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pending-demo
+  labels:
+    lab: troubleshooting
+    exercise: "4"
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: overrequest
+  template:
+    metadata:
+      labels:
+        app: overrequest
+        lab: troubleshooting
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "4"        # Request MUY alto (4 CPUs por Pod)
+            memory: "4Gi"   # Request MUY alto (4Gi por Pod)
+          limits:
+            cpu: "4"
+            memory: "4Gi"

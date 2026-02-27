@@ -1,0 +1,35 @@
+# Ejercicio 2: CPU Sin Limite - Pod de Comparacion sin Throttling
+# Uso: kubectl apply -f cpu-no-throttling.yaml
+#
+# Descripcion:
+#   Pod identico a cpu-throttling-demo pero sin limite de CPU.
+#   Permite comparar el comportamiento real vs el throttleado:
+#   sin limite, el Pod puede usar ~2 CPUs completas del nodo.
+#
+# Conceptos clave:
+#   - Diferencia entre requests (garantia) y limits (techo)
+#   - Sin CPU limit: el Pod puede usar recursos sobrantes del nodo
+#   - Riesgo: puede afectar a otros Pods en el mismo nodo (noisy neighbor)
+#   - kubectl top pod muestra el uso real vs el caso throttleado
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-no-throttling
+  labels:
+    lab: troubleshooting
+    exercise: "2"
+spec:
+  containers:
+  - name: cpu-stress
+    image: polinux/stress:1.0.4
+    resources:
+      requests:
+        cpu: "100m"
+      # Sin limite de CPU
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"

@@ -1,0 +1,58 @@
+# Ejercicio 6: Problem App Fixed - Version Corregida de la Aplicacion
+# Uso: kubectl apply -f problem-app-fixed.yaml
+#
+# Descripcion:
+#   Version corregida del Deployment problem-app. Se reemplaza la imagen
+#   con memory leak por nginx, se aumentan los limits de memoria, se reduce
+#   el numero de replicas a 3 para evitar Pending, y el sidecar se cambia
+#   a un proceso liviano sin CPU excesivo.
+#
+# Conceptos clave:
+#   - Correccion de OOMKilled: reemplazar app con leak + aumentar limites
+#   - Correccion de CPU throttling: reducir carga o aumentar limite
+#   - Reduccion de replicas para evitar Pending en nodos pequenos
+#   - Right-sizing: ajustar requests/limits al uso real esperado
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: problem-app-fixed
+  labels:
+    lab: troubleshooting
+    exercise: "6"
+spec:
+  replicas: 3  # Reducir replicas para caber en nodos pequenos
+  selector:
+    matchLabels:
+      app: problem-fixed
+  template:
+    metadata:
+      labels:
+        app: problem-fixed
+        lab: troubleshooting
+    spec:
+      containers:
+      # Contenedor principal - FIX: imagen sin leak + limite de memoria aumentado
+      - name: app
+        image: nginx:1.25  # Cambiar a app real sin memory leak
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"  # Aumentado para dar margen suficiente
+
+      # Sidecar - FIX: proceso liviano sin CPU excesivo
+      - name: logger
+        image: busybox:1.36  # Cambiar a imagen liviana
+        command: ['sh', '-c', 'tail -f /dev/null']
+        resources:
+          requests:
+            cpu: "10m"      # Reducido al uso real esperado
+            memory: "16Mi"
+          limits:
+            cpu: "50m"      # Reducido a un limite razonable
+            memory: "32Mi"

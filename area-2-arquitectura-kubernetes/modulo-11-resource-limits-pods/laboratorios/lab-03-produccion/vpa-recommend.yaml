@@ -1,0 +1,41 @@
+# Ejercicio 2: VPA en modo Recommend - Solo observacion sin cambios automaticos
+# Uso: kubectl apply -f vpa-recommend.yaml
+#
+# Descripcion:
+#   VerticalPodAutoscaler configurado en modo "Off" para el Deployment api-server.
+#   VPA recolecta metricas de uso real y genera recomendaciones de resources
+#   sin modificar los Pods. Ideal para produccion critica donde se quiere
+#   revisar y aplicar cambios manualmente antes de actualizar manifiestos.
+#
+# Conceptos clave:
+#   - updateMode: "Off" genera recomendaciones sin aplicarlas
+#   - minAllowed y maxAllowed definen el rango valido de recursos
+#   - controlledResources especifica que recursos monitorea VPA
+#   - Requiere VPA instalado en el cluster (ver SETUP.md)
+#
+# Namespace: production
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: api-server-vpa
+  namespace: production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-server
+  updatePolicy:
+    updateMode: "Off"  # Solo recomienda, no actualiza automaticamente
+  resourcePolicy:
+    containerPolicies:
+    - containerName: api
+      minAllowed:
+        cpu: "250m"
+        memory: "256Mi"
+      maxAllowed:
+        cpu: "4"
+        memory: "8Gi"
+      controlledResources:
+      - cpu
+      - memory

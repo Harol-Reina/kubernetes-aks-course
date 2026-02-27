@@ -1,0 +1,221 @@
+# Ejercicio 6: Production-Ready Deployment - Todas las best practices aplicadas
+# Uso: kubectl apply -f production-app.yaml
+#
+# Descripcion:
+#   Deployment completo con todas las best practices de produccion: PodAntiAffinity
+#   para distribucion entre nodos, PriorityClass para preemption, ServiceAccount
+#   dedicado, resources con ephemeral-storage, liveness/readiness/startup probes,
+#   security context estricto, volumes emptyDir con sizeLimit, sidecar de metricas,
+#   y HPA con CPU y memoria. Sirve como plantilla de referencia para produccion.
+#
+# Conceptos clave:
+#   - PodAntiAffinity preferred evita Single Point of Failure en un nodo
+#   - PriorityClass: preemption de Pods de menor prioridad si hay presion
+#   - ephemeral-storage: evita que un Pod consuma todo el disco del nodo
+#   - securityContext: principio de minimo privilegio (runAsNonRoot, readOnly)
+#
+# Namespace: production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: production-api
+  namespace: production
+  labels:
+    app: api
+    tier: important
+    version: v1.0.0
+spec:
+  replicas: 3
+
+  # Rolling update sin downtime: maxUnavailable=0 garantiza disponibilidad
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: api
+
+  template:
+    metadata:
+      labels:
+        app: api
+        tier: important
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+
+    spec:
+      # Best Practice 1: Pod Anti-Affinity para distribuir entre nodos
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - api
+              topologyKey: kubernetes.io/hostname
+
+      # Best Practice 2: PriorityClass - mayor prioridad que batch jobs
+      priorityClassName: high-priority
+
+      # Best Practice 3: ServiceAccount dedicado con minimos permisos
+      serviceAccountName: api-service-account
+
+      containers:
+      - name: api
+        image: nginx:1.25  # Reemplazar con imagen de la aplicacion real
+
+        # Best Practice 4: Resources con requests, limits y ephemeral-storage
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+            ephemeral-storage: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "2Gi"
+            ephemeral-storage: "2Gi"
+
+        # Best Practice 5: Liveness probe - reinicia el contenedor si falla
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Best Practice 5: Readiness probe - excluye de trafico si no esta listo
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+        # Best Practice 6: Startup probe - para apps con arranque lento
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30  # 30 * 10s = 5 min maximo de arranque
+
+        # Best Practice 7: Security context de minimo privilegio
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+        # Best Practice 8: emptyDir con sizeLimit para cache y tmp
+        volumeMounts:
+        - name: cache
+          mountPath: /cache
+        - name: tmp
+          mountPath: /tmp
+
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9090
+          name: metrics
+
+      # Sidecar: Prometheus metrics exporter
+      - name: metrics-exporter
+        image: prom/node-exporter:v1.7.0
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+
+      volumes:
+      - name: cache
+        emptyDir:
+          sizeLimit: "1Gi"    # Best practice: siempre definir sizeLimit
+      - name: tmp
+        emptyDir:
+          sizeLimit: "500Mi"
+---
+# PriorityClass: alta prioridad para workloads de produccion importantes
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "High priority for important production workloads"
+---
+# ServiceAccount dedicado con minimos permisos (principio least privilege)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-service-account
+  namespace: production
+---
+# Service: expone la API en HTTP y el endpoint de metricas
+apiVersion: v1
+kind: Service
+metadata:
+  name: production-api
+  namespace: production
+  labels:
+    app: api
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  - port: 9090
+    targetPort: 9090
+    name: metrics
+  type: ClusterIP
+---
+# HPA: escala basandose en CPU (70%) y memoria (80%)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: production-api-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: production-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

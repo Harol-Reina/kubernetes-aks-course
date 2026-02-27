@@ -1,0 +1,72 @@
+# Ejercicio 4: Container-level Resources (tradicional) - Recursos por contenedor
+# Uso: kubectl apply -f container-level-app.yaml
+#
+# Descripcion:
+#   Deployment equivalente a pod-level-app.yaml pero usando el enfoque tradicional
+#   de asignar resources individualmente a cada contenedor. Sirve como punto de
+#   comparacion: mismos totales (1 CPU / 2Gi), mayor complejidad de configuracion,
+#   menor flexibilidad entre contenedores bajo carga variable.
+#
+# Conceptos clave:
+#   - Cada contenedor tiene su propio presupuesto de recursos fijo
+#   - Total de requests = suma de todos los containers (mismos valores que pod-level)
+#   - Cada contenedor compite de forma independiente por sus recursos asignados
+#   - Compatibilidad universal: funciona en todas las versiones de Kubernetes
+#
+# Namespace: production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-mesh-app-traditional
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mesh-traditional
+  template:
+    metadata:
+      labels:
+        app: mesh-traditional
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.25
+        resources:
+          requests:
+            cpu: "400m"
+            memory: "400Mi"
+          limits:
+            cpu: "800m"
+            memory: "800Mi"
+
+      - name: envoy
+        image: envoyproxy/envoy:v1.28-latest
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "300Mi"
+          limits:
+            cpu: "600m"
+            memory: "600Mi"
+
+      - name: fluentbit
+        image: fluent/fluent-bit:2.2
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "200Mi"
+          limits:
+            cpu: "400m"
+            memory: "400Mi"
+
+      - name: prometheus-exporter
+        image: prom/node-exporter:v1.7.0
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+          limits:
+            cpu: "200m"
+            memory: "200Mi"

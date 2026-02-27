@@ -1,262 +1,206 @@
-# Laboratorio 03: Resource Limits en Producción
+# Laboratorio 03: Resource Limits en Produccion
 
-## 📋 Información General
-
-- **Duración estimada**: 50-60 minutos
-- **Dificultad**: ⭐⭐⭐ Avanzado
-- **Objetivo**: Implementar best practices y autoscaling en producción
-- **Requisitos**:
-  - Cluster Kubernetes 1.28+
-  - `kubectl` configurado
-  - `metrics-server` instalado
-  - Completar **Lab 01** y **Lab 02** (recomendado)
-  - Prometheus (opcional para métricas avanzadas)
+**Duracion estimada:** 50-60 minutos
+**Nivel:** Avanzado
+**Objetivo:** Implementar best practices y autoscaling en produccion
 
 ---
 
-## 🎯 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
 
-Al completar este laboratorio, serás capaz de:
-
-1. ✅ Implementar best practices de resource management en producción
-2. ✅ Configurar Vertical Pod Autoscaler (VPA)
-3. ✅ Configurar Horizontal Pod Autoscaler (HPA)
-4. ✅ Usar Pod-level resources (K8s 1.34+)
-5. ✅ Monitorear recursos con Prometheus
-6. ✅ Aplicar QoS strategies según criticidad
-7. ✅ Optimizar costos y rendimiento
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Tier System (QoS por criticidad)** | Clasificacion de workloads en Tier 1 (Guaranteed), Tier 2 (Burstable) y Tier 3 (Batch) segun su criticidad de negocio. Define la estrategia de resources y autoscaling para cada capa |
+| **Vertical Pod Autoscaler (VPA)** | Ajusta automaticamente los requests y limits de containers basandose en el uso historico real. Modo "Off" solo recomienda; modo "Auto" aplica cambios reiniciando Pods. Ideal para apps stateful |
+| **Horizontal Pod Autoscaler (HPA)** | Escala el numero de replicas basandose en metricas de CPU, memoria o custom metrics de Prometheus. Politicas de comportamiento controlan la velocidad de scale up y scale down |
+| **Pod-level Resources (K8s 1.34+)** | Feature gate PodLevelResources permite definir un presupuesto total de recursos a nivel de Pod que comparten todos los containers, simplificando la configuracion de sidecars |
+| **Monitoreo con Prometheus** | Reglas de alerting para detectar OOMKilled, CPU throttling alto, memoria cerca del limite y Pods Pending prolongados. Base para optimizacion proactiva de recursos |
+| **Best Practices de Produccion** | Combinacion de PodAntiAffinity, PriorityClass, ServiceAccount dedicado, ephemeral-storage limits, security context estricto y emptyDir con sizeLimit |
+| **PriorityClass y Preemption** | Asigna prioridad numerica a los Pods para controlar el orden de scheduling y preemption cuando el cluster esta bajo presion de recursos |
 
 ---
 
-## 📚 Contexto Teórico
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML independientes y documentados:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `tier1-database.yaml` | 1 | StatefulSet PostgreSQL + Headless Service con QoS Guaranteed |
+| `tier2-api.yaml` | 1 | Deployment API REST + Service ClusterIP con QoS Burstable y sidecar |
+| `tier3-batch.yaml` | 1 | CronJob de reportes nocturnos con recursos bajos (Tier 3) |
+| `vpa-recommend.yaml` | 2 | VPA en modo Off: genera recomendaciones sin aplicar cambios |
+| `vpa-auto.yaml` | 2 | VPA en modo Auto: actualiza resources reiniciando Pods automaticamente |
+| `hpa-cpu.yaml` | 3 | HPA basado en CPU (70%) con politicas de scale up agresivo |
+| `hpa-multi.yaml` | 3 | HPA con CPU (70%) y memoria (80%) simultaneamente |
+| `hpa-custom.yaml` | 3 | HPA con metricas custom de Prometheus (RPS y latencia) |
+| `pod-level-app.yaml` | 4 | Deployment con Pod-level resources compartidos (K8s 1.34+) |
+| `container-level-app.yaml` | 4 | Deployment con container-level resources tradicionales (comparacion) |
+| `prometheus-alerts.yaml` | 5 | ConfigMap con reglas de alerting para OOMKilled y throttling |
+| `production-app.yaml` | 6 | Deployment completo con todas las best practices de produccion |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Elimina namespace production, PriorityClass y recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster Kubernetes 1.28+
+- `kubectl` configurado
+- `metrics-server` instalado (ver SETUP.md)
+- Completar **Lab 01** y **Lab 02** (recomendado)
+- Prometheus (opcional para Ejercicio 5)
+- VPA instalado (opcional para Ejercicio 2)
+
+Ver [SETUP.md](./SETUP.md) para instrucciones de instalacion y verificacion del entorno.
+
+---
+
+## Objetivos de Aprendizaje
+
+Al completar este laboratorio, seras capaz de:
+
+1. Implementar best practices de resource management en produccion
+2. Configurar Vertical Pod Autoscaler (VPA) en modos recommend y auto
+3. Configurar Horizontal Pod Autoscaler (HPA) con CPU, memoria y metricas custom
+4. Usar Pod-level resources (K8s 1.34+) para simplificar sidecars
+5. Monitorear recursos con Prometheus y crear alertas
+6. Aplicar QoS strategies segun criticidad (Tier System)
+7. Optimizar costos y rendimiento con PriorityClass y autoscaling
+
+---
+
+## Contexto Teorico
 
 ### Best Practices Framework
 
 ```
-┌─────────────────────────────────────────────┐
-│  Tier 1: CRÍTICO (Guaranteed)               │
-│  - Bases de datos                           │
-│  - Payment services                         │
-│  - Auth services                            │
-│  ├─ QoS: Guaranteed                         │
-│  ├─ Resources: request == limit             │
-│  ├─ Autoscaling: VPA (vertical)             │
-│  └─ Monitoring: Alertas estrictas           │
-└─────────────────────────────────────────────┘
-              ▼
-┌─────────────────────────────────────────────┐
-│  Tier 2: IMPORTANTE (Burstable)             │
-│  - API REST                                 │
-│  - Web frontends                            │
-│  - Background workers                       │
-│  ├─ QoS: Burstable                          │
-│  ├─ Resources: request < limit              │
-│  ├─ Autoscaling: HPA (horizontal)           │
-│  └─ Monitoring: Alertas moderadas           │
-└─────────────────────────────────────────────┘
-              ▼
-┌─────────────────────────────────────────────┐
-│  Tier 3: BATCH/DEV (BestEffort)             │
-│  - Batch jobs                               │
-│  - CI/CD pipelines                          │
-│  - Development environments                 │
-│  ├─ QoS: BestEffort o Burstable bajo       │
-│  ├─ Resources: requests bajos o vacíos      │
-│  ├─ Autoscaling: Opcional                   │
-│  └─ Monitoring: Básico                      │
-└─────────────────────────────────────────────┘
++---------------------------------------------+
+|  Tier 1: CRITICO (Guaranteed)               |
+|  - Bases de datos                           |
+|  - Payment services                         |
+|  - Auth services                            |
+|  +- QoS: Guaranteed                         |
+|  +- Resources: request == limit             |
+|  +- Autoscaling: VPA (vertical)             |
+|  +- Monitoring: Alertas estrictas           |
++---------------------------------------------+
+              |
+              v
++---------------------------------------------+
+|  Tier 2: IMPORTANTE (Burstable)             |
+|  - API REST                                 |
+|  - Web frontends                            |
+|  - Background workers                       |
+|  +- QoS: Burstable                          |
+|  +- Resources: request < limit              |
+|  +- Autoscaling: HPA (horizontal)           |
+|  +- Monitoring: Alertas moderadas           |
++---------------------------------------------+
+              |
+              v
++---------------------------------------------+
+|  Tier 3: BATCH/DEV (BestEffort)             |
+|  - Batch jobs                               |
+|  - CI/CD pipelines                          |
+|  - Development environments                 |
+|  +- QoS: BestEffort o Burstable bajo       |
+|  +- Resources: requests bajos o vacios      |
+|  +- Autoscaling: Opcional                   |
+|  +- Monitoring: Basico                      |
++---------------------------------------------+
 ```
 
 ### Autoscaling Strategies
 
-| Strategy | Tipo | Cuándo Usar | Beneficios |
+| Strategy | Tipo | Cuando Usar | Beneficios |
 |----------|------|-------------|------------|
-| **VPA** | Vertical (resize containers) | Carga predecible, stateful apps | Optimiza requests/limits automáticamente |
-| **HPA** | Horizontal (más Pods) | Carga variable, stateless apps | Escala según demanda |
-| **Cluster Autoscaler** | Horizontal (más nodos) | Cluster elástico | Agrega/remueve nodos según carga |
-| **Combinado** | VPA + HPA | Apps complejas | Mejor adaptación a patrones variados |
+| **VPA** | Vertical (resize containers) | Carga predecible, stateful apps | Optimiza requests/limits automaticamente |
+| **HPA** | Horizontal (mas Pods) | Carga variable, stateless apps | Escala segun demanda |
+| **Cluster Autoscaler** | Horizontal (mas nodos) | Cluster elastico | Agrega/remueve nodos segun carga |
+| **Combinado** | VPA + HPA | Apps complejas | Mejor adaptacion a patrones variados |
 
 ---
 
-## 🧪 Ejercicio 1: Implementar Tier System (Criticality-based QoS)
+## Ejercicio 1: Implementar Tier System (Criticality-based QoS)
 
-### Paso 1.1: Desplegar Aplicación Tier 1 (Crítica - Guaranteed)
+### Paso 1.1: Crear el namespace y desplegar Tier 1 (Critico - Guaranteed)
 
-Crea `tier1-database.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres-db
-  namespace: production
-  labels:
-    tier: critical
-    app: postgres
-spec:
-  serviceName: postgres
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-        tier: critical
-    spec:
-      containers:
-      - name: postgres
-        image: postgres:16-alpine
-        env:
-        - name: POSTGRES_PASSWORD
-          value: "password"
-        - name: POSTGRES_DB
-          value: "production"
-        resources:
-          requests:
-            cpu: "2"
-            memory: "4Gi"
-          limits:
-            cpu: "2"        # ← request == limit (Guaranteed)
-            memory: "4Gi"
-        volumeMounts:
-        - name: data
-          mountPath: /var/lib/postgresql/data
-      
-      # Best practice: Init container para setup
-      initContainers:
-      - name: init-permissions
-        image: busybox:1.36
-        command: ['sh', '-c', 'chown -R 999:999 /var/lib/postgresql/data']
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "64Mi"
-          limits:
-            cpu: "100m"
-            memory: "64Mi"
-        volumeMounts:
-        - name: data
-          mountPath: /var/lib/postgresql/data
-  
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 10Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: production
-spec:
-  selector:
-    app: postgres
-  ports:
-  - port: 5432
-    targetPort: 5432
-  clusterIP: None  # Headless service para StatefulSet
-```
-
-Crear namespace y aplicar:
+Primero crear el namespace de produccion:
 
 ```bash
 kubectl create namespace production
+```
+
+Salida esperada:
+
+```
+namespace/production created
+```
+
+Revisa el archivo `tier1-database.yaml`:
+
+```bash
+cat tier1-database.yaml
+```
+
+Puntos clave del manifiesto:
+- **StatefulSet** con `serviceName` para Headless Service
+- **QoS Guaranteed**: requests identicos a limits en CPU y memoria (`cpu: "2"`, `memory: "4Gi"`)
+- **initContainer** para permisos de directorio de datos con recursos propios
+- **Headless Service** (`clusterIP: None`) requerido para StatefulSets
+- **volumeClaimTemplates** para persistencia de datos de PostgreSQL
+
+```bash
 kubectl apply -f tier1-database.yaml
 ```
 
-Verificar QoS:
+Salida esperada:
+
+```
+statefulset.apps/postgres-db created
+service/postgres created
+```
+
+Verificar QoS class:
 
 ```bash
 kubectl get pod -n production -l app=postgres -o jsonpath='{.items[0].status.qosClass}'
-# Salida esperada: Guaranteed
 ```
 
-### Paso 1.2: Desplegar Aplicación Tier 2 (Importante - Burstable)
+Salida esperada:
 
-Crea `tier2-api.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-server
-  namespace: production
-  labels:
-    tier: important
-    app: api
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: api
-  template:
-    metadata:
-      labels:
-        app: api
-        tier: important
-    spec:
-      containers:
-      # Contenedor principal
-      - name: api
-        image: nginx:1.25  # Reemplazar con tu API real
-        ports:
-        - containerPort: 8080
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "512Mi"
-          limits:
-            cpu: "2"        # ← request < limit (Burstable)
-            memory: "2Gi"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
-      
-      # Sidecar: logging
-      - name: logger
-        image: busybox:1.36
-        command: ['sh', '-c', 'tail -f /dev/null']
-        resources:
-          requests:
-            cpu: "50m"
-            memory: "64Mi"
-          limits:
-            cpu: "200m"
-            memory: "256Mi"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: api-server
-  namespace: production
-spec:
-  selector:
-    app: api
-  ports:
-  - port: 80
-    targetPort: 8080
-  type: ClusterIP
+```
+Guaranteed
 ```
 
-Aplicar:
+### Paso 1.2: Desplegar Tier 2 (Importante - Burstable)
+
+Revisa el archivo `tier2-api.yaml`:
+
+```bash
+cat tier2-api.yaml
+```
+
+Puntos clave del manifiesto:
+- **QoS Burstable**: requests menores a limits (`cpu: "500m"` con limit `cpu: "2"`)
+- **Sidecar logger** con su propio presupuesto de recursos
+- **Liveness y readiness probes** para alta disponibilidad
+- **3 replicas** para tolerancia a fallos
 
 ```bash
 kubectl apply -f tier2-api.yaml
+```
+
+Salida esperada:
+
+```
+deployment.apps/api-server created
+service/api-server created
 ```
 
 Verificar QoS:
@@ -265,56 +209,39 @@ Verificar QoS:
 kubectl get pods -n production -l app=api -o custom-columns=\
 NAME:.metadata.name,\
 QoS:.status.qosClass
-# Salida esperada: Burstable
 ```
 
-### Paso 1.3: Desplegar Aplicación Tier 3 (Batch - BestEffort/Low Burstable)
+Salida esperada:
 
-Crea `tier3-batch.yaml`:
-
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: nightly-report
-  namespace: production
-  labels:
-    tier: batch
-    app: reporting
-spec:
-  schedule: "0 2 * * *"  # 2am diario
-  jobTemplate:
-    spec:
-      template:
-        metadata:
-          labels:
-            app: reporting
-            tier: batch
-        spec:
-          restartPolicy: OnFailure
-          containers:
-          - name: report-generator
-            image: busybox:1.36
-            command:
-            - sh
-            - -c
-            - |
-              echo "Generating report..."
-              sleep 60
-              echo "Report complete"
-            resources:
-              requests:
-                cpu: "100m"      # ← Requests bajos
-                memory: "128Mi"
-              limits:
-                cpu: "1"         # ← Puede burst si hay recursos idle
-                memory: "512Mi"
+```
+NAME                          QoS
+api-server-xxxxxxxxx-xxxxx    Burstable
+api-server-xxxxxxxxx-xxxxx    Burstable
+api-server-xxxxxxxxx-xxxxx    Burstable
 ```
 
-Aplicar:
+### Paso 1.3: Desplegar Tier 3 (Batch - BestEffort/Low Burstable)
+
+Revisa el archivo `tier3-batch.yaml`:
+
+```bash
+cat tier3-batch.yaml
+```
+
+Puntos clave del manifiesto:
+- **Requests bajos** (`cpu: "100m"`, `memory: "128Mi"`): no bloquea recursos del nodo
+- **Limits altos** (`cpu: "1"`, `memory: "512Mi"`): puede usar recursos idle disponibles
+- **CronJob** programado a las 2am para minimizar impacto en produccion
+- **restartPolicy: OnFailure** para trabajos batch que pueden fallar y reintentar
 
 ```bash
 kubectl apply -f tier3-batch.yaml
+```
+
+Salida esperada:
+
+```
+cronjob.batch/nightly-report created
 ```
 
 ### Paso 1.4: Ver Tier Distribution
@@ -328,9 +255,22 @@ CPU_REQ:.spec.containers[0].resources.requests.cpu,\
 MEM_REQ:.spec.containers[0].resources.requests.memory
 ```
 
+Salida esperada (cuando el StatefulSet haya arrancado):
+
+```
+NAME                        TIER       QoS          CPU_REQ   MEM_REQ
+api-server-xxx-xxx          important  Burstable     500m      512Mi
+api-server-xxx-xxx          important  Burstable     500m      512Mi
+api-server-xxx-xxx          important  Burstable     500m      512Mi
+postgres-db-0               critical   Guaranteed    2         4Gi
+```
+
 ---
 
-## 🧪 Ejercicio 2: Configurar Vertical Pod Autoscaler (VPA)
+## Ejercicio 2: Configurar Vertical Pod Autoscaler (VPA)
+
+> **Prerequisito:** VPA debe estar instalado. Ver SETUP.md para instrucciones.
+> Si no tienes VPA instalado, puedes saltar al Ejercicio 3.
 
 ### Paso 2.1: Instalar VPA
 
@@ -342,7 +282,7 @@ cd autoscaler/vertical-pod-autoscaler
 # Instalar VPA
 ./hack/vpa-up.sh
 
-# Verificar instalación
+# Verificar instalacion
 kubectl get pods -n kube-system | grep vpa
 ```
 
@@ -356,45 +296,26 @@ vpa-updater-...                1/1     Running   0          1m
 
 ### Paso 2.2: Crear VPA en Modo "Recommend" (Solo Observar)
 
-Crea `vpa-recommend.yaml`:
+Revisa el archivo `vpa-recommend.yaml`:
 
-```yaml
-apiVersion: autoscaling.k8s.io/v1
-kind: VerticalPodAutoscaler
-metadata:
-  name: api-server-vpa
-  namespace: production
-spec:
-  targetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-server
-  updatePolicy:
-    updateMode: "Off"  # ← Solo recomienda, no actualiza
-  resourcePolicy:
-    containerPolicies:
-    - containerName: api
-      minAllowed:
-        cpu: "250m"
-        memory: "256Mi"
-      maxAllowed:
-        cpu: "4"
-        memory: "8Gi"
-      controlledResources:
-      - cpu
-      - memory
+```bash
+cat vpa-recommend.yaml
 ```
-
-Aplicar:
 
 ```bash
 kubectl apply -f vpa-recommend.yaml
 ```
 
+Salida esperada:
+
+```
+verticalpodautoscaler.autoscaling.k8s.io/api-server-vpa created
+```
+
 ### Paso 2.3: Ver Recomendaciones de VPA
 
 ```bash
-# Esperar ~2 minutos para que VPA recolecte métricas
+# Esperar ~2 minutos para que VPA recolecte metricas
 sleep 120
 
 # Ver recomendaciones
@@ -421,84 +342,64 @@ Recommendation:
       Memory:  1Gi
 ```
 
-**📊 Análisis**:
+**Analisis de los valores de recomendacion:**
 
-- **Lower Bound**: Mínimo para funcionar sin problemas
-- **Target**: Recomendación óptima (usa este valor)
-- **Upper Bound**: Máximo observado en picos
+- **Lower Bound**: Minimo para funcionar sin problemas bajo carga normal
+- **Target**: Recomendacion optima — usar este valor para actualizar manifiestos
+- **Upper Bound**: Maximo observado durante picos de uso
 
-**💡 Recomendación**: Ajustar requests al "Target" de VPA:
+**Recomendacion**: Ajustar requests al "Target" de VPA en el manifiesto de la aplicacion:
 
 ```yaml
 resources:
   requests:
-    cpu: "450m"      # ← Usar VPA Target
+    cpu: "450m"      # Usar VPA Target
     memory: "600Mi"
   limits:
     cpu: "2"
     memory: "2Gi"
 ```
 
-### Paso 2.4: Crear VPA en Modo "Auto" (Actualizar Automáticamente)
+### Paso 2.4: Crear VPA en Modo "Auto" (Actualizar Automaticamente)
 
-**⚠️ PRECAUCIÓN**: Modo "Auto" reinicia Pods para aplicar nuevos resources.
+> **PRECAUCION:** Modo "Auto" reinicia Pods para aplicar nuevos resources.
 
-Crea `vpa-auto.yaml`:
+Revisa el archivo `vpa-auto.yaml`:
 
-```yaml
-apiVersion: autoscaling.k8s.io/v1
-kind: VerticalPodAutoscaler
-metadata:
-  name: postgres-vpa
-  namespace: production
-spec:
-  targetRef:
-    apiVersion: apps/v1
-    kind: StatefulSet
-    name: postgres-db
-  updatePolicy:
-    updateMode: "Auto"  # ← Actualiza automáticamente
-  resourcePolicy:
-    containerPolicies:
-    - containerName: postgres
-      minAllowed:
-        cpu: "1"
-        memory: "2Gi"
-      maxAllowed:
-        cpu: "4"
-        memory: "8Gi"
-      controlledResources:
-      - cpu
-      - memory
-      mode: Auto  # ← VPA puede modificar requests y limits
+```bash
+cat vpa-auto.yaml
 ```
-
-Aplicar:
 
 ```bash
 kubectl apply -f vpa-auto.yaml
 ```
 
-**❓ ¿Cuándo usar "Auto" vs "Off"?**
+Salida esperada:
+
+```
+verticalpodautoscaler.autoscaling.k8s.io/postgres-vpa created
+```
+
+**Cuando usar "Auto" vs "Off"?**
 
 <details>
 <summary>Respuesta</summary>
 
 **updateMode: "Off"** (Solo recomendar):
-- ✅ Apps stateful (bases de datos)
-- ✅ Apps que no toleran reinicios
-- ✅ Producción crítica
-- ✅ Cuando quieres revisar manualmente
+- Apps stateful (bases de datos)
+- Apps que no toleran reinicios
+- Produccion critica
+- Cuando quieres revisar manualmente antes de aplicar
 
-**updateMode: "Auto"** (Actualizar automáticamente):
-- ✅ Apps stateless
-- ✅ Development/staging
-- ✅ Deployments con múltiples replicas (rolling update)
-- ⚠️ NO para StatefulSets en producción (puede causar downtime)
+**updateMode: "Auto"** (Actualizar automaticamente):
+- Apps stateless
+- Development/staging
+- Deployments con multiples replicas (rolling update)
+- NO para StatefulSets en produccion (puede causar downtime)
 
 </details>
 
-### Paso 2.5: Cleanup VPA
+### Paso 2.5: Cleanup VPA de este ejercicio
 
 ```bash
 kubectl delete vpa api-server-vpa postgres-vpa -n production
@@ -506,52 +407,15 @@ kubectl delete vpa api-server-vpa postgres-vpa -n production
 
 ---
 
-## 🧪 Ejercicio 3: Configurar Horizontal Pod Autoscaler (HPA)
+## Ejercicio 3: Configurar Horizontal Pod Autoscaler (HPA)
 
 ### Paso 3.1: Crear HPA Basado en CPU
 
-Crea `hpa-cpu.yaml`:
+Revisa el archivo `hpa-cpu.yaml`:
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-server-hpa
-  namespace: production
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-server
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70  # ← Escalar cuando CPU > 70%
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300  # ← Esperar 5 min antes de scale down
-      policies:
-      - type: Percent
-        value: 50  # ← Scale down máximo 50% a la vez
-        periodSeconds: 60
-    scaleUp:
-      stabilizationWindowSeconds: 0  # ← Scale up inmediato
-      policies:
-      - type: Percent
-        value: 100  # ← Puede duplicar Pods
-        periodSeconds: 15
-      - type: Pods
-        value: 4    # ← Máximo +4 Pods a la vez
-        periodSeconds: 15
-      selectPolicy: Max  # ← Usar la política más agresiva
+```bash
+cat hpa-cpu.yaml
 ```
-
-Aplicar:
 
 ```bash
 kubectl apply -f hpa-cpu.yaml
@@ -572,51 +436,18 @@ api-server-hpa    Deployment/api-server  15%/70%   3         10        3        
 
 ### Paso 3.2: Crear HPA Basado en CPU y Memoria
 
-Crea `hpa-multi.yaml`:
+Revisa el archivo `hpa-multi.yaml`:
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-server-hpa-multi
-  namespace: production
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-server
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  # Métrica 1: CPU
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  
-  # Métrica 2: Memory
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-  
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300
-    scaleUp:
-      stabilizationWindowSeconds: 0
+```bash
+cat hpa-multi.yaml
 ```
 
-**❓ ¿Cómo decide HPA cuándo escalar con múltiples métricas?**
+**Como decide HPA cuando escalar con multiples metricas?**
 
 <details>
 <summary>Respuesta</summary>
 
-HPA calcula el número de replicas necesarias para CADA métrica y usa el **máximo**:
+HPA calcula el numero de replicas necesarias para CADA metrica y usa el **maximo**:
 
 ```
 CPU necesita:    5 replicas (para llegar a 70%)
@@ -625,7 +456,7 @@ Memory necesita: 3 replicas (para llegar a 80%)
 HPA escala a: MAX(5, 3) = 5 replicas
 ```
 
-Esto asegura que todas las métricas estén bajo el target.
+Esto asegura que todas las metricas esten bajo el target simultaneamente.
 </details>
 
 ### Paso 3.3: Simular Carga y Ver Autoscaling
@@ -661,50 +492,21 @@ Detener carga:
 kubectl delete pod load-generator -n production
 ```
 
-### Paso 3.4: HPA con Métricas Customizadas (Prometheus)
+### Paso 3.4: HPA con Metricas Customizadas (Prometheus)
 
-**⚠️ Requiere**: Prometheus Adapter instalado
+> **Requiere:** Prometheus Adapter instalado (ver SETUP.md)
 
-Crea `hpa-custom.yaml`:
+Revisa el archivo `hpa-custom.yaml`:
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-server-hpa-custom
-  namespace: production
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-server
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  # Métrica custom: Request rate (RPS)
-  - type: Pods
-    pods:
-      metric:
-        name: http_requests_per_second
-      target:
-        type: AverageValue
-        averageValue: "1000"  # ← Escalar cuando > 1000 RPS
-  
-  # Métrica custom: Response time (latencia)
-  - type: Pods
-    pods:
-      metric:
-        name: http_request_duration_seconds
-      target:
-        type: AverageValue
-        averageValue: "500m"  # ← 500ms
+```bash
+cat hpa-custom.yaml
 ```
 
-**💡 Best Practice**: Escalar en base a métricas de negocio (RPS, latencia) en lugar de solo CPU/memory.
+**Best Practice:** Escalar en base a metricas de negocio (RPS, latencia) en lugar de solo CPU/memoria es mas preciso porque refleja directamente la experiencia del usuario final.
 
 ---
 
-## 🧪 Ejercicio 4: Pod-level Resources (K8s 1.34+)
+## Ejercicio 4: Pod-level Resources (K8s 1.34+)
 
 ### Paso 4.1: Verificar Feature Gate
 
@@ -720,63 +522,25 @@ cat /var/lib/kubelet/config.yaml | grep -A 10 featureGates
 
 ### Paso 4.2: Crear Deployment con Pod-level Resources
 
-Crea `pod-level-app.yaml`:
+Revisa el archivo `pod-level-app.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: service-mesh-app
-  namespace: production
-  labels:
-    app: mesh
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: mesh
-  template:
-    metadata:
-      labels:
-        app: mesh
-    spec:
-      # Pod-level resources (K8s 1.34+)
-      resources:
-        requests:
-          cpu: "1"
-          memory: "1Gi"
-        limits:
-          cpu: "2"
-          memory: "2Gi"
-      
-      containers:
-      # Contenedor principal de la app
-      - name: app
-        image: nginx:1.25
-        # Sin resources definidos → comparte del Pod-level
-      
-      # Sidecar 1: Envoy proxy (service mesh)
-      - name: envoy
-        image: envoyproxy/envoy:v1.28-latest
-        # Sin resources → comparte del Pod-level
-      
-      # Sidecar 2: Log collector
-      - name: fluentbit
-        image: fluent/fluent-bit:2.2
-        # Sin resources → comparte del Pod-level
-      
-      # Sidecar 3: Metrics exporter
-      - name: prometheus-exporter
-        image: prom/node-exporter:v1.7.0
-        # Sin resources → comparte del Pod-level
+```bash
+cat pod-level-app.yaml
 ```
 
-**💡 Ventaja**: Con 4 sidecars, no necesitas calcular recursos individuales. Todos comparten del presupuesto del Pod.
-
-Aplicar:
+Puntos clave del manifiesto:
+- **`spec.template.spec.resources`**: define el presupuesto total del Pod
+- **Contenedores sin resources individuales**: comparten el presupuesto del Pod
+- **4 contenedores** (app + 3 sidecars) que comparten 1 CPU / 2Gi
 
 ```bash
 kubectl apply -f pod-level-app.yaml
+```
+
+Salida esperada (si K8s 1.34+ con PodLevelResources activado):
+
+```
+deployment.apps/service-mesh-app created
 ```
 
 Verificar:
@@ -785,78 +549,30 @@ Verificar:
 kubectl describe pod -n production -l app=mesh | grep -A 20 "Resources:"
 ```
 
+**Ventaja:** Con 4 sidecars, no necesitas calcular recursos individuales. Todos comparten del presupuesto total del Pod, y los sidecars pueden usar mas recursos cuando la app principal no los necesita.
+
 ### Paso 4.3: Comparar con Container-level Resources
 
-Crea `container-level-app.yaml` (enfoque tradicional):
+Revisa el archivo `container-level-app.yaml` (enfoque tradicional):
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: service-mesh-app-traditional
-  namespace: production
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: mesh-traditional
-  template:
-    metadata:
-      labels:
-        app: mesh-traditional
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.25
-        resources:
-          requests:
-            cpu: "400m"
-            memory: "400Mi"
-          limits:
-            cpu: "800m"
-            memory: "800Mi"
-      
-      - name: envoy
-        image: envoyproxy/envoy:v1.28-latest
-        resources:
-          requests:
-            cpu: "300m"
-            memory: "300Mi"
-          limits:
-            cpu: "600m"
-            memory: "600Mi"
-      
-      - name: fluentbit
-        image: fluent/fluent-bit:2.2
-        resources:
-          requests:
-            cpu: "200m"
-            memory: "200Mi"
-          limits:
-            cpu: "400m"
-            memory: "400Mi"
-      
-      - name: prometheus-exporter
-        image: prom/node-exporter:v1.7.0
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "100Mi"
-          limits:
-            cpu: "200m"
-            memory: "200Mi"
+```bash
+cat container-level-app.yaml
 ```
 
-**📊 Comparación**:
+```bash
+kubectl apply -f container-level-app.yaml
+```
+
+**Comparacion:**
 
 | Enfoque | Total Request | Total Limit | Complejidad | Flexibilidad |
 |---------|--------------|-------------|-------------|--------------|
-| **Pod-level** | 1 CPU, 1Gi | 2 CPU, 2Gi | ⭐ Baja (1 configuración) | ⭐⭐⭐ Alta (sidecars comparten) |
-| **Container-level** | 1 CPU, 1Gi | 2 CPU, 2Gi | ⭐⭐⭐ Alta (4 configuraciones) | ⭐ Baja (fijos por contenedor) |
+| **Pod-level** | 1 CPU, 1Gi | 2 CPU, 2Gi | Baja (1 configuracion) | Alta (sidecars comparten) |
+| **Container-level** | 1 CPU, 1Gi | 2 CPU, 2Gi | Alta (4 configuraciones) | Baja (fijos por contenedor) |
 
 ---
 
-## 🧪 Ejercicio 5: Monitoreo con Prometheus
+## Ejercicio 5: Monitoreo con Prometheus
 
 ### Paso 5.1: Instalar Prometheus (Helm)
 
@@ -874,7 +590,7 @@ helm install prometheus prometheus-community/kube-prometheus-stack \
 kubectl get pods -n monitoring
 ```
 
-### Paso 5.2: Ver Métricas de Recursos en Prometheus
+### Paso 5.2: Ver Metricas de Recursos en Prometheus
 
 ```bash
 # Port-forward Prometheus UI
@@ -883,7 +599,7 @@ kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 909
 # Abrir en navegador: http://localhost:9090
 ```
 
-**Queries útiles**:
+**Queries utiles:**
 
 ```promql
 # 1. CPU usage por Pod
@@ -905,291 +621,53 @@ sum(kube_node_status_allocatable{resource="cpu"}) * 100
 
 ### Paso 5.3: Crear Alertas de Prometheus
 
-Crea `prometheus-alerts.yaml`:
+Revisa el archivo `prometheus-alerts.yaml`:
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-alerts
-  namespace: monitoring
-data:
-  alerts.yaml: |
-    groups:
-    - name: resource-alerts
-      interval: 30s
-      rules:
-      
-      # Alerta: Pod OOMKilled
-      - alert: PodOOMKilled
-        expr: |
-          sum(changes(kube_pod_container_status_restarts_total[5m])) by (pod, namespace) > 0
-          and
-          kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Pod {{ $labels.pod }} was OOMKilled"
-          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was terminated due to OOM"
-      
-      # Alerta: CPU Throttling Alto
-      - alert: HighCPUThrottling
-        expr: |
-          rate(container_cpu_cfs_throttled_seconds_total[5m]) > 0.3
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High CPU throttling on {{ $labels.pod }}"
-          description: "Pod {{ $labels.pod }} is being throttled {{ $value | humanizePercentage }}"
-      
-      # Alerta: Memory Usage Alto
-      - alert: HighMemoryUsage
-        expr: |
-          (container_memory_working_set_bytes / container_spec_memory_limit_bytes) > 0.9
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High memory usage on {{ $labels.pod }}"
-          description: "Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit"
-      
-      # Alerta: Pod Pending
-      - alert: PodsPending
-        expr: |
-          kube_pod_status_phase{phase="Pending"} > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Pod {{ $labels.pod }} is pending"
-          description: "Pod {{ $labels.pod }} has been pending for more than 10 minutes"
+```bash
+cat prometheus-alerts.yaml
 ```
-
-Aplicar:
 
 ```bash
 kubectl apply -f prometheus-alerts.yaml
 ```
 
+Salida esperada:
+
+```
+configmap/prometheus-alerts created
+```
+
 ---
 
-## 🧪 Ejercicio 6: Best Practices Completas
+## Ejercicio 6: Best Practices Completas
 
 ### Paso 6.1: Crear Production-Ready Deployment
 
-Crea `production-app.yaml` con **TODAS** las best practices:
+Revisa el archivo `production-app.yaml` con **TODAS** las best practices:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: production-api
-  namespace: production
-  labels:
-    app: api
-    tier: important
-    version: v1.0.0
-spec:
-  replicas: 3
-  
-  # Strategy: Rolling update sin downtime
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  
-  selector:
-    matchLabels:
-      app: api
-  
-  template:
-    metadata:
-      labels:
-        app: api
-        tier: important
-        version: v1.0.0
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
-    
-    spec:
-      # Best Practice 1: Pod Anti-Affinity (no colocar en mismo nodo)
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - api
-              topologyKey: kubernetes.io/hostname
-      
-      # Best Practice 2: Priority Class (mayor prioridad que batch)
-      priorityClassName: high-priority
-      
-      # Best Practice 3: ServiceAccount dedicado
-      serviceAccountName: api-service-account
-      
-      containers:
-      - name: api
-        image: nginx:1.25  # Reemplazar con tu app
-        
-        # Best Practice 4: Resources con requests y limits
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "512Mi"
-            ephemeral-storage: "1Gi"
-          limits:
-            cpu: "2"
-            memory: "2Gi"
-            ephemeral-storage: "2Gi"
-        
-        # Best Practice 5: Liveness y Readiness probes
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-        
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 2
-        
-        # Best Practice 6: Startup probe (para apps con startup lento)
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 0
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
-        
-        # Best Practice 7: Security Context
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 1000
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-        
-        # Best Practice 8: Volumes para cache (con sizeLimit)
-        volumeMounts:
-        - name: cache
-          mountPath: /cache
-        - name: tmp
-          mountPath: /tmp
-        
-        ports:
-        - containerPort: 8080
-          name: http
-        - containerPort: 9090
-          name: metrics
-      
-      # Sidecar: Prometheus metrics exporter
-      - name: metrics-exporter
-        image: prom/node-exporter:v1.7.0
-        resources:
-          requests:
-            cpu: "50m"
-            memory: "64Mi"
-          limits:
-            cpu: "200m"
-            memory: "128Mi"
-      
-      volumes:
-      - name: cache
-        emptyDir:
-          sizeLimit: "1Gi"  # ← Best practice: siempre sizeLimit
-      - name: tmp
-        emptyDir:
-          sizeLimit: "500Mi"
----
-# PriorityClass para alta prioridad
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: high-priority
-value: 1000
-globalDefault: false
-description: "High priority for important production workloads"
----
-# ServiceAccount dedicado
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: api-service-account
-  namespace: production
----
-# Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: production-api
-  namespace: production
-  labels:
-    app: api
-spec:
-  selector:
-    app: api
-  ports:
-  - port: 80
-    targetPort: 8080
-    name: http
-  - port: 9090
-    targetPort: 9090
-    name: metrics
-  type: ClusterIP
----
-# HPA
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: production-api-hpa
-  namespace: production
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: production-api
-  minReplicas: 3
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+```bash
+cat production-app.yaml
 ```
 
-Aplicar:
+El manifiesto incluye los siguientes recursos en orden:
+1. **Deployment** `production-api` con todas las best practices
+2. **PriorityClass** `high-priority` (cluster-scoped)
+3. **ServiceAccount** `api-service-account` dedicado
+4. **Service** `production-api` con named ports
+5. **HPA** `production-api-hpa` con CPU y memoria
 
 ```bash
 kubectl apply -f production-app.yaml
+```
+
+Salida esperada:
+
+```
+deployment.apps/production-api created
+priorityclass.scheduling.k8s.io/high-priority created
+serviceaccount/api-service-account created
+service/production-api created
+horizontalpodautoscaler.autoscaling.v2/production-api-hpa created
 ```
 
 Verificar:
@@ -1201,39 +679,39 @@ kubectl describe pod -n production -l app=api | head -100
 
 ---
 
-## 📊 Best Practices Checklist
+## Best Practices Checklist
 
-### ✅ Siempre Hacer
+### Siempre Hacer
 
-```yaml
-✅ Definir requests (NUNCA omitir)
-✅ Definir limits para memory (prevenir OOMKilled)
-✅ Usar sizeLimit en emptyDir
-✅ QoS Guaranteed para apps críticas
-✅ Liveness y Readiness probes
-✅ Security context (runAsNonRoot)
-✅ Resource limits para ephemeral-storage
-✅ Usar VPA o HPA según el caso
-✅ Monitorear con Prometheus
-✅ Alertas para OOMKilled y throttling
+```
+Definir requests (NUNCA omitir)
+Definir limits para memory (prevenir OOMKilled)
+Usar sizeLimit en emptyDir
+QoS Guaranteed para apps criticas
+Liveness y Readiness probes
+Security context (runAsNonRoot)
+Resource limits para ephemeral-storage
+Usar VPA o HPA segun el caso
+Monitorear con Prometheus
+Alertas para OOMKilled y throttling
 ```
 
-### ⚠️ Evitar
+### Evitar
 
-```yaml
-❌ Pods sin requests (BestEffort en producción)
-❌ Limits muy altos sin justificación
-❌ emptyDir sin sizeLimit
-❌ QoS BestEffort para servicios críticos
-❌ Containers corriendo como root
-❌ Ignorar restart count alto
-❌ No monitorear throttling
-❌ HPA y VPA juntos en el mismo recurso (conflicto)
+```
+Pods sin requests (BestEffort en produccion)
+Limits muy altos sin justificacion
+emptyDir sin sizeLimit
+QoS BestEffort para servicios criticos
+Containers corriendo como root
+Ignorar restart count alto
+No monitorear throttling
+HPA y VPA juntos en el mismo recurso (conflicto)
 ```
 
-### 🎯 Por Tipo de Aplicación
+### Por Tipo de Aplicacion
 
-**Bases de Datos**:
+**Bases de Datos:**
 ```yaml
 - QoS: Guaranteed
 - Autoscaling: VPA (modo "Off", revisar manualmente)
@@ -1241,7 +719,7 @@ kubectl describe pod -n production -l app=api | head -100
 - Backup de datos antes de resize
 ```
 
-**APIs REST**:
+**APIs REST:**
 ```yaml
 - QoS: Burstable
 - Autoscaling: HPA (basado en CPU/RPS)
@@ -1249,7 +727,7 @@ kubectl describe pod -n production -l app=api | head -100
 - Rolling update: maxUnavailable=0
 ```
 
-**Batch Jobs**:
+**Batch Jobs:**
 ```yaml
 - QoS: BestEffort o Burstable bajo
 - Autoscaling: No necesario
@@ -1259,41 +737,40 @@ kubectl describe pod -n production -l app=api | head -100
 
 ---
 
-## 🧹 Cleanup
+## Limpieza
 
 ```bash
-kubectl delete namespace production
-kubectl delete priorityclass high-priority
-
-# VPA (si instalaste)
-cd autoscaler/vertical-pod-autoscaler
-./hack/vpa-down.sh
-
-# Prometheus (si instalaste)
-helm uninstall prometheus -n monitoring
-kubectl delete namespace monitoring
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
 ```
 
----
-
-## 📚 Próximos Pasos
-
-Has completado el módulo de Resource Limits. Continúa con:
-
-1. **Módulo 12**: Namespaces y Resource Quotas
-2. **Módulo 13**: LimitRanges
-3. **Módulo 19**: Observability y Monitoring
+El script elimina:
+- Namespace `production` (cascade: todos los recursos dentro)
+- PriorityClass `high-priority` (cluster-scoped)
+- Pod `load-generator` si existe en namespace default
+- Muestra instrucciones para limpiar VPA y Prometheus (opcionales)
 
 ---
 
-## 📖 Referencias
+## Proximos Pasos
 
-- **[README Principal](../README.md)**: Documentación completa
-- **[Lab 01: Fundamentos](./lab-01-fundamentos.md)**: Conceptos básicos
-- **[Lab 02: Troubleshooting](./lab-02-troubleshooting.md)**: Debugging
+Has completado el modulo de Resource Limits. Continua con:
+
+1. **Modulo 12**: Namespaces y Resource Quotas
+2. **Modulo 13**: LimitRanges
+3. **Modulo 19**: Observability y Monitoring
+
+---
+
+## Referencias
+
+- **[README Principal](../../README.md)**: Documentacion completa del modulo
+- **[Lab 01: Fundamentos](../lab-01-fundamentos/)**: Conceptos basicos de resource limits
+- **[Lab 02: Troubleshooting](../lab-02-troubleshooting/)**: Debugging de problemas de recursos
 - **[VPA Docs](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)**: Vertical Pod Autoscaler
 - **[HPA Docs](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)**: Horizontal Pod Autoscaler
 
 ---
 
-**¡Felicidades!** 🎉 Has completado todos los laboratorios de Resource Limits y estás listo para producción.
+**Felicidades!** Has completado todos los laboratorios de Resource Limits y estas listo para produccion.

@@ -1,0 +1,36 @@
+# Ejercicio 2: CPU Throttling Demo - Pod con CPU Stress
+# Uso: kubectl apply -f cpu-throttling-demo.yaml
+#
+# Descripcion:
+#   Pod que intenta usar 2 CPUs con un limite de 500m (0.5 CPU).
+#   El kernel usa cgroups para throttlear el proceso: sigue ejecutandose
+#   pero a velocidad reducida. A diferencia de OOMKilled, no se reinicia.
+#
+# Conceptos clave:
+#   - CPU limit enforcement via cgroups CFS (Completely Fair Scheduler)
+#   - Throttling: proceso lento pero no terminado
+#   - Diferencia fundamental con Memory OOMKilled
+#   - Detectable via /sys/fs/cgroup/cpu/cpu.stat
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-throttling-demo
+  labels:
+    lab: troubleshooting
+    exercise: "2"
+spec:
+  containers:
+  - name: cpu-stress
+    image: polinux/stress:1.0.4
+    resources:
+      requests:
+        cpu: "100m"
+      limits:
+        cpu: "500m"  # Limite bajo
+    command: ["stress"]
+    args:
+    - "--cpu"
+    - "2"  # Intenta usar 2 CPUs (mas que el limite de 0.5)

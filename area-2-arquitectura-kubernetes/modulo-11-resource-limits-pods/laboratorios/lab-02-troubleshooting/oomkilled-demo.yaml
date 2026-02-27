@@ -1,0 +1,41 @@
+# Ejercicio 1: OOMKilled Demo - Pod con Memory Leak
+# Uso: kubectl apply -f oomkilled-demo.yaml
+#
+# Descripcion:
+#   Pod que intenta usar 150Mi de memoria con un limite de 100Mi.
+#   El kernel OOM Killer termina el proceso con SIGKILL (Exit Code 137).
+#   El Pod entra en CrashLoopBackOff porque restartPolicy es Always.
+#
+# Conceptos clave:
+#   - Memory limit enforcement via kernel OOM Killer
+#   - Exit Code 137 = 128 + 9 (SIGKILL)
+#   - CrashLoopBackOff con restart count creciente
+#   - Diferencia entre OOMKilled y CPU throttling
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oomkilled-demo
+  labels:
+    lab: troubleshooting
+    exercise: "1"
+spec:
+  restartPolicy: Always
+  containers:
+  - name: memory-leak
+    image: polinux/stress:1.0.4
+    resources:
+      requests:
+        memory: "50Mi"
+      limits:
+        memory: "100Mi"  # Limite bajo intencional
+    command: ["stress"]
+    args:
+    - "--vm"
+    - "1"
+    - "--vm-bytes"
+    - "150M"  # Intenta usar 150Mi (mas que el limite de 100Mi)
+    - "--vm-hang"
+    - "0"

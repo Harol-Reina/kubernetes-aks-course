@@ -1,107 +1,126 @@
 # Laboratorio 02: Troubleshooting de Resource Limits
 
-## 📋 Información General
-
-- **Duración estimada**: 45-50 minutos
-- **Dificultad**: ⭐⭐ Intermedio
-- **Objetivo**: Diagnosticar y resolver problemas comunes de recursos
-- **Requisitos**:
-  - Cluster Kubernetes 1.28+
-  - `kubectl` configurado
-  - `metrics-server` instalado
-  - Completar **Lab 01: Fundamentos** (recomendado)
+**Duracion estimada:** 45-50 minutos
+**Nivel:** Intermedio
+**Objetivo:** Diagnosticar y resolver los problemas mas comunes de gestion de recursos en Pods
 
 ---
 
-## 🎯 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
 
-Al completar este laboratorio, serás capaz de:
-
-1. ✅ Detectar y diagnosticar OOMKilled (Out Of Memory)
-2. ✅ Identificar CPU throttling y su impacto
-3. ✅ Troubleshoot evictions por ephemeral storage
-4. ✅ Analizar métricas de recursos con kubectl y Prometheus
-5. ✅ Resolver problemas comunes de resource management
-6. ✅ Usar eventos y logs para debugging
+| Tecnica | Descripcion |
+|---------|-------------|
+| **OOMKilled (Exit Code 137)** | El kernel OOM Killer termina el proceso cuando el contenedor excede su memory limit. Causa CrashLoopBackOff con restart count creciente. Detectable con `kubectl describe pod` en el campo "Last State" |
+| **CPU Throttling** | cgroups CFS limita el tiempo de CPU disponible cuando se supera el CPU limit. El proceso sigue ejecutandose pero a velocidad reducida. Detectable via `/sys/fs/cgroup/cpu/cpu.stat` |
+| **Ephemeral Storage Eviction** | El kubelet evicta el Pod del nodo cuando supera el limite de ephemeral-storage o el sizeLimit de un emptyDir. El Pod queda en estado Failed/Evicted, no reinicia |
+| **Pods en Pending** | El scheduler no puede asignar el Pod a ningun nodo porque los requests declarados superan los recursos Allocatable disponibles. Diagnostico: `kubectl describe pod` seccion Events |
+| **kubectl top** | Muestra el uso real de CPU y memoria de Pods y nodos (requiere metrics-server). Permite detectar over-provisioning y CPU stuck en el limite |
+| **Debugging con eventos y logs** | `kubectl get events`, `kubectl logs --previous`, y `kubectl describe` son las herramientas principales para diagnosticar fallos de recursos |
 
 ---
 
-## 📚 Contexto Teórico
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML separados y documentados:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `oomkilled-demo.yaml` | 1 | Pod con memory leak: intenta 150Mi con limite de 100Mi |
+| `cpu-throttling-demo.yaml` | 2 | Pod con CPU stress: intenta 2 CPUs con limite de 500m |
+| `cpu-no-throttling.yaml` | 2 | Pod identico sin limite de CPU (comparacion) |
+| `storage-eviction-demo.yaml` | 3 | Pod que escribe 250MB en emptyDir con limite de 200Mi |
+| `pending-demo.yaml` | 4 | Deployment con 10 replicas pidiendo 4 CPU + 4Gi por Pod |
+| `metrics-demo.yaml` | 5 | Deployment de 3 replicas nginx para practicar kubectl top |
+| `problem-app.yaml` | 6 | Deployment con OOMKilled en contenedor principal + throttling en sidecar |
+| `problem-app-fixed.yaml` | 6 | Version corregida con limites ajustados y replicas reducidas |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster Kubernetes 1.28+
+- `kubectl` configurado
+- `metrics-server` instalado (requerido para Ejercicios 5 y 6)
+- Completar **Lab 01: Fundamentos** (recomendado)
+
+Ver [SETUP.md](./SETUP.md) para instrucciones de verificacion del entorno y habilitacion de metrics-server.
+
+---
+
+## Objetivos de Aprendizaje
+
+Al completar este laboratorio, seras capaz de:
+
+1. Detectar y diagnosticar OOMKilled (Out Of Memory)
+2. Identificar CPU throttling y su impacto en el rendimiento
+3. Troubleshoot evictions por ephemeral storage
+4. Analizar metricas de recursos con `kubectl top`
+5. Resolver problemas comunes de resource management
+6. Usar eventos y logs para debugging sistematico
+
+---
+
+## Contexto Teorico
 
 ### Tipos de Problemas de Recursos
 
 | Problema | Recurso | Comportamiento | Exit Code | Restart |
 |----------|---------|----------------|-----------|---------|
-| **OOMKilled** | Memory | Container terminado por kernel | 137 | Sí |
+| **OOMKilled** | Memory | Container terminado por kernel | 137 | Si |
 | **CPU Throttling** | CPU | Container lento, no termina | N/A | No |
-| **Eviction** | Storage | Pod eliminado del nodo | N/A | Sí (re-schedule) |
+| **Eviction** | Storage | Pod eliminado del nodo | N/A | Si (re-schedule) |
 | **Pending** | CPU/Mem | Pod no puede ser scheduled | N/A | N/A |
 
 ### Enforcement Mechanisms
 
 ```
-┌─────────────────────────────────────────────────┐
-│  CPU Limit Exceeded                             │
-│  → cgroups THROTTLING                           │
-│  → Proceso se vuelve LENTO                      │
-│  → NO se termina                                │
-│  → Detectable: container_cpu_cfs_throttled_*    │
-└─────────────────────────────────────────────────┘
++--------------------------------------------------+
+|  CPU Limit Exceeded                              |
+|  -> cgroups THROTTLING                           |
+|  -> Proceso se vuelve LENTO                      |
+|  -> NO se termina                                |
+|  -> Detectable: /sys/fs/cgroup/cpu/cpu.stat      |
++--------------------------------------------------+
 
-┌─────────────────────────────────────────────────┐
-│  Memory Limit Exceeded                          │
-│  → Kernel OOM Killer                            │
-│  → Proceso TERMINADO (SIGKILL)                  │
-│  → Exit Code: 137                               │
-│  → Container REINICIA (restartPolicy: Always)   │
-└─────────────────────────────────────────────────┘
++--------------------------------------------------+
+|  Memory Limit Exceeded                           |
+|  -> Kernel OOM Killer                            |
+|  -> Proceso TERMINADO (SIGKILL)                  |
+|  -> Exit Code: 137                               |
+|  -> Container REINICIA (restartPolicy: Always)   |
++--------------------------------------------------+
 
-┌─────────────────────────────────────────────────┐
-│  Ephemeral Storage Exceeded                     │
-│  → kubelet EVICTION                             │
-│  → Pod ELIMINADO del nodo                       │
-│  → Pod RE-SCHEDULED en otro nodo                │
-│  → Detectable: kubectl get events               │
-└─────────────────────────────────────────────────┘
++--------------------------------------------------+
+|  Ephemeral Storage Exceeded                      |
+|  -> kubelet EVICTION                             |
+|  -> Pod ELIMINADO del nodo                       |
+|  -> Pod RE-SCHEDULED en otro nodo                |
+|  -> Detectable: kubectl get events               |
++--------------------------------------------------+
 ```
 
 ---
 
-## 🧪 Ejercicio 1: Diagnosticar OOMKilled
+## Ejercicio 1: Diagnosticar OOMKilled
 
-### Paso 1.1: Crear Pod con Memory Leak
+### Paso 1.1: Revisar y aplicar el Pod con Memory Leak
 
-Crea `oomkilled-demo.yaml`:
+Revisa el archivo `oomkilled-demo.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: oomkilled-demo
-  labels:
-    lab: troubleshooting
-    exercise: "1"
-spec:
-  restartPolicy: Always
-  containers:
-  - name: memory-leak
-    image: polinux/stress:1.0.4
-    resources:
-      requests:
-        memory: "50Mi"
-      limits:
-        memory: "100Mi"  # ← Límite bajo intencional
-    command: ["stress"]
-    args:
-    - "--vm"
-    - "1"
-    - "--vm-bytes"
-    - "150M"  # ← Intenta usar 150Mi (más que el límite de 100Mi)
-    - "--vm-hang"
-    - "0"
+```bash
+cat oomkilled-demo.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **Memory limit: 100Mi** intencionalmente bajo
+- **stress --vm-bytes 150M**: intenta usar 150Mi (supera el limite)
+- **restartPolicy: Always**: el Pod se reiniciara continuamente tras cada OOMKilled
 
 ```bash
 kubectl apply -f oomkilled-demo.yaml
@@ -110,10 +129,10 @@ kubectl apply -f oomkilled-demo.yaml
 ### Paso 1.2: Observar el Comportamiento
 
 ```bash
-# Ver el Pod (se reiniciará continuamente)
+# Ver el Pod (se reiniciara continuamente)
 kubectl get pod oomkilled-demo --watch
 
-# Salida esperada (después de ~10 segundos):
+# Salida esperada (despues de ~10 segundos):
 # NAME             READY   STATUS             RESTARTS   AGE
 # oomkilled-demo   0/1     CrashLoopBackOff   3          1m
 ```
@@ -130,17 +149,17 @@ Salida esperada:
 
 ```
 Last State:     Terminated
-  Reason:       OOMKilled         ◄── Killed por OOM
-  Exit Code:    137               ◄── SIGKILL (128 + 9)
+  Reason:       OOMKilled         <- Killed por OOM
+  Exit Code:    137               <- SIGKILL (128 + 9)
   Started:      Mon, 01 Jan 2024 10:00:00 +0000
   Finished:     Mon, 01 Jan 2024 10:00:05 +0000
 ```
 
-**🔍 Detalles Técnicos**:
+**Detalles Tecnicos**:
 
 - **Exit Code 137** = 128 + 9 (SIGKILL)
-- Kernel OOM Killer envía SIGKILL al proceso
-- Container NO puede capturar esta señal (terminación forzada)
+- Kernel OOM Killer envia SIGKILL al proceso
+- Container NO puede capturar esta senal (terminacion forzada)
 
 ### Paso 1.4: Ver Restart Count
 
@@ -152,7 +171,7 @@ kubectl get pod oomkilled-demo -o jsonpath='{.status.containerStatuses[0].restar
 ### Paso 1.5: Ver Logs del Intento Fallido
 
 ```bash
-# Ver logs del intento actual (puede estar vacío si falló muy rápido)
+# Ver logs del intento actual (puede estar vacio si fallo muy rapido)
 kubectl logs oomkilled-demo
 
 # Ver logs del intento ANTERIOR
@@ -185,31 +204,31 @@ LAST SEEN   TYPE      REASON      OBJECT             MESSAGE
 50s         Warning   BackOff     pod/oomkilled...   Back-off restarting failed container
 ```
 
-### Paso 1.7: Solución
+### Paso 1.7: Soluciones Posibles
 
-**Opción 1**: Aumentar el límite de memoria
+**Opcion 1**: Aumentar el limite de memoria
 
 ```yaml
 resources:
   limits:
-    memory: "200Mi"  # ← Aumentar a 200Mi
+    memory: "200Mi"  # Aumentar a 200Mi
 ```
 
-**Opción 2**: Reducir el consumo de memoria de la aplicación
+**Opcion 2**: Reducir el consumo de memoria de la aplicacion
 
 ```yaml
 args:
 - "--vm-bytes"
-- "80M"  # ← Reducir a 80Mi (bajo el límite)
+- "80M"  # Reducir a 80Mi (bajo el limite)
 ```
 
-**Opción 3**: Usar Vertical Pod Autoscaler (VPA)
+**Opcion 3**: Usar Vertical Pod Autoscaler (VPA)
 
 ```yaml
 # Ver Lab 03 para VPA
 ```
 
-### Paso 1.8: Cleanup
+### Paso 1.8: Cleanup del Ejercicio
 
 ```bash
 kubectl delete pod oomkilled-demo
@@ -217,36 +236,20 @@ kubectl delete pod oomkilled-demo
 
 ---
 
-## 🧪 Ejercicio 2: Detectar CPU Throttling
+## Ejercicio 2: Detectar CPU Throttling
 
-### Paso 2.1: Crear Pod con CPU Stress
+### Paso 2.1: Revisar y aplicar el Pod con CPU Stress
 
-Crea `cpu-throttling-demo.yaml`:
+Revisa el archivo `cpu-throttling-demo.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cpu-throttling-demo
-  labels:
-    lab: troubleshooting
-    exercise: "2"
-spec:
-  containers:
-  - name: cpu-stress
-    image: polinux/stress:1.0.4
-    resources:
-      requests:
-        cpu: "100m"
-      limits:
-        cpu: "500m"  # ← Límite bajo
-    command: ["stress"]
-    args:
-    - "--cpu"
-    - "2"  # ← Intenta usar 2 CPUs (más que el límite de 0.5)
+```bash
+cat cpu-throttling-demo.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **CPU limit: 500m** (0.5 CPU)
+- **stress --cpu 2**: intenta usar 2 CPUs completas
+- El proceso no termina, solo se ralentiza
 
 ```bash
 kubectl apply -f cpu-throttling-demo.yaml
@@ -265,7 +268,7 @@ NAME                  CPU(cores)   MEMORY(bytes)
 cpu-throttling-demo   499m         5Mi
 ```
 
-**🔍 Observación**: El Pod está "stuck" en ~500m (el límite), intentando usar más pero siendo throttled.
+**Observacion**: El Pod esta "stuck" en ~500m (el limite), intentando usar mas pero siendo throttled.
 
 Presiona `Ctrl+C` para salir.
 
@@ -278,21 +281,21 @@ kubectl exec -it cpu-throttling-demo -- cat /sys/fs/cgroup/cpu/cpu.stat
 Salida esperada:
 
 ```
-nr_periods 1500           # Total de períodos (100ms cada uno)
-nr_throttled 1200         # Períodos donde fue throttled
+nr_periods 1500           # Total de periodos (100ms cada uno)
+nr_throttled 1200         # Periodos donde fue throttled
 throttled_time 85000000   # Tiempo total throttled (nanosegundos)
 ```
 
-**📊 Análisis**:
+**Analisis**:
 
 - **nr_throttled / nr_periods** = 1200 / 1500 = **80%**
-- El container fue throttled **80% del tiempo**!
-- Esto significa que la aplicación está ejecutándose **MUY lenta**
+- El container fue throttled **80% del tiempo**
+- Esto significa que la aplicacion esta ejecutandose **MUY lenta**
 
 ### Paso 2.4: Ver Comportamiento del Container
 
 ```bash
-# Ver logs (debería ser lento para generar output)
+# Ver logs (deberia ser lento para generar output)
 kubectl logs cpu-throttling-demo
 ```
 
@@ -302,46 +305,26 @@ Salida esperada:
 stress: info: [1] dispatching hogs: 2 cpu, 0 io, 0 vm, 0 hdd
 ```
 
-**❓ ¿Por qué el Pod NO se termina (a diferencia de OOMKilled)?**
+**Por que el Pod NO se termina (a diferencia de OOMKilled)?**
 
 <details>
 <summary>Respuesta</summary>
 
-Porque CPU throttling **NO termina el proceso**, solo lo hace más lento:
+Porque CPU throttling **NO termina el proceso**, solo lo hace mas lento:
 
-- Memory limit → **OOMKilled** (terminado)
-- CPU limit → **Throttling** (solo lento)
+- Memory limit -> **OOMKilled** (terminado)
+- CPU limit -> **Throttling** (solo lento)
 
 El kernel usa **cgroups** para limitar el tiempo de CPU disponible, pero el proceso sigue corriendo.
 </details>
 
-### Paso 2.5: Comparar con Pod Sin Límite
+### Paso 2.5: Comparar con Pod Sin Limite
 
-Crea `cpu-no-throttling.yaml`:
+Revisa el archivo `cpu-no-throttling.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: cpu-no-throttling
-  labels:
-    lab: troubleshooting
-    exercise: "2"
-spec:
-  containers:
-  - name: cpu-stress
-    image: polinux/stress:1.0.4
-    resources:
-      requests:
-        cpu: "100m"
-      # Sin límite de CPU
-    command: ["stress"]
-    args:
-    - "--cpu"
-    - "2"
+```bash
+cat cpu-no-throttling.yaml
 ```
-
-Aplica:
 
 ```bash
 kubectl apply -f cpu-no-throttling.yaml
@@ -360,12 +343,12 @@ NAME                 CPU(cores)   MEMORY(bytes)
 cpu-no-throttling    1950m        5Mi
 ```
 
-**📊 Comparación**:
+**Comparacion**:
 
 | Pod | CPU Limit | CPU Usado | Throttled |
 |-----|-----------|-----------|-----------|
-| cpu-throttling-demo | 500m | ~500m | ✅ Sí (80%) |
-| cpu-no-throttling | None | ~1950m | ❌ No |
+| cpu-throttling-demo | 500m | ~500m | Si (80%) |
+| cpu-no-throttling | None | ~1950m | No |
 
 ### Paso 2.6: Detectar Throttling con Prometheus (Opcional)
 
@@ -376,44 +359,44 @@ Si tienes Prometheus instalado:
 rate(container_cpu_cfs_throttled_seconds_total{pod="cpu-throttling-demo"}[5m])
 
 # Query para ver porcentaje de throttling
-rate(container_cpu_cfs_throttled_periods_total{pod="cpu-throttling-demo"}[5m]) / 
+rate(container_cpu_cfs_throttled_periods_total{pod="cpu-throttling-demo"}[5m]) /
 rate(container_cpu_cfs_periods_total{pod="cpu-throttling-demo"}[5m]) * 100
 ```
 
-### Paso 2.7: Solución
+### Paso 2.7: Soluciones Posibles
 
-**Opción 1**: Aumentar el límite de CPU
+**Opcion 1**: Aumentar el limite de CPU
 
 ```yaml
 resources:
   limits:
-    cpu: "2"  # ← Aumentar a 2 CPUs
+    cpu: "2"  # Aumentar a 2 CPUs
 ```
 
-**Opción 2**: Reducir la carga de CPU
+**Opcion 2**: Reducir la carga de CPU
 
 ```yaml
 args:
 - "--cpu"
-- "1"  # ← Solo 1 CPU (bajo el límite)
+- "1"  # Solo 1 CPU (bajo el limite)
 ```
 
-**Opción 3**: Remover el límite (solo requests)
+**Opcion 3**: Remover el limite (solo requests)
 
 ```yaml
 resources:
   requests:
     cpu: "500m"
-  # Sin límite (puede usar lo que necesite)
+  # Sin limite (puede usar lo que necesite)
 ```
 
-**Opción 4**: Horizontal Pod Autoscaler (HPA)
+**Opcion 4**: Horizontal Pod Autoscaler (HPA)
 
 ```bash
 kubectl autoscale deployment <name> --cpu-percent=70 --min=2 --max=10
 ```
 
-### Paso 2.8: Cleanup
+### Paso 2.8: Cleanup del Ejercicio
 
 ```bash
 kubectl delete pod cpu-throttling-demo cpu-no-throttling
@@ -421,47 +404,20 @@ kubectl delete pod cpu-throttling-demo cpu-no-throttling
 
 ---
 
-## 🧪 Ejercicio 3: Troubleshoot Ephemeral Storage Eviction
+## Ejercicio 3: Troubleshoot Ephemeral Storage Eviction
 
-### Paso 3.1: Crear Pod con Ephemeral Storage Limit
+### Paso 3.1: Revisar y aplicar el Pod con Ephemeral Storage Limit
 
-Crea `storage-eviction-demo.yaml`:
+Revisa el archivo `storage-eviction-demo.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: storage-eviction-demo
-  labels:
-    lab: troubleshooting
-    exercise: "3"
-spec:
-  containers:
-  - name: writer
-    image: busybox:1.36
-    resources:
-      requests:
-        ephemeral-storage: "100Mi"
-      limits:
-        ephemeral-storage: "200Mi"  # ← Límite bajo
-    command: 
-    - sh
-    - -c
-    - |
-      echo "Writing 250MB to exceed limit..."
-      dd if=/dev/zero of=/cache/bigfile bs=1M count=250
-      sleep 3600
-    volumeMounts:
-    - name: cache
-      mountPath: /cache
-  
-  volumes:
-  - name: cache
-    emptyDir:
-      sizeLimit: "200Mi"  # ← Best practice: siempre usar sizeLimit
+```bash
+cat storage-eviction-demo.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **ephemeral-storage limit: 200Mi** en el contenedor
+- **emptyDir sizeLimit: 200Mi** como best practice adicional
+- El contenedor escribe 250MB, superando ambos limites
 
 ```bash
 kubectl apply -f storage-eviction-demo.yaml
@@ -473,7 +429,7 @@ kubectl apply -f storage-eviction-demo.yaml
 kubectl get pod storage-eviction-demo --watch
 ```
 
-Salida esperada (después de ~30 segundos):
+Salida esperada (despues de ~30 segundos):
 
 ```
 NAME                     READY   STATUS    RESTARTS   AGE
@@ -481,7 +437,7 @@ storage-eviction-demo    1/1     Running   0          5s
 storage-eviction-demo    0/1     Evicted   0          35s
 ```
 
-### Paso 3.3: Ver Razón de Eviction
+### Paso 3.3: Ver Razon de Eviction
 
 ```bash
 kubectl describe pod storage-eviction-demo | grep -A 10 "Status:"
@@ -530,13 +486,13 @@ kubectl delete pod storage-eviction-demo
 # Limpiar TODOS los Pods evicted en el namespace
 kubectl delete pods --field-selector=status.phase=Failed
 
-# Limpiar TODOS los Pods evicted en el clúster
+# Limpiar TODOS los Pods evicted en el cluster
 kubectl delete pods --all-namespaces --field-selector=status.phase=Failed
 ```
 
-### Paso 3.7: Solución
+### Paso 3.7: Soluciones Posibles
 
-**Opción 1**: Aumentar el límite de ephemeral storage
+**Opcion 1**: Aumentar el limite de ephemeral storage
 
 ```yaml
 resources:
@@ -548,7 +504,7 @@ volumes:
     sizeLimit: "500Mi"
 ```
 
-**Opción 2**: Usar PersistentVolume en lugar de emptyDir
+**Opcion 2**: Usar PersistentVolume en lugar de emptyDir
 
 ```yaml
 volumes:
@@ -557,7 +513,7 @@ volumes:
     claimName: my-pvc
 ```
 
-**Opción 3**: Limpiar archivos temporales periódicamente
+**Opcion 3**: Limpiar archivos temporales periodicamente
 
 ```yaml
 command:
@@ -565,7 +521,7 @@ command:
 - -c
 - |
   while true; do
-    # Tu aplicación
+    # Tu aplicacion
     find /cache -type f -mtime +1 -delete  # Limpiar archivos viejos
     sleep 3600
   done
@@ -573,43 +529,20 @@ command:
 
 ---
 
-## 🧪 Ejercicio 4: Troubleshoot Pending Pods
+## Ejercicio 4: Troubleshoot Pending Pods
 
-### Paso 4.1: Crear Deployment con Requests Muy Altos
+### Paso 4.1: Revisar y aplicar el Deployment con Requests Altos
 
-Crea `pending-demo.yaml`:
+Revisa el archivo `pending-demo.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: pending-demo
-  labels:
-    lab: troubleshooting
-    exercise: "4"
-spec:
-  replicas: 10
-  selector:
-    matchLabels:
-      app: overrequest
-  template:
-    metadata:
-      labels:
-        app: overrequest
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.25-alpine
-        resources:
-          requests:
-            cpu: "4"        # ← Request MUY alto (4 CPUs por Pod)
-            memory: "4Gi"   # ← Request MUY alto (4Gi por Pod)
-          limits:
-            cpu: "4"
-            memory: "4Gi"
+```bash
+cat pending-demo.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **10 replicas** con requests de 4 CPU + 4Gi cada una
+- En un nodo tipico de 4 CPU, solo cabe 1 Pod como maximo
+- Los Pods restantes quedan en estado Pending
 
 ```bash
 kubectl apply -f pending-demo.yaml
@@ -632,7 +565,7 @@ pending-demo-5c7d9f8b7-pqrst   0/1     Pending   0          1m
 ...
 ```
 
-### Paso 4.3: Diagnosticar por qué están Pending
+### Paso 4.3: Diagnosticar por que estan Pending
 
 ```bash
 kubectl describe pod <pending-pod-name> | grep -A 10 "Events:"
@@ -644,11 +577,11 @@ Salida esperada:
 Events:
   Type     Reason            Age   From               Message
   ----     ------            ----  ----               -------
-  Warning  FailedScheduling  30s   default-scheduler  0/3 nodes are available: 
+  Warning  FailedScheduling  30s   default-scheduler  0/3 nodes are available:
            3 Insufficient cpu, 3 Insufficient memory.
 ```
 
-**🔍 Diagnóstico**: El scheduler NO puede encontrar un nodo con suficiente CPU y memoria.
+**Diagnostico**: El scheduler NO puede encontrar un nodo con suficiente CPU y memoria.
 
 ### Paso 4.4: Ver Recursos Disponibles en Nodos
 
@@ -664,14 +597,14 @@ Allocatable:
   memory:             8Gi
 ```
 
-**📊 Análisis**:
+**Analisis**:
 
 - Cada Pod pide: 4 CPU + 4Gi memory
 - Nodo tiene: 4 CPU + 8Gi memory
 - Solo caben **1-2 Pods por nodo**
-- Los demás Pods quedan **Pending**
+- Los demas Pods quedan **Pending**
 
-### Paso 4.5: Ver Qué Recursos Están Consumidos
+### Paso 4.5: Ver que Recursos Estan Consumidos
 
 ```bash
 kubectl describe node <node-name> | grep -A 10 "Allocated resources:"
@@ -687,9 +620,9 @@ Allocated resources:
   memory             4Gi (50%)     4Gi (50%)
 ```
 
-### Paso 4.6: Solución
+### Paso 4.6: Soluciones Posibles
 
-**Opción 1**: Reducir requests
+**Opcion 1**: Reducir requests
 
 ```yaml
 resources:
@@ -698,14 +631,14 @@ resources:
     memory: "512Mi"
 ```
 
-**Opción 2**: Reducir número de replicas
+**Opcion 2**: Reducir numero de replicas
 
 ```yaml
 spec:
-  replicas: 2  # ← Reducir a lo que cabe
+  replicas: 2  # Reducir a lo que cabe
 ```
 
-**Opción 3**: Agregar más nodos al clúster
+**Opcion 3**: Agregar mas nodos al cluster
 
 ```bash
 # Ejemplo con minikube
@@ -715,7 +648,7 @@ minikube node add
 # kubectl scale --replicas=5 deployment/cluster-autoscaler
 ```
 
-### Paso 4.7: Cleanup
+### Paso 4.7: Cleanup del Ejercicio
 
 ```bash
 kubectl delete deployment pending-demo
@@ -723,43 +656,20 @@ kubectl delete deployment pending-demo
 
 ---
 
-## 🧪 Ejercicio 5: Usar Métricas para Troubleshooting
+## Ejercicio 5: Usar Metricas para Troubleshooting
 
-### Paso 5.1: Crear Deployment para Monitoreo
+### Paso 5.1: Revisar y aplicar el Deployment para Monitoreo
 
-Crea `metrics-demo.yaml`:
+Revisa el archivo `metrics-demo.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: metrics-demo
-  labels:
-    lab: troubleshooting
-    exercise: "5"
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: webserver
-  template:
-    metadata:
-      labels:
-        app: webserver
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.25
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "64Mi"
-          limits:
-            cpu: "200m"
-            memory: "128Mi"
+```bash
+cat metrics-demo.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **3 replicas** de nginx con requests de 100m CPU y 64Mi memoria
+- nginx tipicamente usa ~2m CPU y ~15Mi memoria en reposo
+- Ilustra over-provisioning: requests >> uso real
 
 ```bash
 kubectl apply -f metrics-demo.yaml
@@ -795,29 +705,29 @@ metrics-demo-5c7d9f8b7-fghij   nginx   2m           15Mi
 metrics-demo-5c7d9f8b7-klmno   nginx   2m           14Mi
 ```
 
-### Paso 5.4: Calcular Utilización de Recursos
+### Paso 5.4: Calcular Utilizacion de Recursos
 
 ```bash
 # Ver recursos asignados
 kubectl describe deployment metrics-demo | grep -A 10 "Requests:"
 
-# Calcular utilización
+# Calcular utilizacion
 # CPU: 2m / 100m = 2%
 # Memory: 15Mi / 64Mi = 23%
 ```
 
-**📊 Análisis**:
+**Analisis**:
 
-- **CPU**: Usando 2m de 100m request = **2% utilización** → Mucho over-provisioning
-- **Memory**: Usando 15Mi de 64Mi request = **23% utilización** → Over-provisioning
+- **CPU**: Usando 2m de 100m request = **2% utilizacion** -> Mucho over-provisioning
+- **Memory**: Usando 15Mi de 64Mi request = **23% utilizacion** -> Over-provisioning
 
-**💡 Recomendación**: Reducir requests a:
+**Recomendacion**: Reducir requests a valores mas cercanos al uso real:
 
 ```yaml
 resources:
   requests:
-    cpu: "10m"     # ← Reducir de 100m
-    memory: "32Mi" # ← Reducir de 64Mi
+    cpu: "10m"     # Reducir de 100m
+    memory: "32Mi" # Reducir de 64Mi
 ```
 
 ### Paso 5.5: Ver Uso de Todos los Nodos
@@ -833,7 +743,7 @@ NAME       CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
 minikube   450m         11%    2Gi             25%
 ```
 
-### Paso 5.6: Cleanup
+### Paso 5.6: Cleanup del Ejercicio
 
 ```bash
 kubectl delete deployment metrics-demo
@@ -841,78 +751,33 @@ kubectl delete deployment metrics-demo
 
 ---
 
-## 🧪 Ejercicio 6: Caso Práctico Completo
+## Ejercicio 6: Caso Practico Completo
 
 ### Escenario
 
-Tienes una aplicación en producción que está experimentando:
+Tienes una aplicacion en produccion que esta experimentando:
 - Reinicios frecuentes
 - Lentitud intermitente
 - Algunos Pods en estado Pending
 
-### Paso 6.1: Desplegar la Aplicación Problemática
+### Paso 6.1: Desplegar la Aplicacion Problematica
 
-Crea `problem-app.yaml`:
+Revisa el archivo `problem-app.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: problem-app
-  labels:
-    lab: troubleshooting
-    exercise: "6"
-spec:
-  replicas: 5
-  selector:
-    matchLabels:
-      app: problem
-  template:
-    metadata:
-      labels:
-        app: problem
-    spec:
-      containers:
-      # App principal con memory leak
-      - name: app
-        image: polinux/stress:1.0.4
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "50Mi"
-          limits:
-            cpu: "200m"
-            memory: "100Mi"
-        command: ["stress"]
-        args:
-        - "--vm"
-        - "1"
-        - "--vm-bytes"
-        - "120M"  # ← Excede el límite (OOMKilled)
-      
-      # Sidecar con CPU stress
-      - name: logger
-        image: polinux/stress:1.0.4
-        resources:
-          requests:
-            cpu: "50m"
-            memory: "32Mi"
-          limits:
-            cpu: "100m"
-            memory: "64Mi"
-        command: ["stress"]
-        args:
-        - "--cpu"
-        - "2"  # ← Causa throttling
+```bash
+cat problem-app.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **Contenedor `app`**: memory leak con 120M sobre limite de 100Mi (OOMKilled)
+- **Contenedor `logger`**: 2 CPUs sobre limite de 100m (throttling)
+- **5 replicas**: algunas probablemente quedaran en Pending en nodos pequenos
 
 ```bash
 kubectl apply -f problem-app.yaml
 ```
 
-### Paso 6.2: Investigación Inicial
+### Paso 6.2: Investigacion Inicial
 
 ```bash
 # Ver estado de los Pods
@@ -922,7 +787,7 @@ kubectl get pods -l app=problem
 kubectl get events --sort-by='.lastTimestamp' | tail -20
 ```
 
-**❓ ¿Qué problemas observas?**
+**Que problemas observas?**
 
 <details>
 <summary>Respuesta</summary>
@@ -940,7 +805,7 @@ kubectl get pods -l app=problem -o custom-columns=\
 NAME:.metadata.name,\
 RESTARTS:.status.containerStatuses[0].restartCount
 
-# Describir un Pod problemático
+# Describir un Pod problematico
 kubectl describe pod <pod-name> | grep -A 10 "Last State"
 ```
 
@@ -951,7 +816,7 @@ kubectl describe pod <pod-name> | grep -A 10 "Last State"
 kubectl top pods -l app=problem --containers
 ```
 
-Observarás que el contenedor `logger` está stuck en ~100m (su límite).
+Observaras que el contenedor `logger` esta stuck en ~100m (su limite).
 
 ### Paso 6.5: Diagnosticar Pending Pods
 
@@ -959,54 +824,18 @@ Observarás que el contenedor `logger` está stuck en ~100m (su límite).
 kubectl describe pod <pending-pod> | grep -A 5 "Events:"
 ```
 
-### Paso 6.6: Aplicar Soluciones
+### Paso 6.6: Aplicar la Version Corregida
 
-Crea `problem-app-fixed.yaml`:
+Revisa el archivo `problem-app-fixed.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: problem-app-fixed
-  labels:
-    lab: troubleshooting
-    exercise: "6"
-spec:
-  replicas: 3  # ← Reducir replicas
-  selector:
-    matchLabels:
-      app: problem-fixed
-  template:
-    metadata:
-      labels:
-        app: problem-fixed
-    spec:
-      containers:
-      # App principal - FIX: aumentar límite de memoria
-      - name: app
-        image: nginx:1.25  # ← Cambiar a app real sin leak
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "64Mi"
-          limits:
-            cpu: "500m"
-            memory: "256Mi"  # ← Aumentado
-      
-      # Sidecar - FIX: aumentar límite de CPU o reducir carga
-      - name: logger
-        image: busybox:1.36  # ← Cambiar a app real
-        command: ['sh', '-c', 'tail -f /dev/null']
-        resources:
-          requests:
-            cpu: "10m"      # ← Reducido
-            memory: "16Mi"
-          limits:
-            cpu: "50m"      # ← Reducido
-            memory: "32Mi"
+```bash
+cat problem-app-fixed.yaml
 ```
 
-Aplica:
+Puntos clave de la correccion:
+- **`app`**: cambiado a nginx (sin memory leak) con limite de 256Mi
+- **`logger`**: cambiado a busybox con `tail -f /dev/null` (sin CPU excesivo)
+- **3 replicas** en lugar de 5 para caber en nodos pequenos
 
 ```bash
 kubectl apply -f problem-app-fixed.yaml
@@ -1019,7 +848,7 @@ kubectl get pods -l app=problem-fixed
 kubectl top pods -l app=problem-fixed --containers
 ```
 
-### Paso 6.7: Cleanup
+### Paso 6.7: Cleanup del Ejercicio
 
 ```bash
 kubectl delete deployment problem-app problem-app-fixed
@@ -1027,9 +856,9 @@ kubectl delete deployment problem-app problem-app-fixed
 
 ---
 
-## 📊 Troubleshooting Checklist
+## Troubleshooting Checklist
 
-### Cuando un Pod está CrashLoopBackOff
+### Cuando un Pod esta CrashLoopBackOff
 
 ```bash
 # 1. Ver restart count
@@ -1038,42 +867,42 @@ kubectl get pod <pod-name> -o jsonpath='{.status.containerStatuses[0].restartCou
 # 2. Ver exit code
 kubectl describe pod <pod-name> | grep -A 10 "Last State"
 
-# 3. Si Exit Code = 137 → OOMKilled
+# 3. Si Exit Code = 137 -> OOMKilled
 kubectl logs <pod-name> --previous
 
 # 4. Ver recursos
 kubectl describe pod <pod-name> | grep -A 10 "Limits:"
 
-# 5. Aumentar límite de memoria
+# 5. Aumentar limite de memoria
 kubectl edit deployment <deployment-name>
 ```
 
-### Cuando un Pod está Lento
+### Cuando un Pod esta Lento
 
 ```bash
 # 1. Ver CPU usage
 kubectl top pod <pod-name> --containers
 
-# 2. Si CPU stuck en el límite → throttling
+# 2. Si CPU stuck en el limite -> throttling
 kubectl exec -it <pod-name> -- cat /sys/fs/cgroup/cpu/cpu.stat
 
 # 3. Calcular % throttled
 # nr_throttled / nr_periods * 100
 
-# 4. Aumentar límite de CPU o remover límite
+# 4. Aumentar limite de CPU o remover limite
 kubectl edit deployment <deployment-name>
 ```
 
-### Cuando un Pod está Pending
+### Cuando un Pod esta Pending
 
 ```bash
-# 1. Ver razón
+# 1. Ver razon
 kubectl describe pod <pod-name> | grep -A 10 "Events:"
 
-# 2. Si "Insufficient cpu/memory" → ver nodos
+# 2. Si "Insufficient cpu/memory" -> ver nodos
 kubectl describe nodes | grep -A 10 "Allocatable:"
 
-# 3. Ver qué Pods están usando recursos
+# 3. Ver que Pods estan usando recursos
 kubectl get pods -o custom-columns=\
 NAME:.metadata.name,\
 CPU_REQ:.spec.containers[0].resources.requests.cpu,\
@@ -1085,114 +914,130 @@ MEM_REQ:.spec.containers[0].resources.requests.memory
 ### Cuando un Pod fue Evicted
 
 ```bash
-# 1. Ver razón de eviction
+# 1. Ver razon de eviction
 kubectl describe pod <pod-name> | grep -A 5 "Message:"
 
-# 2. Si "ephemeral storage" → ver uso
+# 2. Si "ephemeral storage" -> ver uso
 kubectl exec -it <pod-name> -- df -h
 
 # 3. Ver eventos de eviction
 kubectl get events --field-selector reason=Evicted
 
-# 4. Aumentar límite o limpiar archivos
+# 4. Aumentar limite o limpiar archivos
 ```
 
 ---
 
-## 🎓 Resumen de Patrones de Troubleshooting
+## Resumen de Patrones de Troubleshooting
 
 ### OOMKilled Pattern
 
 ```
-Síntomas:
+Sintomas:
 - CrashLoopBackOff
 - Restart count alto
 - Exit Code: 137
 
-Diagnóstico:
+Diagnostico:
 kubectl describe pod | grep "Last State"
 kubectl logs --previous
 
-Solución:
+Solucion:
 - Aumentar memory limit
-- Optimizar aplicación (fix memory leak)
+- Optimizar aplicacion (fix memory leak)
 - Usar VPA
 ```
 
 ### CPU Throttling Pattern
 
 ```
-Síntomas:
+Sintomas:
 - Pod lento pero no crashea
-- CPU usage stuck en el límite
+- CPU usage stuck en el limite
 - No aumenta con load
 
-Diagnóstico:
+Diagnostico:
 kubectl top pod --containers
 kubectl exec -- cat /sys/fs/cgroup/cpu/cpu.stat
 
-Solución:
+Solucion:
 - Aumentar CPU limit
-- Remover límite (solo requests)
+- Remover limite (solo requests)
 - Usar HPA para escalar horizontalmente
 ```
 
 ### Eviction Pattern
 
 ```
-Síntomas:
+Sintomas:
 - Pod status: Evicted
 - Pod re-scheduled en otro nodo
 
-Diagnóstico:
+Diagnostico:
 kubectl get events --field-selector reason=Evicted
 kubectl describe pod | grep "Message:"
 
-Solución:
+Solucion:
 - Aumentar ephemeral-storage limit
 - Usar sizeLimit en emptyDir
-- Limpiar archivos periódicamente
+- Limpiar archivos periodicamente
 - Usar PersistentVolume
 ```
 
 ### Pending Pattern
 
 ```
-Síntomas:
+Sintomas:
 - Pod status: Pending (no Running)
-- No se asigna a ningún nodo
+- No se asigna a ningun nodo
 
-Diagnóstico:
+Diagnostico:
 kubectl describe pod | grep "Events:"
 kubectl describe nodes | grep "Allocatable:"
 
-Solución:
+Solucion:
 - Reducir requests
-- Reducir número de replicas
-- Agregar más nodos
+- Reducir numero de replicas
+- Agregar mas nodos
 - Usar Cluster Autoscaler
 ```
 
 ---
 
-## 📚 Próximos Pasos
+## Limpieza Completa
 
-Ahora que dominas troubleshooting, continúa con:
+```bash
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
+```
 
-1. **[Laboratorio 03: Producción](./lab-03-produccion.md)**: Best practices, VPA, HPA, Prometheus monitoring
-
----
-
-## 📖 Referencias
-
-- **[README Principal](../README.md)**: Documentación completa
-- **[Lab 01: Fundamentos](./lab-01-fundamentos.md)**: Conceptos básicos
-- **[Guía de Ejemplos](../ejemplos/README.md)**: Catálogo completo de 29 ejemplos
-- **[Ejemplos Troubleshooting](../ejemplos/)**:
-  - [13-troubleshooting-oom](../ejemplos/13-troubleshooting-oom/): Problemas de memoria
-  - [14-troubleshooting-cpu](../ejemplos/14-troubleshooting-cpu/): Throttling y CPU
-- **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentación oficial
+El script elimina todos los recursos del laboratorio:
+- Pods: oomkilled-demo, cpu-throttling-demo, cpu-no-throttling, storage-eviction-demo
+- Deployments: pending-demo, metrics-demo, problem-app, problem-app-fixed
+- Pods restantes con label `lab=troubleshooting`
+- Pods en estado Failed (Evicted)
 
 ---
 
-**¡Felicidades!** 🎉 Has completado el laboratorio de troubleshooting de Resource Limits.
+## Proximos Pasos
+
+Ahora que dominas troubleshooting, continua con:
+
+1. **[Laboratorio 03: Produccion](../lab-03-produccion/)**: Best practices, VPA, HPA, Prometheus monitoring
+
+---
+
+## Referencias
+
+- **[README Principal](../../README.md)**: Documentacion completa del modulo
+- **[Lab 01: Fundamentos](../lab-01-fundamentos/)**: Conceptos basicos de resource limits
+- **[Guia de Ejemplos](../../ejemplos/README.md)**: Catalogo completo de ejemplos
+- **[Ejemplos Troubleshooting](../../ejemplos/)**:
+  - [13-troubleshooting-oom](../../ejemplos/13-troubleshooting-oom/): Problemas de memoria
+  - [14-troubleshooting-cpu](../../ejemplos/14-troubleshooting-cpu/): Throttling y CPU
+- **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentacion oficial
+
+---
+
+**Felicidades!** Has completado el laboratorio de troubleshooting de Resource Limits.

@@ -1,0 +1,35 @@
+# Ejercicio 1: Fundamentos de Resource Limits - Pod con Requests y Limits
+# Uso: kubectl apply -f pod-basic.yaml
+#
+# Descripcion:
+#   Pod basico de nginx con requests y limits definidos explicitamente.
+#   Tiene request < limit en CPU y memoria, lo que lo clasifica como
+#   QoS Burstable. Sirve como punto de partida para entender la diferencia
+#   entre recursos garantizados (requests) y topes maximos (limits).
+#
+# Conceptos clave:
+#   - requests: cantidad de CPU/memoria garantizada por el scheduler
+#   - limits: tope maximo que el kernel enforce (CPU throttle, OOM kill)
+#   - QoS Burstable: pod con requests pero request < limit
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-basic
+  labels:
+    app: app-basic
+    lab: fundamentos
+    exercise: "1"
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "200m"        # Reserva garantizada: 200 milliCPU
+        memory: "128Mi"    # Reserva garantizada: 128 MiB
+      limits:
+        cpu: "500m"        # Maximo permitido: 500 milliCPU
+        memory: "256Mi"    # Maximo permitido: 256 MiB

@@ -1,0 +1,42 @@
+# Ejercicio 2: VPA en modo Auto - Actualizacion automatica de resources
+# Uso: kubectl apply -f vpa-auto.yaml
+#
+# Descripcion:
+#   VerticalPodAutoscaler configurado en modo "Auto" para el StatefulSet postgres-db.
+#   VPA puede reiniciar Pods para aplicar nuevos values de resources cuando
+#   detecta que el uso real difiere significativamente de los requests actuales.
+#   PRECAUCION: este modo causa reinicios de Pods; usar con cuidado en produccion.
+#
+# Conceptos clave:
+#   - updateMode: "Auto" aplica cambios reiniciando Pods
+#   - mode: Auto en containerPolicies permite modificar requests y limits
+#   - minAllowed garantiza recursos minimos para la base de datos
+#   - No recomendado para StatefulSets en produccion critica (causa downtime)
+#
+# Namespace: production
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: postgres-vpa
+  namespace: production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: postgres-db
+  updatePolicy:
+    updateMode: "Auto"  # Actualiza automaticamente reiniciando Pods
+  resourcePolicy:
+    containerPolicies:
+    - containerName: postgres
+      minAllowed:
+        cpu: "1"
+        memory: "2Gi"
+      maxAllowed:
+        cpu: "4"
+        memory: "8Gi"
+      controlledResources:
+      - cpu
+      - memory
+      mode: Auto  # VPA puede modificar tanto requests como limits

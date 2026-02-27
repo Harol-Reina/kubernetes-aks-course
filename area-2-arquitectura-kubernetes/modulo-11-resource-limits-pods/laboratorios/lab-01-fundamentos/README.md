@@ -1,96 +1,125 @@
 # Laboratorio 01: Fundamentos de Resource Limits
 
-## 📋 Información General
-
-- **Duración estimada**: 35-40 minutos
-- **Dificultad**: ⭐ Básico
-- **Objetivo**: Comprender requests, limits y QoS classes
-- **Requisitos**:
-  - Cluster Kubernetes 1.28+
-  - `kubectl` configurado
-  - `metrics-server` instalado
-  - Permisos para crear Pods y Deployments
+**Duracion estimada:** 35-40 minutos
+**Nivel:** Basico
+**Objetivo:** Comprender requests, limits y QoS classes en Kubernetes
 
 ---
 
-## 🎯 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
 
-Al completar este laboratorio, serás capaz de:
-
-1. ✅ Configurar requests y limits para CPU y memoria
-2. ✅ Entender la diferencia entre requests y limits
-3. ✅ Identificar las 3 QoS Classes (Guaranteed, Burstable, BestEffort)
-4. ✅ Usar `kubectl top` para monitorear recursos
-5. ✅ Predecir el comportamiento del scheduler basado en requests
-6. ✅ Observar el comportamiento bajo presión de recursos
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Resource Requests** | Cantidad de CPU/memoria que el scheduler garantiza al Pod. Determina el placement en el nodo |
+| **Resource Limits** | Tope maximo que el kernel enforce: CPU throttling si se excede, OOM kill si la memoria supera el limit |
+| **QoS Guaranteed** | Pod con request == limit en todos los contenedores. Maxima proteccion contra eviction |
+| **QoS Burstable** | Pod con requests definidos pero request < limit. Balance entre flexibilidad y proteccion |
+| **QoS BestEffort** | Pod sin resources definidos. Se evicted primero bajo presion de recursos |
+| **Multi-Container Resources** | Total del Pod = suma de requests/limits de todos los contenedores app |
+| **Init Container Max Rule** | Pod Request = MAX(suma app containers, mayor init container). Init containers no se acumulan |
 
 ---
 
-## 📚 Contexto Teórico
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `pod-basic.yaml` | 1 | Pod nginx con requests y limits explicitos (QoS Burstable) |
+| `qos-comparison.yaml` | 2 | Tres Pods representando las 3 QoS Classes distintas |
+| `fill-node.yaml` | 3 | Deployment de 10 replicas para observar el scheduler con requests altos |
+| `multi-container.yaml` | 4 | Pod con contenedor principal y dos sidecars con resources independientes |
+| `init-container.yaml` | 5 | Pod con init container que pide mas recursos que el app container |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster de Kubernetes funcional (minikube, kind, k3s, o cloud)
+- kubectl configurado
+- metrics-server habilitado (para `kubectl top`)
+- Conocimientos basicos de Pods y Deployments (modulos 03-05)
+
+Consulta [SETUP.md](./SETUP.md) para instrucciones detalladas de verificacion del entorno.
+
+### Verificacion rapida del entorno
+
+```bash
+# Verificar cluster
+kubectl cluster-info
+
+# Verificar nodos
+kubectl get nodes
+
+# Verificar metrics-server
+kubectl top nodes
+
+# Verificar archivos YAML del laboratorio
+ls *.yaml
+```
+
+---
+
+## Contexto Teorico
 
 ### Requests vs Limits
 
 ```
-┌──────────────────────────────────────────────┐
-│                                              │
-│  ┌─────────────────────────────────────┐     │
-│  │         LIMIT (tope máximo)         │     │
-│  │   500m CPU  /  512Mi Memory         │     │
-│  └─────────────────────────────────────┘     │
-│              ▲                               │
-│              │  Puede usar HASTA el límite   │
-│              │                               │
-│  ┌───────────┴────────────────────────┐      │
-│  │   REQUEST (reserva garantizada)    │      │
-│  │   200m CPU  /  256Mi Memory        │      │
-│  └────────────────────────────────────┘      │
-│              ▲                               │
-│              │  SIEMPRE disponible           │
-│                                              │
-└──────────────────────────────────────────────┘
++----------------------------------------------+
+|                                              |
+|  +-------------------------------------+     |
+|  |         LIMIT (tope maximo)         |     |
+|  |   500m CPU  /  512Mi Memory         |     |
+|  +-------------------------------------+     |
+|              ^                               |
+|              |  Puede usar HASTA el limite   |
+|              |                               |
+|  +-----------+-----------------------------+ |
+|  |   REQUEST (reserva garantizada)         | |
+|  |   200m CPU  /  256Mi Memory             | |
+|  +-----------------------------------------+ |
+|              ^                               |
+|              |  SIEMPRE disponible           |
+|                                              |
++----------------------------------------------+
 ```
 
-**Request**: Lo que el scheduler GARANTIZA que estará disponible.  
-**Limit**: El máximo que puede usar (enforcement por kernel).
+**Request**: Lo que el scheduler GARANTIZA que estara disponible.
+**Limit**: El maximo que puede usar (enforcement por kernel).
 
 ### QoS Classes
 
-| QoS Class | Condición | Prioridad Eviction | Uso |
+| QoS Class | Condicion | Prioridad Eviction | Uso |
 |-----------|-----------|-------------------|-----|
-| **Guaranteed** | `request == limit` (todos los contenedores) | Máxima (se evicted último) | Producción crítica |
-| **Burstable** | Tiene requests pero `request < limit` o solo requests | Media | Apps con tráfico variable |
-| **BestEffort** | Sin requests ni limits | Mínima (se evicted primero) | Batch jobs no críticos |
+| **Guaranteed** | `request == limit` (todos los contenedores) | Maxima (se evicted ultimo) | Produccion critica |
+| **Burstable** | Tiene requests pero `request < limit` o solo requests | Media | Apps con trafico variable |
+| **BestEffort** | Sin requests ni limits | Minima (se evicted primero) | Batch jobs no criticos |
 
 ---
 
-## 🧪 Ejercicio 1: Crear Pod con Requests y Limits
+## Ejercicio 1: Crear Pod con Requests y Limits
 
-### Paso 1.1: Crear Pod Básico
+### Paso 1.1: Revisar el manifiesto
 
-Crea un archivo `pod-basic.yaml`:
+Revisa el archivo `pod-basic.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-basic
-  labels:
-    lab: fundamentos
-    exercise: "1"
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.25
-    resources:
-      requests:
-        cpu: "200m"        # Reserva garantizada
-        memory: "128Mi"
-      limits:
-        cpu: "500m"        # Máximo permitido
-        memory: "256Mi"
+```bash
+cat pod-basic.yaml
 ```
 
-Aplica el manifiesto:
+Puntos clave del manifiesto:
+- **requests.cpu: 200m** — el scheduler garantiza 200 milliCPU en el nodo elegido
+- **limits.cpu: 500m** — el kernel limita el CPU a 500m (throttling si se excede)
+- **requests.memory: 128Mi** — reserva de memoria garantizada
+- **limits.memory: 256Mi** — si el proceso supera este valor el kernel lo termina (OOM)
+- Como `request < limit`, la QoS Class sera **Burstable**
 
 ```bash
 kubectl apply -f pod-basic.yaml
@@ -107,7 +136,7 @@ kubectl get pod app-basic -o jsonpath='{.status.qosClass}'
 # Salida esperada: Burstable
 ```
 
-**❓ ¿Por qué es Burstable?**
+**Por que es Burstable?**
 
 <details>
 <summary>Respuesta</summary>
@@ -116,7 +145,7 @@ Porque tiene requests **diferentes** de limits:
 - CPU: `200m < 500m`
 - Memory: `128Mi < 256Mi`
 
-Para ser Guaranteed, necesitaría `request == limit` en ambos.
+Para ser Guaranteed, necesitaria `request == limit` en ambos.
 </details>
 
 ### Paso 1.3: Ver Recursos Asignados
@@ -139,9 +168,6 @@ Limits:
 ### Paso 1.4: Monitorear Uso de Recursos
 
 ```bash
-# Instalar metrics-server si no lo tienes
-# kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-
 # Ver uso actual
 kubectl top pod app-basic
 ```
@@ -153,82 +179,27 @@ NAME        CPU(cores)   MEMORY(bytes)
 app-basic   2m           10Mi
 ```
 
-**📊 Análisis**:
-- **Request CPU**: 200m → **Uso real**: ~2m (solo 1%)
-- **Request Memory**: 128Mi → **Uso real**: ~10Mi (solo 8%)
-- Hay **over-provisioning**, pero está bien para absorber picos de tráfico.
+**Analisis**:
+- **Request CPU**: 200m -> **Uso real**: ~2m (solo 1%)
+- **Request Memory**: 128Mi -> **Uso real**: ~10Mi (solo 8%)
+- Hay **over-provisioning**, pero esta bien para absorber picos de trafico.
 
 ---
 
-## 🧪 Ejercicio 2: Comparar las 3 QoS Classes
+## Ejercicio 2: Comparar las 3 QoS Classes
 
-### Paso 2.1: Crear 3 Pods con diferentes QoS
+### Paso 2.1: Revisar y aplicar los 3 Pods
 
-Crea `qos-comparison.yaml`:
+Revisa el archivo `qos-comparison.yaml`:
 
-```yaml
----
-# Pod 1: QoS Guaranteed
-apiVersion: v1
-kind: Pod
-metadata:
-  name: qos-guaranteed
-  labels:
-    lab: fundamentos
-    exercise: "2"
-    qos: guaranteed
-spec:
-  containers:
-  - name: app
-    image: nginx:1.25
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "256Mi"
-      limits:
-        cpu: "500m"       # ← Igual a request
-        memory: "256Mi"   # ← Igual a request
-
----
-# Pod 2: QoS Burstable
-apiVersion: v1
-kind: Pod
-metadata:
-  name: qos-burstable
-  labels:
-    lab: fundamentos
-    exercise: "2"
-    qos: burstable
-spec:
-  containers:
-  - name: app
-    image: nginx:1.25
-    resources:
-      requests:
-        cpu: "200m"
-        memory: "128Mi"
-      limits:
-        cpu: "1"          # ← Mayor que request
-        memory: "512Mi"   # ← Mayor que request
-
----
-# Pod 3: QoS BestEffort
-apiVersion: v1
-kind: Pod
-metadata:
-  name: qos-besteffort
-  labels:
-    lab: fundamentos
-    exercise: "2"
-    qos: besteffort
-spec:
-  containers:
-  - name: app
-    image: nginx:1.25
-    # Sin resources definidos
+```bash
+cat qos-comparison.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **qos-guaranteed**: CPU y memoria con `request == limit` en ambos -> Guaranteed
+- **qos-burstable**: `request < limit` en CPU y memoria -> Burstable
+- **qos-besteffort**: sin seccion `resources` definida -> BestEffort
 
 ```bash
 kubectl apply -f qos-comparison.yaml
@@ -265,17 +236,17 @@ PRIORITY:.spec.priority | \
 sort -k2
 ```
 
-**📊 Orden de Eviction** (cuando el nodo tiene presión de recursos):
+**Orden de Eviction** (cuando el nodo tiene presion de recursos):
 
 ```
-1. qos-besteffort   ◄── Se evicted PRIMERO
-2. qos-burstable    ◄── Prioridad media
-3. qos-guaranteed   ◄── Se evicted ÚLTIMO (máxima protección)
+1. qos-besteffort   <-- Se evicted PRIMERO
+2. qos-burstable    <-- Prioridad media
+3. qos-guaranteed   <-- Se evicted ULTIMO (maxima proteccion)
 ```
 
 ---
 
-## 🧪 Ejercicio 3: Scheduler y Requests
+## Ejercicio 3: Scheduler y Requests
 
 ### Paso 3.1: Ver Capacidad del Nodo
 
@@ -308,46 +279,23 @@ Allocated resources:
   memory             2Gi (25%)     6Gi (75%)
 ```
 
-**🔍 Análisis Importante**:
+**Analisis Importante**:
 
-- El scheduler SOLO usa **Requests** para decidir dónde colocar Pods.
+- El scheduler SOLO usa **Requests** para decidir donde colocar Pods.
 - Los **Limits** NO afectan al scheduler (pueden sumar >100%).
 
-### Paso 3.3: Crear Deployment que Llene el Nodo
+### Paso 3.3: Revisar y aplicar el Deployment
 
-Crea `fill-node.yaml`:
+Revisa el archivo `fill-node.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: fill-node
-  labels:
-    lab: fundamentos
-    exercise: "3"
-spec:
-  replicas: 10
-  selector:
-    matchLabels:
-      app: filler
-  template:
-    metadata:
-      labels:
-        app: filler
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.25-alpine
-        resources:
-          requests:
-            cpu: "300m"
-            memory: "256Mi"
-          limits:
-            cpu: "1"
-            memory: "512Mi"
+```bash
+cat fill-node.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **10 replicas** con 300m CPU request cada una: sum = 3000m de CPU solo en requests
+- Si el nodo tiene menos de 3000m allocatable, algunos Pods quedaran en Pending
+- Los limits (1 CPU por Pod) no afectan al scheduler
 
 ```bash
 kubectl apply -f fill-node.yaml
@@ -356,24 +304,24 @@ kubectl apply -f fill-node.yaml
 ### Paso 3.4: Observar Comportamiento del Scheduler
 
 ```bash
-# Ver cuántos Pods se crearon
+# Ver cuantos Pods se crearon vs cuantos quedaron Pending
 kubectl get pods -l app=filler
 
-# Ver eventos
+# Ver eventos del Deployment
 kubectl get events --field-selector involvedObject.name=fill-node --sort-by='.lastTimestamp'
 ```
 
-**❓ ¿Qué pasa si la suma de requests excede la capacidad del nodo?**
+**Que pasa si la suma de requests excede la capacidad del nodo?**
 
 <details>
 <summary>Respuesta</summary>
 
-El scheduler NO puede colocar más Pods:
+El scheduler NO puede colocar mas Pods:
 
 ```bash
 kubectl get pods -l app=filler | grep Pending
 
-# Ver razón
+# Ver razon en el Pod en Pending
 kubectl describe pod <pending-pod-name>
 # Events:
 #   Warning  FailedScheduling  ... 0/3 nodes are available: 3 Insufficient cpu.
@@ -384,59 +332,21 @@ Los Pods quedan en **Pending** hasta que se liberen recursos o se agreguen nodos
 
 ---
 
-## 🧪 Ejercicio 4: Multi-Container Resources
+## Ejercicio 4: Multi-Container Resources
 
-### Paso 4.1: Crear Pod con Múltiples Contenedores
+### Paso 4.1: Revisar y aplicar el Pod
 
-Crea `multi-container.yaml`:
+Revisa el archivo `multi-container.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: multi-container-app
-  labels:
-    lab: fundamentos
-    exercise: "4"
-spec:
-  containers:
-  # Contenedor principal
-  - name: app
-    image: nginx:1.25
-    resources:
-      requests:
-        cpu: "300m"
-        memory: "256Mi"
-      limits:
-        cpu: "500m"
-        memory: "512Mi"
-  
-  # Sidecar 1: logging
-  - name: logger
-    image: busybox:1.36
-    command: ['sh', '-c', 'tail -f /dev/null']
-    resources:
-      requests:
-        cpu: "100m"
-        memory: "64Mi"
-      limits:
-        cpu: "200m"
-        memory: "128Mi"
-  
-  # Sidecar 2: metrics
-  - name: metrics
-    image: busybox:1.36
-    command: ['sh', '-c', 'tail -f /dev/null']
-    resources:
-      requests:
-        cpu: "100m"
-        memory: "64Mi"
-      limits:
-        cpu: "200m"
-        memory: "128Mi"
+```bash
+cat multi-container.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **app**: contenedor principal con 300m/500m CPU y 256Mi/512Mi memoria
+- **logger**: sidecar con 100m/200m CPU y 64Mi/128Mi memoria
+- **metrics**: sidecar con 100m/200m CPU y 64Mi/128Mi memoria
+- El total del Pod es la suma de los tres contenedores
 
 ```bash
 kubectl apply -f multi-container.yaml
@@ -448,7 +358,7 @@ kubectl apply -f multi-container.yaml
 kubectl describe pod multi-container-app | grep -A 15 "Containers:"
 ```
 
-**📊 Cálculo de Recursos Totales**:
+**Calculo de Recursos Totales**:
 
 | Contenedor | CPU Request | CPU Limit | Mem Request | Mem Limit |
 |-----------|-------------|-----------|-------------|-----------|
@@ -457,7 +367,7 @@ kubectl describe pod multi-container-app | grep -A 15 "Containers:"
 | metrics   | 100m        | 200m      | 64Mi        | 128Mi     |
 | **TOTAL** | **500m**    | **900m**  | **384Mi**   | **768Mi** |
 
-**❓ ¿Qué QoS Class tiene este Pod?**
+**Que QoS Class tiene este Pod?**
 
 <details>
 <summary>Respuesta</summary>
@@ -487,71 +397,46 @@ multi-container-app    metrics   0m           1Mi
 
 ---
 
-## 🧪 Ejercicio 5: Init Containers y Recursos
+## Ejercicio 5: Init Containers y Recursos
 
-### Paso 5.1: Crear Pod con Init Container
+### Paso 5.1: Revisar y aplicar el Pod
 
-Crea `init-container.yaml`:
+Revisa el archivo `init-container.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: init-container-demo
-  labels:
-    lab: fundamentos
-    exercise: "5"
-spec:
-  initContainers:
-  - name: init-db
-    image: busybox:1.36
-    command: ['sh', '-c', 'sleep 10']
-    resources:
-      requests:
-        cpu: "500m"       # ← Init container pide MUCHO
-        memory: "512Mi"
-      limits:
-        cpu: "1"
-        memory: "1Gi"
-  
-  containers:
-  - name: app
-    image: nginx:1.25
-    resources:
-      requests:
-        cpu: "200m"
-        memory: "128Mi"
-      limits:
-        cpu: "500m"
-        memory: "256Mi"
+```bash
+cat init-container.yaml
 ```
 
-Aplica:
+Puntos clave del manifiesto:
+- **init-db**: init container que duerme 10 segundos y pide 500m CPU / 512Mi memoria
+- **app**: contenedor principal con solo 200m CPU / 128Mi memoria
+- El scheduler reserva el MAX entre ambos: 500m CPU (del init container gana)
 
 ```bash
 kubectl apply -f init-container.yaml
 ```
 
-### Paso 5.2: Entender la Regla del Máximo
+### Paso 5.2: Entender la Regla del Maximo
 
 ```bash
 kubectl describe pod init-container-demo | grep -A 10 "Init Containers"
 ```
 
-**📊 Regla del Máximo** (para calcular requests del Pod):
+**Regla del Maximo** (para calcular requests del Pod):
 
 ```
 Pod Request CPU = MAX(
-  Sum(all app containers),     ← 200m
-  MAX(all init containers)     ← 500m  ◄── GANA
+  Sum(all app containers),     <- 200m
+  MAX(all init containers)     <- 500m  <-- GANA
 )
 
 Pod Request CPU = 500m
 ```
 
-**Por qué**: Init containers se ejecutan **secuencialmente** y solo uno a la vez, así que solo necesitas reservar el más grande.
+**Por que**: Init containers se ejecutan **secuencialmente** y solo uno a la vez,
+asi que solo necesitas reservar el mas grande.
 
-**❓ ¿Qué pasa cuando el init container termina?**
+**Que pasa cuando el init container termina?**
 
 <details>
 <summary>Respuesta</summary>
@@ -563,14 +448,15 @@ kubectl top pod init-container-demo
 # CPU: ~2m (solo app container)
 ```
 
-El scheduler reservó 500m inicialmente, pero después de que init-db termina, solo se usan los 200m del app container.
+El scheduler reservo 500m inicialmente, pero despues de que init-db termina,
+solo se usan los 200m del app container.
 </details>
 
 ---
 
-## 🧪 Ejercicio 6: Monitoreo con kubectl top
+## Ejercicio 6: Monitoreo con kubectl top
 
-### Paso 6.1: Ver Uso de Todos los Pods
+### Paso 6.1: Ver Uso de Todos los Pods del Lab
 
 ```bash
 kubectl top pods -l lab=fundamentos
@@ -608,7 +494,7 @@ kubectl top pods --all-namespaces | head -20
 
 ---
 
-## 🧪 Ejercicio 7: Cleanup y Análisis Final
+## Ejercicio 7: Cleanup y Analisis Final
 
 ### Paso 7.1: Ver Todos los Recursos Creados
 
@@ -620,86 +506,90 @@ STATUS:.status.phase,\
 AGE:.metadata.creationTimestamp
 ```
 
-### Paso 7.2: Limpiar Recursos
-
-```bash
-# Limpiar por label
-kubectl delete pods,deployments -l lab=fundamentos
-
-# Verificar
-kubectl get pods -l lab=fundamentos
-# No resources found
-```
-
-### Paso 7.3: Verificar Liberación de Recursos
+### Paso 7.2: Ver Recursos Asignados Antes de Limpiar
 
 ```bash
 kubectl describe node | grep -A 10 "Allocated resources:"
 ```
 
-Deberías ver que los recursos allocated disminuyeron.
+Anota los valores actuales. Despues de limpiar, los recursos allocated disminuiran.
+
+### Paso 7.3: Limpiar con el Script
+
+```bash
+chmod +x cleanup.sh
+./cleanup.sh
+```
+
+### Paso 7.4: Verificar Liberacion de Recursos
+
+```bash
+kubectl describe node | grep -A 10 "Allocated resources:"
+```
+
+Deberias ver que los recursos allocated disminuyeron respecto a los valores anotados en 7.2.
 
 ---
 
-## 📊 Resumen de Conceptos Aprendidos
+## Resumen de Conceptos Aprendidos
 
 ### 1. Requests vs Limits
 
 | Aspecto | Request | Limit |
 |---------|---------|-------|
-| **Propósito** | Garantía mínima | Tope máximo |
+| **Proposito** | Garantia minima | Tope maximo |
 | **Usado por** | Scheduler (placement) | Kernel (enforcement) |
-| **Enforcement** | NO (solo scheduler) | SÍ (CPU throttling, OOM) |
-| **Puede faltar** | ⚠️ Malo (BestEffort) | ✅ OK (solo requests) |
+| **Enforcement** | NO (solo scheduler) | SI (CPU throttling, OOM) |
+| **Puede faltar** | Malo (BestEffort) | OK (solo requests) |
 
 ### 2. QoS Classes
 
 ```
-┌─────────────────────────────────────────────┐
-│  Guaranteed (request == limit)              │
-│  - Máxima protección contra eviction        │
-│  - Uso: Producción crítica                  │
-│  - Ejemplo: Bases de datos                  │
-└─────────────────────────────────────────────┘
-            ▲
-            │
-┌───────────┴─────────────────────────────────┐
-│  Burstable (request < limit)                │
-│  - Balance flexibilidad/protección          │
-│  - Uso: Apps web con tráfico variable       │
-│  - Ejemplo: APIs REST                       │
-└─────────────────────────────────────────────┘
-            ▲
-            │
-┌───────────┴─────────────────────────────────┐
-│  BestEffort (sin resources)                 │
-│  - Mínima protección (se evicted primero)   │
-│  - Uso: Batch jobs no críticos              │
-│  - Ejemplo: Procesamiento offline           │
-└─────────────────────────────────────────────┘
++-----------------------------------------+
+|  Guaranteed (request == limit)          |
+|  - Maxima proteccion contra eviction    |
+|  - Uso: Produccion critica              |
+|  - Ejemplo: Bases de datos              |
++-----------------------------------------+
+            ^
+            |
++-----------+-----------------------------+
+|  Burstable (request < limit)            |
+|  - Balance flexibilidad/proteccion      |
+|  - Uso: Apps web con trafico variable   |
+|  - Ejemplo: APIs REST                   |
++-----------------------------------------+
+            ^
+            |
++-----------+-----------------------------+
+|  BestEffort (sin resources)             |
+|  - Minima proteccion (evicted primero)  |
+|  - Uso: Batch jobs no criticos          |
+|  - Ejemplo: Procesamiento offline       |
++-----------------------------------------+
 ```
 
 ### 3. Multi-Container Resources
 
 - **Total Pod Request** = Sum(all app containers)
 - **Total Pod Limit** = Sum(all app containers)
-- **Init containers**: Regla del máximo (solo el más grande)
+- **Init containers**: Regla del maximo (solo el mas grande)
 - **QoS Class**: Se calcula con TODOS los contenedores (app + init)
 
 ### 4. Scheduler Behavior
 
-- ✅ Usa **solo requests** para placement
-- ❌ NO considera limits
+- Usa **solo requests** para placement
+- NO considera limits para scheduling
 - Puede colocar Pods donde `sum(limits) > 100%` del nodo
-- Si `sum(requests) > allocatable` → Pod queda **Pending**
+- Si `sum(requests) > allocatable` -> Pod queda **Pending**
 
 ---
 
-## 🎓 Verificación de Conocimientos
+## Verificacion de Conocimientos
 
 ### Quiz Final
 
-**1. ¿Qué QoS Class tiene este Pod?**
+**1. Que QoS Class tiene este Pod?**
 
 ```yaml
 resources:
@@ -708,7 +598,7 @@ resources:
     memory: "256Mi"
   limits:
     cpu: "500m"
-    memory: "512Mi"  # ← Diferente de request
+    memory: "512Mi"  # Diferente de request
 ```
 
 <details>
@@ -716,14 +606,15 @@ resources:
 
 **Burstable**
 
-Aunque CPU tiene `request == limit`, la memoria tiene `request < limit`, por lo que el Pod completo es Burstable.
+Aunque CPU tiene `request == limit`, la memoria tiene `request < limit`, por lo que
+el Pod completo es Burstable.
 
 Para ser Guaranteed, **todos** los recursos deben tener `request == limit`.
 </details>
 
 ---
 
-**2. ¿Cuál es el request total de CPU de este Pod?**
+**2. Cual es el request total de CPU de este Pod?**
 
 ```yaml
 initContainers:
@@ -748,7 +639,7 @@ containers:
 
 **1 CPU** (del init container)
 
-Regla del máximo:
+Regla del maximo:
 - `MAX(init containers) = 1`
 - `SUM(app containers) = 300m + 200m = 500m`
 - `Pod Request = MAX(1, 500m) = 1`
@@ -756,7 +647,7 @@ Regla del máximo:
 
 ---
 
-**3. ¿Este Pod puede ser scheduled en un nodo con 800m CPU allocatable?**
+**3. Este Pod puede ser scheduled en un nodo con 800m CPU allocatable?**
 
 ```yaml
 resources:
@@ -775,36 +666,45 @@ El scheduler usa **requests**, no limits.
 
 - Request: 900m
 - Allocatable: 800m
-- 900m > 800m → **Pod queda Pending**
+- 900m > 800m -> **Pod queda Pending**
 
-El límite de 2 CPUs NO importa para scheduling.
+El limite de 2 CPUs NO importa para scheduling.
 </details>
 
 ---
 
-## 📚 Próximos Pasos
+## Limpieza
 
-Ahora que dominas los fundamentos, continúa con:
-
-1. **[Laboratorio 02: Troubleshooting](./lab-02-troubleshooting.md)**: OOMKilled, CPU throttling, eviction
-2. **[Laboratorio 03: Producción](./lab-03-produccion.md)**: Best practices, VPA, HPA, Prometheus
-
----
-
-## 📖 Referencias
-
-- **[README Principal](../README.md)**: Documentación completa
-- **[Guía de Ejemplos](../ejemplos/README.md)**: Catálogo completo de 29 ejemplos organizados
-- **[Ejemplos Fundamentos](../ejemplos/)**: 
-  - [01-requests-limits-basico](../ejemplos/01-requests-limits-basico/)
-  - [02-multi-container](../ejemplos/02-multi-container/)
-  - [03-init-containers](../ejemplos/03-init-containers/)
-- **[Ejemplos QoS](../ejemplos/)**: 
-  - [07-qos-guaranteed](../ejemplos/07-qos-guaranteed/)
-  - [08-qos-burstable](../ejemplos/08-qos-burstable/)
-  - [09-qos-besteffort](../ejemplos/09-qos-besteffort/)
-- **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentación oficial
+```bash
+# Usar el script de limpieza
+chmod +x cleanup.sh
+./cleanup.sh
+```
 
 ---
 
-**¡Felicidades!** 🎉 Has completado el laboratorio de fundamentos de Resource Limits.
+## Proximos Pasos
+
+1. **Laboratorio 02: Troubleshooting** — OOMKilled, CPU throttling, eviction
+2. **Laboratorio 03: Produccion** — Best practices, VPA, HPA, Prometheus
+
+---
+
+## Referencias
+
+- **[README Principal](../../README.md)**: Documentacion completa del modulo
+- **[Guia de Ejemplos](../../ejemplos/README.md)**: Catalogo completo de ejemplos organizados
+- **[Ejemplos Fundamentos](../../ejemplos/)**:
+  - [01-requests-limits-basico](../../ejemplos/01-requests-limits-basico/)
+  - [02-multi-container](../../ejemplos/02-multi-container/)
+  - [03-init-containers](../../ejemplos/03-init-containers/)
+- **[Ejemplos QoS](../../ejemplos/)**:
+  - [07-qos-guaranteed](../../ejemplos/07-qos-guaranteed/)
+  - [08-qos-burstable](../../ejemplos/08-qos-burstable/)
+  - [09-qos-besteffort](../../ejemplos/09-qos-besteffort/)
+- **[Kubernetes Docs](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)**: Documentacion oficial
+
+---
+
+**Felicidades!** Has completado el Laboratorio 01.
+Tienes las bases solidas para trabajar con Resource Limits en Kubernetes.

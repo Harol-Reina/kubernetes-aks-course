@@ -1,0 +1,53 @@
+# Ejercicio 3: HPA basado en CPU con politicas de scale up y scale down
+# Uso: kubectl apply -f hpa-cpu.yaml
+#
+# Descripcion:
+#   HorizontalPodAutoscaler que escala el Deployment api-server basandose en
+#   uso de CPU. Incluye politicas de comportamiento: scale up inmediato y agresivo,
+#   scale down conservador con ventana de estabilizacion de 5 minutos para evitar
+#   flapping. Requiere metrics-server instalado en el cluster.
+#
+# Conceptos clave:
+#   - averageUtilization: escala cuando el promedio de CPU supera el umbral
+#   - stabilizationWindowSeconds: evita scale down prematuro (flapping)
+#   - selectPolicy: Max usa la politica de scale up mas agresiva disponible
+#   - Requiere que api-server tenga resource requests definidos
+#
+# Namespace: production
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-server-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-server
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Escalar cuando CPU promedio > 70%
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Esperar 5 min antes de scale down
+      policies:
+      - type: Percent
+        value: 50  # Scale down maximo 50% a la vez
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up inmediato sin espera
+      policies:
+      - type: Percent
+        value: 100  # Puede duplicar el numero de Pods
+        periodSeconds: 15
+      - type: Pods
+        value: 4    # Maximo +4 Pods por periodo
+        periodSeconds: 15
+      selectPolicy: Max  # Usar la politica mas agresiva disponible

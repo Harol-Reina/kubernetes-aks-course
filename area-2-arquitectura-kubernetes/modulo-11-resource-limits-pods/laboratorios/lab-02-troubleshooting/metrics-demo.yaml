@@ -1,0 +1,44 @@
+# Ejercicio 5: Metrics Demo - Deployment para Monitoreo de Recursos
+# Uso: kubectl apply -f metrics-demo.yaml
+#
+# Descripcion:
+#   Deployment con 3 replicas de nginx para practicar el uso de kubectl top.
+#   Los limits estan sobredimensionados respecto al uso real de nginx,
+#   lo que ilustra el concepto de over-provisioning y como detectarlo.
+#
+# Conceptos clave:
+#   - kubectl top pods: muestra uso real de CPU y memoria
+#   - kubectl top pods --containers: detalle por contenedor en Pods multi-container
+#   - Over-provisioning: requests/limits mayores al uso real (desperdicio de recursos)
+#   - Utilizacion de recursos: uso_real / request * 100
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-demo
+  labels:
+    lab: troubleshooting
+    exercise: "5"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webserver
+  template:
+    metadata:
+      labels:
+        app: webserver
+        lab: troubleshooting
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"

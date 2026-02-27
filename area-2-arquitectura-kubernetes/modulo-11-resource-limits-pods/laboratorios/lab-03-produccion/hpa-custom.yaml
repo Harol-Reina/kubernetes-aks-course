@@ -1,0 +1,47 @@
+# Ejercicio 3: HPA con metricas custom de Prometheus - RPS y latencia
+# Uso: kubectl apply -f hpa-custom.yaml
+#
+# Descripcion:
+#   HorizontalPodAutoscaler que escala basandose en metricas de negocio expuestas
+#   por Prometheus Adapter: requests por segundo (RPS) y duracion de respuesta.
+#   Escalar en base a metricas de negocio es mas preciso que CPU/memoria porque
+#   refleja directamente la experiencia del usuario final.
+#
+# Conceptos clave:
+#   - type: Pods aplica la metrica promediada por Pod
+#   - averageValue: valor absoluto objetivo (no porcentaje)
+#   - Requiere Prometheus Adapter configurado como custom metrics API
+#   - Las metricas deben ser expuestas por la aplicacion en formato Prometheus
+#
+# Namespace: production
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-server-hpa-custom
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-server
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  # Metrica custom: Request rate (RPS por Pod)
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "1000"  # Escalar cuando supera 1000 RPS por Pod
+
+  # Metrica custom: Response time (latencia promedio)
+  - type: Pods
+    pods:
+      metric:
+        name: http_request_duration_seconds
+      target:
+        type: AverageValue
+        averageValue: "500m"  # Escalar cuando latencia promedio > 500ms

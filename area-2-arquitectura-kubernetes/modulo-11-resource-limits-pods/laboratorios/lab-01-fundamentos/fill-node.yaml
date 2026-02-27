@@ -1,0 +1,46 @@
+# Ejercicio 3: Scheduler y Requests - Deployment que puede llenar el nodo
+# Uso: kubectl apply -f fill-node.yaml
+#
+# Descripcion:
+#   Deployment con 10 replicas y requests relativamente altos por Pod.
+#   Demuestra como el scheduler usa requests (no limits) para decidir
+#   el placement. Si la suma de requests supera la capacidad allocatable
+#   del nodo, los Pods restantes quedan en estado Pending.
+#
+# Conceptos clave:
+#   - El scheduler solo usa requests para el placement, no limits
+#   - Pods en Pending cuando sum(requests) > allocatable del nodo
+#   - La diferencia entre capacidad total y allocatable del nodo
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fill-node
+  labels:
+    app: fill-node
+    lab: fundamentos
+    exercise: "3"
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: filler
+  template:
+    metadata:
+      labels:
+        app: filler
+        lab: fundamentos
+        exercise: "3"
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "256Mi"
+          limits:
+            cpu: "1"
+            memory: "512Mi"

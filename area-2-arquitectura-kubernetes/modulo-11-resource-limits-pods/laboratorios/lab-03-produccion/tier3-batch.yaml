@@ -1,0 +1,53 @@
+# Ejercicio 1: Tier 3 Batch - CronJob con recursos bajos y burst disponible
+# Uso: kubectl apply -f tier3-batch.yaml
+#
+# Descripcion:
+#   CronJob de reporte nocturno con requests bajos y limits altos, permitiendo
+#   usar recursos idle del nodo durante horas de baja actividad. Representa
+#   cargas de trabajo batch que pueden tolerar ser interrumpidas y no requieren
+#   garantias de recursos estrictas.
+#
+# Conceptos clave:
+#   - QoS Burstable con requests bajos: aprovecha recursos ociosos
+#   - CronJob con schedule en horas de baja actividad
+#   - restartPolicy: OnFailure para trabajos batch
+#   - Diferencia entre Tier 3 batch y Tier 1/2 en asignacion de recursos
+#
+# Namespace: production
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-report
+  namespace: production
+  labels:
+    tier: batch
+    app: reporting
+spec:
+  schedule: "0 2 * * *"  # 2am diario
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: reporting
+            tier: batch
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: report-generator
+            image: busybox:1.36
+            command:
+            - sh
+            - -c
+            - |
+              echo "Generating report..."
+              sleep 60
+              echo "Report complete"
+            resources:
+              requests:
+                cpu: "100m"      # Requests bajos: no bloquea recursos del nodo
+                memory: "128Mi"
+              limits:
+                cpu: "1"         # Puede burst si hay recursos idle disponibles
+                memory: "512Mi"

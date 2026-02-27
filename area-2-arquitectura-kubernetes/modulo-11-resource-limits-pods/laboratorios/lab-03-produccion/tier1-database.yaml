@@ -1,0 +1,93 @@
+# Ejercicio 1: Tier 1 Critico - StatefulSet PostgreSQL con QoS Guaranteed
+# Uso: kubectl apply -f tier1-database.yaml
+#
+# Descripcion:
+#   StatefulSet de PostgreSQL con resources identicos en requests y limits,
+#   lo que genera QoS class Guaranteed. Incluye initContainer para permisos
+#   y Headless Service para StatefulSet. Representa cargas de trabajo criticas
+#   donde no se tolera ninguna degradacion de recursos.
+#
+# Conceptos clave:
+#   - QoS Guaranteed: request == limit en CPU y memoria
+#   - StatefulSet con volumeClaimTemplates para persistencia
+#   - Headless Service (clusterIP: None) para StatefulSets
+#   - initContainer con recursos propios (Guaranteed si request == limit)
+#
+# Namespace: production
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-db
+  namespace: production
+  labels:
+    tier: critical
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: critical
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        - name: POSTGRES_DB
+          value: "production"
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "2"        # request == limit → QoS Guaranteed
+            memory: "4Gi"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+
+      # Best practice: initContainer para setup de permisos
+      initContainers:
+      - name: init-permissions
+        image: busybox:1.36
+        command: ['sh', '-c', 'chown -R 999:999 /var/lib/postgresql/data']
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: production
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None  # Headless Service requerido para StatefulSet

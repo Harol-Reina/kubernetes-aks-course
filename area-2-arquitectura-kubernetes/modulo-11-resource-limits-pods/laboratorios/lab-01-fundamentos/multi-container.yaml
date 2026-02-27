@@ -1,0 +1,60 @@
+# Ejercicio 4: Multi-Container Resources - Pod con contenedor principal y sidecars
+# Uso: kubectl apply -f multi-container.yaml
+#
+# Descripcion:
+#   Pod con tres contenedores: uno principal (app) y dos sidecars (logger y
+#   metrics). Ilustra como se calculan los recursos totales del Pod sumando
+#   los requests y limits de todos los contenedores. La QoS Class se
+#   determina evaluando TODOS los contenedores del Pod en conjunto.
+#
+# Conceptos clave:
+#   - Total Pod Request = suma de requests de todos los contenedores app
+#   - Total Pod Limit = suma de limits de todos los contenedores app
+#   - QoS Class se calcula con todos los contenedores (app + init + sidecar)
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-app
+  labels:
+    app: multi-container-app
+    lab: fundamentos
+    exercise: "4"
+spec:
+  containers:
+  # Contenedor principal
+  - name: app
+    image: nginx:1.25
+    resources:
+      requests:
+        cpu: "300m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+  # Sidecar 1: logging
+  - name: logger
+    image: busybox:1.36
+    command: ['sh', '-c', 'tail -f /dev/null']
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+
+  # Sidecar 2: metrics
+  - name: metrics
+    image: busybox:1.36
+    command: ['sh', '-c', 'tail -f /dev/null']
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
