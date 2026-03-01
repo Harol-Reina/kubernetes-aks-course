@@ -331,4 +331,21 @@ echo "1. Revisar el README.md del laboratorio"
 echo "2. Ejecutar instalación de containerd si es necesario"
 echo "3. Instalar kubeadm, kubelet, kubectl"
 echo "4. Ejecutar kubeadm init"
+
+---
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `kubeadm-config.yaml` | Configuracion kubeadm para inicializar cluster single master (editar IPs antes de usar) |
+| `validate-prerequisites.sh` | Script de validacion de prerequisites del sistema |
+| `verify-cluster.sh` | Script de verificacion del cluster post-init |
+| `cleanup.sh` | Script de limpieza completa del cluster |
+
+> **Nota:** Este laboratorio esta disenado para VMs reales. No requiere Minikube ni sus addons.
+
+---
+
+**Proximo paso:** Ejecutar el procedimiento del laboratorio en [README.md](./README.md)
 echo ""

@@ -1,17 +1,18 @@
-# Laboratorios: Cluster Setup con kubeadm
+# 📋 Laboratorios: Cluster Setup con kubeadm
 
-Laboratorios prácticos hands-on para dominar el setup y administración de clusters Kubernetes con kubeadm. Estos labs cubren desde instalación básica hasta troubleshooting avanzado, preparándote para la certificación CKA.
+Laboratorios prácticos hands-on para dominar el setup y administración de clusters Kubernetes con kubeadm. Estos labs utilizan un enfoque **declarativo** con archivos de configuración separados y documentados. Cubren desde instalación básica hasta troubleshooting avanzado, preparándote para la certificación CKA.
 
 ---
 
 ## 📚 Índice de Laboratorios
 
-| Lab | Título | Dificultad | Duración | Objetivos |
-|-----|--------|------------|----------|-----------|
-| [01](./lab-01-basic-cluster.md) | Setup de Cluster Básico | ⭐⭐ Intermedio | 45-60 min | Instalar prerequisites, inicializar control plane, agregar workers |
-| [02](./lab-02-ha-cluster.md) | Cluster High Availability | ⭐⭐⭐⭐ Avanzado | 90-120 min | Setup HA con 3 control planes, load balancer, test failover |
-| [03](./lab-03-etcd-backup-restore.md) | Backup y Restore de etcd | ⭐⭐⭐ Intermedio-Avanzado | 45-60 min | Backups manuales/automáticos, restore, DR strategy |
-| [04](./lab-04-troubleshooting.md) | Troubleshooting Cluster | ⭐⭐⭐⭐ Avanzado | 60-90 min | Diagnosticar y resolver 10 problemas comunes |
+| Lab | Título | Dificultad | Duración | Archivos |
+|-----|--------|------------|----------|----------|
+| [01](./lab-01-kubeadm-init-basic/) | Cluster Básico con kubeadm init | ⭐⭐⭐ Avanzado | 2-3 horas | YAML: 1 \| Scripts: 3 |
+| [02](./lab-02-worker-node-join/) | Worker Node Join | ⭐⭐⭐ Avanzado | 1-2 horas | YAML: 1 \| Scripts: 3 |
+| [03](./lab-03-ha-control-plane/) | HA Control Plane con kubeadm | ⭐⭐⭐⭐ Avanzado | 90-120 min | YAML: 2 \| Scripts: 3 |
+| [04](./lab-04-etcd-external/) | External etcd Cluster | ⭐⭐⭐⭐ Avanzado | 90-120 min | YAML: 1, JSON: 3 \| Scripts: 3 |
+| [Resumen](./lab-resumen-kubeadm/) | Resumen: Cluster Setup | Repaso | 15 min | YAML: 1 |
 
 ---
 

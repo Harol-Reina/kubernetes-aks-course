@@ -643,3 +643,20 @@ sudo mount -t tmpfs -o size=2G tmpfs /var/lib/etcd
 ---
 
 **Siguiente paso**: Una vez validados todos los prerequisites, continúa con el [README.md](./README.md) para el despliegue del cluster.
+
+---
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `ca-config.json` | Perfil de firma cfssl: define usages y expiracion para certificados del cluster etcd |
+| `ca-csr.json` | CSR para generar la CA de etcd con cfssl (`cfssl gencert -initca`) |
+| `etcd-csr.json` | CSR para los certificados de servidor/cliente etcd (SAN via flag -hostname en cfssl) |
+| `etcd.service` | Plantilla de unidad systemd para etcd. Requiere editar variables por nodo antes de desplegar |
+| `kubeadm-config-external-etcd.yaml` | Configuracion kubeadm con topologia de etcd externo para el primer control plane |
+| `setup-etcd.sh` | Script de automatizacion para setup del cluster etcd externo |
+| `verify-etcd.sh` | Script de verificacion del estado del cluster etcd |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+> **Nota:** Este laboratorio esta disenado para VMs reales (no Minikube). Requiere multiples nodos con conectividad de red entre ellos.

@@ -1,0 +1,52 @@
+# Ejercicio 1: Configuracion kubeadm HA - Primer Control Plane
+# Uso: cp kubeadm-config-ha.yaml ~/kubeadm-config-ha.yaml
+#      # Editar IPs segun tu entorno
+#      sudo kubeadm init --config ~/kubeadm-config-ha.yaml --upload-certs
+#
+# Descripcion:
+#   Archivo de configuracion para inicializar el PRIMER control plane
+#   de un cluster HA con kubeadm. El controlPlaneEndpoint apunta al
+#   Load Balancer (NO a la IP local). Incluye certificateKey para
+#   compartir certificados entre control planes via --upload-certs.
+#
+# Conceptos clave:
+#   - controlPlaneEndpoint DEBE apuntar al Load Balancer
+#   - advertiseAddress es la IP LOCAL del nodo (no el LB)
+#   - certificateKey permite compartir certs via upload-certs
+#   - etcd.local = topologia stacked (etcd en cada control plane)
+#   - podSubnet 10.244.0.0/16 compatible con Calico/Flannel
+#
+# IMPORTANTE: Reemplazar IPs antes de usar
+#   - 192.168.1.100 = IP del Load Balancer
+#   - 192.168.1.101 = IP del master-01
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: v1.28.0
+# CRITICO: Apuntar al Load Balancer, no a la IP local
+controlPlaneEndpoint: "192.168.1.100:6443"  # <- IP del Load Balancer
+
+networking:
+  podSubnet: "10.244.0.0/16"  # Para Calico/Flannel
+  serviceSubnet: "10.96.0.0/12"
+
+# Configuracion etcd (stacked)
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+localAPIEndpoint:
+  # IP local del master-01 (NO el Load Balancer)
+  advertiseAddress: "192.168.1.101"
+  bindPort: 6443
+
+# CRITICO para HA: upload-certs permite compartir certificados
+certificateKey: "your-random-certificate-key-here-64-chars-exactly-12345"
+
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd

@@ -836,3 +836,17 @@ sudo journalctl -u haproxy -n 50
 ---
 
 **Siguiente paso**: Una vez validados todos los prerequisites, continúa con el [README.md](./README.md) para el despliegue del cluster HA.
+
+---
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `kubeadm-config-ha.yaml` | Configuracion kubeadm para el primer control plane HA (stacked etcd) |
+| `haproxy-config.cfg` | Configuracion completa de HAProxy para load balancing del API Server |
+| `setup-ha.sh` | Script de automatizacion para setup del cluster HA |
+| `verify-ha.sh` | Script de verificacion del estado HA del cluster |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+> **Nota:** Este laboratorio esta disenado para VMs reales (no Minikube). Requiere multiples nodos con conectividad de red entre ellos.

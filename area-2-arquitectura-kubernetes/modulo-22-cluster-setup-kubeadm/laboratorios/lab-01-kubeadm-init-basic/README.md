@@ -1,15 +1,53 @@
-# Lab 01: Cluster Básico con kubeadm init
+# Lab 01: Cluster Basico con kubeadm init
 
-## 📋 Información del Laboratorio
+**Duracion estimada:** 2-3 horas
+**Nivel:** Avanzado
+**Objetivo:** Inicializar un cluster de Kubernetes single-master con kubeadm en VMs reales
 
-- **Nombre**: Cluster Básico con kubeadm init
-- **Módulo**: 22 - Cluster Setup with kubeadm
-- **Área**: 2 - Arquitectura Kubernetes
-- **Duración**: 2-3 horas
-- **Dificultad**: ⭐⭐⭐ Avanzado
-- **CKA relevance**: ⭐⭐⭐⭐⭐ (25% del examen - Cluster Architecture, Installation & Configuration)
+---
 
-## 🎯 Objetivos de Aprendizaje
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| **kubeadm init** | Herramienta de bootstrap para inicializar el control plane de Kubernetes en una VM real |
+| **InitConfiguration** | Configura el endpoint local del API Server (advertiseAddress, bindPort, criSocket) |
+| **ClusterConfiguration** | Define parametros del cluster: version, networking (podSubnet, serviceSubnet), endpoints |
+| **KubeletConfiguration** | Configura el kubelet local: cgroupDriver debe coincidir con containerd |
+| **Calico CNI** | Plugin de red instalado post-init; requiere podSubnet 192.168.0.0/16 |
+| **kubeadm preflight** | Validaciones automaticas previas al init: swap, puertos, container runtime |
+| **Static Pods** | El control plane (apiserver, scheduler, controller-manager, etcd) corre como static pods |
+
+---
+
+## Archivos del Laboratorio
+
+Este laboratorio usa un enfoque **declarativo con archivos de configuracion**. Las configuraciones se copian y editan en lugar de generarse con heredoc:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `kubeadm-config.yaml` | 1 | Configuracion kubeadm para inicializar cluster single master (editar IPs antes de usar) |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `validate-prerequisites.sh` | Script de validacion de prerequisites del sistema antes del init |
+| `verify-cluster.sh` | Script de verificacion del cluster post-init |
+| `cleanup.sh` | Script de limpieza completa del cluster (kubeadm reset + iptables) |
+
+---
+
+## Informacion del Laboratorio
+
+- **Nombre**: Cluster Basico con kubeadm init
+- **Modulo**: 22 - Cluster Setup with kubeadm
+- **Area**: 2 - Arquitectura Kubernetes
+- **Duracion**: 2-3 horas
+- **Dificultad**: Avanzado
+- **CKA relevance**: Alta (25% del examen - Cluster Architecture, Installation & Configuration)
+
+## Objetivos de Aprendizaje
 
 Al completar este laboratorio, serás capaz de:
 
@@ -265,51 +303,22 @@ kubectl version --client
 
 ### Parte 2: Inicialización del Cluster (20 min)
 
-#### 2.1 Crear configuración kubeadm
+#### 2.1 Preparar configuracion kubeadm
 
 ```bash
-# Crear kubeadm-config.yaml
-cat <<EOF > ~/kubeadm-config.yaml
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: $(hostname -I | awk '{print $1}')
-  bindPort: 6443
-nodeRegistration:
-  criSocket: unix:///var/run/containerd/containerd.sock
-  imagePullPolicy: IfNotPresent
-  name: $(hostname)
-  taints:
-  - effect: NoSchedule
-    key: node-role.kubernetes.io/control-plane
----
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: ClusterConfiguration
-kubernetesVersion: v1.28.0
-controlPlaneEndpoint: "$(hostname -I | awk '{print $1}'):6443"
-networking:
-  podSubnet: "192.168.0.0/16"
-  serviceSubnet: "10.96.0.0/12"
-apiServer:
-  timeoutForControlPlane: 4m0s
-  extraArgs:
-    authorization-mode: "Node,RBAC"
-controllerManager:
-  extraArgs:
-    bind-address: "0.0.0.0"
-scheduler:
-  extraArgs:
-    bind-address: "0.0.0.0"
-etcd:
-  local:
-    dataDir: /var/lib/etcd
----
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cgroupDriver: systemd
-EOF
+# Copiar archivo de configuracion kubeadm incluido en este lab
+cp kubeadm-config.yaml ~/kubeadm-config.yaml
 
-# Revisar configuración
+# IMPORTANTE: Sustituir los placeholders con valores reales del nodo
+
+# Reemplazar <NODE_IP> con la IP principal del nodo:
+NODE_IP=$(hostname -I | awk '{print $1}')
+sed -i "s/<NODE_IP>/$NODE_IP/g" ~/kubeadm-config.yaml
+
+# Reemplazar <NODE_HOSTNAME> con el hostname real:
+sed -i "s/<NODE_HOSTNAME>/$(hostname)/g" ~/kubeadm-config.yaml
+
+# Revisar configuracion resultante
 cat ~/kubeadm-config.yaml
 ```
 

@@ -1,0 +1,18 @@
+# Ejercicio 1: Configuracion Kubelet Personalizada - Worker Node Join
+# Uso: cp kubelet-config.yaml /tmp/kubelet-config.yaml
+#      sudo kubeadm join <CONTROL_PLANE_IP>:6443 --config kubelet-config.yaml
+#
+# Descripcion:
+#   Configuracion personalizada del kubelet para nodos worker.
+#   Define el cgroup driver (debe coincidir con containerd) y
+#   el numero maximo de pods por nodo. Se usa opcionalmente con
+#   kubeadm join para aplicar settings no-default al kubelet.
+#
+# Conceptos clave:
+#   - cgroupDriver debe coincidir con el container runtime (systemd)
+#   - maxPods define el limite de pods por nodo (default: 110)
+#   - Esta configuracion es OPCIONAL para el join basico
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+maxPods: 110

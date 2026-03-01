@@ -8,6 +8,42 @@
 
 ---
 
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| **kubeadm HA init** | Inicializar el primer control plane de un cluster HA usando un archivo de configuracion con `controlPlaneEndpoint` apuntando al Load Balancer |
+| **--upload-certs** | Flag que sube los certificados del control plane cifrados al cluster para que otros control planes los descarguen automaticamente al unirse |
+| **certificateKey** | Clave de cifrado de 64 caracteres usada para proteger los certificados compartidos via `--upload-certs`. Expira a los 2 horas |
+| **HAProxy Load Balancer** | Proxy TCP en modo layer 4 que distribuye trafico al API Server entre los tres control planes con health checks activos |
+| **Stacked etcd** | Topologia donde etcd corre dentro de cada nodo control plane. Mas sencillo pero acopla el fallo de etcd al fallo del nodo |
+| **kubeadm join --control-plane** | Comando para unir nodos adicionales como control planes. Requiere `--certificate-key` para acceder a los certificados compartidos |
+| **Leader Election** | Mecanismo de kube-controller-manager y kube-scheduler para elegir un lider activo entre multiples replicas, evitando split-brain |
+| **Failover validation** | Proceso de detener un control plane y verificar que el cluster sigue respondiendo a traves del Load Balancer |
+
+---
+
+## Archivos del Laboratorio
+
+Este laboratorio utiliza un enfoque **declarativo con archivos de configuracion separados**:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `kubeadm-config-ha.yaml` | 1 | Configuracion kubeadm para inicializar el primer control plane HA con etcd stacked |
+| `haproxy-config.cfg` | 1 | Configuracion completa de HAProxy para load balancing del API Server |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `setup-ha.sh` | Script de automatizacion para setup del cluster HA |
+| `verify-ha.sh` | Script de verificacion del estado del cluster HA |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+> **Nota:** Este laboratorio esta disenado para VMs reales (no Minikube). Requiere multiples nodos con conectividad de red entre ellos.
+
+---
+
 ## Objetivos de Aprendizaje
 
 Al completar este laboratorio, serás capaz de:
@@ -242,40 +278,29 @@ curl -k https://<LB_IP>:6443
 
 ### 2.1 Preparar Configuración kubeadm
 
-Crea archivo `kubeadm-config-ha.yaml` en **master-01**:
+Copia el archivo de configuracion incluido en este laboratorio a **master-01**:
 
-```yaml
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: ClusterConfiguration
-kubernetesVersion: v1.28.0
-# CRÍTICO: Apuntar al Load Balancer, no a la IP local
-controlPlaneEndpoint: "192.168.1.100:6443"  # ← IP del Load Balancer
+```bash
+# Copiar archivo de configuracion al directorio home
+cp kubeadm-config-ha.yaml ~/kubeadm-config-ha.yaml
 
-networking:
-  podSubnet: "10.244.0.0/16"  # Para Calico/Flannel
-  serviceSubnet: "10.96.0.0/12"
-
-# Configuración etcd (stacked)
-etcd:
-  local:
-    dataDir: /var/lib/etcd
-    
----
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: InitConfiguration
-localAPIEndpoint:
-  # IP local del master-01 (NO el Load Balancer)
-  advertiseAddress: "192.168.1.101"
-  bindPort: 6443
-
-# CRÍTICO para HA: upload-certs permite compartir certificados
-certificateKey: "your-random-certificate-key-here-64-chars-exactly-12345"
-
----
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cgroupDriver: systemd
+# IMPORTANTE: Editar IPs para tu entorno
+nano ~/kubeadm-config-ha.yaml
+# Cambiar: 192.168.1.100 -> IP real del Load Balancer
+# Cambiar: 192.168.1.101 -> IP real de master-01
 ```
+
+Revisa el contenido antes de aplicar:
+
+```bash
+cat ~/kubeadm-config-ha.yaml
+```
+
+Puntos clave del archivo `kubeadm-config-ha.yaml`:
+- **controlPlaneEndpoint**: apunta al Load Balancer (NO a la IP local del nodo)
+- **advertiseAddress**: IP local del master-01 (la que otros nodos usaran para contactar este API Server)
+- **certificateKey**: clave de 64 caracteres que cifra los certificados subidos con `--upload-certs`
+- **etcd.local**: topologia stacked (etcd corre dentro del control plane)
 
 ### 2.2 Ejecutar kubeadm init
 

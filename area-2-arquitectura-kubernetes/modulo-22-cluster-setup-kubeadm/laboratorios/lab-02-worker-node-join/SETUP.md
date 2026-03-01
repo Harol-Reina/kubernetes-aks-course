@@ -526,4 +526,18 @@ Antes de ejecutar `kubeadm join`, verificar:
 
 ---
 
-**Próximo paso**: Ejecutar el procedimiento del laboratorio en [README.md](./README.md)
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `kubelet-config.yaml` | Configuracion personalizada del kubelet para nodos worker (cgroupDriver, maxPods) |
+| `validate-prerequisites.sh` | Script de validacion de prerequisites (enlace al script de Lab 01) |
+| `join-worker.sh` | Script automatizado para preparar y hacer join del worker node |
+| `verify-node.sh` | Script de verificacion del estado del worker tras el join |
+| `cleanup.sh` | Script de limpieza del worker node (drain + delete + kubeadm reset) |
+
+> **Nota:** Este laboratorio esta disenado para VMs reales con un control plane ya inicializado (Lab 01 completado). No requiere Minikube.
+
+---
+
+**Proximo paso:** Ejecutar el procedimiento del laboratorio en [README.md](./README.md)

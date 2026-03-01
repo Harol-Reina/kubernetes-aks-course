@@ -1,15 +1,54 @@
 # Lab 02: Worker Node Join
 
-## 📋 Información del Laboratorio
+**Duracion estimada:** 1-2 horas
+**Nivel:** Avanzado
+**Objetivo:** Agregar worker nodes a un cluster Kubernetes existente usando kubeadm join
+
+---
+
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| **kubeadm join** | Comando para unir un nodo worker a un cluster existente usando bootstrap tokens |
+| **Bootstrap Tokens** | Tokens temporales (TTL 24h por defecto) que autorizan el join de nuevos nodos |
+| **TLS Bootstrap** | Proceso por el que el kubelet obtiene su certificado del API server al hacer join |
+| **CA Certificate Hash** | Hash SHA256 del CA del cluster; evita ataques man-in-the-middle durante el join |
+| **KubeletConfiguration** | Configuracion opcional del kubelet (cgroupDriver, maxPods) aplicable durante el join |
+| **Node Registration** | Proceso por el que el nodo se registra con labels, taints y capacidad en el API server |
+| **kubeadm token** | Comandos para crear, listar y eliminar bootstrap tokens en el control plane |
+
+---
+
+## Archivos del Laboratorio
+
+Este laboratorio usa un enfoque **declarativo con archivos de configuracion**:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `kubelet-config.yaml` | 1 | Configuracion personalizada del kubelet para el worker node (cgroupDriver, maxPods) |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `validate-prerequisites.sh` | Enlace al script de validacion de prerequisites (mismo que Lab 01) |
+| `join-worker.sh` | Script automatizado para preparar y hacer join del worker node |
+| `verify-node.sh` | Script de verificacion del estado del worker tras el join |
+| `cleanup.sh` | Script de limpieza del worker node (drain + delete + kubeadm reset) |
+
+---
+
+## Informacion del Laboratorio
 
 - **Nombre**: Agregar Worker Nodes al Cluster
-- **Módulo**: 22 - Cluster Setup with kubeadm
-- **Área**: 2 - Arquitectura Kubernetes
-- **Duración**: 1-2 horas
-- **Dificultad**: ⭐⭐⭐ Avanzado
-- **CKA relevance**: ⭐⭐⭐⭐⭐ (25% del examen - Cluster Architecture, Installation & Configuration)
+- **Modulo**: 22 - Cluster Setup with kubeadm
+- **Area**: 2 - Arquitectura Kubernetes
+- **Duracion**: 1-2 horas
+- **Dificultad**: Avanzado
+- **CKA relevance**: Alta (25% del examen - Cluster Architecture, Installation & Configuration)
 
-## 🎯 Objetivos de Aprendizaje
+## Objetivos de Aprendizaje
 
 Al completar este laboratorio, serás capaz de:
 
@@ -277,20 +316,16 @@ sudo kubeadm join 192.168.1.100:6443 \
   --discovery-token-ca-cert-hash sha256:<hash> \
   --node-name worker-01
 
-# Join con configuración de kubelet personalizada
-cat <<EOF > kubelet-config.yaml
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cgroupDriver: systemd
-maxPods: 110
-EOF
+# Join con configuracion de kubelet personalizada
+# Usar archivo de configuracion kubelet incluido en este lab:
+cat kubelet-config.yaml
 
 sudo kubeadm join 192.168.1.100:6443 \
   --token <token> \
   --discovery-token-ca-cert-hash sha256:<hash> \
   --config kubelet-config.yaml
 
-# Join con CRI socket específico
+# Join con CRI socket especifico
 sudo kubeadm join 192.168.1.100:6443 \
   --token <token> \
   --discovery-token-ca-cert-hash sha256:<hash> \

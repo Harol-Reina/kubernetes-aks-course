@@ -8,6 +8,45 @@
 
 ---
 
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| **cfssl / cfssljson** | Herramienta de Cloudflare para generar CAs y certificados TLS. Se usa para crear la PKI del cluster etcd externo |
+| **CA signing profiles** | Perfiles en `ca-config.json` que definen los `usages` permitidos para los certificados firmados (server auth + client auth) |
+| **TLS mutuo (mTLS)** | Configuracion donde tanto servidor como cliente presentan certificados. Requerido entre nodos etcd y entre API Server y etcd |
+| **etcd cluster bootstrap** | Proceso de inicializar un cluster etcd nuevo usando `--initial-cluster-state new` y `--initial-cluster` con todos los miembros |
+| **systemd unit para etcd** | Archivo de servicio que lanza etcd con todas las variables de red y TLS configuradas. Requiere personalizar por nodo |
+| **etcd.external en kubeadm** | Seccion de configuracion kubeadm que deshabilita etcd local y apunta el API Server a un cluster etcd externo via endpoints TLS |
+| **Separacion de concerns** | Topologia donde etcd y control planes son clusters independientes: el fallo de uno no afecta directamente al otro |
+| **etcdctl member list** | Comando para verificar el quorum y estado de los miembros del cluster etcd |
+
+---
+
+## Archivos del Laboratorio
+
+Este laboratorio utiliza un enfoque **declarativo con archivos de configuracion separados**:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `ca-config.json` | 1 | Perfil de firma cfssl: define usages y expiracion para certificados del cluster etcd |
+| `ca-csr.json` | 1 | CSR para generar la CA de etcd con cfssl (`cfssl gencert -initca`) |
+| `etcd-csr.json` | 1 | CSR para los certificados de servidor/cliente etcd (SAN se especifican en el comando cfssl) |
+| `etcd.service` | 1 | Plantilla de unidad systemd para etcd. Requiere editar variables por nodo antes de desplegar |
+| `kubeadm-config-external-etcd.yaml` | 2 | Configuracion kubeadm con topologia de etcd externo para inicializar el primer control plane |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `setup-etcd.sh` | Script de automatizacion para setup del cluster etcd externo |
+| `verify-etcd.sh` | Script de verificacion del estado del cluster etcd |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+> **Nota:** Este laboratorio esta disenado para VMs reales (no Minikube). Requiere multiples nodos con conectividad de red entre ellos.
+
+---
+
 ## Objetivos de Aprendizaje
 
 Al completar este laboratorio, serás capaz de:
@@ -208,47 +247,19 @@ sudo mv cfssljson_1.6.4_linux_amd64 /usr/local/bin/cfssljson
 ### 2.2 Crear CA para etcd
 
 ```bash
-# Crear directorio temporal
-mkdir -p ~/etcd-certs && cd ~/etcd-certs
+# Crear directorio temporal y copiar archivos de configuracion
+mkdir -p ~/etcd-certs
+cp ca-config.json ca-csr.json etcd-csr.json ~/etcd-certs/
+cd ~/etcd-certs
 
-# 1. Configuración de CA
-cat > ca-config.json <<EOF
-{
-  "signing": {
-    "default": {
-      "expiry": "8760h"
-    },
-    "profiles": {
-      "etcd": {
-        "usages": ["signing", "key encipherment", "server auth", "client auth"],
-        "expiry": "8760h"
-      }
-    }
-  }
-}
-EOF
+# Revisar configuracion de CA antes de usar
+cat ca-config.json
+# Debe mostrar perfil "etcd" con usages: signing, key encipherment, server auth, client auth
 
-# 2. CSR de CA
-cat > ca-csr.json <<EOF
-{
-  "CN": "etcd-cluster-ca",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "Kubernetes",
-      "OU": "etcd-cluster",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
+cat ca-csr.json
+# Debe mostrar CN: etcd-cluster-ca y parametros de clave RSA 2048
 
-# 3. Generar CA
+# Generar CA
 cfssl gencert -initca ca-csr.json | cfssljson -bare ca
 # Genera: ca.pem, ca-key.pem
 ```
@@ -256,26 +267,10 @@ cfssl gencert -initca ca-csr.json | cfssljson -bare ca
 ### 2.3 Generar Certificados de Servidor
 
 ```bash
-# IMPORTANTE: Cambiar IPs por las de tus nodos etcd
-
-cat > etcd-csr.json <<EOF
-{
-  "CN": "etcd",
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "US",
-      "L": "Portland",
-      "O": "Kubernetes",
-      "OU": "etcd-cluster",
-      "ST": "Oregon"
-    }
-  ]
-}
-EOF
+# Revisar el CSR de certificados etcd (ya esta en ~/etcd-certs/)
+cat etcd-csr.json
+# Debe mostrar CN: etcd y parametros de clave RSA 2048
+# Nota: los SANs (IPs permitidas) se especifican en el flag -hostname del comando cfssl
 
 # Generar certificado servidor
 # hosts: IPs de los 3 nodos etcd + localhost
@@ -310,45 +305,21 @@ done
 **En etcd-01** (192.168.1.201):
 
 ```bash
-# Variables (CAMBIAR SEGÚN TU RED)
-ETCD_NAME="etcd-01"
-INTERNAL_IP="192.168.1.201"
-INITIAL_CLUSTER="etcd-01=https://192.168.1.201:2380,etcd-02=https://192.168.1.202:2380,etcd-03=https://192.168.1.203:2380"
+# Copiar la plantilla de servicio etcd al nodo
+# El archivo etcd.service esta incluido en este laboratorio
+sudo cp etcd.service /etc/systemd/system/etcd.service
 
-# Crear archivo de servicio
-cat <<EOF | sudo tee /etc/systemd/system/etcd.service
-[Unit]
-Description=etcd
-Documentation=https://github.com/etcd-io/etcd
-After=network.target
+# IMPORTANTE: Editar las variables del nodo antes de activar el servicio
+# Abrir el archivo y cambiar ETCD_NAME, INTERNAL_IP, INITIAL_CLUSTER
+sudo nano /etc/systemd/system/etcd.service
 
-[Service]
-Type=notify
-ExecStart=/usr/local/bin/etcd \\
-  --name ${ETCD_NAME} \\
-  --data-dir=/var/lib/etcd \\
-  --listen-peer-urls https://${INTERNAL_IP}:2380 \\
-  --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
-  --advertise-client-urls https://${INTERNAL_IP}:2379 \\
-  --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \\
-  --initial-cluster ${INITIAL_CLUSTER} \\
-  --initial-cluster-state new \\
-  --initial-cluster-token etcd-cluster-1 \\
-  --client-cert-auth \\
-  --trusted-ca-file=/etc/etcd/ca.pem \\
-  --cert-file=/etc/etcd/etcd.pem \\
-  --key-file=/etc/etcd/etcd-key.pem \\
-  --peer-client-cert-auth \\
-  --peer-trusted-ca-file=/etc/etcd/ca.pem \\
-  --peer-cert-file=/etc/etcd/etcd.pem \\
-  --peer-key-file=/etc/etcd/etcd-key.pem
+# Para etcd-01:
+#   ${ETCD_NAME}      -> etcd-01
+#   ${INTERNAL_IP}    -> 192.168.1.201
+#   ${INITIAL_CLUSTER} -> etcd-01=https://192.168.1.201:2380,etcd-02=https://192.168.1.202:2380,etcd-03=https://192.168.1.203:2380
 
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Revisar contenido del archivo de servicio
+cat /etc/systemd/system/etcd.service
 ```
 
 ### 3.2 Configurar etcd-02 y etcd-03
@@ -405,43 +376,27 @@ done
 
 ### 4.2 Configuración kubeadm para Primer Control Plane
 
-**En master-01**:
+**En master-01**, copia y edita el archivo de configuracion incluido en este laboratorio:
 
-```yaml
-# Archivo: kubeadm-config-external-etcd.yaml
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: ClusterConfiguration
-kubernetesVersion: v1.28.0
-controlPlaneEndpoint: "192.168.1.100:6443"  # Load Balancer
+```bash
+# Copiar archivo de configuracion al directorio home
+cp kubeadm-config-external-etcd.yaml ~/kubeadm-config-external-etcd.yaml
 
-# CONFIGURACIÓN CRÍTICA: etcd externo
-etcd:
-  external:
-    endpoints:
-      - https://192.168.1.201:2379
-      - https://192.168.1.202:2379
-      - https://192.168.1.203:2379
-    caFile: /etc/kubernetes/pki/etcd/ca.pem
-    certFile: /etc/kubernetes/pki/etcd/client.crt
-    keyFile: /etc/kubernetes/pki/etcd/client.key
+# IMPORTANTE: Editar IPs para tu entorno
+nano ~/kubeadm-config-external-etcd.yaml
+# Cambiar: 192.168.1.100 -> IP real del Load Balancer
+# Cambiar: 192.168.1.101 -> IP real de master-01
+# Cambiar: 192.168.1.201/202/203 -> IPs reales de los nodos etcd
 
-networking:
-  podSubnet: "10.244.0.0/16"
-  serviceSubnet: "10.96.0.0/12"
-
----
-apiVersion: kubeadm.k8s.io/v1beta3
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: "192.168.1.101"  # IP de master-01
-  bindPort: 6443
-certificateKey: "your-random-certificate-key-here-64-chars"
-
----
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cgroupDriver: systemd
+# Revisar configuracion antes de aplicar
+cat ~/kubeadm-config-external-etcd.yaml
 ```
+
+Puntos clave del archivo `kubeadm-config-external-etcd.yaml`:
+- **etcd.external.endpoints**: lista los tres endpoints del cluster etcd (puerto 2379)
+- **caFile / certFile / keyFile**: certificados TLS para que el API Server se autentique con etcd
+- **controlPlaneEndpoint**: apunta al Load Balancer (NO a la IP local)
+- La ausencia de `etcd.local` indica a kubeadm que NO cree un pod etcd en este nodo
 
 ### 4.3 Inicializar Primer Control Plane
 

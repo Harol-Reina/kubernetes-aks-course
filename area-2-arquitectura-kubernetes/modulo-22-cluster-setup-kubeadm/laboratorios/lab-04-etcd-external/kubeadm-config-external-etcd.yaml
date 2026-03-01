@@ -1,0 +1,54 @@
+# Ejercicio 2: Configuracion kubeadm con etcd Externo
+# Uso: cp kubeadm-config-external-etcd.yaml ~/kubeadm-config-external-etcd.yaml
+#      # Editar IPs segun tu entorno
+#      sudo kubeadm init --config ~/kubeadm-config-external-etcd.yaml --upload-certs
+#
+# Descripcion:
+#   Archivo de configuracion para inicializar un cluster Kubernetes
+#   con topologia de etcd externo. La seccion etcd.external define
+#   los endpoints del cluster etcd dedicado y los certificados TLS
+#   para la comunicacion API Server -> etcd.
+#
+# Conceptos clave:
+#   - etcd.external.endpoints lista los 3 nodos etcd dedicados
+#   - caFile, certFile, keyFile para autenticacion TLS mutuo
+#   - controlPlaneEndpoint apunta al Load Balancer
+#   - No se crea pod etcd local (etcd esta externo)
+#
+# IMPORTANTE: Reemplazar IPs antes de usar
+#   - 192.168.1.100 = IP del Load Balancer
+#   - 192.168.1.101 = IP de master-01
+#   - 192.168.1.201/202/203 = IPs de los nodos etcd
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+kubernetesVersion: v1.28.0
+controlPlaneEndpoint: "192.168.1.100:6443"  # Load Balancer
+
+# CONFIGURACION CRITICA: etcd externo
+etcd:
+  external:
+    endpoints:
+      - https://192.168.1.201:2379
+      - https://192.168.1.202:2379
+      - https://192.168.1.203:2379
+    caFile: /etc/kubernetes/pki/etcd/ca.pem
+    certFile: /etc/kubernetes/pki/etcd/client.crt
+    keyFile: /etc/kubernetes/pki/etcd/client.key
+
+networking:
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "192.168.1.101"  # IP de master-01
+  bindPort: 6443
+certificateKey: "your-random-certificate-key-here-64-chars"
+
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
