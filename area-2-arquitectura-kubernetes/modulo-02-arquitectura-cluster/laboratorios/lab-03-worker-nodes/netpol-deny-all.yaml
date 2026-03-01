@@ -1,0 +1,26 @@
+# Ejercicio 4.3: Network Policies - Politica Deny-All de Ingress
+# Uso: kubectl apply -f netpol-deny-all.yaml
+#
+# Descripcion:
+#   NetworkPolicy que bloquea todo el trafico de entrada (Ingress) hacia pods
+#   con la etiqueta app=backend. Una vez aplicada, ningun pod podra conectarse
+#   al backend a menos que haya una politica explicitamente permisiva.
+#
+# Conceptos clave:
+#   - policyTypes: [Ingress] solo afecta trafico entrante
+#   - Sin reglas ingress definidas = denegar todo el ingress
+#   - Requiere CNI compatible con NetworkPolicy (Calico, Cilium, etc.)
+#   - Verificar bloqueo: kubectl run test --rm -it --image=busybox -- wget --timeout=5 http://<backend-ip>
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress

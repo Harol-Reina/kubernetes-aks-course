@@ -1,6 +1,6 @@
-# Capitulo 2: Docker y Contenerizacion
+# Capítulo 2: Docker y Contenerización
 
-Con la base de virtualizacion clara, pasamos a la revolucion que cambio el despliegue de aplicaciones: los contenedores. Docker simplifico radicalmente como empaquetamos, distribuimos y ejecutamos software.
+Con la base de virtualización clara, pasamos a la revolución que cambió el despliegue de aplicaciones: los contenedores. Docker simplificó radicalmente cómo empaquetamos, distribuimos y ejecutamos software.
 
 ---
 

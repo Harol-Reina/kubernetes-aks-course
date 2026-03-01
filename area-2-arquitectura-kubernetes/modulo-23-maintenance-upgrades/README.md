@@ -1,32 +1,6 @@
-# Módulo 23: Cluster Maintenance & Upgrades
+# Capítulo 25: Mantenimiento y Upgrades
 
-## 📋 Tabla de Contenidos
-
-1. [Introducción](#introducción)
-2. [Estrategia de Upgrades](#estrategia-de-upgrades)
-3. [Version Skew Policy](#version-skew-policy)
-4. [Upgrade del Control Plane](#upgrade-del-control-plane)
-5. [Upgrade de Worker Nodes](#upgrade-de-worker-nodes)
-6. [Node Maintenance](#node-maintenance)
-7. [Certificate Management](#certificate-management)
-8. [Backup y Rollback](#backup-y-rollback)
-9. [Best Practices](#best-practices)
-10. [Troubleshooting](#troubleshooting)
-
----
-
-## 🎯 Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-- ✅ Planificar y ejecutar upgrades de cluster seguros
-- ✅ Entender y aplicar version skew policy
-- ✅ Realizar upgrades de control plane con kubeadm
-- ✅ Actualizar worker nodes sin downtime
-- ✅ Usar `drain`, `cordon`, y `uncordon` efectivamente
-- ✅ Gestionar certificados de Kubernetes
-- ✅ Implementar estrategias de backup pre-upgrade
-- ✅ Realizar rollback en caso de problemas
+El cluster está montado. Ahora lo mantenemos operativo: backups de etcd, upgrades de versión, drain de nodos y procedimientos de recuperación.
 
 ---
 
@@ -1137,32 +1111,7 @@ sudo kubeadm certs renew apiserver-kubelet-client
 sudo systemctl restart kubelet
 
 # 3. Verificar
-sudo systemctl status kubelet
-```
 
----
+## Resumen del Capítulo
 
-## 📚 Referencias
-
-- [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
-- [Version Skew Policy](https://kubernetes.io/releases/version-skew-policy/)
-- [Certificate Management](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/)
-- [Safely Drain Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
-- [Kubernetes Release Notes](https://kubernetes.io/docs/setup/release/notes/)
-
----
-
-## 🎯 Próximos Pasos
-
-1. **Práctica**: Completar laboratorios de este módulo
-2. **Documentación**: Crear runbooks de upgrade para tu organización
-3. **Automatización**: Implementar scripts de upgrade
-4. **Monitoreo**: Configurar alertas de expiración de certificados
-5. **Avanzar**: Continuar con [Módulo 24: Advanced Scheduling](../modulo-24-advanced-scheduling/)
-
----
-
-**Ver también:**
-- [Laboratorios](./laboratorios/README.md) - Labs prácticos
-- [Ejemplos](./ejemplos/README.md) - Scripts y configs
-- [RESUMEN](./RESUMEN-MODULO.md) - Cheatsheet de comandos
+Este capítulo cubrió el mantenimiento de clusters Kubernetes: estrategias de upgrade, version skew policy, actualización del control plane y workers con kubeadm, drenado de nodos, gestión de certificados, backup y restore de etcd, y procedimientos de rollback.

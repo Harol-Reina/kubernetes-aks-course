@@ -1,0 +1,24 @@
+# Ejercicio 5.3: Troubleshooting - Pod con Imagen Inexistente
+# Uso: kubectl apply -f broken-pod.yaml
+#
+# Descripcion:
+#   Pod que intenta usar una imagen con un tag inexistente en Docker Hub.
+#   Genera los estados ImagePullBackOff / ErrImagePull para practicar
+#   el flujo de diagnostico de problemas de imagenes.
+#
+# Conceptos clave:
+#   - ImagePullBackOff indica que el kubelet no puede descargar la imagen
+#   - Diagnostico: kubectl describe pod broken-pod | grep -A 10 "Events:"
+#   - El Scheduler si asigna el pod; el fallo ocurre en el Worker Node
+#   - Solucion: eliminar el pod y crear uno con imagen correcta
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-pod
+spec:
+  containers:
+  - name: app
+    image: nginx:nonexistent-tag-12345

@@ -1,6 +1,6 @@
-# Capitulo 1: Virtualizacion Tradicional
+# Capítulo 1: Virtualización Tradicional
 
-La infraestructura moderna comienza con un cambio fundamental: separar las aplicaciones del hardware fisico. En este capitulo, recorremos la evolucion desde servidores dedicados hasta la virtualizacion, entendiendo las tecnologias que pavimentaron el camino hacia los contenedores.
+La infraestructura moderna comienza con un cambio fundamental: separar las aplicaciones del hardware físico. En este capítulo, recorremos la evolución desde servidores dedicados hasta la virtualización, entendiendo las tecnologías que pavimentaron el camino hacia los contenedores.
 
 ---
 

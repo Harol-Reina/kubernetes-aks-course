@@ -1,0 +1,31 @@
+# Ejercicio 5.2: Optimizacion de Resources - Pod con QoS Guaranteed
+# Uso: kubectl apply -f guaranteed-pod.yaml
+#
+# Descripcion:
+#   Pod donde requests == limits en CPU y memoria. Kubernetes asigna la clase
+#   QoS "Guaranteed" a este pod, que es la de mayor prioridad y el ultimo
+#   en ser desalojado cuando el nodo sufre presion de recursos.
+#
+# Conceptos clave:
+#   - QoS Guaranteed: requests == limits para todos los contenedores
+#   - QoS Burstable: requests < limits o solo limits definidos
+#   - QoS BestEffort: sin requests ni limits (primer candidato a eviction)
+#   - Verificar: kubectl get pod guaranteed -o jsonpath='{.status.qosClass}'
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guaranteed
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"

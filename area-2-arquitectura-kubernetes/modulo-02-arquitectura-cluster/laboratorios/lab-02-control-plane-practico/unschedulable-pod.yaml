@@ -1,0 +1,25 @@
+# Ejercicio 3.2: Node Selector Imposible - Pod Inschedulable (Prueba Conceptual)
+# Uso: kubectl apply -f unschedulable-pod.yaml
+#
+# Descripcion:
+#   Pod con nodeSelector que apunta a una etiqueta inexistente (disktype=nvme).
+#   El Scheduler no encontrara ningun nodo elegible y el pod quedara en Pending.
+#   Usar para observar el mensaje de error del Scheduler.
+#
+# Conceptos clave:
+#   - Un pod en Pending sin nodo asignado indica problema de scheduling
+#   - Diagnostico: kubectl describe pod unschedulable-pod | grep -A 3 "Events:"
+#   - Mensaje esperado: "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector"
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unschedulable-pod
+spec:
+  nodeSelector:
+    disktype: nvme
+  containers:
+  - name: nginx
+    image: nginx

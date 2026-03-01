@@ -1,39 +1,6 @@
-# Módulo 25: Networking Deep Dive
+# Capítulo 27: Networking Avanzado
 
-## Información del Módulo
-
-- **Duración estimada**: 6-8 horas
-- **Nivel**: Avanzado
-- **Cobertura CKA**: ~20% del examen
-- **Prerequisitos**: Módulos 1-24 completados
-
-## Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-1. Comprender el modelo de networking de Kubernetes
-2. Configurar y troubleshoot CNI plugins
-3. Implementar y gestionar Services (ClusterIP, NodePort, LoadBalancer)
-4. Configurar DNS en Kubernetes (CoreDNS)
-5. Implementar Network Policies para seguridad
-6. Configurar Ingress controllers y rules
-7. Diagnosticar y resolver problemas de red
-8. Optimizar comunicación entre pods y servicios
-
----
-
-## Índice
-
-1. [Introducción al Networking de Kubernetes](#1-introducción-al-networking-de-kubernetes)
-2. [CNI - Container Network Interface](#2-cni---container-network-interface)
-3. [Services - Tipos y Casos de Uso](#3-services---tipos-y-casos-de-uso)
-4. [DNS en Kubernetes (CoreDNS)](#4-dns-en-kubernetes-coredns)
-5. [Network Policies](#5-network-policies)
-6. [Ingress Controllers y Rules](#6-ingress-controllers-y-rules)
-7. [Service Mesh Basics](#7-service-mesh-basics)
-8. [Network Troubleshooting](#8-network-troubleshooting)
-9. [Performance y Optimización](#9-performance-y-optimización)
-10. [Best Practices](#10-best-practices)
+El scheduling decide dónde corren los Pods. Ahora profundizamos en cómo se comunican: modelo de red, CNI plugins, DNS interno y Network Policies.
 
 ---
 
@@ -1446,31 +1413,6 @@ spec:
 - [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/)
 - [CoreDNS](https://coredns.io/plugins/kubernetes/)
 
-### Tools
+## Resumen del Capítulo
 
-- [Calico](https://www.tigera.io/project-calico/)
-- [Cilium](https://cilium.io/)
-- [Ingress-Nginx](https://kubernetes.github.io/ingress-nginx/)
-- [Istio](https://istio.io/)
-- [Linkerd](https://linkerd.io/)
-
-### Labs y Tutoriales
-
-- Ver directorio `laboratorios/` para prácticas hands-on
-- Ver directorio `ejemplos/` para YAML de referencia
-
----
-
-## Siguientes Pasos
-
-1. Completar laboratorios 01-04 en orden
-2. Practicar troubleshooting en cluster de prueba
-3. Implementar Network Policies en ambiente dev
-4. Explorar service mesh (Istio/Linkerd)
-5. Preparar para CKA: troubleshooting de red es ~20% del examen
-
----
-
-**Última actualización**: Noviembre 2025
-**Versión de Kubernetes**: 1.28+
-**Autor**: Curso Kubernetes CKA/CKAD
+Este capítulo cubrió el networking avanzado de Kubernetes: el modelo de red plana, plugins CNI (Calico, Flannel, Cilium), Service types y sus implementaciones, CoreDNS para resolución de nombres, Network Policies para segmentación, Ingress controllers, y diagnóstico de problemas de red.

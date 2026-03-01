@@ -8,9 +8,28 @@ Al finalizar este laboratorio, serás capaz de:
 - ✓ Verificar la comunicación entre componentes
 - ✓ Entender el flujo de creación de un recurso
 
-## Duración Estimada
+## Duracion Estimada
 
-⏱️ 60-90 minutos
+60-90 minutos | Basico
+
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| Inspeccion del Control Plane | Identificar y describir pods del kube-system (etcd, apiserver, scheduler, controller-manager) |
+| Comandos kubectl de exploracion | `kubectl get`, `kubectl describe`, `kubectl get events`, `kubectl logs` |
+| Observacion de etcd | Inspeccion de configuracion y directorio de datos del pod etcd-minikube |
+| Analisis de kube-system | Listado y clasificacion de todos los pods del namespace kube-system |
+| Watch de eventos en tiempo real | `kubectl get events -w` para rastrear la creacion de recursos |
+| API Watch | Simular el mecanismo watch que usan kubelet y controllers |
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de recursos creados durante el laboratorio |
+
+> Este laboratorio usa exclusivamente comandos imperativos. No hay archivos YAML que aplicar.
 
 ## Pre-requisitos
 

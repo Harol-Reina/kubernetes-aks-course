@@ -1,0 +1,28 @@
+# Ejercicio 3.2: Anatomia de un Pod - Pod con Multiples Contenedores
+# Uso: kubectl apply -f multi-container-pod.yaml
+#
+# Descripcion:
+#   Pod con dos contenedores: nginx como servidor principal y busybox como
+#   sidecar que imprime mensajes periodicamente. Permite explorar con crictl
+#   como el Container Runtime gestiona multiples contenedores en un mismo pod,
+#   incluyendo el pause container compartido.
+#
+# Conceptos clave:
+#   - Todos los contenedores de un pod comparten red y volumen de red
+#   - El pause container (sandbox) mantiene el namespace de red del pod
+#   - Inspeccion con crictl: sudo crictl pods --name multi-container
+#   - Los contenedores de un pod siempre se planifican en el mismo nodo
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  - name: sidecar
+    image: busybox
+    command: ["sh", "-c", "while true; do echo Hello; sleep 10; done"]

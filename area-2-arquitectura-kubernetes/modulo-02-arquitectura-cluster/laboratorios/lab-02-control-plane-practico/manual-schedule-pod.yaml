@@ -1,0 +1,25 @@
+# Ejercicio 3.4: Scheduling Manual - Pod con Scheduler Inexistente
+# Uso: kubectl apply -f manual-schedule-pod.yaml
+#
+# Descripcion:
+#   Pod configurado con schedulerName: manual-scheduler, un scheduler que no
+#   existe en el cluster. El pod quedara en estado Pending hasta que se le
+#   asigne un nodo manualmente con kubectl patch.
+#
+# Conceptos clave:
+#   - schedulerName permite especificar un scheduler alternativo
+#   - Asignacion manual: kubectl patch pod manual-schedule -p '{"spec":{"nodeName":"minikube"}}'
+#   - nodeName es el resultado final del scheduling; asignarlo manualmente omite el Scheduler
+#   - Diagnostico: kubectl describe pod manual-schedule | grep "Events:"
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manual-schedule
+spec:
+  schedulerName: manual-scheduler
+  containers:
+  - name: nginx
+    image: nginx

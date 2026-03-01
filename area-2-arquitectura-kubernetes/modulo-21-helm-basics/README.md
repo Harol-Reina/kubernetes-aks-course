@@ -1,6 +1,50 @@
-# Capitulo 23: Helm -- Gestor de Paquetes
+# Capítulo 23: Helm — Gestor de Paquetes
 
-Los patrones estan claros. Pero gestionar decenas de manifiestos YAML por aplicacion es tedioso. Helm empaqueta todo en charts reutilizables y parametrizables.
+Los patrones están claros. Pero gestionar decenas de manifiestos YAML por aplicación es tedioso. Helm empaqueta todo en charts reutilizables y parametrizables.
+
+---
+
+## 📚 Estructura del Módulo
+
+### 🎓 Teoría (90 minutos)
+
+| Sección | Tema | Duración |
+|---------|------|----------|
+| 1 | ¿Qué es Helm? Historia y motivación | 10 min |
+| 2 | Arquitectura Helm 3 vs Helm 2 | 10 min |
+| 3 | Anatomía de un Chart | 15 min |
+| 4 | Sistema de Templates | 15 min |
+| 5 | Values y Personalización | 10 min |
+| 6 | Gestión de Releases | 15 min |
+| 7 | Repositorios y Artifact Hub | 10 min |
+| 8 | Mejores Prácticas | 5 min |
+
+### 🧪 Práctica (120 minutos)
+
+| Lab | Contenido | Duración | Nivel |
+|-----|-----------|----------|-------|
+| 01 | Helm Basics: Install, Search, Deploy | 30 min | 🟢 Básico |
+| 02 | Crear Chart desde Cero | 30 min | 🟡 Intermedio |
+| 03 | Multi-Entorno con Values | 30 min | 🟡 Intermedio |
+| 04 | Hooks y Upgrade Avanzado | 30 min | 🔴 Avanzado |
+
+### 📖 Rutas de Aprendizaje
+
+#### 🌱 Principiante (3.5h)
+1. Leer teoría completa (90 min)
+2. Lab 01: Helm Basics (30 min)
+3. Lab 02: Crear Chart (30 min)
+4. Revisar ejemplos básicos (30 min)
+
+#### 🚀 Intermedio (2.5h)
+1. Leer secciones 3-6 (55 min)
+2. Lab 02 + Lab 03 (60 min)
+3. Estudiar ejemplos avanzados (30 min)
+
+#### ⚡ CKAD Speed Run (1.5h)
+1. RESUMEN-MODULO.md (20 min)
+2. Lab 01 + desafíos rápidos (40 min)
+3. Comandos esenciales y templates (30 min)
 
 ---
 
@@ -909,8 +953,106 @@ helm uninstall myapp
 
 ---
 
-## Cierre del Capitulo
+## 📖 Recursos Adicionales
 
-Helm transforma la gestion de aplicaciones Kubernetes. En lugar de mantener decenas de YAMLs sueltos, un chart empaqueta Deployments, Services, ConfigMaps y Secrets en una unidad versionada y parametrizable. Con `values.yaml` adaptas la misma aplicacion a desarrollo, staging y produccion sin tocar los templates. Los releases permiten upgrades atomicos y rollbacks instantaneos con `helm rollback`. Los repositorios publicos como Artifact Hub ofrecen miles de charts listos para produccion. Y los hooks extienden el ciclo de vida para migraciones, validaciones y tareas pre/post-deploy.
+### Documentación Oficial
+- **Helm Docs**: https://helm.sh/docs/
+- **Chart Best Practices**: https://helm.sh/docs/chart_best_practices/
+- **Chart Template Guide**: https://helm.sh/docs/chart_template_guide/
 
-Con Helm dominado, el stack CKAD esta practicamente completo. Los siguientes capitulos se centran en el CKA: montar clusters desde cero, mantenerlos operativos y diagnosticar problemas cuando algo falla.
+### Repositorios Útiles
+- **Artifact Hub**: https://artifacthub.io/
+- **Bitnami Charts**: https://github.com/bitnami/charts
+- **Helm Stable**: https://github.com/helm/charts
+
+### Herramientas
+- **Helmfile**: Gestión declarativa de releases
+- **Helm Diff**: Ver diferencias antes de upgrade
+- **ChartMuseum**: Repositorio privado de charts
+
+---
+
+## 🧪 Laboratorios
+
+| Lab | Descripción | Duración | Nivel |
+|-----|-------------|----------|-------|
+| [Lab 01](./laboratorios/lab-01-helm-basics.md) | Helm Basics: Install, Search, Deploy | 30 min | 🟢 |
+| [Lab 02](./laboratorios/lab-02-crear-chart.md) | Crear Chart desde Cero | 30 min | 🟡 |
+| [Lab 03](./laboratorios/lab-03-multi-entorno.md) | Multi-Entorno con Values | 30 min | 🟡 |
+| [Lab 04](./laboratorios/lab-04-hooks-avanzado.md) | Hooks y Upgrade Avanzado | 30 min | 🔴 |
+
+---
+
+## 📝 Resumen
+
+### Puntos Clave
+
+✅ **Helm** es el package manager estándar para Kubernetes  
+✅ **Charts** empaquetan aplicaciones completas (Deployment, Service, ConfigMap, etc.)  
+✅ **Values** permiten personalizar deployments sin modificar templates  
+✅ **Templates** usan Go templating para generar YAML dinámico  
+✅ **Releases** son instancias instaladas de charts  
+✅ **Repositories** distribuyen charts públicos y privados  
+✅ **Hooks** ejecutan tareas en momentos específicos del ciclo de vida  
+✅ **CKAD**: Dominar `helm install`, `upgrade`, `rollback`, y personalización con `--set`
+
+### Siguiente Paso
+
+Con Helm completado, has alcanzado **95%+ de cobertura CKAD** 🎉
+
+**Próximos módulos (CKA focus)**:
+- Módulo 22: Cluster Setup con kubeadm
+- Módulo 23: Maintenance & Upgrades
+- Módulo 24: Advanced Scheduling
+
+---
+
+## ❓ Troubleshooting
+
+### Error: "Release already exists"
+```bash
+# Ver releases existentes
+helm list -A
+
+# Forzar reinstalación
+helm uninstall myapp
+helm install myapp ./mychart
+```
+
+### Error: "Validation failed"
+```bash
+# Validar antes de instalar
+helm lint ./mychart
+helm template myapp ./mychart --debug
+```
+
+### Error: "Upgrade failed"
+```bash
+# Ver estado
+helm status myapp
+helm history myapp
+
+# Rollback
+helm rollback myapp
+
+# Reinstalar desde cero
+helm uninstall myapp
+helm install myapp ./mychart
+```
+
+### Templates no se renderizan correctamente
+```bash
+# Debug template rendering
+helm template myapp ./mychart --debug
+
+# Ver valores finales
+helm install myapp ./mychart --dry-run --debug | grep -A 20 "COMPUTED VALUES"
+```
+
+---
+
+**🎓 ¡Felicitaciones!** Has completado el Módulo 21 y alcanzado la preparación completa para CKAD 🚀
+
+## Resumen del Capítulo
+
+Este capítulo cubrió los conceptos fundamentales de helm — gestor de paquetes, desde la teoría hasta la práctica con ejemplos y manifiestos YAML aplicables en entornos reales. Los laboratorios en el directorio `laboratorios/` permiten practicar cada concepto, y el `RESUMEN-MODULO.md` sirve como guía de repaso rápido.

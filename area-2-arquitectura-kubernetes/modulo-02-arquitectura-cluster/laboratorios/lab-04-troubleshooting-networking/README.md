@@ -2,68 +2,59 @@
 
 ## Objetivos
 
-Al finalizar este laboratorio, serás capaz de:
-- ✓ Diagnosticar problemas de conectividad en Services
-- ✓ Debuggear issues de DNS resolution
-- ✓ Analizar flujo de tráfico en el cluster
-- ✓ Resolver problemas comunes de networking
-- ✓ Usar herramientas de debugging en producción
+Al finalizar este laboratorio, seras capaz de:
+- Diagnosticar problemas de conectividad en Services
+- Debuggear issues de DNS resolution
+- Analizar flujo de trafico en el cluster
+- Resolver problemas comunes de networking
+- Usar herramientas de debugging en produccion
 
-## Duración Estimada
+## Duracion Estimada
 
-⏱️ 90-120 minutos
+90-120 minutos | Avanzado
 
 ## Pre-requisitos
 
 - Cluster Kubernetes funcional
 - Herramientas instaladas: `tcpdump`, `netcat`, `dig`, `curl`
 - Acceso a crear/eliminar recursos
-- Conocimientos básicos de networking
+- Conocimientos basicos de networking
+
+---
+
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| Service targetPort debugging | Comparar targetPort del Service con containerPort del Pod |
+| Label selector matching | Verificar alineacion entre selector del Service y labels del Pod |
+| Endpoint inspection | Usar `kubectl get endpoints` para detectar desconexion Pod-Service |
+| tcpdump en Pod | Capturar trafico de red desde dentro de un contenedor |
+| DNS troubleshooting | Diagnosticar CoreDNS con nslookup, dig y /etc/resolv.conf |
+| Ephemeral debug containers | Agregar contenedor de debug a un Pod en ejecucion sin herramientas |
+| iptables tracing | Rastrear el flujo de trafico a traves de las reglas de kube-proxy |
+| NetworkPolicy analysis | Identificar politicas que bloquean trafico entre Pods |
+
+## Archivos YAML del Laboratorio
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `broken-app-service.yaml` | Problema 1 | Deployment + Service con targetPort incorrecto (8080 vs 80) |
+| `backend-label-mismatch.yaml` | Problema 2 | Deployment + Service con selector que no coincide con labels |
+| `netshoot-pod.yaml` | Ejercicio 3.1 | Pod de diagnostico con nicolaka/netshoot |
 
 ---
 
 ## Parte 1: Troubleshooting de Services (35 minutos)
 
-### 🔴 Problema 1: Service No Responde
+### Problema 1: Service No Responde
 
-**Escenario:** Un usuario reporta que su aplicación no responde.
+**Escenario:** Un usuario reporta que su aplicacion no responde.
 
-**Paso 1:** Crea el escenario problemático
+**Paso 1:** Crea el escenario problematico
 
 ```bash
-# Deployment con PUERTO INCORRECTO
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: broken-app
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: broken-app
-  template:
-    metadata:
-      labels:
-        app: broken-app
-    spec:
-      containers:
-      - name: nginx
-        image: nginx
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: broken-service
-spec:
-  selector:
-    app: broken-app
-  ports:
-  - port: 80
-    targetPort: 8080  # ❌ INCORRECTO - nginx escucha en 80
-EOF
+kubectl apply -f broken-app-service.yaml
 ```
 
 **Paso 2:** Intenta conectar al Service
@@ -72,11 +63,11 @@ EOF
 kubectl run test --rm -it --image=busybox -- wget -O- broken-service
 ```
 
-**Debería FALLAR con timeout**
+**Deberia FALLAR con timeout**
 
 ---
 
-**🔍 DEBUGGING:**
+**DEBUGGING:**
 
 **Paso 3:** Verifica que el Service existe
 
@@ -84,7 +75,7 @@ kubectl run test --rm -it --image=busybox -- wget -O- broken-service
 kubectl get svc broken-service
 ```
 
-✅ Service existe
+Service existe
 
 **Paso 4:** Verifica los endpoints
 
@@ -92,17 +83,17 @@ kubectl get svc broken-service
 kubectl get endpoints broken-service
 ```
 
-**Pregunta:** ¿Hay IPs en los endpoints? ¿Cuántas?
+**Pregunta:** Hay IPs en los endpoints? Cuantas?
 
-✅ Deberías ver 3 IPs (una por cada pod)
+Deberias ver 3 IPs (una por cada pod)
 
-**Paso 5:** Verifica que los pods están corriendo
+**Paso 5:** Verifica que los pods estan corriendo
 
 ```bash
 kubectl get pods -l app=broken-app
 ```
 
-✅ 3 pods en estado Running
+3 pods en estado Running
 
 **Paso 6:** Intenta conectar directamente a un pod
 
@@ -113,7 +104,7 @@ echo "Pod IP: $POD_IP"
 kubectl run test --rm -it --image=busybox -- wget -O- http://$POD_IP:80
 ```
 
-✅ **Esto FUNCIONA** - el pod responde en puerto 80
+**Esto FUNCIONA** - el pod responde en puerto 80
 
 **Paso 7:** Compara el Service
 
@@ -121,11 +112,11 @@ kubectl run test --rm -it --image=busybox -- wget -O- http://$POD_IP:80
 kubectl describe svc broken-service | grep -A 3 "Port:"
 ```
 
-❌ **ENCONTRADO EL PROBLEMA:** `targetPort: 8080` pero el pod escucha en `80`
+**ENCONTRADO EL PROBLEMA:** `targetPort: 8080` pero el pod escucha en `80`
 
 ---
 
-**✅ SOLUCIÓN:**
+**SOLUCION:**
 
 ```bash
 kubectl patch svc broken-service -p '{"spec":{"ports":[{"port":80,"targetPort":80}]}}'
@@ -134,46 +125,18 @@ kubectl patch svc broken-service -p '{"spec":{"ports":[{"port":80,"targetPort":8
 kubectl run test --rm -it --image=busybox -- wget -O- broken-service
 ```
 
-✅ Ahora funciona
+Ahora funciona
 
 ---
 
-### 🔴 Problema 2: Service Sin Endpoints
+### Problema 2: Service Sin Endpoints
 
 **Escenario:** Service creado pero no tiene endpoints.
 
 **Paso 1:** Crea el escenario
 
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: backend-app  # Label: backend-app
-  template:
-    metadata:
-      labels:
-        app: backend-app
-    spec:
-      containers:
-      - name: nginx
-        image: nginx
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-service
-spec:
-  selector:
-    app: backend  # ❌ INCORRECTO - busca "backend" no "backend-app"
-  ports:
-  - port: 80
-EOF
+kubectl apply -f backend-label-mismatch.yaml
 ```
 
 **Paso 2:** Verifica endpoints
@@ -182,11 +145,11 @@ EOF
 kubectl get endpoints backend-service
 ```
 
-❌ **ENDPOINTS: <none>**
+**ENDPOINTS: none**
 
 ---
 
-**🔍 DEBUGGING:**
+**DEBUGGING:**
 
 **Paso 3:** Compara los labels
 
@@ -200,11 +163,11 @@ kubectl get pods -l app=backend-app -o jsonpath='{.items[0].metadata.labels}'
 echo
 ```
 
-❌ **PROBLEMA:** Selector no coincide con los labels de los pods
+**PROBLEMA:** Selector no coincide con los labels de los pods
 
 ---
 
-**✅ SOLUCIÓN:**
+**SOLUCION:**
 
 ```bash
 kubectl patch svc backend-service -p '{"spec":{"selector":{"app":"backend-app"}}}'
@@ -213,11 +176,11 @@ kubectl patch svc backend-service -p '{"spec":{"selector":{"app":"backend-app"}}
 kubectl get endpoints backend-service
 ```
 
-✅ Ahora tiene endpoints
+Ahora tiene endpoints
 
 ---
 
-### 🔴 Problema 3: NodePort Inaccesible
+### Problema 3: NodePort Inaccesible
 
 **Escenario:** NodePort configurado pero no se puede acceder desde fuera.
 
@@ -245,7 +208,7 @@ curl http://$NODE_IP:$NODE_PORT
 
 ---
 
-**🔍 DEBUGGING:**
+**DEBUGGING:**
 
 **Paso 4:** Verifica desde DENTRO de un nodo
 
@@ -257,7 +220,7 @@ ssh $NODE_IP
 curl localhost:$NODE_PORT
 ```
 
-✅ Funciona desde el nodo
+Funciona desde el nodo
 
 **Paso 5:** Verifica firewall
 
@@ -266,19 +229,19 @@ curl localhost:$NODE_PORT
 sudo iptables -L -n | grep $NODE_PORT
 ```
 
-**Paso 6:** Verifica que kube-proxy creó las reglas
+**Paso 6:** Verifica que kube-proxy creo las reglas
 
 ```bash
 sudo iptables -t nat -L KUBE-NODEPORTS -n | grep $NODE_PORT
 ```
 
-✅ Reglas existen
+Reglas existen
 
 ---
 
-**💡 CAUSA COMÚN:** Firewall externo bloquea el puerto
+**CAUSA COMUN:** Firewall externo bloquea el puerto
 
-**✅ SOLUCIONES:**
+**SOLUCIONES:**
 - Abrir puerto en firewall del cloud provider
 - Usar LoadBalancer en lugar de NodePort
 - Usar Ingress Controller
@@ -287,7 +250,7 @@ sudo iptables -t nat -L KUBE-NODEPORTS -n | grep $NODE_PORT
 
 ## Parte 2: Troubleshooting DNS (30 minutos)
 
-### 🔴 Problema 4: DNS No Resuelve
+### Problema 4: DNS No Resuelve
 
 **Escenario:** Pods no pueden resolver nombres de Services.
 
@@ -307,19 +270,19 @@ kubectl run dns-debug --rm -it --image=busybox -- sh
 nslookup myapp
 ```
 
-**Si falla, continúa con el debugging...**
+**Si falla, continua con el debugging...**
 
 ---
 
-**🔍 DEBUGGING:**
+**DEBUGGING:**
 
-**Paso 3:** Verifica que CoreDNS está corriendo
+**Paso 3:** Verifica que CoreDNS esta corriendo
 
 ```bash
 kubectl get pods -n kube-system -l k8s-app=kube-dns
 ```
 
-❌ Si no hay pods o están en CrashLoopBackOff → **PROBLEMA ENCONTRADO**
+Si no hay pods o estan en CrashLoopBackOff - PROBLEMA ENCONTRADO
 
 **Paso 4:** Verifica el Service de CoreDNS
 
@@ -327,7 +290,7 @@ kubectl get pods -n kube-system -l k8s-app=kube-dns
 kubectl get svc -n kube-system kube-dns
 ```
 
-✅ Debería tener ClusterIP (típicamente 10.96.0.10)
+Deberia tener ClusterIP (tipicamente 10.96.0.10)
 
 **Paso 5:** Verifica /etc/resolv.conf en el pod
 
@@ -335,14 +298,14 @@ kubectl get svc -n kube-system kube-dns
 kubectl run dns-debug --rm -it --image=busybox -- cat /etc/resolv.conf
 ```
 
-Debería tener:
+Deberia tener:
 ```
 nameserver 10.96.0.10
 search default.svc.cluster.local svc.cluster.local cluster.local
 options ndots:5
 ```
 
-❌ Si no está configurado correctamente → **PROBLEMA EN KUBELET**
+Si no esta configurado correctamente - PROBLEMA EN KUBELET
 
 **Paso 6:** Prueba DNS directamente
 
@@ -350,11 +313,11 @@ options ndots:5
 kubectl run dns-debug --rm -it --image=busybox -- nslookup kubernetes 10.96.0.10
 ```
 
-✅ Si esto funciona, el problema está en la configuración del pod, no en CoreDNS
+Si esto funciona, el problema esta en la configuracion del pod, no en CoreDNS
 
 ---
 
-**✅ SOLUCIONES COMUNES:**
+**SOLUCIONES COMUNES:**
 
 1. **CoreDNS no corre:**
 ```bash
@@ -364,7 +327,7 @@ kubectl rollout restart deployment coredns -n kube-system
 2. **ConfigMap corrupto:**
 ```bash
 kubectl get configmap coredns -n kube-system -o yaml
-# Verifica que el Corefile está correcto
+# Verifica que el Corefile esta correcto
 ```
 
 3. **Pods de CoreDNS sin recursos:**
@@ -375,7 +338,7 @@ kubectl describe pod -n kube-system -l k8s-app=kube-dns
 
 ---
 
-### 🔴 Problema 5: DNS Lento
+### Problema 5: DNS Lento
 
 **Escenario:** DNS funciona pero es muy lento.
 
@@ -392,10 +355,10 @@ time nslookup google.com
 **Paso 2:** Verifica cache hits en CoreDNS
 
 ```bash
-# Port-forward a las métricas de CoreDNS
+# Port-forward a las metricas de CoreDNS
 kubectl port-forward -n kube-system svc/kube-dns 9153:9153 &
 
-# Ver métricas de cache
+# Ver metricas de cache
 curl http://localhost:9153/metrics | grep coredns_cache
 ```
 
@@ -407,12 +370,12 @@ kubectl top pods -n kube-system -l k8s-app=kube-dns
 
 ---
 
-**✅ SOLUCIONES:**
+**SOLUCIONES:**
 
 1. **Aumentar cache TTL en CoreDNS:**
 ```bash
 kubectl edit configmap coredns -n kube-system
-# Cambiar: cache 30 → cache 300
+# Cambiar: cache 30 a cache 300
 ```
 
 2. **Escalar CoreDNS:**
@@ -424,24 +387,14 @@ kubectl scale deployment coredns -n kube-system --replicas=3
 
 ---
 
-## Parte 3: Análisis de Flujo de Tráfico (25 minutos)
+## Parte 3: Analisis de Flujo de Trafico (25 minutos)
 
-### 📝 Ejercicio 3.1: tcpdump en un Pod
+### Ejercicio 3.1: tcpdump en un Pod
 
 **Paso 1:** Crea un pod con herramientas de networking
 
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: netshoot
-spec:
-  containers:
-  - name: netshoot
-    image: nicolaka/netshoot
-    command: ["sleep", "3600"]
-EOF
+kubectl apply -f netshoot-pod.yaml
 ```
 
 **Paso 2:** Ejecuta tcpdump en el pod
@@ -452,17 +405,17 @@ kubectl exec -it netshoot -- tcpdump -i any -n port 80
 
 **Deja esto corriendo...**
 
-**Paso 3:** En otra terminal, genera tráfico
+**Paso 3:** En otra terminal, genera trafico
 
 ```bash
 kubectl exec netshoot -- curl http://google.com
 ```
 
-**Observa el tcpdump** - deberías ver paquetes HTTP
+**Observa el tcpdump** - deberias ver paquetes HTTP
 
 ---
 
-### 📝 Ejercicio 3.2: Rastrear Request de Service
+### Ejercicio 3.2: Rastrear Request de Service
 
 **Paso 1:** Crea un Service y pods
 
@@ -471,7 +424,7 @@ kubectl create deployment trace-test --image=nginx --replicas=2
 kubectl expose deployment trace-test --port=80
 ```
 
-**Paso 2:** Desde un pod de debug, captura tráfico
+**Paso 2:** Desde un pod de debug, captura trafico
 
 ```bash
 # En netshoot pod
@@ -486,16 +439,16 @@ kubectl exec netshoot -- curl trace-test
 kubectl exec netshoot -- curl trace-test
 ```
 
-**Observa:** Verás paquetes a diferentes pod IPs (balanceo de carga)
+**Observa:** Veras paquetes a diferentes pod IPs (balanceo de carga)
 
 ---
 
-### 📝 Ejercicio 3.3: iptables Tracing
+### Ejercicio 3.3: iptables Tracing
 
 **Paso 1:** Desde un worker node, habilita tracing de iptables
 
 ```bash
-# ⚠️ Solo en entorno de prueba
+# Solo en entorno de prueba
 sudo modprobe ipt_LOG
 
 # Agregar regla de log
@@ -503,7 +456,7 @@ SERVICE_IP=$(kubectl get svc trace-test -o jsonpath='{.spec.clusterIP}')
 sudo iptables -t nat -I KUBE-SERVICES -d $SERVICE_IP -j LOG --log-prefix "KUBE-SERVICE: "
 ```
 
-**Paso 2:** Genera tráfico
+**Paso 2:** Genera trafico
 
 ```bash
 kubectl exec netshoot -- curl trace-test
@@ -526,7 +479,7 @@ sudo iptables -t nat -D KUBE-SERVICES -d $SERVICE_IP -j LOG --log-prefix "KUBE-S
 
 ## Parte 4: Debugging Avanzado (20 minutos)
 
-### 📝 Ejercicio 4.1: Ephemeral Debug Container
+### Ejercicio 4.1: Ephemeral Debug Container
 
 **Paso 1:** Crea un pod sin herramientas de debug
 
@@ -553,7 +506,7 @@ ls -la /proc/1/root  # Ver filesystem del contenedor target
 
 ---
 
-### 📝 Ejercicio 4.2: Debug de Nodo
+### Ejercicio 4.2: Debug de Nodo
 
 **Paso 1:** Crea un pod de debug en un nodo
 
@@ -570,14 +523,14 @@ kubectl debug node/$NODE -it --image=ubuntu
 # Dentro del debug pod
 chroot /host
 
-# Ahora estás en el nodo
+# Ahora estas en el nodo
 ps aux | grep kubelet
 journalctl -u kubelet -n 50
 ```
 
 ---
 
-### 📝 Ejercicio 4.3: Service Mesh Debugging (si usas Istio/Linkerd)
+### Ejercicio 4.3: Service Mesh Debugging (si usas Istio/Linkerd)
 
 **Paso 1:** Verifica sidecar injection
 
@@ -585,7 +538,7 @@ journalctl -u kubelet -n 50
 kubectl get pod <pod-name> -o jsonpath='{.spec.containers[*].name}'
 ```
 
-**Deberías ver:** `app-container istio-proxy` (o `linkerd-proxy`)
+**Deberias ver:** `app-container istio-proxy` (o `linkerd-proxy`)
 
 **Paso 2:** Ver logs del sidecar
 
@@ -593,7 +546,7 @@ kubectl get pod <pod-name> -o jsonpath='{.spec.containers[*].name}'
 kubectl logs <pod-name> -c istio-proxy
 ```
 
-**Paso 3:** Verificar comunicación
+**Paso 3:** Verificar comunicacion
 
 ```bash
 kubectl exec <pod-name> -c app-container -- curl localhost:15000/stats
@@ -603,11 +556,11 @@ kubectl exec <pod-name> -c app-container -- curl localhost:15000/stats
 
 ## Parte 5: Escenarios Reales (10 minutos)
 
-### 🚨 Caso 1: "Intermittent Connection Failures"
+### Caso 1: "Intermittent Connection Failures"
 
-**Síntomas:**
+**Sintomas:**
 - Algunas requests funcionan, otras fallan
-- No hay patrón claro
+- No hay patron claro
 
 **Debugging:**
 ```bash
@@ -624,13 +577,13 @@ done
 kubectl describe pod -l app=<app>
 ```
 
-**Causa común:** Uno o más pods están en estado "Not Ready" pero no se quitaron de endpoints.
+**Causa comun:** Uno o mas pods estan en estado "Not Ready" pero no se quitaron de endpoints.
 
 ---
 
-### 🚨 Caso 2: "Service Works from Some Pods, Not Others"
+### Caso 2: "Service Works from Some Pods, Not Others"
 
-**Síntomas:**
+**Sintomas:**
 - Service funciona desde pod A
 - Service NO funciona desde pod B
 
@@ -639,7 +592,7 @@ kubectl describe pod -l app=<app>
 # 1. Verificar NetworkPolicies
 kubectl get networkpolicies
 
-# 2. Ver si hay políticas que afecten el tráfico
+# 2. Ver si hay politicas que afecten el trafico
 kubectl describe networkpolicy <policy-name>
 
 # 3. Probar desde pod con label diferente
@@ -647,13 +600,13 @@ kubectl run test-1 --rm -it --image=busybox --labels=role=frontend -- wget <serv
 kubectl run test-2 --rm -it --image=busybox --labels=role=backend -- wget <service>
 ```
 
-**Causa común:** NetworkPolicy bloqueando tráfico desde ciertos pods.
+**Causa comun:** NetworkPolicy bloqueando trafico desde ciertos pods.
 
 ---
 
-### 🚨 Caso 3: "External Traffic Not Reaching Service"
+### Caso 3: "External Traffic Not Reaching Service"
 
-**Síntomas:**
+**Sintomas:**
 - Interno funciona (ClusterIP)
 - LoadBalancer/Ingress no responde
 
@@ -684,18 +637,18 @@ Usa esta checklist cuando debuggees problemas de networking:
 
 - [ ] Service existe: `kubectl get svc <name>`
 - [ ] Service tiene endpoints: `kubectl get endpoints <name>`
-- [ ] Pods están Running: `kubectl get pods -l <selector>`
+- [ ] Pods estan Running: `kubectl get pods -l <selector>`
 - [ ] Labels coinciden: Comparar selector del Service vs labels de pods
 - [ ] Puertos correctos: targetPort coincide con containerPort
 - [ ] Pods responden directamente: `curl http://<pod-ip>:<port>`
-- [ ] Firewall permite tráfico (para NodePort/LoadBalancer)
+- [ ] Firewall permite trafico (para NodePort/LoadBalancer)
 
 ### Para problemas de DNS:
 
-- [ ] CoreDNS está corriendo: `kubectl get pods -n kube-system -l k8s-app=kube-dns`
+- [ ] CoreDNS esta corriendo: `kubectl get pods -n kube-system -l k8s-app=kube-dns`
 - [ ] Service kube-dns existe: `kubectl get svc -n kube-system kube-dns`
 - [ ] /etc/resolv.conf correcto en pods
-- [ ] Probar resolución directa: `nslookup <service> <dns-ip>`
+- [ ] Probar resolucion directa: `nslookup <service> <dns-ip>`
 - [ ] Verificar logs de CoreDNS
 - [ ] Verificar ConfigMap de CoreDNS
 
@@ -708,7 +661,7 @@ Usa esta checklist cuando debuggees problemas de networking:
 
 ---
 
-## Herramientas Útiles
+## Herramientas Utiles
 
 ```bash
 # Debug pod todo-en-uno
@@ -722,7 +675,7 @@ kubectl run netshoot --rm -it --image=nicolaka/netshoot -- bash
 # - iperf3
 # - traceroute
 # - nmap
-# y muchas más...
+# y muchas mas...
 ```
 
 ---
@@ -730,38 +683,36 @@ kubectl run netshoot --rm -it --image=nicolaka/netshoot -- bash
 ## Limpieza
 
 ```bash
-kubectl delete deployment broken-app backend web trace-test myapp --ignore-not-found
-kubectl delete service broken-service backend-service web trace-test myapp --ignore-not-found
-kubectl delete pod netshoot minimal --ignore-not-found
+./cleanup.sh
 ```
 
 ---
 
-## Verificación Final
+## Verificacion Final
 
-### ✅ Checklist de Conocimientos
+### Checklist de Conocimientos
 
-- [ ] Puedo diagnosticar por qué un Service no responde
-- [ ] Sé cómo verificar que selector y labels coinciden
+- [ ] Puedo diagnosticar por que un Service no responde
+- [ ] Se como verificar que selector y labels coinciden
 - [ ] Puedo troubleshootear problemas de DNS
-- [ ] Entiendo cómo usar tcpdump en pods
+- [ ] Entiendo como usar tcpdump en pods
 - [ ] Puedo crear ephemeral debug containers
-- [ ] Sé cómo verificar NetworkPolicies
+- [ ] Se como verificar NetworkPolicies
 - [ ] Puedo analizar iptables rules de kube-proxy
 - [ ] Conozco las causas comunes de problemas de networking
-- [ ] Tengo un proceso sistemático para debugging
+- [ ] Tengo un proceso sistematico para debugging
 
 ---
 
 ## Recursos Adicionales
 
-- 📖 [Debugging Services](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/)
-- 📖 [DNS Troubleshooting](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/)
-- 🛠️ [Netshoot - Network Troubleshooting Tool](https://github.com/nicolaka/netshoot)
-- 📖 [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
+- [Debugging Services](https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/)
+- [DNS Troubleshooting](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/)
+- [Netshoot - Network Troubleshooting Tool](https://github.com/nicolaka/netshoot)
+- [Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 
 ---
 
-**¡Felicitaciones!** Has completado todos los laboratorios del Módulo 02 ✅
+**Felicitaciones!** Has completado todos los laboratorios del Modulo 02.
 
-**Siguiente paso:** Revisa el resumen del módulo y prepárate para el Módulo 03.
+**Siguiente paso:** Revisa el resumen del modulo y preparate para el Modulo 03.

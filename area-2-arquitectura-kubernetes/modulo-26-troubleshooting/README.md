@@ -1,18 +1,6 @@
-# Módulo 26: Troubleshooting Avanzado en Kubernetes
+# Capítulo 28: Troubleshooting
 
-## Índice
-1. [Introducción al Troubleshooting](#introducción-al-troubleshooting)
-2. [Metodología Sistemática](#metodología-sistemática)
-3. [Troubleshooting de Aplicaciones](#troubleshooting-de-aplicaciones)
-4. [Troubleshooting del Control Plane](#troubleshooting-del-control-plane)
-5. [Troubleshooting de Worker Nodes](#troubleshooting-de-worker-nodes)
-6. [Troubleshooting de Red](#troubleshooting-de-red)
-7. [Troubleshooting de Storage](#troubleshooting-de-storage)
-8. [Troubleshooting de Performance](#troubleshooting-de-performance)
-9. [Troubleshooting de Seguridad y RBAC](#troubleshooting-de-seguridad-y-rbac)
-10. [Herramientas de Diagnóstico](#herramientas-de-diagnóstico)
-11. [Best Practices](#best-practices)
-12. [Preparación CKA](#preparación-cka)
+Todo funciona... hasta que falla. Este capítulo proporciona un framework sistemático para diagnosticar y resolver problemas en Kubernetes: desde Pods que no arrancan hasta clusters que no responden.
 
 ---
 
@@ -1797,3 +1785,7 @@ Con los módulos 22-26, tienes **100% coverage** del CKA! 🎉
 **Laboratorios**: [laboratorios/README.md](./laboratorios/README.md)
 
 **Módulo Anterior**: [Módulo 25 - Networking](../modulo-25-networking/README.md)
+
+## Resumen del Capítulo
+
+Este capítulo cubrió los conceptos fundamentales de troubleshooting, desde la teoría hasta la práctica con ejemplos y manifiestos YAML aplicables en entornos reales. Los laboratorios en el directorio `laboratorios/` permiten practicar cada concepto, y el `RESUMEN-MODULO.md` sirve como guía de repaso rápido.

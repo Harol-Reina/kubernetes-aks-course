@@ -1,0 +1,23 @@
+# Ejercicio 3.1: Observar Decisiones del Scheduler - Pod Simple
+# Uso: kubectl apply -f scheduler-test-pod.yaml
+#
+# Descripcion:
+#   Pod minimo sin restricciones de nodo para observar como el Scheduler
+#   toma decisiones automaticas de asignacion. Util para ver eventos de
+#   scheduling y la columna NODE en kubectl get pod -o wide.
+#
+# Conceptos clave:
+#   - El Scheduler asigna pods a nodos segun recursos disponibles
+#   - En Minikube (single-node) siempre asigna al unico nodo disponible
+#   - Los eventos de scheduling se consultan con kubectl get events
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scheduler-test
+spec:
+  containers:
+  - name: nginx
+    image: nginx

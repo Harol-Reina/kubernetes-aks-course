@@ -1,0 +1,25 @@
+# Ejercicio 3.2: Node Selector - Pod con Requisito de Disco SSD
+# Uso: kubectl apply -f ssd-pod.yaml
+#
+# Descripcion:
+#   Pod que usa nodeSelector para requerir un nodo con etiqueta disktype=ssd.
+#   Antes de aplicar este archivo, etiquetar el nodo:
+#   kubectl label node minikube disktype=ssd
+#
+# Conceptos clave:
+#   - nodeSelector filtra nodos elegibles por etiquetas
+#   - Si ningun nodo tiene la etiqueta, el pod queda en estado Pending
+#   - Verificar asignacion: kubectl describe pod ssd-pod | grep "Node-Selectors:"
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ssd-pod
+spec:
+  nodeSelector:
+    disktype: ssd
+  containers:
+  - name: nginx
+    image: nginx

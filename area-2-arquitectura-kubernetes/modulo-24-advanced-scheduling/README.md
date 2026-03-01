@@ -1,32 +1,6 @@
-# Módulo 24: Advanced Scheduling
+# Capítulo 26: Advanced Scheduling
 
-## 📋 Tabla de Contenidos
-
-1. [Introducción](#introducción)
-2. [Manual Scheduling](#manual-scheduling)
-3. [Static Pods](#static-pods)
-4. [Taints y Tolerations](#taints-y-tolerations)
-5. [Node Affinity](#node-affinity)
-6. [Pod Affinity y Anti-Affinity](#pod-affinity-y-anti-affinity)
-7. [Resource Quotas y LimitRanges](#resource-quotas-y-limitranges)
-8. [Priority Classes](#priority-classes)
-9. [Scheduler Profiles](#scheduler-profiles)
-10. [Troubleshooting](#troubleshooting)
-
----
-
-## 🎯 Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-- ✅ Controlar el scheduling de pods manualmente
-- ✅ Crear y gestionar static pods
-- ✅ Aplicar taints y tolerations para control de nodos
-- ✅ Usar node affinity para scheduling avanzado
-- ✅ Implementar pod affinity y anti-affinity
-- ✅ Configurar resource quotas y limits
-- ✅ Trabajar con priority classes
-- ✅ Entender scheduler profiles personalizados
+El cluster se mantiene solo. Ahora controlamos dónde corren los Pods: afinidad, anti-afinidad, taints, tolerations y topología de distribución.
 
 ---
 
@@ -1121,3 +1095,7 @@ kubectl describe limitrange -n <namespace>
 - [RESUMEN](./RESUMEN-MODULO.md) - Cheatsheet de comandos
 
 **🎯 CKA Coverage:** Este módulo cubre ~15% del examen CKA (Workloads & Scheduling).
+
+## Resumen del Capítulo
+
+Este capítulo cubrió los conceptos fundamentales de advanced scheduling, desde la teoría hasta la práctica con ejemplos y manifiestos YAML aplicables en entornos reales. Los laboratorios en el directorio `laboratorios/` permiten practicar cada concepto, y el `RESUMEN-MODULO.md` sirve como guía de repaso rápido.

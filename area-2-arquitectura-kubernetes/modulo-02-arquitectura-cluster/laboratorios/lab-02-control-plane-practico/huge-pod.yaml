@@ -1,0 +1,28 @@
+# Ejercicio 3.3: Limites del Scheduler - Pod con Recursos Imposibles
+# Uso: kubectl apply -f huge-pod.yaml
+#
+# Descripcion:
+#   Pod que solicita 1000 CPU cores y 1000Gi de memoria, valores imposibles
+#   en cualquier cluster real. Sirve para observar el error de Insufficient
+#   resources del Scheduler y entender como falla la planificacion.
+#
+# Conceptos clave:
+#   - El Scheduler verifica recursos disponibles antes de asignar un pod
+#   - Si ningun nodo tiene suficientes recursos, el pod queda en Pending
+#   - Mensaje esperado: "Insufficient cpu, Insufficient memory"
+#   - Limpiar con: kubectl delete pod huge-pod
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: huge-pod
+spec:
+  containers:
+  - name: app
+    image: nginx
+    resources:
+      requests:
+        cpu: "1000"
+        memory: "1000Gi"

@@ -1,0 +1,31 @@
+# Ejercicio 1.4: Eviction de Pods - Pod con Consumo Excesivo de Memoria
+# Uso: kubectl apply -f memory-hog-pod.yaml
+#
+# Descripcion:
+#   Pod que consume 1G de memoria real mediante stress para simular presion
+#   de memoria en el nodo. Permite observar los umbrales de eviction del
+#   kubelet y el comportamiento del nodo bajo presion.
+#
+# Conceptos clave:
+#   - requests.memory define la cantidad reservada para scheduling
+#   - limits.memory es el maximo; si se supera el proceso recibe OOMKill
+#   - Eviction thresholds: /var/lib/kubelet/config.yaml (campo eviction)
+#   - Observar presion: kubectl describe node | grep -A 5 "Allocated resources"
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-hog
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "1G", "--timeout", "600s"]
+    resources:
+      requests:
+        memory: "100Mi"
+      limits:
+        memory: "2Gi"

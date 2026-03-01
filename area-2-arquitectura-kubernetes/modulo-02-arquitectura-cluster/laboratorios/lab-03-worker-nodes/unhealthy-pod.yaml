@@ -1,0 +1,31 @@
+# Ejercicio 1.2: Health Probes en Accion - Pod con Liveness Probe Fallida
+# Uso: kubectl apply -f unhealthy-pod.yaml
+#
+# Descripcion:
+#   Pod con liveness probe configurada para hacer httpGet a /nonexistent,
+#   ruta que no existe en nginx. El kubelet detectara los fallos y reiniciara
+#   el contenedor repetidamente hasta entrar en CrashLoopBackOff.
+#
+# Conceptos clave:
+#   - initialDelaySeconds: tiempo antes del primer chequeo
+#   - periodSeconds: frecuencia de los chequeos
+#   - failureThreshold: numero de fallos antes de reiniciar el contenedor
+#   - Observar eventos: kubectl get events --watch --field-selector involvedObject.name=unhealthy-pod
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unhealthy-pod
+spec:
+  containers:
+  - name: app
+    image: nginx
+    livenessProbe:
+      httpGet:
+        path: /nonexistent
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 2

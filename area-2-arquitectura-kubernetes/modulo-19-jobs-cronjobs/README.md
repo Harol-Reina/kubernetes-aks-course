@@ -1,41 +1,6 @@
-# Módulo 19: Jobs & CronJobs - Ejecución de Tareas Batch en Kubernetes
+# Capítulo 21: Jobs y CronJobs
 
-> *"Los Deployments gestionan servicios continuos, pero Jobs y CronJobs son la solución para tareas finitas y programadas."*
-
-**Duración**: 4-5 horas (Principiante) | 2-3 horas (Intermedio) | 1-2 horas (Certificación)  
-**Nivel**: Intermedio  
-**Prerequisitos**: Módulos 04-07 (Pods, ReplicaSets, Deployments)
-
----
-
-## 🎯 Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-### 🎓 Conceptuales
-- Comprender la diferencia entre workloads continuos (Deployments) y tareas finitas (Jobs)
-- Explicar cuándo usar Jobs vs Deployments vs CronJobs
-- Entender el ciclo de vida de un Job y sus estados
-- Conocer patrones de diseño para procesamiento batch en Kubernetes
-
-### 🛠️ Técnicos
-- Crear y ejecutar Jobs simples y paralelos
-- Configurar CronJobs con sintaxis de scheduling
-- Gestionar Jobs completados, fallidos y en ejecución
-- Implementar backoffLimit y activeDeadlineSeconds
-- Limpiar Jobs automáticamente (TTL)
-
-### 🔍 Troubleshooting
-- Diagnosticar Jobs que no completan
-- Resolver CronJobs que no se ejecutan según schedule
-- Debugging de Jobs fallidos con múltiples reintentos
-- Identificar problemas de concurrencia en CronJobs
-
-### 🏢 Profesionales
-- Diseñar pipelines de procesamiento batch escalables
-- Implementar data migrations con Jobs
-- Programar tareas de mantenimiento con CronJobs
-- Aplicar patrones para certificación CKAD (20% del examen)
+Con seguridad resuelta, expandimos los tipos de workload. No todo es un servidor web: los Jobs ejecutan tareas finitas y los CronJobs las programan en el tiempo.
 
 ---
 
@@ -1574,3 +1539,7 @@ kubectl get job process-data -o yaml
 **Estado**: ✅ 100% Completo  
 **Versión**: 1.0  
 **Última actualización**: Noviembre 2025
+
+## Resumen del Capítulo
+
+Este capítulo cubrió los conceptos fundamentales de jobs y cronjobs, desde la teoría hasta la práctica con ejemplos y manifiestos YAML aplicables en entornos reales. Los laboratorios en el directorio `laboratorios/` permiten practicar cada concepto, y el `RESUMEN-MODULO.md` sirve como guía de repaso rápido.

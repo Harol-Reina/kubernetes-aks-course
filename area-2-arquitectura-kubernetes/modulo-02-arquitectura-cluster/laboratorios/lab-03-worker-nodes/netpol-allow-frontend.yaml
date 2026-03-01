@@ -1,0 +1,34 @@
+# Ejercicio 4.3: Network Policies - Politica Allow desde Frontend
+# Uso: kubectl apply -f netpol-allow-frontend.yaml
+#
+# Descripcion:
+#   NetworkPolicy que permite trafico Ingress hacia pods app=backend unicamente
+#   desde pods con etiqueta app=frontend en el puerto 80. Complementa a
+#   netpol-deny-all.yaml para demostrar el modelo de politicas aditivas.
+#
+# Conceptos clave:
+#   - Las NetworkPolicies son aditivas: se suman las reglas permisivas
+#   - from.podSelector selecciona pods fuente dentro del mismo namespace
+#   - Prueba exitosa: kubectl run frontend --rm -it --image=busybox --labels=app=frontend -- wget http://<backend-ip>
+#   - Aplicar DESPUES de netpol-deny-all.yaml
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 80

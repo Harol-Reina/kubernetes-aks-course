@@ -1,0 +1,54 @@
+# Ejercicio 2: Problema 2 - Service Sin Endpoints (selector no coincide)
+# Uso: kubectl apply -f backend-label-mismatch.yaml
+#
+# Descripcion:
+#   Deployment con label app=backend-app y Service con selector app=backend.
+#   El Service no encontrara ningun Pod porque el selector no coincide
+#   con los labels de los Pods del Deployment.
+#
+# Conceptos clave:
+#   - El selector del Service debe coincidir exactamente con los labels del Pod
+#   - Endpoints vacios (<none>) indica desalineacion de labels
+#   - Debugging: comparar spec.selector del Service vs metadata.labels del Pod
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend-app
+    tier: backend
+    lab: lab-04
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend-app
+  template:
+    metadata:
+      labels:
+        app: backend-app  # Label correcto: backend-app
+        tier: backend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - name: http
+          containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  labels:
+    app: backend
+    lab: lab-04
+spec:
+  selector:
+    app: backend  # INCORRECTO: busca "backend" pero los Pods tienen "backend-app"
+  ports:
+  - port: 80
+    targetPort: 80

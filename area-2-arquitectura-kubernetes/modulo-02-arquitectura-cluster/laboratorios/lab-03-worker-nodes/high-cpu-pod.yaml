@@ -1,0 +1,33 @@
+# Ejercicio 1.3: Resource Management - Pod con Alta Demanda de CPU
+# Uso: kubectl apply -f high-cpu-pod.yaml
+#
+# Descripcion:
+#   Pod que ejecuta la herramienta stress para consumir 2 CPU cores durante
+#   300 segundos. Permite observar el consumo real con kubectl top y verificar
+#   los limites de cgroups en el Worker Node.
+#
+# Conceptos clave:
+#   - requests.cpu define la reserva garantizada en el nodo
+#   - limits.cpu es el maximo absoluto; el kernel throttlea si se supera
+#   - Monitoreo: kubectl top pod high-cpu-pod
+#   - Cgroups en el nodo: /sys/fs/cgroup/cpu/kubepods.slice/...
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: high-cpu-pod
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args: ["--cpu", "2", "--timeout", "300s"]
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "1Gi"

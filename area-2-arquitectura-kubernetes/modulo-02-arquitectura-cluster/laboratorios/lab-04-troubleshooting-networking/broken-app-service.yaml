@@ -1,0 +1,54 @@
+# Ejercicio 1: Problema 1 - Service No Responde (targetPort incorrecto)
+# Uso: kubectl apply -f broken-app-service.yaml
+#
+# Descripcion:
+#   Deployment con nginx (containerPort: 80) y Service con targetPort: 8080
+#   para simular el error mas comun: puerto de destino incorrecto.
+#   El Service existe y tiene endpoints, pero el trafico no llega al pod.
+#
+# Conceptos clave:
+#   - targetPort debe coincidir con containerPort del Pod
+#   - Endpoints se crean aunque el puerto este mal configurado
+#   - Debugging: comparar targetPort vs containerPort
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-app
+  labels:
+    app: broken-app
+    tier: frontend
+    lab: lab-04
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: broken-app
+  template:
+    metadata:
+      labels:
+        app: broken-app
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - name: http
+          containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: broken-service
+  labels:
+    app: broken-app
+    lab: lab-04
+spec:
+  selector:
+    app: broken-app
+  ports:
+  - port: 80
+    targetPort: 8080  # INCORRECTO: nginx escucha en 80, no en 8080

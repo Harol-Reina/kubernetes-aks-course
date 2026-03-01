@@ -1,0 +1,36 @@
+# Ejercicio 3.1: Pod de diagnostico de red con nicolaka/netshoot
+# Uso: kubectl apply -f netshoot-pod.yaml
+#
+# Descripcion:
+#   Pod de diagnostico con la imagen nicolaka/netshoot que incluye
+#   un conjunto completo de herramientas de red: tcpdump, curl, dig,
+#   nslookup, netstat, ss, iperf3, traceroute, nmap, y mas.
+#   Util para depuracion de conectividad, DNS y trafico en el cluster.
+#
+# Conceptos clave:
+#   - netshoot como pod de debug de red en el cluster
+#   - tcpdump para captura de trafico en interfaces del pod
+#   - dig/nslookup para depuracion de DNS interno de Kubernetes
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot
+  labels:
+    app: netshoot
+    purpose: network-debug
+    lab: lab-04
+spec:
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot
+    command: ["sleep", "3600"]
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"

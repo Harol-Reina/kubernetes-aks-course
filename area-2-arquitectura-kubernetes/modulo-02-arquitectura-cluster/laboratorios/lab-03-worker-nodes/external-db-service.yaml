@@ -1,0 +1,35 @@
+# Ejercicio 2.4: Service sin Endpoints - Service Externo sin Selector
+# Uso: kubectl apply -f external-db-service.yaml
+#
+# Descripcion:
+#   Service sin campo selector mas un objeto Endpoints que apunta manualmente
+#   a una IP externa (192.168.1.100). Este patron permite que pods del cluster
+#   accedan a bases de datos u otros recursos externos usando un nombre DNS
+#   interno de Kubernetes.
+#
+# Conceptos clave:
+#   - Un Service sin selector no crea Endpoints automaticamente
+#   - El Endpoint Controller solo gestiona endpoints de Services con selector
+#   - Acceso desde pods: mysql -h external-db -P 3306
+#   - Verificar: kubectl get svc external-db && kubectl get endpoints external-db
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-db
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: external-db
+subsets:
+- addresses:
+  - ip: 192.168.1.100
+  ports:
+  - port: 3306

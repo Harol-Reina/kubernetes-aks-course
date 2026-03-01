@@ -1,6 +1,6 @@
-# Capitulo 24: Cluster Setup con kubeadm
+# Capítulo 24: Cluster Setup con kubeadm
 
-Helm empaqueta aplicaciones. Ahora montamos clusters reales desde cero con kubeadm: inicializacion del control plane, union de nodos y configuracion de red.
+Helm empaqueta aplicaciones. Ahora montamos clusters reales desde cero con kubeadm: inicialización del control plane, unión de nodos y configuración de red.
 
 ---
 
@@ -1242,8 +1242,36 @@ Storage:
 
 ---
 
-## Cierre del Capitulo
+## 📝 Resumen
 
-Montar un cluster Kubernetes desde cero con kubeadm revela la mecanica interna que los servicios managed ocultan: container runtimes, certificados PKI, modulos del kernel, etcd como unica fuente de verdad y CNI plugins que conectan los pods entre nodos. La topologia HA con multiples control planes y load balancer garantiza que la perdida de un nodo no derribe el cluster. Y el backup de etcd es la unica red de seguridad real ante un desastre: sin snapshot, no hay recuperacion posible.
+En este módulo aprendiste:
 
-El cluster esta montado. El siguiente paso es mantenerlo operativo: upgrades de version, drain de nodos para mantenimiento, renovacion de certificados y procedimientos de rollback cuando algo sale mal.
+✅ **Instalar Kubernetes** con kubeadm desde cero  
+✅ **Configurar control plane** y worker nodes  
+✅ **Implementar HA** con múltiples control planes  
+✅ **Gestionar etcd** incluyendo backup/restore  
+✅ **Configurar networking** con CNI plugins  
+✅ **Troubleshootear** problemas comunes  
+✅ **Aplicar mejores prácticas** de producción
+
+### Comandos Esenciales
+
+```bash
+# Inicializar cluster
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+
+# Agregar worker
+sudo kubeadm join <endpoint>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+
+# Backup etcd
+sudo ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-snapshot.db ...
+
+# Verificar salud
+kubectl get nodes
+kubectl get pods -A
+kubectl get componentstatuses
+```
+
+## Resumen del Capítulo
+
+Este capítulo cubrió la instalación y configuración de clusters Kubernetes desde cero con kubeadm: preparación del sistema, inicialización del control plane, configuración de CNI, unión de worker nodes, clusters de alta disponibilidad, gestión de etcd y troubleshooting de problemas comunes de instalación.
