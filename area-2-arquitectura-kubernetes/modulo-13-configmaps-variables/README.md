@@ -1,24 +1,35 @@
 # Capítulo 15: ConfigMaps y Variables de Entorno
 
-Las apps corren sanas. Ahora externalizamos su configuración para no recompilar imágenes con cada cambio de entorno.
+En el capítulo anterior las probes garantizan que nuestras aplicaciones reciben tráfico solo
+cuando están realmente listas y se reinician cuando dejan de responder. Las aplicaciones son
+robustas y autorecuperables. Pero ahora enfrentamos un problema de mantenibilidad que se
+vuelve doloroso en cuanto tienes más de un entorno.
 
----
+La configuración hardcodeada en imágenes Docker es una trampa habitual. La URL de la base de
+datos está en el Dockerfile, o peor, en el código fuente. Funciona en desarrollo porque
+apunta a tu instancia local. Pero para desplegar en staging debes cambiar la URL, reconstruir
+la imagen, hacer push al registry, actualizar el Deployment. Para producción, lo mismo otra
+vez. Tres entornos = tres imágenes diferentes para la misma aplicación. Cuando el DBA cambia
+la contraseña de la base de datos de producción un viernes a las 5pm, no puedes simplemente
+actualizar un valor — debes recorrer todo el pipeline de CI/CD de nuevo. Y si hay un error
+de configuración en producción, el ciclo de debugging se convierte en un proceso de
+reconstrucción de imagen completo.
 
-## 🎓 Metodología de Aprendizaje
+Los ConfigMaps desacoplan la configuración de la imagen. La imagen Docker queda genérica
+y sirve para cualquier entorno. La configuración — URLs, flags de feature, tamaños de pool,
+timeouts — vive en objetos ConfigMap que el cluster inyecta en el Pod como variables de
+entorno o como archivos montados en el sistema de archivos del contenedor.
 
-Este módulo sigue el patrón pedagógico del curso:
+Piensa en la diferencia entre el menú de un restaurante y la receta de cocina. El menú
+(ConfigMap) cambia constantemente: nuevos precios, platos de temporada, promociones. Pero
+la receta (imagen Docker) permanece igual. El chef (el contenedor) lee el menú actualizado
+cada día sin necesidad de reentrenarse ni cambiar cómo cocina.
 
-1. **Teoría estructurada**: Cada sección explica conceptos con ejemplos claros
-2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
-3. **Laboratorios progresivos**: 3 labs de básico a troubleshooting
-4. **Resumen ejecutivo**: [RESUMEN-MODULO.md](RESUMEN-MODULO.md) para repaso rápido
-
-### Consejos de Estudio
-- ⚠️ **Crítico**: Entender cuándo usar env vars vs ConfigMaps vs Secrets
-- 🧪 Experimentar con updates: ¿Se actualizan automáticamente los Pods?
-- 📊 Usar `kubectl describe pod` para ver variables de entorno
-- 🔍 Probar volumeMounts para ver archivos en tiempo real
-- 💡 Implementar hot-reload en tus apps para detectar cambios de config
+En este capítulo crearás ConfigMaps desde literales, archivos y manifiestos YAML, los
+consumirás como variables de entorno individuales o completos con `envFrom`, los montarás
+como archivos de configuración en volúmenes, entenderás el comportamiento de hot-reload
+cuando un ConfigMap cambia, y aprenderás cuándo usar ConfigMaps inmutables para evitar
+modificaciones accidentales.
 
 ---
 
@@ -548,6 +559,75 @@ kubectl exec nginx-volume -- cat /etc/config/nginx.conf
 
 **📄 Ver ejemplo con sidecar**: [`ejemplos/07-combinados/deployment-auto-reload.yaml`](ejemplos/07-combinados/deployment-auto-reload.yaml)
 
+### Anatomia del Retardo de Propagacion
+
+Cuando editas un ConfigMap montado como volumen, el nuevo valor no llega al Pod de forma instantanea. El retardo total es la suma de dos componentes:
+
+```
+Retardo total = kubelet syncFrequency + TTL del cache local
+                (~60s por defecto)    (~60s por defecto)
+                = hasta ~120 segundos en el peor caso
+```
+
+El kubelet de cada nodo revisa periodicamente los ConfigMaps montados (campo `--sync-frequency`, default `1m`). Ademas, el objeto se cachea localmente durante un tiempo configurable (`--cache-sync-timeout`). En clusters con muchos Pods el administrador puede reducir `syncFrequency` a 30s o 10s, pero a costa de mas carga en el API server.
+
+### Forzar Rollout Despues de Cambiar un ConfigMap
+
+Las variables de entorno **nunca** se actualizan en Pods vivos. Para que un Deployment recoja el nuevo ConfigMap debes provocar un rollout:
+
+```bash
+# Opcion 1: Anotacion manual con fecha/version
+# Agrega una anotacion al pod template para que Kubernetes detecte el cambio
+kubectl patch deployment myapp -p \
+  '{"spec":{"template":{"metadata":{"annotations":{"configmap-update":"2024-03-15-v2"}}}}}'
+
+# Opcion 2: Restart del Deployment (mas sencillo, mismo efecto)
+kubectl rollout restart deployment/myapp
+
+# Opcion 3: Hash automatico del ConfigMap (patron GitOps)
+# Calcula el hash del ConfigMap y lo incrusta en la anotacion del pod template.
+# Cuando el ConfigMap cambia, el hash cambia, y Kubernetes hace rollout automaticamente.
+CM_HASH=$(kubectl get configmap app-config -o yaml | sha256sum | cut -c1-8)
+kubectl patch deployment myapp -p \
+  "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"configmap-hash\":\"${CM_HASH}\"}}}}}"
+
+# Verificar que el rollout progresa correctamente
+kubectl rollout status deployment/myapp
+# Waiting for deployment "myapp" rollout to finish: 1 out of 3 new replicas have been updated...
+# Waiting for deployment "myapp" rollout to finish: 2 out of 3 new replicas have been updated...
+# deployment "myapp" successfully rolled out
+```
+
+### ConfigMaps Inmutables para Mayor Seguridad y Rendimiento
+
+A partir de Kubernetes 1.21 puedes declarar un ConfigMap como inmutable. Esto es especialmente util en clusters grandes (10 000+ Pods) porque el kubelet cierra el watch del objeto y deja de consultar el API server por cambios, reduciendo la carga de red significativamente.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-v2
+immutable: true    # No se puede modificar despues de creado
+data:
+  app.properties: |
+    database.host=db.production.svc
+    cache.ttl=300
+    feature.dark-mode=true
+```
+
+**Reglas de los ConfigMaps inmutables**:
+
+- Una vez `immutable: true`, los campos `data` y `binaryData` no pueden cambiar.
+- Tampoco se puede revertir a `immutable: false`.
+- La unica forma de "actualizar" es eliminar el objeto y crearlo con un nuevo nombre (p. ej. `app-config-v3`).
+
+| Caracteristica | ConfigMap mutable | ConfigMap inmutable |
+|----------------|-------------------|---------------------|
+| Watch activo del kubelet | Si (carga constante) | No (se cierra al montarlo) |
+| Modificable tras crear | Si | No |
+| Proteccion contra cambios accidentales | No | Si |
+| Recomendado para | Configuracion que cambia frecuentemente | Versiones de release estables |
+
 ---
 
 ## Secrets
@@ -765,6 +845,151 @@ kubectl delete configmap app-config-v1
 ```
 
 **📄 Ver ejemplo completo**: [`ejemplos/07-combinados/immutable-configmap-versioning.yaml`](ejemplos/07-combinados/immutable-configmap-versioning.yaml)
+
+---
+
+## Patrones de Uso Real
+
+Los ConfigMaps no solo almacenan pares clave-valor simples. En produccion aparecen cuatro patrones recurrentes que conviene conocer antes de disenar la estrategia de configuracion de tu aplicacion.
+
+### Patron 1: Archivos de Configuracion de Aplicacion
+
+El caso mas comun es sustituir el archivo de configuracion que antes se copiaba dentro de la imagen Docker por un ConfigMap montado en volumen. La aplicacion lee el archivo desde el sistema de archivos sin saber que Kubernetes lo gestiona.
+
+```yaml
+# ConfigMap que contiene el archivo nginx.conf completo
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        location / {
+            proxy_pass http://backend:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        location /health {
+            access_log off;
+            return 200 "ok\n";
+        }
+    }
+```
+
+```yaml
+# Fragmento del Deployment: montar el archivo sin sobrescribir el directorio
+volumeMounts:
+- name: nginx-cfg
+  mountPath: /etc/nginx/conf.d/default.conf
+  subPath: nginx.conf
+  readOnly: true
+volumes:
+- name: nginx-cfg
+  configMap:
+    name: nginx-config
+```
+
+### Patron 2: Feature Flags
+
+Un ConfigMap con un archivo JSON o YAML de feature flags permite activar o desactivar funcionalidades sin redesplegar la aplicacion, siempre que esta relea el archivo periodicamente o utilice un sidecar watcher.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-flags
+data:
+  features.json: |
+    {
+      "dark-mode": true,
+      "new-checkout": false,
+      "beta-api": true,
+      "rate-limit-enabled": true
+    }
+```
+
+La aplicacion carga `/app/config/features.json` al arrancar (o cada N segundos) y actua en consecuencia. Cambiar un flag solo requiere `kubectl edit configmap feature-flags` y esperar el intervalo de reload, sin un nuevo build de imagen.
+
+### Patron 3: Configuracion por Entorno
+
+La misma imagen Docker se despliega en varios namespaces (dev, staging, prod). Cada namespace tiene su propio ConfigMap con el mismo nombre pero distintos valores. El Deployment no cambia entre entornos.
+
+```bash
+# Crear el ConfigMap especifico de produccion
+# El archivo production.properties contiene valores reales
+kubectl create configmap app-config \
+  --from-file=config.properties=configs/production.properties \
+  -n production
+
+# El mismo nombre "app-config" en staging apunta a valores de staging
+kubectl create configmap app-config \
+  --from-file=config.properties=configs/staging.properties \
+  -n staging
+
+# Verificar diferencias entre entornos
+kubectl get configmap app-config -n production -o jsonpath='{.data.config\.properties}'
+kubectl get configmap app-config -n staging    -o jsonpath='{.data.config\.properties}'
+```
+
+Este patron se alinea con el principio de [The Twelve-Factor App](https://12factor.net/config): la imagen es identica en todos los entornos, solo cambia la configuracion inyectada por el cluster.
+
+### Patron 4: Scripts de Inicializacion
+
+Los init containers frecuentemente necesitan ejecutar scripts SQL, shell o de migracion antes de que arranque el contenedor principal. Guardar esos scripts en un ConfigMap evita reconstruir la imagen cada vez que cambia un script de base de datos.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-scripts
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+      id   SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id    INT REFERENCES users(id),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  seed.sql: |
+    INSERT INTO users (name) VALUES ('admin')
+    ON CONFLICT DO NOTHING;
+```
+
+```yaml
+# Init container que ejecuta los scripts antes de arrancar la app
+initContainers:
+- name: db-migrate
+  image: postgres:15-alpine
+  command: ["sh", "-c", "psql $DATABASE_URL -f /scripts/init.sql -f /scripts/seed.sql"]
+  volumeMounts:
+  - name: init-scripts
+    mountPath: /scripts
+    readOnly: true
+volumes:
+- name: init-scripts
+  configMap:
+    name: db-init-scripts
+    defaultMode: 0555   # Ejecutable
+```
+
+**Cuadro resumen de patrones**:
+
+| Patron | Tipo de dato | Metodo de consumo | Se actualiza en vivo |
+|--------|-------------|-------------------|----------------------|
+| Archivo de configuracion | Texto multilinea | Volumen | Si (sin subPath) |
+| Feature flags | JSON/YAML | Volumen | Si (sin subPath) |
+| Configuracion por entorno | Propiedades simples | `envFrom` o volumen | No (env) / Si (vol) |
+| Scripts de init | SQL / Shell | Volumen (initContainer) | Si (proxima ejecucion) |
 
 ---
 

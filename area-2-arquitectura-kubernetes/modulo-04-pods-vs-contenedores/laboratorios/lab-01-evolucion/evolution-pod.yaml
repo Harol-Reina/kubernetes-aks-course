@@ -1,0 +1,41 @@
+# Ejercicio 4: Evolution Demo - Pod Multi-Container con Network Namespace Compartido
+# Uso: kubectl apply -f evolution-pod.yaml
+#
+# Descripcion:
+#   Pod con dos contenedores (nginx y httpd) que demuestran el enfoque Kubernetes
+#   para comunicacion entre contenedores. Ambos comparten el mismo network namespace,
+#   permitiendo comunicacion via localhost sin configuracion adicional.
+#
+# Conceptos clave:
+#   - Shared network namespace: ambos contenedores tienen la misma IP del Pod
+#   - Comunicacion localhost: los contenedores se ven mutuamente en 127.0.0.1
+#   - Multi-container Pod: patron fundamental de Kubernetes
+#   - Puerto unico por Pod: cada contenedor debe usar un puerto diferente
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: evolution-demo
+  labels:
+    demo: evolution
+    app: multi-container
+spec:
+  containers:
+  - name: web
+    image: nginx:alpine
+    ports:
+    - name: http
+      containerPort: 80
+
+  - name: api
+    image: httpd:alpine
+    ports:
+    - name: http-api
+      containerPort: 8080
+    # httpd usa puerto 80 por defecto
+    # nginx tambien usa 80, pero en el Pod solo uno puede usar cada puerto
+    # Reconfiguramos httpd para escuchar en el puerto 8080
+    command: ["/bin/sh"]
+    args: ["-c", "sed 's/Listen 80/Listen 8080/' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && httpd -f /tmp/httpd.conf -D FOREGROUND"]

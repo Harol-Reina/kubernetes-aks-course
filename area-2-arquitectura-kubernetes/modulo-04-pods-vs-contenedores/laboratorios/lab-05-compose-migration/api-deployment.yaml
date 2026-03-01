@@ -1,0 +1,81 @@
+# Ejercicio 2: Migración de API Backend - Node.js con ConfigMap
+# Uso: kubectl apply -f api-deployment.yaml
+#
+# Descripcion:
+#   Migra el servicio API backend de Docker Compose a Kubernetes.
+#   Usa ConfigMap para la configuracion de conexion a la base de datos,
+#   Deployment con 2 replicas para alta disponibilidad y Service ClusterIP
+#   para que el frontend pueda resolver el nombre DNS "api".
+#
+# Conceptos clave:
+#   - ConfigMap reemplaza el bloque "environment:" de Docker Compose
+#   - depends_on no existe en Kubernetes: el DNS de Services resuelve la dependencia
+#   - replicas: 2 como equivalente al escalado horizontal de Docker Compose
+#   - Service ClusterIP expone la API solo dentro del cluster
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  labels:
+    app: api
+    tier: backend
+data:
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_NAME: myapp
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        tier: backend
+    spec:
+      containers:
+      - name: api
+        image: node:alpine
+        command: ["sh", "-c", "sleep infinity"]  # Simulacion: reemplazar con imagen real
+        ports:
+        - name: http
+          containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: api-config
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+    tier: backend
+spec:
+  selector:
+    app: api
+  ports:
+  - name: http
+    port: 3000
+    targetPort: http

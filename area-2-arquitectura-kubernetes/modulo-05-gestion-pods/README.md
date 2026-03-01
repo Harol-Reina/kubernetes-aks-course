@@ -1,42 +1,14 @@
 # Capítulo 7: Gestión Avanzada de Pods
 
-Sabemos qué es un Pod. Ahora aprendemos a gestionarlos en el día a día: ciclo de vida, especificaciones avanzadas, debugging y buenas prácticas.
+En el capítulo anterior aprendimos qué ES un Pod: la abstracción que Kubernetes usa para agrupar contenedores. Pero conocer el concepto y saber operarlo son cosas muy distintas. Es como saber qué es un coche versus saber conducirlo, revisarlo cuando hace un ruido raro y llevarlo al taller con un diagnóstico claro.
 
----
+**El problema real**: Tu Pod aparece con estado `Pending` y no sabes cuánto tiempo lleva así ni por qué. Otro Pod entra en `CrashLoopBackOff` después de 3 reinicios. Uno más muestra `OOMKilled` y no entiendes qué significa. Sin conocer el ciclo de vida completo de un Pod y las herramientas de diagnóstico, pasas minutos o horas tratando de adivinar qué está pasando, probando `kubectl delete pod` como solución universal y esperando que el problema se resuelva solo.
 
-## 🎓 Guía de Estudio Recomendada
+**La solución**: Kubernetes expone el estado completo del ciclo de vida de un Pod (Pending, Running, Succeeded, Failed, Unknown), junto con herramientas de diagnóstico precisas: `kubectl describe` para ver eventos, `kubectl logs` para ver la salida del contenedor, `kubectl exec` para entrar al Pod, y `kubectl top` para ver consumo de recursos. Combinadas con labels, anotaciones y especificaciones de recursos, estas herramientas dan control total sobre el comportamiento de los Pods.
 
-Para maximizar tu aprendizaje, sigue esta ruta estructurada:
+**La analogía**: Saber qué es un coche (capítulo anterior) es diferente a saber cómo conducirlo, cómo revisar el aceite, cómo leer los códigos de error del tablero, y cómo comunicarle al mecánico exactamente qué falla. La gestión avanzada de Pods es ese conocimiento práctico de operación y diagnóstico.
 
-```
-Fase 1: Manifiestos YAML (60-90 min)
-├─ Estructura básica
-├─ Campos obligatorios y opcionales
-├─ Mejores prácticas de escritura
-└─ Lab 01: Crear manifiestos
-
-Fase 2: Resources y Health Checks (90-120 min)
-├─ Resource requests y limits
-├─ QoS classes
-├─ Probes (liveness, readiness, startup)
-└─ Lab 02: Optimización de recursos
-
-Fase 3: Seguridad y Labels (60-90 min)
-├─ Security contexts
-├─ Labels y selectors avanzados
-├─ Annotations y metadata
-└─ Lab 03: Hardening de Pods
-
-Fase 4: Debugging y Production (60-90 min)
-├─ Herramientas de debugging
-├─ Troubleshooting patterns
-├─ Best practices
-└─ Lab 04: Resolución de problemas
-```
-
-👉 **[ABRIR GUÍA DE ESTUDIO](./RESUMEN-MODULO.md)**
-
----
+**En este capítulo** recorrerás las fases del ciclo de vida de un Pod y las condiciones que provocan cada transición, dominarás los comandos imperativos y declarativos de kubectl para crear, modificar y depurar Pods, aprenderás a usar labels y selectores para organizar y filtrar recursos, y construirás manifiestos YAML listos para producción con resource requests y limits correctamente configurados. Este capítulo cubre temas de examen tanto en CKAD como en CKA.
 
 ---
 
@@ -3486,8 +3458,6 @@ kubectl debug my-pod -it --image=busybox --target=app
 **Clave**: Usa **Deployments** en producción, no Pods directos
 
 ---
-
-**⬅️ Anterior**: [Módulo 04](../modulo-04-pods-vs-contenedores/README.md)  
 
 ## Resumen del Capítulo
 

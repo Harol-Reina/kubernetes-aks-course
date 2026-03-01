@@ -1,6 +1,14 @@
 # Capítulo 2: Docker y Contenerización
 
-Con la base de virtualización clara, pasamos a la revolución que cambió el despliegue de aplicaciones: los contenedores. Docker simplificó radicalmente cómo empaquetamos, distribuimos y ejecutamos software.
+En el capítulo anterior vimos cómo la virtualización resolvió el problema del hardware desperdiciado. Las VMs fueron un gran avance, pero generaron sus propios problemas. Con esa base clara, ahora damos el siguiente paso hacia la tecnología que realmente cambió cómo se construye y entrega software moderno.
+
+**El problema real**: Imagina un equipo de desarrollo que trabaja en un microservicio. Para hacer CI/CD, cada pipeline necesita levantar una VM, esperar 2-3 minutos a que arranque el sistema operativo, instalar dependencias, correr los tests y apagar la VM. Con 50 microservicios y docenas de builds por día, esto se convierte en un cuello de botella crítico. Además, cada VM consume 2-4 GB de RAM solo para el sistema operativo, sin contar la aplicación. Un servidor con 64 GB puede alojar unos 20 servicios con VMs. Con contenedores, puede alojar 200 o más.
+
+**La solución**: Los contenedores comparten el kernel del sistema operativo host en lugar de virtualizar hardware completo. No necesitan arrancar un OS propio: simplemente aíslan procesos usando características del kernel de Linux (namespaces y cgroups). El resultado es arranque en milisegundos, consumo de memoria en megabytes en lugar de gigabytes, y densidad radicalmente superior.
+
+**La analogía**: Las VMs son como casas independientes: cada una tiene sus propios cimientos, estructura y servicios. Los contenedores son como apartamentos en un edificio: comparten los cimientos, la estructura y los servicios centrales, pero cada uno tiene su propio espacio privado. Mismo aislamiento práctico, fracción del costo.
+
+**En este capítulo** aprenderás la arquitectura de Docker (daemon, cliente, registry), cómo funcionan las imágenes y los contenedores, cómo escribir un Dockerfile para empaquetar tu aplicación, y cómo usar docker-compose para orquestar múltiples contenedores localmente. Al terminar, podrás contenerizar cualquier aplicación y entenderás exactamente por qué este modelo escala tan bien, lo que preparará el terreno para el problema que Kubernetes viene a resolver.
 
 ---
 

@@ -1,0 +1,45 @@
+# Ejercicio 8: Shared Volume Demo - Compartir Datos entre Contenedores via emptyDir
+# Uso: kubectl apply -f shared-volume-pod.yaml
+#
+# Descripcion:
+#   Pod con dos contenedores que comparten un volume emptyDir. El contenedor writer
+#   escribe timestamps cada 5 segundos en /shared/log.txt, y el contenedor reader
+#   lee ese archivo continuamente. Demuestra como compensar el aislamiento del
+#   mount namespace usando volumes de Kubernetes.
+#
+# Conceptos clave:
+#   - emptyDir: volume efimero creado cuando el Pod se asigna a un nodo, destruido al terminar
+#   - volumeMounts: monta el volume en una ruta especifica dentro del contenedor
+#   - Sidecar pattern: contenedores complementarios en el mismo Pod (writer + reader)
+#   - Mount namespace separado: sin volume, cada contenedor tiene su propio filesystem
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shared-volume-demo
+  labels:
+    app: shared-volume-demo
+    tier: analysis
+spec:
+  containers:
+  - name: writer
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "while true; do date >> /shared/log.txt; sleep 5; done"]
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+
+  - name: reader
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "while true; do tail -f /shared/log.txt; sleep 10; done"]
+    volumeMounts:
+    - name: shared-data
+      mountPath: /shared
+
+  volumes:
+  - name: shared-data
+    emptyDir: {}

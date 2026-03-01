@@ -1,0 +1,33 @@
+# Ejercicio 4: Shared PID Demo - Pod con shareProcessNamespace habilitado
+# Uso: kubectl apply -f shared-pid-pod.yaml
+#
+# Descripcion:
+#   Pod con shareProcessNamespace: true que permite a ambos contenedores ver
+#   los procesos del otro. Sin esta opcion, cada contenedor solo ve sus propios
+#   procesos. Util para debugging, monitoreo y sidecar patterns.
+#
+# Conceptos clave:
+#   - shareProcessNamespace: flag opcional del spec del Pod (false por defecto)
+#   - PID namespace compartido: container1 puede ver procesos de container2 y viceversa
+#   - Proceso init del Pod (PID 1): visible desde ambos contenedores cuando se habilita
+#   - Uso tipico: sidecars de debugging que necesitan ver procesos del contenedor principal
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shared-pid-demo
+  labels:
+    app: shared-pid-demo
+    tier: analysis
+spec:
+  shareProcessNamespace: true
+  containers:
+  - name: container1
+    image: busybox
+    command: ["/bin/sh", "-c", "while true; do sleep 30; done"]
+
+  - name: container2
+    image: busybox
+    command: ["/bin/sh", "-c", "while true; do sleep 30; done"]

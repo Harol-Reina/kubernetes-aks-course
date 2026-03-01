@@ -1,6 +1,14 @@
 # Capítulo 25: Mantenimiento y Upgrades
 
-El cluster está montado. Ahora lo mantenemos operativo: backups de etcd, upgrades de versión, drain de nodos y procedimientos de recuperación.
+En el capítulo anterior construimos el cluster desde cero con kubeadm: control plane inicializado, nodos unidos, red configurada. El cluster existe y funciona. Pero crear algo es solo el primer día; mantenerlo operativo durante años es el verdadero trabajo.
+
+El problema es real y tiene consecuencias graves. Kubernetes publica una nueva minor version cada cuatro meses y solo soporta las tres últimas; quedarte en una versión fuera de soporte significa que las vulnerabilidades de seguridad que se descubran no recibirán parches. Más crítico aún: etcd es el único lugar donde vive todo el estado de tu cluster, todos los Pods, Deployments, Secrets, y configuraciones. Si etcd se corrompe o el disco falla sin un backup reciente, no puedes recuperar nada: el cluster es una pizarra en blanco y todo lo que corrías se ha perdido. Que esto ocurra en producción a las 3am es uno de los peores escenarios posibles en operaciones.
+
+La solución es una práctica sistemática de mantenimiento: backups periódicos de etcd que se puedan restaurar en minutos, upgrades planificados un minor version a la vez siguiendo el orden correcto (control plane primero, workers después), y el uso de `drain` y `cordon` para sacar nodos del servicio de forma segura antes de cualquier operación de mantenimiento.
+
+Piénsalo como el mantenimiento de un coche: los backups de etcd son como cambiar el aceite regularmente (previenen daños mayores), los upgrades de versión son como reemplazar piezas del motor mientras el coche sigue en marcha (hay que hacerlo con cuidado y en el orden correcto), y el drain de nodos es como sacar el coche del carril de alta velocidad antes de abrirle el capó.
+
+En este capítulo aprenderás a hacer snapshots de etcd y restaurarlos ante un desastre, a planificar y ejecutar upgrades con kubeadm paso a paso, a usar `kubectl drain` y `kubectl cordon` para mantenimiento seguro de nodos, y a definir ventanas de mantenimiento que minimicen el impacto en los usuarios.
 
 ---
 
@@ -491,6 +499,134 @@ done
 
 ---
 
+## ⚠️ Escenarios de Fallo Durante Upgrades
+
+Los upgrades pueden fallar de formas predecibles. Conocer estos escenarios de antemano permite responder con rapidez y sin improvisación.
+
+### Escenario 1: Control Plane Actualizado, Workers Incompatibles
+
+**Sintoma:** `kubectl get nodes` muestra workers en `NotReady` o con versiones incompatibles tras actualizar el control plane.
+
+**Causa:** El skew de versiones supera el limite permitido. Si el control plane está en 1.29 y los workers siguen en 1.27, el kubelet de los workers queda fuera de la ventana N-2.
+
+```
+Control Plane: 1.29
+├── kubelet: 1.28-1.29 ✅ (N-1, dentro del skew permitido)
+├── kubelet: 1.27     ❌ (N-2, NO soportado)
+└── kubectl: 1.28-1.30 ✅ (N-1 a N+1, permitido)
+```
+
+**Solucion:**
+
+```bash
+# Verificar versiones de todos los nodos
+kubectl get nodes -o custom-columns='NAME:.metadata.name,VERSION:.status.nodeInfo.kubeletVersion'
+# NAME          VERSION
+# master-01     v1.29.0
+# worker-01     v1.27.8   <- problema: demasiado atras
+
+# Actualizar workers inmediatamente (seguir proceso de upgrade in-place)
+kubectl drain worker-01 --ignore-daemonsets --delete-emptydir-data
+# Upgrade de kubelet en el worker...
+kubectl uncordon worker-01
+```
+
+**Prevencion:** Nunca dejar pasar mas de una minor version de diferencia entre control plane y workers. Planificar el upgrade de workers en la misma ventana de mantenimiento que el control plane.
+
+### Escenario 2: Corrupcion de etcd Durante el Upgrade
+
+**Sintoma:** El API server no responde, los pods no se schedulan, `etcdctl endpoint health` devuelve errores.
+
+**Causa:** Fallo de disco, reinicio abrupto del nodo de etcd durante la escritura, o fallo de red en configuracion etcd externo.
+
+**Por que ocurre:** etcd usa un algoritmo de consenso (Raft) que requiere quorum. Si un nodo de etcd falla durante un upgrade y el cluster pierde quorum, el cluster entero se detiene.
+
+**Solucion: siempre tener un snapshot ANTES del upgrade.**
+
+```bash
+# Verificar salud de etcd antes de cualquier upgrade
+ETCDCTL_API=3 etcdctl endpoint health \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key
+# Output esperado:
+# https://127.0.0.1:2379 is healthy: successfully committed proposal: took = 1.2ms
+
+# Tomar snapshot ANTES del upgrade
+ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-pre-upgrade-$(date +%Y%m%d-%H%M).db \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key
+```
+
+Si etcd se corrompe y hay un snapshot, consultar la seccion "Procedimientos de Rollback Detallados" mas abajo.
+
+### Escenario 3: CRDs Incompatibles con la Nueva Version
+
+**Sintoma:** Tras el upgrade, recursos custom (como los de Prometheus Operator, cert-manager o Istio) dejan de funcionar. Los pods del operator crashean con errores de API no encontrada.
+
+**Causa:** Las APIs de Kubernetes se deprecan y eliminan entre versiones. Ejemplo historico: `extensions/v1beta1` fue eliminado en 1.22, `batch/v1beta1` en 1.25.
+
+```bash
+# Verificar que APIs deprecadas siguen en uso en tu cluster
+# Requiere el plugin kubectl-convert o kubectl deprecations
+kubectl api-resources | grep -i "extensions"
+
+# Ver que versiones de API soporta el cluster nuevo
+kubectl api-versions | sort
+
+# Buscar recursos que usan APIs deprecadas
+kubectl get <recurso> -o yaml | grep apiVersion
+```
+
+**Solucion:**
+
+```bash
+# 1. Revisar release notes de la version objetivo antes del upgrade
+# https://kubernetes.io/docs/reference/using-api/deprecation-guide/
+
+# 2. Convertir manifiestos a la nueva API con kubectl-convert
+kubectl convert -f deployment-viejo.yaml --output-version apps/v1
+
+# 3. Actualizar los operadores (Helm charts, etc.) ANTES del upgrade del cluster
+helm upgrade prometheus-stack prometheus-community/kube-prometheus-stack
+
+# 4. Verificar compatibilidad de addons en el changelog del addon
+```
+
+**Prevencion:** Probar en un cluster de staging con la misma version objetivo ANTES de tocar produccion. Revisar siempre el migration guide de la version.
+
+### Escenario 4: Aplicacion Rompe Despues del Upgrade
+
+**Sintoma:** Las aplicaciones propias dejan de arrancar con errores como `no matches for kind "Deployment" in version "extensions/v1beta1"`.
+
+**Causa:** Los manifiestos YAML de la aplicacion referencian APIs que fueron eliminadas en la nueva version de Kubernetes.
+
+```bash
+# Detectar uso de APIs eliminadas en tus propios manifiestos
+grep -r "apiVersion: extensions" ./manifests/
+grep -r "apiVersion: batch/v1beta1" ./manifests/
+
+# Verificar con el plugin kubectl-deprecations (si esta instalado)
+kubectl deprecations --filename ./manifests/
+
+# Ver que cambios de API aplican a la version objetivo
+# Consultar: https://kubernetes.io/docs/reference/using-api/deprecation-guide/
+```
+
+**Solucion:** Actualizar los manifiestos a las APIs estables antes del upgrade del cluster. Los cambios mas comunes:
+
+```
+extensions/v1beta1 Deployment  →  apps/v1 Deployment
+extensions/v1beta1 Ingress     →  networking.k8s.io/v1 Ingress
+batch/v1beta1 CronJob          →  batch/v1 CronJob
+policy/v1beta1 PodDisruptionBudget  →  policy/v1 PodDisruptionBudget
+```
+
+---
+
 ## 🔧 Node Maintenance
 
 ### Comandos Esenciales
@@ -911,6 +1047,134 @@ Si todo falla:
 2. Restaurar etcd backup
 3. Aplicar resource backups
 4. Migrar workloads
+
+---
+
+## 🔁 Procedimientos de Rollback Detallados
+
+El rollback de un upgrade de Kubernetes es una operacion delicada. kubeadm no soporta oficialmente el downgrade de versiones, por lo que el metodo preferido siempre es restaurar desde un snapshot de etcd. Esta seccion detalla ambas opciones.
+
+### Rollback Via Restauracion de etcd (Metodo Preferido)
+
+Este metodo revierte el estado completo del cluster al momento en que se tomo el snapshot. Es la unica forma de rollback que Kubernetes considera segura y es la que se pide en el examen CKA.
+
+```bash
+# Paso 1: Identificar las versiones actual y anterior
+kubeadm version
+# kubeadm version: &Version{Major:1,Minor:28,...}
+
+kubectl version --short
+# Client Version: v1.28.4
+# Server Version: v1.28.4
+
+# Paso 2: Detener el kube-apiserver para evitar escrituras durante el restore
+# Los manifiestos estaticos se mueven fuera del directorio watched
+sudo mv /etc/kubernetes/manifests/kube-apiserver.yaml /tmp/kube-apiserver.yaml
+
+# Verificar que el pod de kube-apiserver ha desaparecido
+sudo crictl pods | grep apiserver
+# (no output esperado — el pod debe haber terminado)
+
+# Paso 3: Restaurar el snapshot de etcd al directorio de datos
+# IMPORTANTE: el directorio destino NO debe existir previamente
+sudo ETCDCTL_API=3 etcdctl snapshot restore \
+  /backup/etcd-pre-upgrade.db \
+  --data-dir=/var/lib/etcd-restored \
+  --name=master-01 \
+  --initial-cluster=master-01=https://127.0.0.1:2380 \
+  --initial-cluster-token=etcd-cluster-1 \
+  --initial-advertise-peer-urls=https://127.0.0.1:2380
+
+# Paso 4: Reemplazar el directorio de datos de etcd
+sudo mv /var/lib/etcd /var/lib/etcd.failed-upgrade
+sudo mv /var/lib/etcd-restored /var/lib/etcd
+
+# Paso 5: Apuntar el manifiesto de etcd al directorio restaurado
+# Editar /etc/kubernetes/manifests/etcd.yaml si usa ruta diferente
+# Verificar que el hostPath sea /var/lib/etcd
+sudo grep -A 2 "hostPath" /etc/kubernetes/manifests/etcd.yaml
+
+# Paso 6: Restaurar el kube-apiserver
+sudo mv /tmp/kube-apiserver.yaml /etc/kubernetes/manifests/kube-apiserver.yaml
+
+# Paso 7: Esperar a que el control plane se recupere (puede tardar 1-3 minutos)
+kubectl get nodes
+# NAME        STATUS   ROLES           AGE   VERSION
+# master-01   Ready    control-plane   30d   v1.27.8   <- version del snapshot
+
+# Paso 8: Verificar que el estado del cluster es consistente con el backup
+kubectl get pods --all-namespaces
+kubectl get deployments --all-namespaces
+```
+
+### Rollback Via Downgrade de Paquetes (No Oficial)
+
+Este metodo intenta instalar versiones anteriores de los paquetes kubeadm, kubelet y kubectl. Solo funciona para rollback de patch versions y no garantiza consistencia con el estado de etcd.
+
+```bash
+# ADVERTENCIA: Este metodo NO es soportado oficialmente por Kubernetes.
+# Solo usar como ultimo recurso para rollback de patch versions (1.28.4 -> 1.28.2).
+# Para minor versions, usar siempre el metodo de restore de etcd.
+
+# Paso 1: Desbloquear paquetes
+sudo apt-mark unhold kubeadm kubelet kubectl
+
+# Paso 2: Instalar version anterior
+sudo apt-get install -y \
+  kubeadm=1.27.8-00 \
+  kubelet=1.27.8-00 \
+  kubectl=1.27.8-00
+
+# Paso 3: Bloquear paquetes en version anterior
+sudo apt-mark hold kubeadm kubelet kubectl
+
+# Paso 4: Reiniciar kubelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+# Paso 5: Verificar
+kubectl get nodes
+```
+
+### Checklist de Rollback
+
+Antes de ejecutar cualquier rollback, verificar:
+
+- [ ] El snapshot de etcd existe y fue tomado ANTES del upgrade problemático
+- [ ] El snapshot corresponde a la version de Kubernetes correcta
+- [ ] El equipo ha sido notificado de la ventana de rollback
+- [ ] El problema que causó el rollback está documentado con evidencia (logs, screenshots)
+- [ ] Se ha probado el procedimiento en staging previamente
+- [ ] El runbook de rollback está disponible y actualizado
+- [ ] Hay un responsable de comunicaciones hacia los usuarios durante el rollback
+
+### Medidas Preventivas Para Evitar Rollbacks
+
+La mejor forma de gestionar un rollback es no necesitarlo. Estas practicas reducen la probabilidad de que un upgrade requiera rollback:
+
+1. **Snapshot obligatorio antes de cualquier operacion de cluster**
+   ```bash
+   # Este comando debe ejecutarse como primer paso de CUALQUIER upgrade
+   ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-$(date +%Y%m%d-%H%M).db \
+     --endpoints=https://127.0.0.1:2379 \
+     --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+     --cert=/etc/kubernetes/pki/etcd/server.crt \
+     --key=/etc/kubernetes/pki/etcd/server.key
+   ```
+
+2. **Mantener paquetes de la version anterior disponibles**
+   ```bash
+   # Guardar los paquetes descargados antes de hacer unhold
+   sudo apt-cache show kubeadm | grep Version
+   # Descargar sin instalar para tener el .deb de la version N-1
+   sudo apt-get download kubeadm=1.27.8-00 kubelet=1.27.8-00 kubectl=1.27.8-00
+   ```
+
+3. **Probar el upgrade completo en staging** con el mismo workload representativo de produccion antes de la ventana de mantenimiento.
+
+4. **Definir un criterio de rollback** antes de empezar: si en X minutos después de aplicar el upgrade no se cumple la condicion Y, se inicia rollback automaticamente.
+
+5. **Documentar un runbook de rollback** que cualquier miembro del equipo pueda ejecutar sin depender de quien hizo el upgrade.
 
 ---
 

@@ -1,6 +1,14 @@
 # Capítulo 3: Introducción a Kubernetes
 
-Ahora que dominamos Docker, es momento de conocer el sistema que orquesta contenedores a escala: Kubernetes. Descubrimos su origen en Google, su propósito y los problemas que resuelve.
+En los dos capítulos anteriores construimos una base sólida: entendemos la virtualización y sabemos contenerizar aplicaciones con Docker. Ahora llegamos al punto de inflexión donde Docker solo ya no es suficiente.
+
+**El problema real**: Tienes 50 contenedores distribuidos en 10 servidores. A las 3 de la mañana, uno de los servidores falla. Los 5 contenedores que corrían ahí simplemente dejan de responder. ¿Quién los detecta? ¿Quién los reinicia en otro servidor? ¿Quién redirige el tráfico? Nadie, a menos que haya alguien despierto mirando dashboards. Ahora multiplica ese escenario por 500 contenedores y 3 deploys al día: el equipo de operaciones se convierte en un equipo de bomberos permanente apagando incendios en lugar de entregar valor.
+
+**La solución**: Kubernetes es el sistema de orquestación que automatiza todo eso. Sabe en qué nodo vive cada contenedor, detecta cuando un Pod falla y lo reinicia automáticamente, distribuye carga de trabajo inteligentemente y permite actualizar aplicaciones sin tiempo de inactividad. No hay nadie despierto a las 3am porque Kubernetes está haciendo esa guardia de forma continua.
+
+**La analogía**: Docker es como tener músicos talentosos. Kubernetes es el director de orquesta que coordina a todos: dice quién toca qué, en qué momento, a qué volumen, y cuando un músico se enferma (falla un contenedor), lo reemplaza sin que el concierto se detenga.
+
+**En este capítulo** conocerás el origen de Kubernetes en Google (nacido de su sistema interno Borg, que lleva más de 15 años orquestando cientos de miles de contenedores), los conceptos fundamentales del modelo declarativo de K8s, y por qué su adopción se convirtió en el estándar de la industria. Al terminar, tendrás el contexto histórico y conceptual para entender por qué cada decisión de diseño en Kubernetes existe.
 
 ---
 
@@ -942,34 +950,6 @@ Módulos 14-18: Config       ← ConfigMaps, Secrets, Volumes (CKAD focus)
     ↓
 Módulos 19-20: Security     ← RBAC, ServiceAccounts (CKS focus)
 ```
-
-### **🏆 Objetivos de Certificación:**
-Al completar este área estarás preparado para:
-- 📜 **Examen CKAD**: Desarrollo de aplicaciones en K8s
-- 📜 **Examen CKA**: Administración de clusters
-- 📜 **Base sólida para CKS**: Seguridad especializada
-
----
-
-## ⏭️ Siguiente Paso
-
-**¡Estás listo para dominar Kubernetes desde sus fundamentos!**
-
-Con esta introducción tienes:
-- ✅ **Contexto histórico** de Google Borg → Kubernetes
-- ✅ **Comprensión clara** de qué problemas resuelve K8s
-- ✅ **Ejemplos prácticos** de self-healing y automation
-- ✅ **Prerequisitos verificados** (especialmente Docker)
-- ✅ **Mindset correcto** para aprendizaje declarativo
-
-🎯 **Próximo módulo**: **[M02: Arquitectura de Cluster](../modulo-02-arquitectura-cluster/README.md)**
-
-Donde aprenderás:
-- Componentes del Control Plane (API Server, etcd, Scheduler, Controllers)
-- Arquitectura de Worker Nodes (kubelet, kube-proxy, runtime)
-- Comunicación entre componentes
-- Flujo completo de requests en K8s
-- Cómo todo lo que acabas de aprender se implementa técnicamente
 
 ---
 

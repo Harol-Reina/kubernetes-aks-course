@@ -1,19 +1,34 @@
 # Capítulo 12: Namespaces y Organización
 
-Con acceso externo resuelto, organizamos los recursos del cluster con Namespaces: aislamiento lógico, multi-tenancy y convenciones de nombres.
+En el capítulo anterior resolvimos el acceso externo con Ingress: un punto de entrada único
+que enruta tráfico a múltiples servicios. Nuestras aplicaciones ahora son accesibles desde
+internet. Pero a medida que el equipo y el número de aplicaciones crecen, el cluster se
+convierte en un cajón desastre donde todo convive sin separación.
 
----
+El caos llega rápido cuando no hay organización. El equipo de desarrollo despliega una versión
+de prueba con el mismo nombre que el servicio de producción — colisión de nombres, el deployment
+de producción se sobreescribe. El equipo A borra accidentalmente un Secret que creó el equipo B
+porque ambos trabajan en el mismo espacio. Los desarrolladores junior tienen acceso a los
+manifiestos de producción porque todo está en el namespace `default`. Una herramienta de CI/CD
+mal configurada hace `kubectl delete all --all` y elimina recursos de todos los equipos a la
+vez. Sin límites, un deployment de desarrollo consume toda la CPU del cluster y deja sin
+recursos a la aplicación de producción.
 
-## 🎓 Metodología de Aprendizaje
+Los Namespaces son la solución de Kubernetes para crear aislamiento lógico dentro de un cluster
+físico. Son compartimentos estancos: los recursos de un Namespace no interfieren con los de
+otro, se pueden aplicar cuotas de recursos independientes, y los permisos RBAC se asignan por
+Namespace.
 
-Este módulo sigue el patrón **Teoría → Ejemplo Inline → Checkpoint → Laboratorio**:
+Imagina un edificio de oficinas moderno. Hay un solo edificio (el cluster), pero cada
+departamento ocupa su propia planta (Namespace): contabilidad en el piso 3, desarrollo en el
+piso 4, producción en el piso 5. Cada planta tiene sus propias llaves de acceso, su propio
+presupuesto de suministros y sus propias normas internas. Lo que pasa en el piso 4 no afecta
+al piso 5.
 
-1. **Teoría**: Conceptos explicados con diagramas ASCII
-2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
-3. **Checkpoints**: Autoevaluaciones para verificar comprensión
-4. **Laboratorios**: Ejercicios prácticos guiados paso a paso
-
-**💡 Tip**: Los namespaces son fundamentales para organización. Practica creándolos y destruyéndolos frecuentemente.
+En este capítulo aprenderás a crear y gestionar Namespaces, aplicar ResourceQuotas para limitar
+el consumo por equipo, configurar LimitRanges como valores por defecto, cambiar de contexto
+entre Namespaces con kubectl, y diseñar estrategias de organización para entornos multi-equipo
+y multi-entorno.
 
 ---
 
@@ -741,6 +756,104 @@ spec:
 #     memory: "512Mi"
 ```
 
+### Ejemplos Prácticos de ResourceQuota y LimitRange
+
+La combinación de ResourceQuota y LimitRange es la estrategia estándar para dar a cada equipo
+su propio espacio con garantías de recursos. A continuación se muestran configuraciones completas
+listas para aplicar en un namespace de desarrollo.
+
+#### ResourceQuota para namespace de desarrollo
+
+```yaml
+# Uso: kubectl apply -f dev-quota.yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: development
+spec:
+  hard:
+    # Cómputo: requests son lo que el scheduler reserva,
+    # limits son el techo absoluto de consumo
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    # Número máximo de objetos por tipo
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "5"
+    configmaps: "20"
+    secrets: "20"
+    # Opcionalmente limitar Deployments y Jobs
+    count/deployments.apps: "10"
+    count/jobs.batch: "5"
+```
+
+#### LimitRange con valores por defecto seguros
+
+```yaml
+# Uso: kubectl apply -f dev-limitrange.yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: development
+spec:
+  limits:
+  - type: Container
+    default:          # Límite aplicado si el contenedor no especifica limits
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:   # Request aplicado si el contenedor no especifica requests
+      cpu: 100m
+      memory: 128Mi
+    max:              # Ningún contenedor puede pedir más de esto
+      cpu: "2"
+      memory: 2Gi
+    min:              # Ningún contenedor puede pedir menos de esto
+      cpu: 50m
+      memory: 64Mi
+```
+
+#### Verificar estado de cuotas y límites
+
+```bash
+# Ver cuota de un namespace: comparar Used vs Hard
+kubectl describe resourcequota dev-quota -n development
+
+# Salida esperada:
+# Name:                   dev-quota
+# Namespace:              development
+# Resource                Used  Hard
+# --------                ----  ----
+# configmaps              3     20
+# count/deployments.apps  2     10
+# limits.cpu              800m  8
+# limits.memory           1Gi   16Gi
+# persistentvolumeclaims  1     5
+# pods                    4     20
+# requests.cpu            300m  4
+# requests.memory         384Mi 8Gi
+# secrets                 4     20
+# services                2     10
+
+# Ver rangos de límites aplicados al namespace
+kubectl describe limitrange dev-limits -n development
+
+# Salida esperada:
+# Name:       dev-limits
+# Namespace:  development
+# Type        Resource  Min   Max  Default Request  Default Limit
+# ----        --------  ---   ---  ---------------  -------------
+# Container   cpu       50m   2    100m             500m
+# Container   memory    64Mi  2Gi  128Mi            512Mi
+```
+
+> **Tip para el examen CKAD**: Si el namespace tiene ResourceQuota de CPU/memoria, todo Pod
+> debe declarar `requests` y `limits`. El LimitRange resuelve esto al inyectar valores por
+> defecto automáticamente, evitando errores de admisión.
+
 ---
 
 ## Aislamiento y Seguridad
@@ -906,6 +1019,86 @@ staging-frontend/
 staging-backend/
 ```
 
+### 5. Patrones de Organización Multi-Equipo
+
+A medida que el número de equipos y entornos crece, la elección del patrón de namespaces tiene
+un impacto directo en la complejidad operativa. Los tres patrones más comunes son:
+
+#### Patrón A: Un namespace por equipo
+
+```
+team-frontend/
+team-backend/
+team-data/
+team-platform/
+```
+
+| Aspecto | Detalle |
+|---------|---------|
+| **Ventajas** | Propiedad clara: cada equipo gestiona su namespace |
+| | RBAC simple: Role + RoleBinding por namespace |
+| | Cuota por equipo (chargeback claro) |
+| **Desventajas** | Dependencias cross-team requieren DNS completo (`svc.ns`) |
+| | Un único entorno por equipo complica testing |
+| **Adecuado para** | Equipos pequeños, una sola etapa de despliegue (producción) |
+
+#### Patrón B: Un namespace por entorno
+
+```
+development/
+staging/
+production/
+```
+
+| Aspecto | Detalle |
+|---------|---------|
+| **Ventajas** | Todos los equipos comparten el mismo namespace por etapa |
+| | Promoción de artefactos entre entornos es directa |
+| | Fácil de entender para equipos nuevos |
+| **Desventajas** | Los equipos comparten cuota: un equipo puede agotar los recursos |
+| | RBAC más grueso: difícil dar permisos por equipo dentro de un namespace |
+| **Adecuado para** | Equipos pequeños con alta confianza mutua |
+
+#### Patrón C: Híbrido equipo + entorno (recomendado para organizaciones medianas/grandes)
+
+```
+frontend-dev/
+frontend-staging/
+frontend-prod/
+backend-dev/
+backend-staging/
+backend-prod/
+data-dev/
+data-prod/
+```
+
+| Aspecto | Detalle |
+|---------|---------|
+| **Ventajas** | Aislamiento completo: equipo A no afecta al equipo B |
+| | RBAC granular: permisos por equipo y por entorno |
+| | Cuotas independientes por combinación equipo/entorno |
+| **Desventajas** | Proliferación de namespaces: con 5 equipos y 3 entornos = 15 namespaces |
+| | Más overhead de gestión (ResourceQuotas, LimitRanges, RBAC × namespace) |
+| **Adecuado para** | Organizaciones con requisitos de compliance o auditoría estrictos |
+
+#### Criterios para elegir el patrón
+
+```
+¿Cuántos equipos hay?
+  < 3 equipos  → Patrón B (por entorno) es suficiente
+  3-8 equipos  → Patrón A (por equipo) con un namespace de infraestructura compartido
+  > 8 equipos  → Patrón C (híbrido) para control granular
+
+¿Hay requisitos de compliance (PCI, HIPAA, SOC2)?
+  Sí → Patrón C obligatorio (aislamiento auditado por equipo y entorno)
+  No → Patrón A o B según tamaño
+
+¿Cuántos entornos existen?
+  Solo producción → Patrón A
+  Dev + Prod      → Patrón A con sufijos (-dev, -prod)
+  Dev + Staging + Prod → Patrón C
+```
+
 ---
 
 ## Best Practices
@@ -950,14 +1143,52 @@ staging-backend/
          memory: "512Mi"
    ```
 
-4. **Labels consistentes**
+4. **Labels y annotations consistentes en namespaces**
+
+   Los labels en el namespace son la base para NetworkPolicies, herramientas de cost allocation
+   (como Kubecost) y automatización con operadores. Usar un conjunto estándar en toda la
+   organización hace que las políticas sean reutilizables entre namespaces.
+
    ```yaml
+   # Uso: kubectl apply -f namespace-production.yaml
+   apiVersion: v1
+   kind: Namespace
    metadata:
-     name: development
+     name: frontend-prod
      labels:
-       environment: dev
-       team: platform
-       cost-center: engineering
+       # Labels estándar de Kubernetes (recomendados)
+       app.kubernetes.io/part-of: ecommerce-platform
+       # Labels organizacionales (definir convención propia)
+       team: frontend           # Equipo propietario
+       environment: production  # Etapa del ciclo de vida
+       cost-center: engineering # Para facturación interna (chargeback)
+       managed-by: platform-team
+       # Label requerido por Pod Security Admission (K8s 1.25+)
+       pod-security.kubernetes.io/enforce: restricted
+     annotations:
+       # Contexto operativo en annotations (no en labels)
+       contact: "frontend-oncall@empresa.com"
+       documentation: "https://wiki.empresa.com/frontend"
+       created-by: "terraform"
+   ```
+
+   **Por qué importan los labels del namespace**:
+
+   | Uso | Cómo se usa el label |
+   |-----|----------------------|
+   | **NetworkPolicy** | `namespaceSelector: matchLabels: {team: frontend}` para permitir tráfico solo entre namespaces del mismo equipo |
+   | **Cost allocation** | Herramientas como Kubecost agregan costes por `team` o `cost-center` |
+   | **Pod Security** | `pod-security.kubernetes.io/enforce` activa la política de seguridad de Pods |
+   | **Automatización** | Operators usan `environment: production` para aplicar configuraciones distintas |
+
+   ```bash
+   # Buscar namespaces por label (útil en clusters grandes)
+   kubectl get ns -l environment=production
+   kubectl get ns -l team=frontend,environment=production
+
+   # Añadir label a namespace existente (sin recrearlo)
+   kubectl label namespace development cost-center=engineering
+   kubectl label namespace development managed-by=platform-team
    ```
 
 5. **Documentar estructura de namespaces**
@@ -1246,17 +1477,6 @@ En este módulo has aprendido:
 4. **Módulo 13**: ResourceQuota (profundización)
 
 ---
-
-**📚 Navegación del Curso**:
-- ⬅️ Anterior: [Módulo 09 - Ingress y Acceso Externo](../modulo-09-ingress-external-access/README.md)
-- ➡️ Siguiente: [Módulo 11 - Resource Limits en Pods](../modulo-11-resource-limits-pods/README.md)
-- 🏠 [Volver al índice del curso](../../README.md)
-
----
-
-**Autor**: Curso Kubernetes Avanzado  
-**Última actualización**: Noviembre 2025  
-**Versión**: Kubernetes 1.28+
 
 ## Resumen del Capítulo
 

@@ -1,6 +1,14 @@
 # Capítulo 27: Networking Avanzado
 
-El scheduling decide dónde corren los Pods. Ahora profundizamos en cómo se comunican: modelo de red, CNI plugins, DNS interno y Network Policies.
+En el capítulo anterior tomamos el control del placement de los Pods: ahora sabemos garantizar que cada workload aterrice en el nodo correcto. Los Pods están donde deben estar. Pero una vez ubicados, necesitan comunicarse, y esa comunicación "funciona mágicamente" hasta el día que deja de funcionar.
+
+Ese es el problema. Cuando un Pod no puede hablar con otro, o cuando un Service no resuelve su nombre DNS, o cuando el tráfico de red llega al nodo pero nunca alcanza el contenedor, la mayoría de los ingenieros no tienen un modelo mental claro de qué está ocurriendo. No saben si el problema está en el CNI plugin, en las iptables del nodo, en CoreDNS o en la configuración del Service. Sin entender la arquitectura de red, el debugging es un proceso de prueba y error sin guía, que puede consumir horas en producción durante un incidente.
+
+Kubernetes implementa un modelo de red plana: todo Pod puede comunicarse con todo Pod directamente, sin NAT, usando su IP real. Este modelo es elegante en teoría, pero requiere un plugin CNI (Container Network Interface) que lo implemente en la capa de infraestructura, y un sistema DNS interno (CoreDNS) que resuelva nombres de Services a IPs virtuales. Entender estas capas es la diferencia entre adivinar y diagnosticar.
+
+Es como entender cómo funciona el sistema postal: no basta con saber que puedes enviar cartas; necesitas entender cómo los carteros (CNI), los centros de clasificación (kube-proxy) y las guías de direcciones (CoreDNS) cooperan para que el sobre llegue al destino correcto.
+
+En este capítulo aprenderás el modelo de red plana de Kubernetes y sus invariantes, cómo funcionan los CNI plugins más comunes (Calico, Flannel, Cilium), cómo CoreDNS resuelve nombres dentro del cluster, cómo depurar problemas de conectividad entre Pods y Services, y una introducción a service mesh para escenarios de comunicación avanzados.
 
 ---
 

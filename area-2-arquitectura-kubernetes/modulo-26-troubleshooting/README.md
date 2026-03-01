@@ -1,6 +1,14 @@
 # Capítulo 28: Troubleshooting
 
-Todo funciona... hasta que falla. Este capítulo proporciona un framework sistemático para diagnosticar y resolver problemas en Kubernetes: desde Pods que no arrancan hasta clusters que no responden.
+En el capítulo anterior completamos el conocimiento profundo de networking: ya entendemos el modelo de red plana, los CNI plugins y cómo CoreDNS resuelve nombres. Con este capítulo cerramos el área de arquitectura Kubernetes con la habilidad transversal que une todo lo aprendido: saber qué hacer cuando algo falla.
+
+El escenario es inevitable. Son las 2am, recibes una alerta de PagerDuty: la aplicación de pagos está caída. Abres el dashboard y ves un Pod en CrashLoopBackOff, pero no sabes por qué. O un Service que debería estar disponible no responde, aunque los Pods parecen estar Running. O un PersistentVolumeClaim lleva horas en estado Pending y nadie sabe qué espera. Sin un framework de diagnóstico, la respuesta natural es revisar los últimos cambios, reiniciar Pods aleatoriamente y esperar que algo funcione. Ese enfoque desperdicia tiempo crítico y a veces empeora la situación.
+
+El framework sistemático de troubleshooting en Kubernetes funciona en capas, de afuera hacia adentro: primero la capa de aplicación (¿el contenedor está corriendo?), luego la capa de Pod (¿Kubernetes puede programarlo?), después la capa de nodo (¿el nodo tiene recursos y está sano?), y finalmente la capa de cluster (¿los componentes del control plane responden?). Cada capa tiene sus herramientas y síntomas específicos, y saber en qué capa está el problema elimina el 80% del espacio de búsqueda.
+
+Piénsalo como el proceso diagnóstico de un médico: no hace todas las pruebas posibles a la vez, sino que empieza con los síntomas, los agrupa en sistemas anatómicos, y va aplicando pruebas específicas para confirmar o descartar causas. `kubectl describe`, `kubectl logs`, `kubectl exec` y `kubectl get events` son el estetoscopio, el termómetro y los análisis de sangre del ingeniero de Kubernetes.
+
+En este capítulo aprenderás el framework de debugging por capas, los error codes más comunes (CrashLoopBackOff, ImagePullBackOff, OOMKilled, Pending, Evicted) y cómo resolverlos, técnicas de debugging de red con Services e Ingress, diagnóstico de nodos con problemas de recursos, y cómo prepararte para los escenarios de troubleshooting del examen CKA.
 
 ---
 

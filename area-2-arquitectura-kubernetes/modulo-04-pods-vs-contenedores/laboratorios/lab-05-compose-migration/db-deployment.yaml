@@ -1,0 +1,114 @@
+# Ejercicio 1: Migración de Base de Datos - PostgreSQL con persistencia
+# Uso: kubectl apply -f db-deployment.yaml
+#
+# Descripcion:
+#   Migra el servicio de base de datos de Docker Compose a Kubernetes.
+#   Incluye PVC para persistencia, ConfigMap para variables de entorno no
+#   sensibles, Secret para la contraseña, Deployment y Service ClusterIP.
+#
+# Conceptos clave:
+#   - PersistentVolumeClaim como reemplazo de Docker named volumes
+#   - ConfigMap para variables de entorno (db name, user)
+#   - Secret para credenciales sensibles (password)
+#   - Service ClusterIP para service discovery interno via DNS
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    app: postgres
+    tier: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  labels:
+    app: postgres
+    tier: database
+data:
+  POSTGRES_DB: myapp
+  POSTGRES_USER: user
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  labels:
+    app: postgres
+    tier: database
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: pass
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    app: postgres
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        - secretRef:
+            name: postgres-secret
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    app: postgres
+    tier: database
+spec:
+  selector:
+    app: postgres
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: postgres

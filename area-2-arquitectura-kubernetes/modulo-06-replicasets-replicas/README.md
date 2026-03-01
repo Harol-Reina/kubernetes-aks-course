@@ -1,42 +1,14 @@
 # Capítulo 8: ReplicaSets y Escalado
 
-Gestionar Pods individuales no escala. Los ReplicaSets garantizan que el número deseado de réplicas esté siempre corriendo, proporcionando auto-healing y escalado horizontal.
+En los dos capítulos anteriores aprendimos a crear y gestionar Pods individuales con precisión. Eso es necesario, pero en producción nadie gestiona Pods uno a uno. Necesitamos un nivel de abstracción superior que se haga cargo de eso automáticamente.
 
----
+**El problema real**: Tienes un Pod corriendo tu aplicación web. El nodo donde vive ese Pod falla a medianoche. El Pod muere y no vuelve. Tus usuarios ven error 502. Al día siguiente llega el Black Friday y el tráfico se multiplica por 10. Tienes exactamente una réplica de tu app y empieza a saturarse. Para escalar tienes que crear Pods manualmente, uno por uno, y cuando pase el pico, eliminarlos también a mano. No hay nadie que vigile si un Pod muere en producción, y no hay mecanismo automático de recuperación.
 
-## 🎓 Guía de Estudio Recomendada
+**La solución**: Los ReplicaSets son el primer controlador de Kubernetes que introduce el concepto de estado deseado aplicado a la cantidad de Pods. Le dices "quiero 3 réplicas de este Pod" y el ReplicaSet se asegura de que siempre haya exactamente 3, sin importar qué pase: si uno muere, lo recrea; si hay 4, elimina el excedente. El escalado pasa de ser una operación manual a un simple cambio de número.
 
-Para maximizar tu aprendizaje, sigue esta ruta estructurada:
+**La analogía**: Imagina un gerente de turno que tiene una regla fija: siempre debe haber 3 cajeros en las cajas del supermercado. Si uno se va a descansar, inmediatamente llama a otro para cubrirlo. Si llegan refuerzos de más, los reasigna a otra tarea. El ReplicaSet es ese gerente automático que nunca duerme y nunca descuida el conteo.
 
-```
-Fase 1: Conceptos de ReplicaSets (45-60 min)
-├─ ¿Qué es un ReplicaSet?
-├─ Arquitectura y reconciliación
-├─ Diferencias con Pods y Deployments
-└─ Lab 01: Crear primer ReplicaSet
-
-Fase 2: Manifiestos y Selectors (60-90 min)
-├─ Estructura de manifiestos YAML
-├─ Selectors: matchLabels y matchExpressions
-├─ Template de Pods
-└─ Lab 02: Manifiestos avanzados
-
-Fase 3: Escalado y Auto-recuperación (60-90 min)
-├─ Escalado manual vs declarativo
-├─ Auto-recuperación (self-healing)
-├─ Ownership y referencias
-└─ Lab 03: Escalado bajo carga
-
-Fase 4: Limitaciones y Producción (45-60 min)
-├─ Limitaciones de ReplicaSets
-├─ Cuándo usar Deployments
-├─ Best practices de producción
-└─ Lab 04: Migración a Deployments
-```
-
-👉 **[ABRIR GUÍA DE ESTUDIO](./RESUMEN-MODULO.md)**
-
----
+**En este capítulo** aprenderás la anatomía completa de un ReplicaSet (spec.replicas, spec.selector, spec.template), verás en tiempo real cómo reacciona ante la eliminación de un Pod, practicarás el escalado horizontal con `kubectl scale`, y entenderás la limitación fundamental de los ReplicaSets (no saben actualizar versiones de imagen) que justifica la existencia del siguiente concepto: los Deployments.
 
 ---
 
@@ -2454,14 +2426,6 @@ Antes de continuar al Módulo 07, deberías poder responder:
 - [ ] Menciona 3 antipatrones comunes
 
 ---
-
-**📅 Fecha de actualización**: Noviembre 2025  
-**🔖 Versión**: 2.0  
-**👨‍💻 Autor**: Curso Kubernetes AKS
-
----
-
-**⬅️ Anterior**: [Módulo 05 - Gestión de Pods](../modulo-05-gestion-pods/README.md)  
 
 ## Resumen del Capítulo
 

@@ -1,6 +1,14 @@
 # Capítulo 22: Init Containers y Sidecar Patterns
 
-Los Jobs ejecutan tareas finitas. Los patrones multi-contenedor van más allá de un contenedor por Pod: Init Containers preparan, Sidecars acompañan y Ambassadors representan.
+En el capítulo anterior vimos que Kubernetes puede ejecutar tareas finitas con Jobs, rompiendo la idea de que todo workload debe ser un servicio continuo. Ahora damos otro paso en esa misma dirección: romper la idea de que un Pod siempre contiene un solo contenedor.
+
+Imagina que tienes una aplicación que necesita que la base de datos esté lista antes de arrancar. Sin ningún mecanismo de control, el contenedor principal intenta conectarse a la base de datos en el momento de inicio, falla, y entra en CrashLoopBackOff. O piensa en una aplicación que necesita un agente de logs corriendo a su lado para enviar trazas a un sistema centralizado: no tiene sentido construir eso dentro de la imagen de la app, porque mezcla responsabilidades y complica las actualizaciones. Estos dos problemas son tan comunes en producción que Kubernetes tiene patrones formales para resolverlos.
+
+Los Init Containers son contenedores especiales que se ejecutan antes que el contenedor principal: preparan el terreno, verifican dependencias, cargan configuración y solo cuando terminan exitosamente, el contenedor principal arranca. Los Sidecars son contenedores que corren en paralelo con el principal, compartiendo el mismo entorno de red y almacenamiento, añadiendo capacidades sin modificar la imagen de la aplicación.
+
+Es como un concierto: los Init Containers son los técnicos de sonido que montan el escenario antes de que empiece el show; los Sidecars son los guardaespaldas del artista, siempre presentes mientras dura la actuación.
+
+En este capítulo dominarás el patrón Init Container para gestión de dependencias, el patrón Sidecar para log collection y proxies, el patrón Ambassador para abstraer comunicaciones externas, y el patrón Adapter para transformar datos de salida al formato esperado por sistemas de monitoreo.
 
 ---
 
@@ -2138,54 +2146,6 @@ kubectl apply -f ejemplos/multi-container-full.yaml
 - [ ] Estoy listo para preguntas CKAD sobre multi-container
 
 ---
-
-## 🎯 Próximos Pasos
-
-### Después de este módulo:
-
-1. ✅ **Practicar** todos los labs (2-3 horas)
-2. ✅ **Revisar** RESUMEN-MODULO.md para quick reference
-3. ✅ **Continuar** con **Módulo 21**: Helm Basics
-4. ✅ **Preparar** para CKAD (repetir labs bajo tiempo)
-
----
-
-## 📞 Soporte
-
-Si tienes dudas o encuentras problemas:
-
-1. Revisa sección **Troubleshooting** (Sección 5)
-2. Consulta `troubleshooting/` para problemas comunes
-3. Revisa logs con `kubectl logs <pod> -c <container>`
-4. Usa `kubectl describe pod` para eventos
-
----
-
-## 🏆 Conclusión
-
-Has completado el **Módulo 20: Init Containers & Sidecar Patterns**.
-
-**Conocimientos adquiridos:**
-- ✅ Init Containers para setup y validación
-- ✅ Sidecar Pattern para funcionalidad auxiliar
-- ✅ Multi-Container Pods y comunicación
-- ✅ Patrones Ambassador y Adapter
-- ✅ Troubleshooting de containers múltiples
-- ✅ Best practices y casos reales
-- ✅ Preparación CKAD (10% del examen)
-
-**Siguiente**: [Módulo 21 - Helm Basics](../modulo-21-helm-basics/README.md)
-
----
-
-**¡Felicidades! 🎉**  
-Ahora dominas patrones avanzados de multi-container Pods.
-
----
-
-*Última actualización*: 2025-11-13  
-*Versión*: 2.0  
-*Autor*: Curso Kubernetes Pro
 
 ## Resumen del Capítulo
 

@@ -1,6 +1,14 @@
 # Capítulo 24: Cluster Setup con kubeadm
 
-Helm empaqueta aplicaciones. Ahora montamos clusters reales desde cero con kubeadm: inicialización del control plane, unión de nodos y configuración de red.
+En el capítulo anterior conquistamos Helm y la gestión de aplicaciones a escala: ahora podemos desplegar, actualizar y hacer rollback de aplicaciones completas con comandos atómicos. Dominamos el ciclo de vida de las aplicaciones. Es momento de dar un salto de perspectiva: hacia abajo en la pila, al nivel donde el propio cluster existe o no existe.
+
+Todo el curso hasta ahora ha usado Minikube: un cluster de un solo nodo que arranca con un comando, perfecto para aprender. Pero Minikube no es para producción. En producción necesitas múltiples nodos para alta disponibilidad, un control plane separado de los workers, certificados TLS gestionados correctamente, un plugin CNI para la red del cluster, y la capacidad de añadir y reemplazar nodos sin interrupciones. Si vas a presentar el examen CKA o trabajar en entornos on-premises, necesitas saber montar clusters reales desde cero.
+
+kubeadm es la herramienta oficial de Kubernetes para exactamente esto: inicializa el control plane con `kubeadm init`, genera los certificados, configura etcd, arranca el API server, y produce el comando exacto que debes ejecutar en cada worker para que se una al cluster con `kubeadm join`.
+
+La diferencia entre Minikube y kubeadm es como la diferencia entre una cocina de juguete y una cocina de restaurante real: con la de juguete aprendes los conceptos, pero para cocinar para cien personas necesitas construir la cocina real, con sus sistemas de gas, ventilación, y estaciones de trabajo separadas.
+
+En este capítulo aprenderás los prerrequisitos de red y sistema, a ejecutar `kubeadm init` con las opciones correctas, a instalar un plugin CNI (Flannel o Calico), a unir nodos worker con `kubeadm join`, a verificar el estado del cluster, y a configurar un setup de alta disponibilidad con múltiples control plane nodes.
 
 ---
 

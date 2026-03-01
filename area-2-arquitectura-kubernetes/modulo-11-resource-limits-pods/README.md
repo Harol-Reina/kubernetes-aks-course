@@ -1,24 +1,33 @@
 # Capítulo 13: Resource Limits en Pods
 
-Los Namespaces organizan. Ahora controlamos cuántos recursos consume cada Pod: requests, limits, y las consecuencias de no definirlos.
+En el capítulo anterior los Namespaces nos dieron aislamiento lógico: equipos separados,
+entornos separados. Pero la organización por sí sola no es suficiente — dentro de cada
+Namespace, cualquier Pod puede consumir tantos recursos del nodo como quiera.
 
----
+El problema es devastador en producción. Un Pod con una fuga de memoria empieza a consumir
+RAM de forma creciente: 200MB, 500MB, 1GB, 2GB... El sistema operativo del nodo detecta
+que se está quedando sin memoria y activa el OOM Killer (Out of Memory Killer). Este proceso
+no discrimina: mata el Pod con la fuga, pero también puede matar cualquier otro Pod que
+estuviera corriendo en el mismo nodo — tu base de datos, tu API, tu servicio de pagos. Todo
+cae por culpa de una sola aplicación mal configurada. Lo mismo ocurre con CPU: un Pod que
+entra en un bucle infinito o realiza procesamiento intensivo puede acaparar todos los cores
+del nodo, dejando a los demás Pods sin CPU para responder peticiones.
 
-## 🎓 Metodología de Aprendizaje
+Los requests y limits son la respuesta. Los requests le dicen al scheduler cuántos recursos
+necesita mínimamente un Pod para funcionar — el scheduler solo asigna el Pod a un nodo que
+tenga esa cantidad disponible. Los limits definen el techo máximo que puede consumir — si lo
+supera, el contenedor es limitado (CPU) o eliminado (memoria).
 
-Este módulo sigue el patrón pedagógico del curso:
+Piensa en un buffet con aforo limitado. Sin reglas, los primeros en llegar llenan el plato
+hasta el borde y no queda comida para los demás. Con limits por persona (un máximo de 300g
+por plato) y requests garantizados (cada persona tiene reservada al menos una ración mínima),
+todo el mundo come. El buffet funciona sin caos ni escasez.
 
-1. **Teoría estructurada**: Cada sección explica conceptos con analogías y diagramas
-2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
-3. **Laboratorios prácticos**: 3 labs progresivos con escenarios realistas
-4. **Resumen ejecutivo**: [RESUMEN-MODULO.md](RESUMEN-MODULO.md) para repaso rápido
-
-### Consejos de Estudio
-- ⚠️ **Crítico**: Entender la diferencia entre requests y limits (80% de problemas vienen de aquí)
-- 📊 Experimentar con las 3 QoS classes en el clúster
-- 🧪 Provocar OOMKilled intencionalmente para entender su comportamiento
-- 📈 Usar `kubectl top` constantemente para correlacionar teoría con realidad
-- 🔍 Leer logs del kubelet cuando un Pod no se programa
+En este capítulo dominarás la diferencia entre requests y limits para CPU y memoria, las
+clases de QoS (Guaranteed, Burstable, BestEffort) que determinan qué Pods se eliminan
+primero bajo presión, cómo configurar LimitRanges para imponer valores por defecto en un
+Namespace, ResourceQuotas para limitar el consumo total, y cómo diagnosticar y resolver
+eventos OOMKilled.
 
 ---
 
@@ -2272,10 +2281,6 @@ kubectl describe limitrange
 - [ ] Testing de límites en staging
 
 ---
-
-**Última actualización**: Noviembre 2025  
-**Versión de Kubernetes**: 1.28+  
-**Autor**: Curso de Kubernetes - Arquitectura
 
 ## Resumen del Capítulo
 

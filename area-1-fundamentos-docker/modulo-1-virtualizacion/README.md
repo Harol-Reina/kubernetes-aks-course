@@ -1,6 +1,14 @@
 # Capítulo 1: Virtualización Tradicional
 
-La infraestructura moderna comienza con un cambio fundamental: separar las aplicaciones del hardware físico. En este capítulo, recorremos la evolución desde servidores dedicados hasta la virtualización, entendiendo las tecnologías que pavimentaron el camino hacia los contenedores.
+Este curso comienza aquí porque toda la historia de los contenedores y Kubernetes tiene sus raíces en un problema muy concreto que surgió en los centros de datos de los años 90 y 2000. Para entender por qué Docker existe, y por qué Kubernetes es necesario, primero hay que entender qué se hacía antes y qué salió mal.
+
+**El problema real**: En la era del "bare metal", cada aplicación vivía en su propio servidor físico. Una empresa con 50 aplicaciones tenía 50 servidores, la mayoría ejecutando su CPU al 5-10% de capacidad. El costo era astronómico: hardware dedicado, espacio físico en el data center, climatización, energía eléctrica y personal para mantenerlo todo. Si necesitabas más capacidad para una aplicación, esperabas semanas mientras se compraba, rackeba y configuraba un servidor nuevo.
+
+**La solución**: Los hipervisores llegaron para permitir que un solo servidor físico albergue múltiples sistemas operativos completos ejecutándose en paralelo, aislados entre sí. En lugar de un servidor por aplicación, podías tener 10, 20 o 30 máquinas virtuales en el mismo hardware, cada una con su propio OS, sin que se interfirieran entre ellas.
+
+**La analogía**: Piensa en un edificio de oficinas. Antes, cada empresa necesitaba su propio edificio (servidor físico). La virtualización es como dividir ese edificio en oficinas independientes: cada inquilino tiene su propio espacio, su propia llave, sus propias paredes, pero todos comparten la estructura, la electricidad y la plomería del edificio.
+
+**En este capítulo** explorarás los dos tipos de hipervisores (Type 1 bare-metal como KVM y VMware ESXi, y Type 2 hosted como VirtualBox), cómo funciona la virtualización a nivel del kernel de Linux, y -muy importante- cuáles son las limitaciones de las VMs que eventualmente llevaron al mundo a inventar los contenedores. Al terminar, entenderás exactamente por qué Docker fue una revolución y no solo una mejora incremental.
 
 ---
 
@@ -18,6 +26,54 @@ Con la virtualización surgió una solución: **compartir los recursos de un mis
 
 **👉 Ejemplo práctico:**
 En un servidor con 64 GB de RAM y 16 núcleos, se pueden ejecutar 4 máquinas virtuales (VMs) con 16 GB y 4 núcleos cada una, compartiendo el mismo hardware.
+
+### 📅 Línea de tiempo: evolución de la infraestructura de cómputo
+
+```
+Década    Paradigma                    Característica clave
+──────────────────────────────────────────────────────────────────────────
+1960s     MAINFRAMES                   Un ordenador central, muchos
+                                       terminales de acceso compartido.
+                                       Acceso por turnos o time-sharing.
+
+1970s     MINICOMPUTADORES             Máquinas de tamaño departamental.
+                                       Una máquina por empresa o área.
+                                       Primer acceso multiusuario real.
+
+1980s     CLIENTE-SERVIDOR             PCs de escritorio + servidores
+                                       dedicados por aplicación.
+                                       Proliferación de hardware físico.
+
+1990s     INTERNET + SERVIDORES WEB    Servidores dedicados por servicio
+                                       (web, mail, DNS, FTP...).
+                                       Uso real del servidor: 5-15%.
+
+2000s     VIRTUALIZACIÓN               Múltiples SO en un servidor físico.
+                                       Un servidor → 4 a 10 VMs.
+                                       Uso del servidor: 60-80%.
+
+2010s     CONTENEDORES                 Procesos aislados sin SO completo.
+                                       Arranque en millisegundos.
+                                       Docker (2013) cambia la industria.
+
+2020s     ORQUESTACIÓN                 Kubernetes gestiona miles de
+                                       contenedores distribuidos.
+                                       Autoescalado, autorreparación.
+```
+
+### 💸 El problema del servidor dedicado por aplicación
+
+Antes de la virtualización, la norma era **"una aplicación = un servidor"**. Esto generaba costos e ineficiencias estructurales muy concretos:
+
+| Problema | Magnitud real |
+|----------|---------------|
+| **Utilización media del servidor** | 5-15% de CPU y RAM |
+| **Costo por servidor físico** | USD 3,000 - 10,000 (hardware) + hosting + cooling + energía |
+| **Tiempo para escalar** | Semanas o meses (compra, envío, instalación, configuración) |
+| **Servidores por aplicación** | 1 servidor dedicado = 1 app, aunque solo se use de madrugada |
+| **Espacio en el datacenter** | Racks completos para servidores al 10% de carga |
+
+El resultado era derrochador: un servidor costoso, ocupando espacio y consumiendo electricidad, cuya única tarea era correr un proceso de negocio que solo estaba activo a ratos. La virtualización cambió esta ecuación radicalmente: **un servidor físico podía alojar 4 a 10 VMs**, elevando la utilización real al 60-80% y amortizando el hardware sobre muchas cargas de trabajo simultáneas.
 
 ---
 
@@ -48,6 +104,48 @@ Cuando el entorno virtual está en ejecución y un usuario o un programa emiten 
 
 ### **🔐 KVM (Kernel-based Virtual Machine):**
 La **máquina virtual basada en el kernel (KVM)** es un hipervisor open source de tipo 1 que forma parte de las distribuciones de Linux modernas. Las máquinas virtuales que se ejecutan con la KVM obtienen los beneficios de las funciones de rendimiento de Linux, y los usuarios pueden aprovechar el control detallado que brinda el sistema operativo.
+
+### 🏗️ Arquitectura detallada: Tipo 1 vs Tipo 2
+
+Los dos modelos de hipervisor difieren fundamentalmente en dónde se sitúa la capa de virtualización dentro de la pila de software:
+
+```
+Tipo 1 (Bare-metal):              Tipo 2 (Hosted):
+
+┌─────┐ ┌─────┐ ┌─────┐          ┌─────┐ ┌─────┐
+│ VM1 │ │ VM2 │ │ VM3 │          │ VM1 │ │ VM2 │
+│ OS  │ │ OS  │ │ OS  │          │ OS  │ │ OS  │
+└──┬──┘ └──┬──┘ └──┬──┘          └──┬──┘ └──┬──┘
+   └───────┼───────┘                └───┬───┘
+     ┌─────┴─────┐               ┌─────┴──────┐
+     │ Hipervisor│               │ Hipervisor  │
+     │ (Tipo 1)  │               │ (Tipo 2)    │
+     └─────┬─────┘               └──────┬──────┘
+     ┌─────┴─────┐               ┌──────┴──────┐
+     │ Hardware  │               │ SO Host     │
+     │ Físico    │               │ (Windows /  │
+     └───────────┘               │  Linux/Mac) │
+                                 └──────┬──────┘
+                                 ┌──────┴──────┐
+                                 │  Hardware   │
+                                 │  Físico     │
+                                 └─────────────┘
+```
+
+En el **Tipo 1**, el hipervisor es el sistema operativo de la máquina: accede directamente al hardware sin intermediarios, lo que le permite controlar drivers, interrupciones y planificación de CPU con la máxima eficiencia. En el **Tipo 2**, el hipervisor es una aplicación más dentro de un SO convencional: cada llamada al hardware debe pasar primero por el kernel del host, añadiendo latencia.
+
+### 📊 Comparación de rendimiento aproximada
+
+| Metrica | Tipo 1 (Bare-metal) | Tipo 2 (Hosted) | Bare metal (sin VM) |
+|---------|---------------------|-----------------|----------------------|
+| **Overhead de CPU** | 2-5% | 5-15% | 0% |
+| **Overhead de RAM por VM** | ~200 MB/VM | ~500 MB/VM | 0 |
+| **Tiempo de arranque de VM** | 30-60 s | 60-120 s | 3-5 min (SO completo) |
+| **Uso tipico** | Produccion empresarial | Desarrollo y pruebas | Sistemas legacy |
+| **Gestion remota** | API dedicada (vCenter, etc.) | Limitada | Acceso directo |
+| **Densidad de VMs** | Alta (20-50 VMs/host) | Media (4-10 VMs/host) | N/A |
+
+El overhead del Tipo 2 se explica por la doble capa de planificacion: el scheduler del SO host compite con las necesidades del hipervisor, que a su vez intenta repartir el tiempo de CPU entre sus VMs. En produccion, ese coste adicional puede significar latencias perceptibles en cargas de trabajo de base de datos o procesamiento en tiempo real.
 
 ---
 
@@ -523,7 +621,37 @@ Fallas en el hipervisor pueden afectar todas las VMs que ejecuta, creando un pun
 
 ---
 
-## 🔄 7. De la virtualización a los contenedores
+## 📈 7. Evolución de la infraestructura: de bare metal a orquestación
+
+Para comprender la posicion que ocupa la virtualización en la historia de la infraestructura, conviene verla dentro del arco completo que va desde los servidores dedicados hasta los sistemas de orquestacion modernos:
+
+```
+EVOLUCIÓN DE LA INFRAESTRUCTURA:
+
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  BARE METAL │    │    VMs      │    │ CONTAINERS  │    │ ORQUESTACION│
+│             │    │             │    │             │    │             │
+│ 1 app =     │───▶│ N apps =    │───▶│ N apps =    │───▶│ N×M apps =  │
+│ 1 servidor  │    │ 1 servidor  │    │ 1 proceso   │    │ gestionadas │
+│             │    │ (aisladas)  │    │ (ligero)    │    │ autom.      │
+│ Uso: 10-15% │    │ Uso: 60-80% │    │ Uso: 80-95% │    │             │
+│ Boot: 5 min │    │ Boot: 30s-  │    │ Boot: <1 s  │    │ Auto-heal   │
+│ Tamaño: N/A │    │       2 min │    │ MB/contendr │    │ Auto-scale  │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+     1990s               2000s              2010s              2020s
+```
+
+Cada salto en esta evolución responde a un cuello de botella concreto del modelo anterior:
+
+- **Bare metal → VMs**: el desperdicio de hardware al 10% de utilizacion era insostenible. Los hipervisores permitieron consolidar cargas de trabajo en menos maquinas fisicas.
+- **VMs → Contenedores**: el overhead del SO guest por VM (2-4 GB RAM, minutos de boot) era incompatible con arquitecturas de microservicios que exigen cientos de procesos ligeros. Los contenedores eliminan ese OS invitado compartiendo el kernel del host.
+- **Contenedores → Orquestacion**: manejar cientos o miles de contenedores manualmente resulta inviable. Kubernetes automatiza el despliegue, el escalado, la recuperacion ante fallos y la gestion de la red entre contenedores.
+
+Esta progresion es la razon por la que este curso comienza aqui: para entender Kubernetes hay que entender por que los contenedores existen, y para entender por que existen los contenedores hay que entender las limitaciones de las VMs.
+
+---
+
+## 🔄 8. De la virtualización a los contenedores
 
 La virtualización fue el **primer paso hacia la infraestructura ágil** y sentó las bases para la computación en la nube moderna. Sin embargo, al crecer las necesidades de despliegue y escalabilidad, surgieron nuevos desafíos que llevaron al desarrollo de tecnologías complementarias.
 
@@ -552,6 +680,71 @@ La virtualización y la **organización en contenedores** son dos enfoques para 
 - **Escalabilidad limitada**: Difícil escalar aplicaciones rápidamente (microservicios)
 - **Densidad baja**: Máximo 10-20 VMs por servidor físico típico
 
+### 🧱 Limitaciones de las VMs en detalle
+
+Cada VM es, a todos los efectos, un ordenador completo ejecutandose dentro de otro ordenador. Eso implica un coste estructural que no desaparece por mucho que se optimice el hipervisor.
+
+#### Overhead por OS guest
+
+La parte mas costosa de una VM es el sistema operativo invitado que se ejecuta dentro de ella. Ese SO necesita memoria, CPU y disco independientemente de si la aplicacion que aloja esta haciendo algo util o no:
+
+| Componente de la VM | Consumo tipico de RAM | Proposito |
+|---------------------|----------------------|-----------|
+| Kernel del SO guest | 200-400 MB | Gestion de memoria, I/O, scheduling |
+| Servicios del SO (systemd, sshd, etc.) | 300-600 MB | Infraestructura del sistema operativo |
+| Runtime de la aplicacion (JVM, Node...) | 200-500 MB | Ejecutar el codigo de negocio |
+| **Total minimo por VM** | **~700 MB - 1.5 GB** | Solo para tener la VM "encendida" |
+
+En una arquitectura de microservicios con 50 servicios, esto puede significar 35-75 GB de RAM dedicada solo a mantener sistemas operativos invitados, antes de correr ni una linea de logica de negocio.
+
+#### Comparacion de tamanyo: VMs vs contenedores
+
+```
+Imagen de VM (disco):
+┌───────────────────────────────────────────────┐
+│  SO base (Ubuntu/Windows)    2 GB - 8 GB       │
+│  Librerias del sistema       500 MB - 1.5 GB   │
+│  Runtime (JDK, Node...)      200 MB - 500 MB   │
+│  Codigo de la aplicacion     10 MB - 100 MB    │
+│  ─────────────────────────────────────────     │
+│  TOTAL:                      2.7 GB - 10 GB    │
+└───────────────────────────────────────────────┘
+
+Imagen de contenedor (Docker):
+┌───────────────────────────────────────────────┐
+│  SO base minimo (alpine/slim) 5 MB - 80 MB    │
+│  Librerias necesarias         20 MB - 150 MB   │
+│  Runtime (JDK, Node...)       80 MB - 300 MB   │
+│  Codigo de la aplicacion      10 MB - 100 MB   │
+│  ─────────────────────────────────────────     │
+│  TOTAL:                       50 MB - 500 MB   │
+└───────────────────────────────────────────────┘
+```
+
+La diferencia puede ser de **10 a 20 veces** en terminos de tamanyo de imagen y consumo de RAM. En un servidor con 256 GB de RAM, eso es la diferencia entre ejecutar ~25 VMs o ~500 contenedores.
+
+#### Tiempos de arranque comparados
+
+El tiempo que tarda un sistema en estar disponible es critico en escenarios de escalado automatico y recuperacion ante fallos:
+
+| Tecnologia | Tiempo de arranque tipico | Causa principal del tiempo |
+|------------|--------------------------|---------------------------|
+| Servidor fisico (boot completo) | 3-5 minutos | POST, BIOS, kernel, servicios |
+| VM Tipo 1 (ESXi/KVM) | 30-60 segundos | Boot del SO guest completo |
+| VM Tipo 2 (VirtualBox) | 60-120 segundos | SO host + SO guest en serie |
+| Contenedor Docker | 1-3 segundos | Solo iniciar el proceso |
+| Contenedor (imagen ya cacheada) | < 500 ms | Fork de proceso + namespaces |
+
+En Kubernetes, cuando un nodo falla y hay que reprogramar las cargas de trabajo en otro nodo, la diferencia entre arrancar VMs (minutos) y contenedores (segundos) determina directamente el tiempo de recuperacion del servicio.
+
+#### Otros costes operacionales de las VMs
+
+- **Snapshot y migracion**: Crear un snapshot de una VM de 8 GB es una operacion de disco intensiva que puede durar varios minutos y consumir ancho de banda significativo.
+- **Parches del SO guest**: Con 50 VMs corriendo Ubuntu, hay que gestionar 50 sistemas operativos independientes, cada uno con sus propios ciclos de actualizaciones, vulnerabilidades y reiniciar cada vez que se parchea el kernel.
+- **Licenciamiento**: Los SO guest con licencia (Windows Server, RHEL) se cobran por instancia. 50 VMs = 50 licencias.
+
+Estas limitaciones, mas que defectos de diseno, son consecuencias inevitables del modelo de VMs. Hacen que las VMs sean excelentes para consolidar servidores y aislar cargas de trabajo a nivel de SO, pero inadecuadas como unidad de despliegue para arquitecturas modernas de cientos o miles de servicios.
+
 #### **✅ Soluciones que ofrecen los contenedores:**
 - **Arranque instantáneo**: Segundos versus minutos
 - **Granularidad**: Desde 50MB hasta lo que necesites
@@ -571,7 +764,7 @@ Plataformas como **Red Hat OpenShift** incluyen funciones que permiten migrar la
 
 ---
 
-## 🚀 8. Migración y modernización de VMs
+## 🚀 9. Migración y modernización de VMs
 
 ### **📦 ¿En qué consiste la migración de máquinas virtuales?**
 
@@ -629,6 +822,68 @@ La clave está en **modernizar gradualmente** según las necesidades del negocio
 
 ---
 
-## Resumen del capitulo
+## Conceptos Clave para Recordar
 
-En este capitulo cubrimos los fundamentos de la virtualizacion: desde el contexto historico de servidores dedicados hasta los hipervisores tipo 1 y tipo 2, pasando por los distintos tipos de virtualizacion (servidores, escritorios, red, almacenamiento, aplicaciones y NFV). Vimos las ventajas de consolidacion y aislamiento, pero tambien las limitaciones de overhead y arranque lento que motivaron la aparicion de los contenedores. Con esta base solida, en el siguiente capitulo exploraremos Docker y la contenerizacion como evolucion natural de estas tecnologias.
+Antes de pasar al siguiente capítulo, asegúrate de que puedes responder estas preguntas:
+
+### Checklist de comprensión
+
+- [ ] **¿Qué problema resolvió la virtualización?** — La subutilización masiva de servidores físicos (10-15% de uso) y el costo de tener un servidor por aplicación
+- [ ] **¿Qué es un hipervisor?** — Software que crea y gestiona máquinas virtuales, distribuyendo los recursos físicos entre múltiples OS aislados
+- [ ] **¿Cuál es la diferencia entre Tipo 1 y Tipo 2?** — Tipo 1 corre directamente sobre hardware (ESXi, KVM), Tipo 2 corre sobre un OS host (VirtualBox, VMware Workstation)
+- [ ] **¿Por qué Tipo 1 tiene mejor rendimiento?** — No hay capa intermedia de OS host, el hipervisor accede directamente al hardware
+- [ ] **¿Qué es KVM?** — Hipervisor Tipo 1 integrado en el kernel de Linux, base de muchas soluciones cloud
+- [ ] **¿Cuánta RAM consume una VM solo para existir?** — 700 MB - 1.5 GB mínimo (kernel + servicios del OS guest)
+- [ ] **¿Cuánto tarda en arrancar una VM vs un contenedor?** — VM: 30-120 segundos, Contenedor: < 3 segundos
+- [ ] **¿Cuáles son las principales limitaciones de las VMs?** — Overhead de OS guest, tamaño de imagen (GB), tiempo de arranque, dificultad para microservicios
+
+### Tabla resumen: Virtualización en números
+
+| Concepto | Valor típico |
+|----------|-------------|
+| Utilización sin virtualización | 10-15% |
+| Utilización con virtualización | 60-80% |
+| VMs por servidor físico | 10-20 |
+| RAM mínima por VM | 700 MB - 1.5 GB |
+| Tamaño imagen VM | 2-10 GB |
+| Tiempo arranque VM (Tipo 1) | 30-60 segundos |
+| Tiempo arranque VM (Tipo 2) | 60-120 segundos |
+| Contenedores por servidor | 100-500+ |
+| RAM por contenedor | 50-500 MB |
+| Tamaño imagen contenedor | 50-500 MB |
+| Tiempo arranque contenedor | < 3 segundos |
+
+### Diagrama de decisión: ¿VM o Contenedor?
+
+```
+¿Necesitas un OS diferente al host (ej: Windows en Linux)?
+├── SÍ → VM (cada VM tiene su propio kernel)
+└── NO →
+    ¿Necesitas aislamiento completo a nivel de kernel?
+    ├── SÍ → VM (mayor seguridad entre tenants)
+    └── NO →
+        ¿Necesitas arranque rápido y alta densidad?
+        ├── SÍ → Contenedor
+        └── NO →
+            ¿Es una aplicación legacy que no se puede contenerizar?
+            ├── SÍ → VM (lift & shift)
+            └── NO → Contenedor (opción por defecto en 2024+)
+```
+
+> **Nota importante**: En la práctica moderna, VMs y contenedores coexisten. Kubernetes típicamente corre dentro de VMs en la nube (cada nodo de AKS es una VM de Azure), y los contenedores corren dentro de esas VMs. Entender ambas tecnologías es esencial.
+
+---
+
+## Resumen del capítulo
+
+En este capítulo cubrimos los fundamentos de la virtualización: desde el contexto histórico de servidores dedicados hasta los hipervisores Tipo 1 y Tipo 2, pasando por los distintos tipos de virtualización (servidores, escritorios, red, almacenamiento, aplicaciones y NFV).
+
+**Lo que aprendimos:**
+- La evolución de la infraestructura: mainframes → cliente-servidor → virtualización → contenedores → orquestación
+- Cómo los hipervisores permiten compartir hardware físico entre múltiples sistemas operativos
+- Las diferencias entre hipervisores bare-metal (Tipo 1) y hosted (Tipo 2)
+- KVM como el hipervisor open-source integrado en Linux
+- Las ventajas de consolidación, aislamiento y eficiencia
+- Las limitaciones de overhead (RAM, disco, arranque) que motivaron la aparición de los contenedores
+
+**Conexión con el siguiente capítulo:** Ahora que entiendes por qué las VMs son pesadas para arquitecturas de microservicios, en el Capítulo 2 exploraremos Docker y la contenerización — la tecnología que resolvió estas limitaciones compartiendo el kernel del host en lugar de cargar un OS completo por cada instancia.

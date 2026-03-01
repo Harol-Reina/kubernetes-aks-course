@@ -1,6 +1,38 @@
 # Capítulo 20: RBAC — ServiceAccounts
 
-RBAC protege el acceso humano. Pero las aplicaciones también necesitan permisos para interactuar con la API de Kubernetes. Los ServiceAccounts resuelven esta necesidad.
+En el capítulo anterior implementamos RBAC para los usuarios humanos: desarrolladores,
+administradores y auditores tienen permisos granulares según su rol. El acceso de las personas
+al cluster está controlado. Pero en Kubernetes, los humanos no son los únicos que hacen
+peticiones a la API.
+
+El problema aparece cuando tus propias aplicaciones necesitan interactuar con Kubernetes.
+Un operador de Prometheus necesita listar todos los Pods y Nodes del cluster para recopilar
+métricas. Una herramienta de CD como ArgoCD necesita crear y actualizar Deployments. Un
+controlador personalizado necesita observar cambios en recursos y reaccionar. Un agente de
+logs necesita leer los metadatos de los Pods para enriquecer los logs con el nombre del
+servicio. Todas estas aplicaciones corren dentro del cluster, en Pods, y necesitan llamar
+a la API de Kubernetes. Pero con qué credenciales? Si no tienes ServiceAccounts configurados,
+tienes dos opciones igual de malas: o la aplicación no tiene acceso y falla silenciosamente,
+o le das acceso de cluster-admin, que es como dejar las llaves del coche puestas dentro del
+coche con el motor encendido.
+
+Los ServiceAccounts son identidades para procesos, no para personas. Kubernetes crea
+automáticamente un ServiceAccount por defecto en cada Namespace, genera un token JWT para
+él, y lo monta en cada Pod. Puedes crear ServiceAccounts personalizados con nombres
+descriptivos y asociarlos a Roles mediante RoleBindings — exactamente igual que con usuarios
+humanos, pero para aplicaciones.
+
+La distinción es como la que existe entre las credenciales de un empleado y las credenciales
+de un sistema en el departamento de IT. Los empleados tienen sus cuentas de usuario con sus
+contraseñas personales. Los servidores y servicios automatizados tienen cuentas de sistema
+con permisos distintos, más específicos, y gestionados de forma diferente. Mezclar ambos es
+una mala práctica de seguridad tanto en IT tradicional como en Kubernetes.
+
+En este capítulo aprenderás cómo Kubernetes monta automáticamente tokens de ServiceAccount
+en los Pods, crearás ServiceAccounts con permisos específicos para tus aplicaciones, usarás
+la API de Kubernetes desde dentro de un Pod con el token del ServiceAccount, deshabilitarás
+el montaje automático cuando una aplicación no lo necesita, y entenderás los nuevos tokens
+con expiración (BoundServiceAccountTokens) introducidos en Kubernetes 1.24+.
 
 ---
 
@@ -1590,18 +1622,6 @@ modulo-18-rbac-serviceaccounts/
 - **In-cluster config**: Configuración que permite a pods acceder a la API desde dentro del cluster
 
 ---
-
-## Agradecimientos
-
-Gracias por completar el Módulo 18. Ahora tienes los conocimientos necesarios para implementar autenticación y autorización robusta para tus aplicaciones en Kubernetes.
-
-**¡No olvides practicar con los laboratorios!** La mejor forma de aprender es experimentando con ejemplos reales.
-
----
-
-**Última actualización**: Noviembre 2025  
-**Autor**: Curso Kubernetes - Arquitectura y Operaciones  
-**Licencia**: Uso educativo
 
 ## Resumen del Capítulo
 

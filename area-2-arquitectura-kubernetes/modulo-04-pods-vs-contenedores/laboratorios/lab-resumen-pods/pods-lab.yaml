@@ -1,0 +1,258 @@
+# ============================================================
+# pods-lab.yaml
+# Ejercicio Resumen: Pods vs Contenedores
+# Uso: kubectl apply -f pods-lab.yaml
+# Duracion: ~15 minutos
+#
+# Este archivo despliega TODO lo necesario para repasar los
+# conceptos principales de Pods multi-container en Kubernetes:
+#   - Namespace dedicado lab-pods-test
+#   - Pod multi-container (nginx + httpd en puertos distintos)
+#   - Pod con shareProcessNamespace: true (PID namespace compartido)
+#   - Pod con patron sidecar (emptyDir compartido)
+#   - Pod con init container (ejecucion secuencial)
+#   - Pod de prueba para verificacion (busybox)
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-pods-test
+#    Namespace aislado para todos los recursos del lab resumen.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-pods-test
+  labels:
+    lab: pods-resumen
+    modulo: "04"
+
+---
+# =============================================================
+# 2) POD: Multi-container (Lab 01 - Evolucion)
+#    Demuestra que nginx (80) y httpd (8080) comparten la misma
+#    IP del Pod y se comunican via localhost.
+#    Concepto: shared network namespace, puertos unicos por Pod.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container-pod
+  namespace: lab-pods-test
+  labels:
+    app: multi-container
+    concepto: shared-network
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - name: nginx-http
+      containerPort: 80
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+
+  - name: httpd
+    image: httpd:alpine
+    # httpd escucha en 80 por defecto; lo cambiamos a 8080 para evitar conflicto
+    command: ["/bin/sh", "-c"]
+    args: ["sed 's/Listen 80/Listen 8080/' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && httpd -f /tmp/httpd.conf -D FOREGROUND"]
+    ports:
+    - name: httpd-http
+      containerPort: 8080
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+
+---
+# =============================================================
+# 3) POD: Shared PID Namespace (Lab 02 - Namespace Sharing)
+#    Con shareProcessNamespace: true, el contenedor "inspector"
+#    puede ver los procesos del contenedor "app" usando ps aux.
+#    Concepto: PID namespace compartido entre contenedores.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shared-pid-pod
+  namespace: lab-pods-test
+  labels:
+    app: shared-pid
+    concepto: pid-namespace
+spec:
+  shareProcessNamespace: true
+  containers:
+  - name: app
+    image: nginx:alpine
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+
+  - name: inspector
+    image: busybox
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests:
+        cpu: "10m"
+        memory: "16Mi"
+      limits:
+        cpu: "50m"
+        memory: "32Mi"
+
+---
+# =============================================================
+# 4) POD: Sidecar Pattern con emptyDir (Lab 03 - Sidecar)
+#    nginx escribe logs en /var/log/nginx/access.log dentro
+#    del volumen emptyDir compartido. El sidecar "log-reader"
+#    lee ese archivo con tail -f y lo imprime a stdout.
+#    Concepto: patron sidecar para logging con volumen compartido.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-pod
+  namespace: lab-pods-test
+  labels:
+    app: sidecar
+    concepto: sidecar-pattern
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - name: http
+      containerPort: 80
+    volumeMounts:
+    - name: logs
+      mountPath: /var/log/nginx
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+
+  - name: log-reader
+    image: busybox
+    command: ["sh", "-c", "tail -f /logs/access.log 2>/dev/null || (sleep 2 && tail -f /logs/access.log)"]
+    volumeMounts:
+    - name: logs
+      mountPath: /logs
+    resources:
+      requests:
+        cpu: "10m"
+        memory: "16Mi"
+      limits:
+        cpu: "50m"
+        memory: "32Mi"
+
+  volumes:
+  - name: logs
+    emptyDir: {}
+
+---
+# =============================================================
+# 5) POD: Init Container (Lab 04 - Init Migration)
+#    El init container "setup" espera 5 segundos (simula una
+#    dependencia externa) y crea un archivo de configuracion en
+#    el volumen compartido. El contenedor "app" solo arranca
+#    cuando init finaliza y lee ese archivo de configuracion.
+#    Concepto: ejecucion secuencial, precondiciones con init containers.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-container-pod
+  namespace: lab-pods-test
+  labels:
+    app: init-container
+    concepto: init-pattern
+spec:
+  initContainers:
+  - name: setup
+    image: busybox
+    command: ["sh", "-c"]
+    args:
+    - |
+      echo "Init: esperando 5s para simular dependencia..."
+      sleep 5
+      echo "Init: creando archivo de configuracion..."
+      echo "CONFIG_READY=true" > /shared/config.env
+      echo "INITIALIZED_AT=$(date)" >> /shared/config.env
+      echo "Init: configuracion completada."
+    volumeMounts:
+    - name: shared-config
+      mountPath: /shared
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+
+  containers:
+  - name: app
+    image: busybox
+    command: ["sh", "-c"]
+    args:
+    - |
+      echo "App: leyendo configuracion generada por init container..."
+      cat /config/config.env
+      echo "App: iniciando servicio principal..."
+      sleep 3600
+    volumeMounts:
+    - name: shared-config
+      mountPath: /config
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
+
+  volumes:
+  - name: shared-config
+    emptyDir: {}
+
+---
+# =============================================================
+# 6) POD: Test Pod para verificacion
+#    Pod temporal con herramientas de red para verificar
+#    DNS, conectividad y comportamiento del namespace.
+#    Uso: kubectl exec -it test-pod -n lab-pods-test -- sh
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: lab-pods-test
+  labels:
+    app: test-pod
+    concepto: verificacion
+spec:
+  containers:
+  - name: nettools
+    image: busybox
+    command: ["sh", "-c", "sleep 3600"]
+    resources:
+      requests:
+        cpu: "10m"
+        memory: "16Mi"
+      limits:
+        cpu: "50m"
+        memory: "32Mi"

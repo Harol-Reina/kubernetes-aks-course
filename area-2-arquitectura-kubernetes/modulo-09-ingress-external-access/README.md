@@ -1,19 +1,31 @@
 # Capítulo 11: Ingress y Acceso Externo
 
-Los Services conectan internamente. Ahora exponemos aplicaciones al exterior con Ingress Controllers, rutas HTTP y terminación TLS.
+En el capítulo anterior dominamos los Services: esa capa que conecta Pods entre sí y con el
+exterior. Sabemos crear un LoadBalancer Service y exponerlo al mundo. Ese conocimiento es la
+base exacta que necesitamos ahora para dar el siguiente paso.
 
----
+El problema aparece cuando la aplicación crece. Tienes 20 microservicios: frontend, API de
+usuarios, API de pedidos, servicio de pagos, servicio de notificaciones... Si cada uno necesita
+su propio LoadBalancer Service, terminas con 20 IPs públicas, 20 balanceadores de carga
+facturados por separado en tu cuenta de cloud, y 20 entradas DNS que gestionar manualmente.
+En AWS o Azure, cada LoadBalancer cuesta dinero cada hora. Escalar esto no es viable ni
+técnica ni económicamente.
 
-## 🎓 Metodología de Aprendizaje
+Ingress es la solución: un único punto de entrada que recibe todo el tráfico HTTP/HTTPS externo
+y lo distribuye internamente según reglas de enrutamiento. Un solo LoadBalancer, múltiples
+aplicaciones. Defines que `api.miempresa.com/users` va al servicio de usuarios y
+`api.miempresa.com/orders` va al servicio de pedidos, todo con una sola IP pública.
 
-Este módulo sigue el patrón **Teoría → Ejemplo Inline → Checkpoint → Laboratorio**:
+Piensa en Ingress como la recepcionista de un edificio de oficinas. El visitante llega a una
+sola entrada (la IP pública), le dice a quién busca (el host o la ruta), y la recepcionista
+lo dirige al piso y oficina correctos (el Service interno). Sin esa recepcionista, cada
+departamento necesitaría su propia puerta en la fachada del edificio.
 
-1. **Teoría**: Conceptos explicados con diagramas ASCII
-2. **Ejemplos inline**: YAMLs de ejemplo en `ejemplos/` referenciados inmediatamente
-3. **Checkpoints**: Autoevaluaciones para verificar comprensión
-4. **Laboratorios**: Ejercicios prácticos guiados paso a paso
-
-**💡 Tip**: Crea los YAMLs de ejemplo a medida que avanzas. No copies-pegues todo al inicio.
+En este capítulo configurarás el Ingress Controller de NGINX, escribirás reglas de enrutamiento
+basadas en host y ruta, configurarás terminación TLS para servir HTTPS, y aprenderás a usar
+annotations para personalizar el comportamiento del controlador. Al terminar, serás capaz de
+exponer docenas de servicios con una sola IP pública y gestionar certificados SSL de forma
+centralizada.
 
 ---
 
@@ -3384,17 +3396,6 @@ En este módulo has aprendido:
 5. **Módulo 10**: Continúa con **Namespaces y Organización**
 
 ---
-
-**📚 Navegación del Curso**:
-- ⬅️ Anterior: [Módulo 08 - Services y Endpoints](../modulo-08-services-endpoints/README.md)
-- ➡️ Siguiente: [Módulo 10 - Namespaces y Organización](../modulo-10-namespaces-organizacion/README.md)
-- 🏠 [Volver al índice del curso](../../README.md)
-
----
-
-**Autor**: Curso Kubernetes Avanzado  
-**Última actualización**: Noviembre 2025  
-**Versión**: Kubernetes 1.28+
 
 ## Resumen del Capítulo
 

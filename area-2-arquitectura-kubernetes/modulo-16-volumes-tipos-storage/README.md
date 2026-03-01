@@ -1,6 +1,35 @@
 # Capítulo 18: Volumes — Tipos y Storage
 
-Con los conceptos de volúmenes claros, implementamos storage real: EmptyDir, HostPath, PersistentVolumes, PersistentVolumeClaims y StorageClasses.
+En el capítulo anterior comprendimos el modelo conceptual de los volúmenes: por qué existen,
+cómo desacoplan datos del ciclo de vida del Pod, y las abstracciones PersistentVolume y
+PersistentVolumeClaim. Ahora tenemos el mapa conceptual completo. Es el momento de bajar al
+terreno y trabajar con storage real.
+
+El problema práctico es que no hay un tipo de almacenamiento que sirva para todo. Un cache
+compartido entre dos contenedores del mismo Pod necesita un volumen temporal que desaparezca
+con el Pod — usar almacenamiento persistente de pago sería un desperdicio innecesario. Un
+agente de recolección de logs necesita leer archivos del sistema del nodo anfitrión — un
+volumen en la nube no puede hacer eso. Una base de datos relacional necesita un disco
+persistente que sobreviva al Pod pero que solo pueda ser montado por una instancia a la vez
+— ReadWriteOnce. Un servidor de archivos compartido necesita que múltiples Pods lean y
+escriban simultáneamente — ReadWriteMany. Elegir el tipo incorrecto de storage genera
+problemas que van desde desperdicio de dinero hasta corrupción de datos.
+
+Este capítulo es el catálogo práctico de soluciones de almacenamiento. Para cada tipo de
+storage, verás el caso de uso concreto, el manifiesto YAML completo, y las ventajas e
+inconvenientes. Aprenderás a provisionar storage dinámicamente con StorageClasses para que
+el cluster cree discos en la nube automáticamente cuando los Pods los solicitan.
+
+La diferencia con el capítulo anterior es como saber que "necesitas un vehículo" (el concepto)
+versus elegir entre un coche, un camión de reparto o una motocicleta según el trabajo
+concreto (la implementación). Cada vehículo existe por una razón, y usar el incorrecto hace
+el trabajo más caro, más lento, o directamente imposible.
+
+En este capítulo implementarás emptyDir para cache y comunicación entre contenedores,
+hostPath para acceso al sistema del nodo, el ciclo de vida completo PV/PVC, StorageClasses
+para provisión dinámica, los access modes (ReadWriteOnce, ReadOnlyMany, ReadWriteMany), y
+los fundamentos de StatefulSets para aplicaciones que necesitan identidad de storage
+persistente por réplica.
 
 ---
 
@@ -3025,73 +3054,7 @@ Has completado el módulo de **Volúmenes: Tipos y Storage** en Azure Kubernetes
 - ✅ PVC stuck in Terminating
 - ✅ Disk pressure y eviction
 
-### 📈 Progreso del Curso
-
-```
-Área 2: Arquitectura de Kubernetes
-├── ✅ Módulo 15: Volúmenes - Conceptos
-└── ✅ Módulo 16: Volúmenes - Tipos y Storage ← Estás aquí
-```
-
-### 🎯 Próximos Pasos
-
-1. **Completar los laboratorios**:
-   - [Lab 01: Volúmenes Básicos](./laboratorios/lab-01-volumenes-basicos/)
-   - [Lab 02: PV/PVC Avanzado](./laboratorios/lab-02-pv-pvc-avanzado/)
-
-2. **Practicar en tu cluster**:
-   - Crear PVCs con diferentes StorageClasses
-   - Probar access modes (RWO, RWX)
-   - Simular fallos y recuperación
-
-3. **Explorar temas avanzados**:
-   - Volume snapshots
-   - Velero para backups
-   - CSI drivers personalizados
-   - Azure NetApp Files para alto rendimiento
-
-### 📚 Referencias Adicionales
-
-**Documentación oficial**:
-- [Kubernetes Volumes](https://kubernetes.io/docs/concepts/storage/volumes/)
-- [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
-- [Storage Classes](https://kubernetes.io/docs/concepts/storage/storage-classes/)
-- [Azure Disk CSI Driver](https://github.com/kubernetes-sigs/azuredisk-csi-driver)
-- [Azure File CSI Driver](https://github.com/kubernetes-sigs/azurefile-csi-driver)
-
-**Mejores prácticas**:
-- [AKS Storage Best Practices](https://learn.microsoft.com/en-us/azure/aks/operator-best-practices-storage)
-- [Kubernetes Storage Performance](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/)
-
-**Herramientas útiles**:
-- [Velero](https://velero.io/) - Backup y migración de clusters
-- [K9s](https://k9scli.io/) - TUI para gestión de Kubernetes
-- [kubectl-view-allocations](https://github.com/davidB/kubectl-view-allocations) - Ver uso de recursos
-
 ---
-
-## 🎉 ¡Felicitaciones!
-
-Has completado el **Módulo 16: Volúmenes - Tipos y Storage** del curso de Kubernetes en Azure.
-
-Ahora tienes las habilidades para:
-- ✅ Diseñar estrategias de almacenamiento para aplicaciones
-- ✅ Implementar persistencia de datos en producción
-- ✅ Troubleshoot problemas de volúmenes
-- ✅ Optimizar costos de almacenamiento en Azure
-- ✅ Recuperar datos ante fallos
-
-**Sigue practicando** y no olvides completar los laboratorios para consolidar el conocimiento.
-
----
-
-**¿Preguntas o problemas?** Revisa la sección de [Troubleshooting](#troubleshooting-práctico) o consulta los laboratorios para ejemplos adicionales.
-
-**Siguiente módulo**: Continúa tu aprendizaje con módulos sobre ConfigMaps, Secrets, y gestión de configuración.
-
----
-
-📖 **Ver teoría**: [Volver a Módulo 15 - Conceptos](../modulo-15-volumes-conceptos/README.md)
 
 ## Resumen del Capítulo
 

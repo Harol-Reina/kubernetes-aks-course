@@ -1,6 +1,14 @@
 # Capítulo 4: Arquitectura de un Cluster Kubernetes
 
-Con Kubernetes presentado, exploramos su arquitectura interna: el plano de control, los nodos worker y cómo cada componente contribuye al funcionamiento del cluster.
+En el capítulo anterior entendimos QUE hace Kubernetes: orquesta contenedores automáticamente. Ahora necesitamos entender COMO lo hace. Este conocimiento no es solo teórico: es la diferencia entre un operador que adivina y uno que diagnostica.
+
+**El problema real**: Un Pod no levanta y no sabes por qué. Sin conocer la arquitectura, no sabes ni por donde empezar: ¿es un problema del scheduler? ¿del kubelet? ¿del etcd? ¿de la red? Un desarrollador que no conoce los componentes internos del cluster termina haciendo `kubectl delete pod` y rezando, en lugar de leer los logs del componente correcto y resolver el problema de raíz. En incidentes de producción, esa diferencia se mide en horas de downtime.
+
+**La solución**: El cluster Kubernetes tiene una arquitectura clara y bien dividida: el Control Plane (API server, etcd, scheduler, controller manager) que toma decisiones, y los Worker Nodes (kubelet, kube-proxy, container runtime) que las ejecutan. Cuando conoces estos componentes y sus responsabilidades, cada error tiene un lugar específico donde buscar.
+
+**La analogía**: Es como conocer el organigrama de una empresa antes de empezar a trabajar ahí. Si necesitas aprobar un presupuesto, sabes que tienes que hablar con Finanzas, no con Recursos Humanos. Si un Pod no se programa en ningún nodo, sabes que el problema está en el scheduler o en los recursos del nodo, no en la aplicación misma.
+
+**En este capítulo** explorarás cada componente del Control Plane y sus responsabilidades exactas, entenderás qué hace el kubelet en cada Worker Node, aprenderás el flujo completo de comunicación cuando creas un recurso (desde tu `kubectl apply` hasta que el contenedor arranca), y verás cómo etcd actúa como la única fuente de verdad del cluster. Esta comprensión es requisito directo para los exámenes CKA y CKAD.
 
 ---
 

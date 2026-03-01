@@ -1,50 +1,14 @@
 # Capítulo 23: Helm — Gestor de Paquetes
 
-Los patrones están claros. Pero gestionar decenas de manifiestos YAML por aplicación es tedioso. Helm empaqueta todo en charts reutilizables y parametrizables.
+En el capítulo anterior dominamos los patrones multi-contenedor: Init Containers, Sidecars, Ambassadors y Adapters. Ya sabemos estructurar Pods sofisticados con múltiples responsabilidades bien separadas. El problema ahora es diferente: no es de arquitectura, sino de escala operativa.
 
----
+Piensa en desplegar WordPress en Kubernetes. Necesitas un Deployment para la aplicación, otro para MySQL, un Service para cada uno, un Ingress para el tráfico externo, un PersistentVolumeClaim para la base de datos, un ConfigMap con la configuración de PHP, y un Secret con las credenciales. Son seis o más archivos YAML solo para una aplicación. Ahora multiplica eso por tres entornos (desarrollo, staging, producción), cada uno con valores distintos de réplicas, imágenes, límites de recursos y URLs. El resultado es una proliferación de archivos que son casi idénticos pero no exactamente iguales, imposibles de gestionar sin errores y sin una forma limpia de hacer rollback si algo sale mal.
 
-## 📚 Estructura del Módulo
+Helm resuelve este problema exactamente como `apt`, `yum` o `brew` lo hacen en el mundo de sistemas operativos: empaqueta una aplicación completa con todas sus dependencias en un chart, permite parametrizar cada valor mediante un archivo `values.yaml` y gestiona el ciclo de vida completo con comandos atómicos de install, upgrade y rollback.
 
-### 🎓 Teoría (90 minutos)
+La analogía es directa: así como `apt install nginx` descarga, configura e instala Nginx con un solo comando, `helm install myapp ./mychart` despliega toda tu aplicación Kubernetes con un solo comando, usando los valores correctos para cada entorno.
 
-| Sección | Tema | Duración |
-|---------|------|----------|
-| 1 | ¿Qué es Helm? Historia y motivación | 10 min |
-| 2 | Arquitectura Helm 3 vs Helm 2 | 10 min |
-| 3 | Anatomía de un Chart | 15 min |
-| 4 | Sistema de Templates | 15 min |
-| 5 | Values y Personalización | 10 min |
-| 6 | Gestión de Releases | 15 min |
-| 7 | Repositorios y Artifact Hub | 10 min |
-| 8 | Mejores Prácticas | 5 min |
-
-### 🧪 Práctica (120 minutos)
-
-| Lab | Contenido | Duración | Nivel |
-|-----|-----------|----------|-------|
-| 01 | Helm Basics: Install, Search, Deploy | 30 min | 🟢 Básico |
-| 02 | Crear Chart desde Cero | 30 min | 🟡 Intermedio |
-| 03 | Multi-Entorno con Values | 30 min | 🟡 Intermedio |
-| 04 | Hooks y Upgrade Avanzado | 30 min | 🔴 Avanzado |
-
-### 📖 Rutas de Aprendizaje
-
-#### 🌱 Principiante (3.5h)
-1. Leer teoría completa (90 min)
-2. Lab 01: Helm Basics (30 min)
-3. Lab 02: Crear Chart (30 min)
-4. Revisar ejemplos básicos (30 min)
-
-#### 🚀 Intermedio (2.5h)
-1. Leer secciones 3-6 (55 min)
-2. Lab 02 + Lab 03 (60 min)
-3. Estudiar ejemplos avanzados (30 min)
-
-#### ⚡ CKAD Speed Run (1.5h)
-1. RESUMEN-MODULO.md (20 min)
-2. Lab 01 + desafíos rápidos (40 min)
-3. Comandos esenciales y templates (30 min)
+En este capítulo aprenderás la estructura de un chart, a trabajar con repositorios públicos como Artifact Hub, a personalizar despliegues con `values.yaml` y overrides, a gestionar releases con upgrade y rollback, y a crear tu primer chart desde cero para empaquetar tu propia aplicación.
 
 ---
 

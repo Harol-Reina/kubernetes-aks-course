@@ -1,6 +1,37 @@
 # Capítulo 19: RBAC — Users y Groups
 
-Los datos persisten. Ahora controlamos quién accede a qué dentro del cluster. RBAC (Role-Based Access Control) define permisos granulares para usuarios y grupos.
+En los capítulos anteriores construimos una plataforma completa: aplicaciones con storage
+persistente, configuración externalizada, secretos protegidos, health checks activos y
+recursos controlados. El cluster está funcionando. Ahora, inevitablemente, más personas
+necesitan acceder a él.
+
+El problema surge en cuanto el segundo desarrollador se une al equipo. La solución fácil —
+darle la misma kubeconfig que tienes tú, con permisos de cluster-admin — es también la más
+peligrosa. Con cluster-admin, cualquier acción es posible: un `kubectl delete namespace
+production` ejecutado por error en la terminal equivocada destruye todo el entorno de
+producción en segundos. No hay confirmación, no hay papelera de reciclaje, no hay deshacer.
+Y no es solo un escenario hipotético: incidentes de este tipo ocurren regularmente en equipos
+que no han implementado control de acceso. También hay consecuencias de compliance: si tu
+empresa maneja datos de clientes, regulaciones como GDPR o SOC2 exigen que puedas demostrar
+que solo las personas autorizadas tuvieron acceso a datos sensibles. Con todos usando
+cluster-admin, esa demostración es imposible.
+
+RBAC (Role-Based Access Control) es el sistema de permisos de Kubernetes. Permite definir
+exactamente qué operaciones (get, list, create, delete, patch) puede realizar cada usuario
+sobre qué tipos de recursos (Pods, Secrets, Deployments) en qué Namespaces. El principio de
+mínimo privilegio: cada persona tiene exactamente los permisos que necesita para su trabajo,
+ni uno más.
+
+Piensa en las tarjetas de acceso de una oficina moderna. No todo el mundo tiene llave del
+servidor room, de la sala de dirección o del archivo de recursos humanos. El desarrollador
+entra a su planta y a las salas comunes. El administrador de sistemas tiene acceso a la sala
+de servidores. El director tiene acceso a todo. Las tarjetas son los RoleBindings, las
+cerraduras son los Roles, y cada empleado es un usuario.
+
+En este capítulo dominarás los cuatro objetos de RBAC: Role, ClusterRole, RoleBinding y
+ClusterRoleBinding; aprenderás la diferencia entre permisos con scope de Namespace y permisos
+a nivel de cluster, crearás usuarios con certificados X.509 y los asociarás a grupos, y
+diseñarás una jerarquía de permisos para un equipo de ingeniería real.
 
 ---
 

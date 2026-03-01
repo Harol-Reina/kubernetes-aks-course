@@ -1,21 +1,36 @@
 # Capítulo 16: Secrets y Datos Sensibles
 
-Configuración resuelta con ConfigMaps. Ahora protegemos los datos sensibles — contraseñas, tokens, certificados TLS — con Secrets.
+En el capítulo anterior los ConfigMaps resolvieron la configuración externalizada: URLs,
+flags, parámetros de la aplicación viven fuera de la imagen y se inyectan en tiempo de
+ejecución. Es un avance enorme. Pero la solución tiene un punto ciego crítico que en producción
+puede convertirse en un incidente de seguridad grave.
 
----
+El problema es que un ConfigMap es completamente legible. Cualquier desarrollador con acceso
+de lectura al Namespace puede hacer `kubectl get configmap mi-config -o yaml` y ver todos sus
+valores. Si guardas la contraseña de la base de datos de producción en un ConfigMap — como
+hace el 30% de los equipos que aprenden Kubernetes por primera vez — cualquier junior de la
+empresa puede leerla. Más grave aún: los ConfigMaps aparecen en los logs de herramientas de
+CI/CD, en capturas de pantalla de dashboards, en outputs de `kubectl describe`. Una
+contraseña en un ConfigMap no es una contraseña protegida, es simplemente un texto visible
+almacenado en etcd sin ninguna restricción especial.
 
-## 🎓 Metodología de Aprendizaje
+Los Secrets de Kubernetes existen precisamente para separar los datos sensibles del resto de
+la configuración. Ofrecen codificación base64 para que los valores no aparezcan en texto plano
+en los manifiestos, integración con RBAC para restringir quién puede leerlos, transmisión
+solo a los nodos que ejecutan Pods que los necesitan, almacenamiento en tmpfs (memoria, no
+disco) en los nodos, y soporte para encriptación en reposo en etcd.
 
-Este módulo sigue una progresión estructurada:
+Los ConfigMaps son como postales: cualquiera que las vea puede leer el mensaje. Los Secrets
+son como sobres sellados: el destinatario los recibe cerrados y solo él tiene permiso de
+abrirlos. Ambos viajan por el mismo sistema postal (Kubernetes), pero con niveles de acceso
+y visibilidad radicalmente distintos.
 
-1. **📖 Teoría Fundamental** → Conceptos de Secrets y seguridad
-2. **💻 Ejemplos Inline** → Snippets en cada sección del README
-3. **🔍 Análisis de Seguridad** → Limitaciones de base64
-4. **💡 Best Practices** → Patrones de seguridad profesionales
-5. **🐛 Troubleshooting** → Problemas comunes y soluciones
-6. **🧪 Laboratorios** → Práctica hands-on
-
-**Recomendación**: Lee cada sección, ejecuta los ejemplos y verifica con `kubectl describe/get`. Secrets son críticos para seguridad - entiende las limitaciones.
+En este capítulo aprenderás los diferentes tipos de Secret (Opaque, TLS, docker-registry,
+service-account-token), crearás Secrets desde literales, archivos y generadores, los
+montarás como variables de entorno o como archivos en volúmenes, entenderás las limitaciones
+reales de la seguridad de Secrets en Kubernetes, y conocerás las integraciones con gestores
+de secretos externos como Azure Key Vault y HashiCorp Vault para entornos de producción
+reales.
 
 ---
 

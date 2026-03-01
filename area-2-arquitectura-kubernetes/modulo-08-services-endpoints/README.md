@@ -1,39 +1,14 @@
 # Capítulo 10: Services y Service Discovery
 
-Con Deployments desplegamos aplicaciones. Ahora necesitamos que se comuniquen entre sí y con el mundo exterior. Los Services proporcionan descubrimiento y balanceo de carga estable.
+En los dos capítulos anteriores logramos desplegar aplicaciones de forma robusta: ReplicaSets para disponibilidad y Deployments para actualizaciones sin downtime. Ahora surge el siguiente problema: los Pods están corriendo, pero nadie puede hablar con ellos de forma confiable.
 
----
+**El problema real**: Tu frontend necesita comunicarse con el backend. Hardcodeas la IP del Pod del backend: `10.1.2.47`. Todo funciona. El backend crashea, Kubernetes lo recrea automáticamente (el ReplicaSet hace su trabajo) y el nuevo Pod recibe la IP `10.1.2.83`. El frontend sigue intentando conectarse a `10.1.2.47` y falla. Ahora imagina que escalas el backend a 5 réplicas: ¿a cuál de las 5 IPs te conectas? ¿Cómo balanceas la carga entre ellas? Las IPs de los Pods son efímeras por diseño, y ningún cliente debería depender de ellas directamente.
 
-## 🗺️ Guía de Estudio Recomendada
+**La solución**: Los Services son una capa de abstracción estable sobre el conjunto dinámico de Pods. Un Service recibe una IP fija (ClusterIP) y un nombre DNS que nunca cambian, y automáticamente enruta el tráfico hacia los Pods que coincidan con sus selectores, sin importar cuántos haya ni cuántas veces se hayan recreado. Kubernetes actualiza la lista de Endpoints del Service en tiempo real a medida que los Pods entran y salen.
 
-### Para Principiantes (Primera vez con Services)
-1. **Día 1** (2 horas):
-   - Leer Secciones 1-2 (Introducción + ClusterIP)
-   - Ejecutar ejemplos inline
-   - Completar Lab 01
+**La analogía**: Es como el directorio telefónico de una empresa. No llamas al número de escritorio de Juan, que cambia cada vez que lo cambian de oficina. Llamas a la extensión del departamento de soporte, que siempre llega a alguien disponible, sin importar quién esté de turno hoy. El Service es esa extensión estable que abstrae la rotación de personas (Pods) detrás de ella.
 
-2. **Día 2** (2 horas):
-   - Leer Sección 3 (NodePort + LoadBalancer)
-   - Ejecutar ejemplos
-   - Completar Lab 02
-
-3. **Día 3** (2 horas):
-   - Leer Secciones 4-6
-   - Completar Lab 03
-   - Revisar troubleshooting
-
-### Para Estudiantes con Experiencia
-1. **Revisión rápida**: Secciones 1-3 (1 hora)
-2. **Focus avanzado**: Secciones 4-6 (1.5 horas)
-3. **Labs selectivos**: Lab 03 (servicios avanzados)
-
-### Para Preparación de Certificación (CKA/CKAD)
-- ✅ Dominar todos los tipos de Services
-- ✅ Troubleshooting rápido de Endpoints
-- ✅ Configuración de Services sin YAML (imperativos)
-- ✅ Practicar Labs bajo tiempo límite
-
----
+**En este capítulo** aprenderás los cuatro tipos de Service (ClusterIP para comunicación interna, NodePort para acceso externo simple, LoadBalancer para nube, y ExternalName para integrar servicios externos), entenderás cómo funciona el DNS interno de Kubernetes (`nombre.namespace.svc.cluster.local`), explorarás cómo los Endpoints se actualizan dinámicamente, y verás cómo el kube-proxy implementa las reglas de red que hacen posible todo esto. Services es un tema central tanto en CKAD como en CKA y en el examen de Azure AKS.
 
 ---
 

@@ -1,108 +1,18 @@
 # Capítulo 9: Deployments y Rollouts
 
-Los ReplicaSets mantienen Pods vivos, pero no gestionan actualizaciones. Los Deployments añaden rolling updates, rollbacks y estrategias de despliegue declarativas.
+En el capítulo anterior los ReplicaSets resolvieron el problema de mantener Pods vivos y escalar horizontalmente. Pero hay un escenario que los ReplicaSets no cubren y que ocurre varias veces al dia en cualquier equipo que practica entrega continua: desplegar una nueva version de la aplicacion.
+
+**El problema real**: Tienes 100 Pods corriendo la version 1.0 de tu aplicacion. Necesitas desplegar la version 1.1. Si actualizas el ReplicaSet directamente, Kubernetes mata todos los Pods y crea 100 nuevos, causando minutos de downtime total. Si lo haces manual y gradual, tarde 30 minutos y te equivocas a mitad del proceso. Y lo peor: si la version 1.1 tiene un bug critico que no detectaste en staging, todos tus usuarios estan afectados y no tienes forma rapida de volver atras. Un rollback manual de 100 Pods en plena crisis es una pesadilla operacional.
+
+**La solucion**: Los Deployments envuelven a los ReplicaSets y anaden inteligencia de actualizacion: rolling updates que reemplazan Pods gradualmente (de 1 en 1, o por porcentajes configurables), historial de revisiones para hacer rollback con un solo comando, y control de velocidad para pausar y reanudar un despliegue si algo sale mal. Todo declarativo, todo reproducible.
+
+**La analogia**: Renovar un hotel habitacion por habitacion en lugar de cerrarlo entero. Los huespedes siguen durmiendo mientras el equipo pinta, cambia muebles y actualiza cada habitacion. Cuando termina la renovacion, nadie noto la interrupcion. Si a la mitad decides que el nuevo estilo no gusta, pausas la renovacion y devuelves las habitaciones ya renovadas al estilo anterior.
+
+**En este capítulo** dominará la estrategia RollingUpdate con sus parametros maxSurge y maxUnavailable, aprenderas a hacer rollbacks al instante con `kubectl rollout undo`, explorara el historial de revisiones con `kubectl rollout history`, y conoceras las estrategias avanzadas blue-green y canary que se construyen sobre estos mismos mecanismos. Este es uno de los temas con mayor peso en el examen CKAD.
 
 ---
 
-## 📚 Estructura del Módulo
-
-Este módulo está organizado en **8 secciones temáticas**:
-
-| # | Sección | Duración | Contenido |
-|---|---------|----------|-----------|
-| **1** | ¿Qué es un Deployment? | 30 min | Definición, arquitectura, comparación vs ReplicaSet |
-| **2** | Creación de Deployments | 35 min | Manifiestos YAML, anatomía, comandos kubectl |
-| **3** | Rolling Updates | 45 min | Actualizaciones sin downtime, maxSurge, maxUnavailable |
-| **4** | Rollback y Versiones | 40 min | Historial de revisiones, undo, rollback automático |
-| **5** | Estrategias de Despliegue | 50 min | RollingUpdate vs Recreate, parámetros avanzados |
-| **6** | Técnicas Avanzadas | 45 min | Blue-Green, Canary, pause/resume |
-| **7** | Monitoreo y Troubleshooting | 35 min | Status, events, debugging common issues |
-| **8** | Best Practices | 50 min | Producción-ready, security, anti-patterns |
-
-**Total**: ~4.5 horas (teoría + práctica)
-
----
-
-## 🗂️ Recursos de Aprendizaje
-
-### **Archivos del Módulo**
-
-```
-modulo-07-deployments-rollouts/
-├── README.md                          # ← Teoría completa (este archivo)
-├── RESUMEN-MODULO.md                  # Guía de estudio y referencia rápida
-├── ejemplos/                          # Manifiestos YAML de ejemplo
-│   ├── 01-basico/
-│   │   ├── 01-deployment-simple.yaml
-│   │   ├── 02-deployment-production.yaml
-│   │   └── 03-deployment-multi-container.yaml
-│   ├── 02-rolling-updates/
-│   │   ├── 01-rolling-update-demo.yaml
-│   │   ├── 02-max-surge-unavailable.yaml
-│   │   └── 03-progressive-rollout.yaml
-│   ├── 03-strategies/
-│   │   ├── 01-recreate-strategy.yaml
-│   │   ├── 02-rollingupdate-strategy.yaml
-│   │   └── 03-blue-green-deployment.yaml
-│   ├── 04-canary/
-│   │   ├── 01-canary-v1.yaml
-│   │   ├── 02-canary-v2.yaml
-│   │   └── 03-canary-service.yaml
-│   └── 05-best-practices/
-│       └── production-ready-deployment.yaml
-└── laboratorios/                      # Prácticas guiadas
-    ├── lab-01-crear-primer-deployment.md
-    ├── lab-02-rolling-updates.md
-    ├── lab-03-rollback-versiones.md
-    ├── lab-04-estrategias-despliegue.md
-    ├── lab-05-blue-green-deployment.md
-    ├── lab-06-canary-deployment.md
-    ├── lab-07-troubleshooting.md
-    └── lab-08-production-ready.md
-```
-
-### **Metodología de Estudio**
-
-Este módulo sigue la metodología **Teoría → Ejemplo → Práctica**:
-
-1. **Teoría**: Lee la explicación conceptual en este README
-2. **Ejemplo inline**: Observa ejemplos de código comentados
-3. **Archivo de referencia**: Consulta manifiestos en `ejemplos/`
-4. **Checkpoint**: Verifica tu comprensión
-5. **Laboratorio**: Practica hands-on en `laboratorios/`
-
----
-
-## 🚀 Guía de Estudio Recomendada
-
-### **Fase 1: Fundamentos (Día 1 - 2 horas)**
-- Leer Secciones 1-2
-- Completar Labs 1-2
-- **Objetivo**: Crear y gestionar Deployments básicos
-
-### **Fase 2: Actualizaciones (Día 2 - 2 horas)**
-- Leer Secciones 3-4
-- Completar Labs 3-4
-- **Objetivo**: Dominar rolling updates y rollbacks
-
-### **Fase 3: Estrategias Avanzadas (Día 3 - 2.5 horas)**
-- Leer Secciones 5-6
-- Completar Labs 5-6
-- **Objetivo**: Implementar Blue-Green y Canary
-
-### **Fase 4: Producción (Día 4 - 2 horas)**
-- Leer Secciones 7-8
-- Completar Labs 7-8
-- **Objetivo**: Production-ready deployments
-
-### **Fase 5: Consolidación (Día 5 - 1 hora)**
-- Repasar RESUMEN-MODULO.md
-- Proyecto final: Deploy full-stack app
-- **Objetivo**: Aplicar todo lo aprendido
-
----
-
-## � 1. ¿Qué es un Deployment?
+## 🚀 1. ¿Qué es un Deployment?
 
 ### **1.1 El Problema que Resuelven los Deployments**
 
@@ -3356,37 +3266,6 @@ laboratorios/
 **Tiempo total de laboratorios**: ~6 horas prácticas
 
 ---
-
-## 🎓 Certificación de Conocimientos
-
-**Has completado exitosamente el Módulo 07** si puedes:
-
-1. ✅ Crear y gestionar Deployments con kubectl
-2. ✅ Configurar rolling updates con zero downtime (maxUnavailable: 0)
-3. ✅ Hacer rollback a versiones anteriores
-4. ✅ Implementar estrategias avanzadas (Blue-Green, Canary)
-5. ✅ Aplicar best practices de producción
-6. ✅ Troubleshoot problemas comunes de Deployments
-7. ✅ Configurar health checks y security contexts
-8. ✅ Diseñar Deployments production-ready siguiendo el template
-
-**Tiempo de dominio estimado**: 4-5 horas de estudio + 6 horas de labs = **10-11 horas totales**
-
----
-
-### **📖 Continúa tu aprendizaje**
-
-➡️ **Siguiente módulo**: [Módulo 08 - Services y Endpoints](../modulo-08-services-endpoints/README.md)
-
-💬 **¿Dudas o feedback?**: Consulta con tu instructor o en los canales de Slack del curso.
-
-🎉 **¡Felicitaciones por completar este módulo!**
-
----
-
-**Última actualización**: 2024  
-**Versión del documento**: 2.0  
-**Autor**: Curso Kubernetes Completo
 
 ## Resumen del Capítulo
 

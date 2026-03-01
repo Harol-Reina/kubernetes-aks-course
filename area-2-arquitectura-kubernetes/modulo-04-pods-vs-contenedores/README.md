@@ -1,6 +1,14 @@
 # Capítulo 6: Pods vs Contenedores Docker
 
-Con Minikube funcionando, exploramos la unidad mínima de ejecución en Kubernetes: el Pod. Veremos cómo se diferencia de un contenedor Docker y por qué Kubernetes añade esta capa de abstracción.
+Tienes Minikube corriendo y estás listo para ejecutar tu primera aplicación en Kubernetes. El instinto natural es buscar el equivalente a `docker run`: algo como `kubectl run nginx --image=nginx`. Funciona. Pero si intentas replicar mentalmente el modelo de Docker dentro de Kubernetes, muy pronto te encontrarás confundido.
+
+**El problema real**: En Docker, un contenedor es la unidad fundamental. En Kubernetes, si intentas pensar en contenedores directamente, te perderás: ¿por qué hay un contenedor "pause" que no hace nada? ¿Por qué dos contenedores en el mismo Pod pueden hablar por localhost sin exponer puertos? ¿Por qué los volúmenes se definen a nivel del Pod y no del contenedor? Sin entender el concepto de Pod como abstracción, los manifiestos YAML parecen arbitrarios y el comportamiento del cluster parece magia negra.
+
+**La solución**: Kubernetes introduce el Pod como unidad mínima de despliegue, no el contenedor. Un Pod es un wrapper que agrupa uno o más contenedores que deben correr juntos, dándoles una IP compartida, namespaces de red y PID comunes, y acceso a los mismos volúmenes. Esta abstracción es lo que hace posible patrones como el sidecar, donde un contenedor auxiliar complementa al principal sin acoplarse a su código.
+
+**La analogía**: Los contenedores son pasajeros. El Pod es el vehículo. Un auto puede llevar un conductor solo (Pod con un contenedor), o un conductor y sus herramientas de trabajo en el asiento trasero (Pod con contenedor principal y sidecar). Los pasajeros del mismo vehículo comparten el espacio, pueden hablar entre ellos directamente, y llegan y salen juntos.
+
+**En este capítulo** entenderás la diferencia estructural entre un contenedor Docker y un Pod de Kubernetes, aprenderás cuándo usar múltiples contenedores en un Pod (y cuándo no), explorarás el patrón sidecar con un ejemplo real de logging, y verás cómo el modelo de red compartida dentro del Pod simplifica la comunicación entre procesos. Este concepto es la base de todo lo que viene: ReplicaSets, Deployments y patrones avanzados como init containers.
 
 ---
 
@@ -30,128 +38,6 @@ DOCKER:              KUBERNETES:
 - Volúmenes compartidos entre contenedores
 - Ciclo de vida coordinado
 - IP única para todo el grupo
-
----
-
-## 🎯 Objetivos del Módulo (Expandido)
-
-Al completar este módulo serás capaz de:
-
-- ✅ **Explicar la evolución histórica** de contenedores hasta Pods
-- ✅ **Definir qué es un Pod** y diferenciarlo de un contenedor Docker
-- ✅ **Comprender el contenedor pause** como infraestructura del Pod
-- ✅ **Identificar los 7 namespaces Linux** y cuáles se comparten
-- ✅ **Diseñar Pods multi-contenedor** usando patrones Sidecar, Adapter, Ambassador
-- ✅ **Crear Pods con kubectl** (run, apply) y YAML
-- ✅ **Inspeccionar Pods** con describe, logs, exec
-- ✅ **Diagnosticar fallos** usando estados y eventos
-- ✅ **Aplicar mejores prácticas** en diseño de Pods
-
-### Patrones Multi-Contenedor
-- ✅ **Implementar el patrón Sidecar** para logging, monitoring y service mesh
-- ✅ **Utilizar Init Containers** para tareas de preparación y dependencias
-- ✅ **Aplicar el patrón Ambassador** para proxy y load balancing
-
-### Arquitectura y Decisiones
-- ✅ **Decidir cuándo usar** un Pod multi-contenedor vs múltiples Pods
-- ✅ **Migrar aplicaciones** de Docker Compose a Kubernetes
-- ✅ **Evitar antipatrones** comunes en diseño de Pods
-
----
-
-## 📚 Prerequisitos
-
-Antes de comenzar este módulo, asegúrate de tener:
-
-**Conocimientos:**
-- ✅ Conceptos básicos de contenedores Docker
-- ✅ Familiaridad con comandos `docker run`, `docker-compose`
-- ✅ Conocimientos básicos de Linux (procesos, networking)
-- ✅ Comprensión de la arquitectura de Kubernetes (Módulo 02)
-
-**Entorno técnico:**
-- ✅ Minikube instalado y funcionando (completar Módulo 03)
-- ✅ kubectl configurado correctamente
-- ✅ Cluster de Minikube iniciado con driver Docker
-
-**Verificación rápida:**
-```bash
-# Verificar que Minikube está corriendo
-minikube status
-
-# Verificar conexión a kubectl
-kubectl get nodes
-
-# Debería mostrar:
-# NAME       STATUS   ROLES           AGE   VERSION
-# minikube   Ready    control-plane   Xd    vX.XX.X
-```
-
----
-
-## 🗺️ Estructura del Módulo
-
-Este módulo está organizado siguiendo la progresión **Teoría → Ejemplo → Laboratorio**:
-
-| Sección | Tema | Contenido |
-|---------|------|-----------|
-| **1** | [Fundamentos y Evolución](#📚-1-la-evolución-de-los-contenedores) | Historia LXC→Docker→K8s, motivación de Pods |
-| **2** | [Anatomía de un Pod](#🧩-2-qué-es-un-pod-la-evolución-final) | Contenedor pause, arquitectura interna, networking |
-| **3** | [Docker vs Pods](#🆚-3-docker-vs-pods-evolución-práctica) | Evolución práctica y comparación |
-| **4** | [Patrones Multi-Contenedor](#🎨-4-patrones-multi-contenedor-en-pods) | Sidecar, Init Containers, Ambassador |
-| **5** | [Migración Docker Compose](#🛠️-5-migración-docker-compose--kubernetes) | Cuándo usar Pods vs múltiples Pods, migración |
-| **6** | [Laboratorios Prácticos](#🧪-6-laboratorios-prácticos) | Ejercicios guiados paso a paso |
-| **7** | [Ciclo de Vida](#🔄-7-ciclo-de-vida-de-pods) | Estados y transiciones de Pods |
-| **8** | [Ejemplos Disponibles](#🧪-8-ejemplos-prácticos-disponibles) | Índice completo de ejemplos YAML |
-| **9** | [Antipatrones y Best Practices](#🚨-9-antipatrones-y-mejores-prácticas) | Qué evitar y mejores prácticas |
-| **10** | [Debugging](#🔧-10-debugging-y-troubleshooting) | Herramientas de diagnóstico |
-
-**🔍 Separación de responsabilidades:**
-- Este módulo (04): **Qué es un Pod y patrones básicos**
-- Módulo 05: **Gestión avanzada** (manifiestos complejos, resource management, health checks)
-
----
-
-## 🎓 Recursos de Aprendizaje
-
-### Ejemplos Prácticos
-📁 **Carpeta**: [`ejemplos/`](./ejemplos/)
-- 40+ archivos YAML ejecutables organizados por concepto
-- Cada ejemplo está documentado con comentarios explicativos
-- Comandos de prueba incluidos en cada archivo
-
-### Laboratorios Guiados
-📁 **Carpeta**: [`laboratorios/`](./laboratorios/)
-- 5 laboratorios paso a paso con verificaciones
-- Duración total: ~4 horas de práctica
-- Incluyen troubleshooting y cleanup
-
-### Documentación de Referencia
-- 📖 [`ejemplos/README.md`](./ejemplos/README.md) - Índice de todos los ejemplos
-- 📖 [`laboratorios/README.md`](./laboratorios/README.md) - Guía de laboratorios
-- 📘 **[`RESUMEN-MODULO.md`](./RESUMEN-MODULO.md)** - **Guía de estudio estructurada** (RECOMENDADO)
-
----
-
-## 🎓 Guía de Estudio Recomendada
-
-**¿Primera vez con este módulo?** Te recomendamos seguir la guía de estudio:
-
-👉 **[ABRIR GUÍA DE ESTUDIO](./RESUMEN-MODULO.md)**
-
-La guía te proporciona:
-- ✅ Ruta de aprendizaje paso a paso
-- ✅ Progresión pedagógica: Teoría → Ejemplo → Lab
-- ✅ Checkpoints de verificación en cada sección
-- ✅ Tiempo estimado por fase
-- ✅ Enlaces directos a ejemplos y labs relevantes
-
-**Estructura de la guía**:
-1. **Fase 1**: Fundamentos y evolución (45-60 min)
-2. **Fase 2**: Namespaces Linux (60-90 min)
-3. **Fase 3**: Patrones multi-contenedor (90-120 min)
-4. **Fase 4**: Decisiones de arquitectura (45-60 min)
-5. **Fase 5**: Best practices (30-45 min)
 
 ---
 

@@ -1,24 +1,34 @@
 # Capítulo 14: Health Checks y Probes
 
-Con recursos limitados, necesitamos saber si nuestras aplicaciones están sanas. Las probes de Kubernetes detectan y recuperan contenedores que fallan.
+En el capítulo anterior pusimos límites a los recursos: ningún Pod puede acaparar CPU ni
+memoria más allá de su cuota. Tenemos organización y estabilidad a nivel de infraestructura.
+Pero surge una pregunta diferente: ¿cómo sabe Kubernetes si una aplicación está realmente
+funcionando, y no solo ocupando recursos?
 
----
+El problema es sutil pero frecuente. El proceso del servidor web está corriendo — Kubernetes
+lo ve como "healthy" — pero la aplicación entró en un deadlock interno y responde a todas
+las peticiones con error 500. O el servidor está levantado pero aún cargando datos de la
+base de datos al arrancar, y Kubernetes ya le está enviando tráfico real que falla. O un
+microservicio acumula conexiones sin liberar hasta que se queda sin file descriptors y deja
+de responder, pero el proceso sigue vivo. En todos estos casos, sin health checks, Kubernetes
+no toma ninguna acción — sigue enviando tráfico a un Pod roto y no lo reinicia.
 
-## 🎓 Metodología de Aprendizaje
+Las probes de Kubernetes son la solución. Liveness probe comprueba si el contenedor sigue
+vivo y debe reiniciarse si falla. Readiness probe decide si el Pod debe recibir tráfico.
+Startup probe da tiempo extra a aplicaciones lentas en el arranque antes de que liveness
+comience a evaluarlas. Juntas, estas tres probes permiten que Kubernetes tome decisiones
+inteligentes y automáticas sobre el ciclo de vida de tus contenedores.
 
-Este módulo sigue el patrón pedagógico del curso:
+Imagina al médico de urgencias evaluando a un paciente. Que el corazón lata (proceso activo)
+no significa que el paciente esté bien. El médico comprueba la presión arterial, la temperatura,
+el nivel de oxígeno — indicadores reales del estado de salud. Las probes hacen lo mismo con
+tus Pods: van más allá de "el proceso existe" y verifican que la aplicación responde
+correctamente.
 
-1. **Teoría estructurada**: Cada sección explica conceptos con ejemplos claros
-2. **Ejemplos inline**: YAMLs completos en `ejemplos/` referenciados inmediatamente
-3. **Laboratorios progresivos**: 3 labs que van de básico a troubleshooting
-4. **Resumen ejecutivo**: [RESUMEN-MODULO.md](RESUMEN-MODULO.md) para repaso rápido
-
-### Consejos de Estudio
-- ⚠️ **Crítico**: Entender cuándo usar Liveness vs Readiness (error común)
-- 🧪 Provocar fallos intencionalmente para ver comportamiento
-- 📊 Usar `kubectl describe pod` para ver eventos de probes
-- 🔍 Experimentar con parámetros (qué pasa si failureThreshold = 1 vs 3)
-- 💡 Implementar endpoints `/health` y `/ready` en tus apps
+En este capítulo configurarás los tres tipos de probe, elegirás entre los handlers HTTP,
+TCP y exec según el tipo de aplicación, ajustarás los parámetros de timing para evitar
+falsos positivos, y aprenderás a diagnosticar situaciones donde las probes causan reinicios
+o exclusiones del tráfico inesperados.
 
 ---
 

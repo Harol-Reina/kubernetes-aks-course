@@ -1,6 +1,14 @@
 # Capítulo 26: Advanced Scheduling
 
-El cluster se mantiene solo. Ahora controlamos dónde corren los Pods: afinidad, anti-afinidad, taints, tolerations y topología de distribución.
+En el capítulo anterior aprendimos a mantener el cluster saludable a lo largo del tiempo: backups, upgrades, y mantenimiento de nodos. El cluster está robusto y actualizado. Pero hay un problema que hasta ahora hemos ignorado: el scheduler coloca los Pods donde quiere, y eso no siempre es lo que necesitamos.
+
+El scheduler toma decisiones basándose en recursos disponibles, pero no sabe nada sobre tus requisitos de negocio. Un workload de Machine Learning que necesita GPU puede aterrizar en el único nodo del cluster que no tiene GPU y quedarse en Pending para siempre. Una aplicación que procesa datos financieros con requisitos de baja latencia puede terminar en un nodo en otra zona de disponibilidad, añadiendo decenas de milisegundos innecesarios. Dos réplicas de la misma aplicación crítica pueden quedar en el mismo nodo físico, eliminando toda la redundancia que las réplicas debían proporcionar. El scheduler por defecto es eficiente pero ciego a estas necesidades.
+
+Advanced Scheduling te devuelve el control: las reglas de affinity y anti-affinity permiten especificar "este Pod quiere (o no quiere) estar junto a estos otros Pods o en estos nodos". Los taints y tolerations funcionan al revés: los nodos rechazan Pods por defecto, y solo los Pods con la toleración correcta pueden entrar. `topologySpreadConstraints` garantiza distribución equilibrada entre zonas y nodos.
+
+Es como asignar oficinas a empleados en una empresa: algunos necesitan estar cerca de la sala de servidores (affinity de nodo), otros deben estar separados para no crear un punto único de fallo (anti-affinity), y ciertas salas restringidas solo están disponibles para personas con credenciales específicas (taints y tolerations).
+
+En este capítulo aprenderás a usar `nodeSelector` para placement simple, a definir reglas `requiredDuringScheduling` y `preferredDuringScheduling` para affinity y anti-affinity, a aplicar taints en nodos y tolerations en Pods, a configurar `topologySpreadConstraints` para alta disponibilidad geográfica, y a usar Pod Priority para garantizar que los workloads críticos siempre tengan recursos.
 
 ---
 

@@ -1,26 +1,46 @@
-# 🏗️ Lab 3: Sidecar Pattern Real-World
+# Laboratorio 03: Sidecar Pattern Real-World - Logging con Fluent Bit
 
-## 📋 Información del Laboratorio
+**Duracion estimada:** 60 minutos
+**Nivel:** Intermedio-Avanzado
+**Objetivo:** Implementar un sidecar de logging real con Flask y Fluent Bit, comunicados via shared volume (emptyDir), demostrando separacion de responsabilidades en un Pod multi-container.
 
-- **Duración estimada**: 60 minutos
-- **Nivel**: Intermedio-Avanzado
-- **Prerrequisitos**:
-  - Docker instalado
-  - kubectl configurado
-  - Cluster Kubernetes activo (minikube/kind)
-  - Conocimientos básicos de Python/Flask
+---
 
-## 🎯 Objetivo
+## Tecnicas y Conceptos Utilizados
 
-Implementar un **sidecar de logging** real con:
-- Aplicación web Flask que genera logs estructurados
-- Sidecar Fluent Bit que procesa logs en tiempo real
-- Comunicación vía shared volume (emptyDir)
-- Separación de responsabilidades entre app y logging
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Sidecar pattern** | Contenedor auxiliar que extiende la funcionalidad de la app principal sin modificarla. El sidecar Fluent Bit procesa los logs que genera Flask |
+| **emptyDir shared volume** | Volumen efimero compartido entre contenedores del mismo Pod. La app escribe en `/var/log/app` y el sidecar lee desde el mismo path |
+| **Fluent Bit** | Log processor ligero que lee, parsea y reenvía logs. Configurado via ConfigMap montado como archivo de configuracion |
+| **JSON logs estructurados** | La app genera logs en JSON con campos timestamp, method, path, ip. Facilita el parseo automatico por el sidecar |
+| **Resource limits por contenedor** | Cada contenedor del Pod tiene sus propios `requests` y `limits` de CPU/memoria, garantizando aislamiento de recursos |
+| **ConfigMap como archivo de config** | La configuracion de Fluent Bit se almacena en un ConfigMap y se monta como archivo individual via `subPath` |
 
-## 🧪 Práctica
+---
 
-### Paso 1: Preparación del Entorno
+## Archivos del Laboratorio
+
+Este laboratorio utiliza archivos separados para cada componente:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `web-app.py` | 1 | Aplicacion Flask que genera logs JSON estructurados al shared volume |
+| `Dockerfile` | 2 | Imagen minimalista python:3.9-slim con Flask instalado |
+| `fluent-bit.conf` | 3 | Configuracion del sidecar Fluent Bit: INPUT tail, FILTER parser JSON, OUTPUT file+stdout |
+| `sidecar-pod.yaml` | 4 | Pod multi-container con webapp + log-processor y volumenes compartidos |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Elimina pod webapp-sidecar, configmap fluent-config y detiene port-forward |
+
+---
+
+## Practica
+
+### Paso 1: Preparacion del Entorno
 
 ```bash
 mkdir -p ~/labs/modulo-04/sidecar-real && cd ~/labs/modulo-04/sidecar-real
@@ -29,80 +49,37 @@ echo "🏗️ SIDECAR PATTERN: Real-World Logging"
 echo "======================================"
 ```
 
-### Paso 2: Crear Aplicación Web Flask
+### Paso 2: Revisar la Aplicacion Web Flask
+
+Revisa el archivo `web-app.py` del laboratorio:
 
 ```bash
-# 1. Crear aplicación web que genera logs
-cat > web-app.py << 'EOF'
-from flask import Flask, request, jsonify
-import logging
-import json
-import time
-from datetime import datetime
-
-app = Flask(__name__)
-
-# Configurar logging para escribir JSON estructurado
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(message)s',
-    handlers=[
-        logging.FileHandler('/var/log/app/access.log'),
-        logging.StreamHandler()
-    ]
-)
-
-@app.route('/')
-def home():
-    log_entry = {
-        'timestamp': datetime.now().isoformat(),
-        'method': request.method,
-        'path': request.path,
-        'user_agent': request.headers.get('User-Agent'),
-        'ip': request.remote_addr,
-        'message': 'Home page accessed'
-    }
-    app.logger.info(json.dumps(log_entry))
-    return jsonify({'message': '🏠 Welcome to Sidecar Demo', 'status': 'ok'})
-
-@app.route('/api/users')
-def users():
-    log_entry = {
-        'timestamp': datetime.now().isoformat(),
-        'method': request.method,
-        'path': request.path,
-        'user_agent': request.headers.get('User-Agent'),
-        'ip': request.remote_addr,
-        'message': 'Users API accessed'
-    }
-    app.logger.info(json.dumps(log_entry))
-    return jsonify([{'id': 1, 'name': 'Alice'}, {'id': 2, 'name': 'Bob'}])
-
-@app.route('/health')
-def health():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-EOF
+cat web-app.py
 ```
 
-**🔍 Características de la App**:
+Copia el archivo al directorio de trabajo:
+
+```bash
+cp /ruta/al/lab-03-sidecar-real-world/web-app.py .
+```
+
+**Caracteristicas de la App**:
 - Logs en formato **JSON estructurado**
 - Escribe a `/var/log/app/access.log` (shared volume)
 - 3 endpoints: `/`, `/api/users`, `/health`
 
-### Paso 3: Crear Dockerfile para la Aplicación
+### Paso 3: Revisar el Dockerfile
+
+Revisa el archivo `Dockerfile` del laboratorio:
 
 ```bash
-cat > Dockerfile << 'EOF'
-FROM python:3.9-slim
-WORKDIR /app
-COPY web-app.py .
-RUN pip install flask && mkdir -p /var/log/app
-EXPOSE 5000
-CMD ["python", "web-app.py"]
-EOF
+cat Dockerfile
+```
+
+Copia el archivo al directorio de trabajo:
+
+```bash
+cp /ruta/al/lab-03-sidecar-real-world/Dockerfile .
 ```
 
 ### Paso 4: Build de la Imagen
@@ -115,119 +92,41 @@ docker build -t sidecar-webapp:v1 .
 # minikube image load sidecar-webapp:v1
 ```
 
-### Paso 5: Configurar Fluent Bit (Sidecar)
+### Paso 5: Revisar la Configuracion de Fluent Bit (Sidecar)
+
+Revisa el archivo `fluent-bit.conf` del laboratorio:
 
 ```bash
-cat > fluent-bit.conf << 'EOF'
-[SERVICE]
-    Flush         1
-    Log_Level     info
-    Daemon        off
-
-[INPUT]
-    Name              tail
-    Path              /var/log/app/access.log
-    Tag               app.access
-    Refresh_Interval  1
-    Read_from_Head    true
-
-[FILTER]
-    Name   parser
-    Match  app.access
-    Key_Name log
-    Parser json
-
-[OUTPUT]
-    Name   file
-    Match  *
-    Path   /var/log/processed/
-    File   processed.log
-    Format json_lines
-
-[OUTPUT]
-    Name   stdout
-    Match  *
-    Format json_lines
-EOF
+cat fluent-bit.conf
 ```
 
-**🔍 Funciones de Fluent Bit**:
+**Funciones de Fluent Bit**:
 - **INPUT**: Lee `/var/log/app/access.log` (shared volume)
 - **FILTER**: Parsea JSON
 - **OUTPUT**: Escribe logs procesados y muestra en stdout
 
 ### Paso 6: Crear ConfigMap para Fluent Bit
 
+Copia el archivo de configuracion al directorio de trabajo y crea el ConfigMap:
+
 ```bash
+cp /ruta/al/lab-03-sidecar-real-world/fluent-bit.conf .
 kubectl create configmap fluent-config --from-file=fluent-bit.conf
 ```
 
-### Paso 7: Crear Pod con Sidecar
+### Paso 7: Revisar y Crear Pod con Sidecar
+
+Revisa el archivo `sidecar-pod.yaml` antes de aplicarlo:
 
 ```bash
-cat > sidecar-pod.yaml << 'EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: webapp-sidecar
-  labels:
-    app: webapp
-    pattern: sidecar
-spec:
-  containers:
-  # Main application container
-  - name: webapp
-    image: sidecar-webapp:v1
-    imagePullPolicy: Never  # Usar imagen local (minikube)
-    ports:
-    - containerPort: 5000
-    volumeMounts:
-    - name: log-volume
-      mountPath: /var/log/app
-    resources:
-      requests:
-        memory: "128Mi"
-        cpu: "100m"
-      limits:
-        memory: "256Mi"
-        cpu: "200m"
-        
-  # Sidecar container for log processing
-  - name: log-processor
-    image: fluent/fluent-bit:2.0
-    volumeMounts:
-    - name: log-volume
-      mountPath: /var/log/app
-      readOnly: true
-    - name: fluent-config
-      mountPath: /fluent-bit/etc/fluent-bit.conf
-      subPath: fluent-bit.conf
-    - name: processed-logs
-      mountPath: /var/log/processed
-    resources:
-      requests:
-        memory: "64Mi"
-        cpu: "50m"
-      limits:
-        memory: "128Mi"
-        cpu: "100m"
-        
-  volumes:
-  - name: log-volume
-    emptyDir: {}
-  - name: processed-logs
-    emptyDir: {}
-  - name: fluent-config
-    configMap:
-      name: fluent-config
-EOF
+cat sidecar-pod.yaml
 ```
 
-**🔍 Componentes del Pod**:
-- **webapp**: Aplicación principal (genera logs)
+Puntos clave del manifiesto:
+- **webapp**: Aplicacion principal (genera logs)
 - **log-processor**: Sidecar (procesa logs)
 - **log-volume**: Shared emptyDir para logs
-- **fluent-config**: ConfigMap con configuración
+- **fluent-config**: ConfigMap con configuracion
 
 ### Paso 8: Desplegar Pod
 
@@ -236,7 +135,7 @@ kubectl apply -f sidecar-pod.yaml
 kubectl wait --for=condition=Ready pod/webapp-sidecar --timeout=120s
 ```
 
-### Paso 9: Generar Tráfico
+### Paso 9: Generar Trafico
 
 ```bash
 # Port forward
@@ -244,9 +143,9 @@ kubectl port-forward pod/webapp-sidecar 8080:5000 &
 sleep 3
 
 echo ""
-echo "🚦 Generando tráfico para demostrar sidecar..."
+echo "🚦 Generando trafico para demostrar sidecar..."
 curl -s http://localhost:8080/ | jq
-curl -s http://localhost:8080/api/users | jq  
+curl -s http://localhost:8080/api/users | jq
 curl -s http://localhost:8080/health | jq
 curl -s http://localhost:8080/
 curl -s http://localhost:8080/api/users
@@ -262,9 +161,9 @@ echo "📝 LOGS ORIGINALES (webapp container):"
 kubectl exec webapp-sidecar -c webapp -- cat /var/log/app/access.log
 ```
 
-**🔍 Observaciones**:
+**Observaciones**:
 - Logs en formato JSON estructurado
-- Incluyen timestamp, método, path, user-agent, IP
+- Incluyen timestamp, metodo, path, user-agent, IP
 
 ### Paso 11: Verificar Logs Procesados por Sidecar
 
@@ -274,7 +173,7 @@ echo "⚙️ LOGS PROCESADOS (sidecar container):"
 kubectl exec webapp-sidecar -c log-processor -- cat /var/log/processed/processed.log
 ```
 
-**🔍 Observaciones**:
+**Observaciones**:
 - Logs procesados por Fluent Bit
 - Formato normalizado
 - Listos para enviar a sistema central (Elasticsearch, etc.)
@@ -292,7 +191,7 @@ echo "--- Log Processor Container ---"
 kubectl logs webapp-sidecar -c log-processor --tail=10
 ```
 
-### Paso 13: Análisis de Recursos
+### Paso 13: Analisis de Recursos
 
 ```bash
 echo ""
@@ -300,7 +199,7 @@ echo "💾 RESOURCE USAGE:"
 kubectl top pod webapp-sidecar --containers
 ```
 
-**🔍 Observaciones**:
+**Observaciones**:
 - Webapp consume ~128Mi RAM
 - Log processor consume ~64Mi RAM
 - Resource isolation entre funciones
@@ -312,7 +211,7 @@ kubectl top pod webapp-sidecar --containers
 kill %1 2>/dev/null
 ```
 
-## 📊 Diagrama de Arquitectura
+## Diagrama de Arquitectura
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -337,33 +236,42 @@ kill %1 2>/dev/null
 └─────────────────────────────────────────────────────────┘
 ```
 
-## ✅ Beneficios del Sidecar Pattern Demostrados
+## Beneficios del Sidecar Pattern Demostrados
 
 ```
 ✅ SIDECAR PATTERN BENEFITS:
-├─ 🔄 Separación de responsabilidades
-│   • Webapp: Lógica de negocio
+├─ 🔄 Separacion de responsabilidades
+│   • Webapp: Logica de negocio
 │   • Sidecar: Logging/procesamiento
 │
-├─ 🌐 Comunicación via shared volume
+├─ 🌐 Comunicacion via shared volume
 │   • Sin dependencias entre contenedores
-│   • Acoplamiento mínimo
+│   • Acoplamiento minimo
 │
 ├─ 📊 Procesamiento en tiempo real
-│   • Fluent Bit lee y procesa logs instantáneamente
+│   • Fluent Bit lee y procesa logs instantaneamente
 │   • No afecta performance de la app
 │
 ├─ 🔍 Logs estructurados y enriquecidos
 │   • JSON parsing
-│   • Normalización
+│   • Normalizacion
 │   • Ready para enviar a Elasticsearch/Splunk
 │
 └─ ⚖️ Resource isolation entre funciones
-    • Límites independientes de CPU/memoria
+    • Limites independientes de CPU/memoria
     • Escalado independiente
 ```
 
-## 🧹 Limpieza
+## Limpieza
+
+Ejecuta el script de limpieza del laboratorio:
+
+```bash
+chmod +x cleanup.sh
+./cleanup.sh
+```
+
+O manualmente:
 
 ```bash
 # Detener port-forward si sigue activo
@@ -378,15 +286,15 @@ cd ~
 rm -rf ~/labs/modulo-04/sidecar-real
 ```
 
-## 🎓 Conceptos Clave Aprendidos
+## Conceptos Clave Aprendidos
 
 1. **Sidecar Pattern** para extender funcionalidad sin modificar app
-2. **Shared Volumes** (emptyDir) para comunicación entre contenedores
+2. **Shared Volumes** (emptyDir) para comunicacion entre contenedores
 3. **Fluent Bit** como log processor real-world
 4. **Resource Limits** independientes por contenedor
-5. **Separación de responsabilidades** en microservicios
+5. **Separacion de responsabilidades** en microservicios
 
-## 🚀 Mejoras Adicionales
+## Mejoras Adicionales
 
 ### Variante 1: Enviar logs a Elasticsearch
 
@@ -402,7 +310,7 @@ Modificar `fluent-bit.conf`:
     Type   _doc
 ```
 
-### Variante 2: Sidecar de Métricas
+### Variante 2: Sidecar de Metricas
 
 Agregar Prometheus exporter sidecar:
 
@@ -414,12 +322,12 @@ Agregar Prometheus exporter sidecar:
   - containerPort: 9113
 ```
 
-## 📚 Referencias
+## Referencias
 
 - [Fluent Bit Documentation](https://docs.fluentbit.io/)
 - [Kubernetes Sidecar Pattern](https://kubernetes.io/docs/concepts/cluster-administration/logging/#sidecar-container-with-logging-agent)
 - [emptyDir Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir)
 
-## ⏭️ Siguiente Paso
+## Siguiente Paso
 
-Continúa con **[Lab 4: Init Container Migration Pattern](./lab-04-init-migration.md)** para migrar setup complejo de Docker a Init Containers.
+Continua con **[Lab 4: Init Container Migration Pattern](../lab-04-init-migration/README.md)** para migrar setup complejo de Docker a Init Containers.

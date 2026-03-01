@@ -1,0 +1,69 @@
+# Ejercicio 4: Pod con Sidecar de Logging - webapp-sidecar
+# Uso: kubectl apply -f sidecar-pod.yaml
+#
+# Descripcion:
+#   Pod multi-container con patron sidecar. La app Flask genera logs
+#   en JSON estructurado que el sidecar Fluent Bit procesa en tiempo real.
+#   Comunicacion via shared volume (emptyDir).
+#
+# Conceptos clave:
+#   - Sidecar pattern para logging
+#   - Shared volumes (emptyDir) entre contenedores
+#   - Resource limits independientes por contenedor
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-sidecar
+  labels:
+    app: webapp
+    pattern: sidecar
+spec:
+  containers:
+  # Main application container
+  - name: webapp
+    image: sidecar-webapp:v1
+    imagePullPolicy: Never  # Usar imagen local (minikube)
+    ports:
+    - containerPort: 5000
+    volumeMounts:
+    - name: log-volume
+      mountPath: /var/log/app
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+  # Sidecar container for log processing
+  - name: log-processor
+    image: fluent/fluent-bit:2.0
+    volumeMounts:
+    - name: log-volume
+      mountPath: /var/log/app
+      readOnly: true
+    - name: fluent-config
+      mountPath: /fluent-bit/etc/fluent-bit.conf
+      subPath: fluent-bit.conf
+    - name: processed-logs
+      mountPath: /var/log/processed
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+  volumes:
+  - name: log-volume
+    emptyDir: {}
+  - name: processed-logs
+    emptyDir: {}
+  - name: fluent-config
+    configMap:
+      name: fluent-config

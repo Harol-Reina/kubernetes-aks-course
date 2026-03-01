@@ -1,28 +1,14 @@
 # Capítulo 21: Jobs y CronJobs
 
-Con seguridad resuelta, expandimos los tipos de workload. No todo es un servidor web: los Jobs ejecutan tareas finitas y los CronJobs las programan en el tiempo.
+En el capítulo anterior resolvimos la seguridad de identidad con ServiceAccounts: ahora cada Pod tiene una identidad y permisos bien definidos. Con esa base sólida, llega el momento de ampliar nuestra visión sobre los tipos de workloads que Kubernetes puede ejecutar.
 
----
+Hasta ahora, todos nuestros workloads eran servicios continuos: un Deployment que mantiene Pods corriendo indefinidamente, listos para responder peticiones. Pero en el mundo real, muchas tareas no son así. Si necesitas importar un millón de registros desde un CSV, generar el reporte mensual de facturación o hacer un backup de la base de datos, un Deployment es la herramienta equivocada: nunca termina, no sabe cuándo "tuvo éxito" y no se limpia solo. Usar un Deployment para una tarea batch es como contratar a alguien de forma permanente para que haga una sola mudanza.
 
-## 📋 Prerequisitos
+Los Jobs resuelven exactamente este problema: ejecutan uno o más Pods hasta que completan su tarea exitosamente y luego se detienen. Los CronJobs van un paso más allá y programan esas tareas en el tiempo, igual que un cron de Linux pero con toda la resiliencia de Kubernetes.
 
-### Conocimientos Requeridos:
-- ✅ Pods y su ciclo de vida (Módulo 04-05)
-- ✅ Gestión de recursos (requests/limits) (Módulo 11)
-- ✅ ConfigMaps y Secrets (Módulos 13-14)
-- ✅ Conceptos de scheduling básico
+Piensa en la diferencia así: los Deployments son como empleados permanentes que trabajan 24/7 en la oficina, mientras que los Jobs son como contratistas externos: los contratas para un proyecto específico, trabajan hasta terminarlo y luego se van. Los CronJobs son esos mismos contratistas, pero con una cita recurrente en el calendario.
 
-### Herramientas Necesarias:
-- ✅ kubectl configurado
-- ✅ Cluster K8s funcional (Minikube/AKS)
-- ✅ Familiaridad con sintaxis YAML
-- ✅ Editor de texto con highlighting
-
-### Archivos del Módulo:
-- 📄 [Laboratorios](./laboratorios/) - 4 labs prácticos
-- 📄 [Ejemplos YAML](./ejemplos/) - 6+ ejemplos comentados
-- 📄 [RESUMEN-MODULO.md](./RESUMEN-MODULO.md) - Quick reference
-- 📄 [Troubleshooting](./troubleshooting/) - Guías de debugging
+En este capítulo aprenderás a definir Jobs con `completions` y `parallelism`, controlar reintentos con `backoffLimit`, limpiar automáticamente con TTL, y programar ejecuciones periódicas con CronJobs usando sintaxis cron estándar y políticas de concurrencia.
 
 ---
 
@@ -1468,77 +1454,6 @@ kubectl get job process-data -o yaml
 - 🔁 Repite labs hasta hacerlos "de memoria"
 
 ---
-
-### ▶️ Navegación
-
-- **⬅️ Módulo Anterior**: [Módulo 18 - RBAC: ServiceAccounts](../modulo-18-rbac-serviceaccounts/README.md)
-- **➡️ Siguiente Módulo**: [Módulo 20 - Init Containers & Sidecar Patterns](../modulo-20-init-sidecar-patterns/README.md) *(en desarrollo)*
-- **🏠 Índice del Área**: [Área 2 - Arquitectura Kubernetes](../README.md)
-- **📚 Curso Principal**: [Inicio](../../README.md)
-- **📋 RESUMEN**: [RESUMEN-MODULO.md](./RESUMEN-MODULO.md)
-
----
-
-### 💡 Consejos Finales
-
-**Estrategias de aprendizaje efectivas:**
-
-1. **📖 Teoría primero, práctica después**
-   - Lee secciones 1-6 completas
-   - Entiende el "por qué" antes del "cómo"
-   - Toma notas de conceptos clave
-
-2. **🧪 Hands-on prioritario**
-   - Haz TODOS los labs en orden
-   - No copies y pegues, escribe los comandos
-   - Experimenta más allá de las guías
-
-3. **🤔 Aprende de los errores**
-   - Si un Job falla, investiga por qué
-   - Usa `kubectl describe` y `kubectl logs`
-   - Documenta errores y soluciones
-
-4. **🔄 Repetición espaciada**
-   - Día 1: Labs 1-2
-   - Día 3: Labs 3-4
-   - Día 7: Repite todos los labs
-   - Día 14: Repaso final
-
-5. **🎓 Prepárate para CKAD**
-   - Practica velocidad (2 min por Job)
-   - Memoriza sintaxis cron común
-   - Simula examen con timer
-
-**Errores comunes a evitar:**
-
-- ❌ Usar `restartPolicy: Always` en Jobs
-- ❌ Olvidar configurar `backoffLimit`
-- ❌ No configurar TTL (acumulación de Jobs)
-- ❌ Schedules muy frecuentes sin necesidad
-- ❌ No probar CronJobs con trigger manual primero
-- ❌ Ignorar `concurrencyPolicy` en CronJobs críticos
-
-**Recursos extra de práctica:**
-
-- **Killer.sh**: Simulador de examen CKAD (incluye Jobs)
-- **KodeKloud**: Labs interactivos de Jobs y CronJobs
-- **Katacoda**: Escenarios de Kubernetes hands-on
-- **Play with Kubernetes**: Cluster temporal gratis
-
----
-
-**🎉 ¡Felicitaciones por completar el Módulo 19!**
-
-*Has adquirido conocimientos fundamentales de Jobs y CronJobs que te preparan para ejecutar tareas batch y programadas en Kubernetes, una habilidad crítica para CKAD y operaciones en producción.*
-
-**Tiempo estimado de estudio**: 
-- 4-5 horas (principiante) 
-- 2-3 horas (intermedio) 
-- 1-2 horas (certificación)
-
-**Estado**: ✅ 100% Completo  
-**Versión**: 1.0  
-**Última actualización**: Noviembre 2025
 
 ## Resumen del Capítulo
 

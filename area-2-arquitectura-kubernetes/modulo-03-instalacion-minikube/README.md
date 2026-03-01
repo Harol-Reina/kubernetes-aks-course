@@ -1,6 +1,14 @@
 # Capítulo 5: Instalación de Minikube
 
-Ya entendemos los componentes. Ahora instalemos nuestro primer cluster local con Minikube para tener un entorno de práctica funcional.
+Llevamos cuatro capítulos construyendo una base teórica: virtualización, contenedores, qué es Kubernetes y cómo funciona su arquitectura interna. Todo ese conocimiento es necesario, pero hay un límite a lo que se puede aprender leyendo. Ha llegado el momento de tener un cluster real en tus manos.
+
+**El problema real**: Kubernetes no se puede aprender de memoria como una tabla de multiplicar. Cada concepto -Pods, Services, Deployments, ConfigMaps- solo se entiende verdaderamente cuando lo ejecutas, lo rompes y lo reparas. Sin un cluster donde practicar, estás memorizando comandos sin comprender qué hacen. Y los clusters de producción o de nube tienen costos, restricciones de permisos y consecuencias reales cuando algo sale mal, lo que los hace inadecuados para aprender.
+
+**La solución**: Minikube crea un cluster de Kubernetes completo, con todos sus componentes, corriendo en tu laptop en cuestión de minutos. Es el entorno perfecto para experimentar sin miedo: si rompes algo, basta con `minikube delete` y `minikube start` para tener un cluster limpio en segundos.
+
+**La analogía**: Aprender Kubernetes sin un cluster es como aprender a volar solo con libros. Minikube es el simulador de vuelo: un entorno controlado y seguro donde puedes practicar todas las maniobras, cometer errores sin consecuencias y ganar confianza antes de operar un cluster real en producción.
+
+**En este capítulo** instalarás Docker, kubectl y Minikube paso a paso con verificaciones en cada etapa, aprenderás los comandos esenciales para manejar el ciclo de vida del cluster, explorarás el dashboard visual de Kubernetes, y habilitarás addons útiles como metrics-server e ingress. A partir de aquí, cada capítulo del curso irá acompañado de laboratorios prácticos que ejecutarás en este entorno.
 
 ---
 
@@ -24,28 +32,79 @@ Minikube es una herramienta que ejecuta un cluster de Kubernetes de un solo nodo
 - Compatible con kubectl estándar
 - Fácil creación y eliminación de clusters
 
-#### 1.2 Drivers de Minikube: Comparativa
+#### 1.2 Drivers de Minikube: Comparativa Detallada
 
-Minikube soporta varios drivers, cada uno con ventajas y desventajas:
+Minikube soporta varios drivers. El driver determina qué tecnología de virtualización o contenedores se usa para aislar el cluster. Elegir el driver correcto afecta rendimiento, compatibilidad y facilidad de uso.
 
-| Driver | Tecnología | Uso Recomendado | Ventajas | Desventajas |
-|--------|------------|----------------|----------|-------------|
-| **Docker** | Contenedor | ✅ **Desarrollo/Aprendizaje** | Rápido, ligero, fácil setup | Networking requiere port-forward |
-| **VirtualBox** | VM completa | Producción local | Aislamiento total, networking nativo | Alto consumo recursos |
-| **KVM** | VM Linux | Servidores Linux | Performance nativo | Solo Linux, configuración compleja |
-| **Podman** | Contenedor | Entornos sin root | Sin daemon, rootless | Menos maduro, posibles bugs |
-| **HyperV** | VM Windows | Windows Pro/Enterprise | Integración Windows | Solo Windows, licencia requerida |
+| Driver | OS Compatible | Rendimiento | Virt. Anidada | Recomendado |
+|--------|--------------|-------------|---------------|-------------|
+| `docker` | Linux / macOS / Windows | Excelente | Si | Si (default) |
+| `virtualbox` | Linux / macOS / Windows | Bueno | Si | Alternativa multiplataforma |
+| `hyperkit` | macOS | Bueno | Si | macOS nativo (sin Docker Desktop) |
+| `hyper-v` | Windows Pro/Enterprise | Bueno | No | Windows nativo |
+| `kvm2` | Linux | Excelente | Si | Linux nativo (bare metal) |
+| `podman` | Linux / macOS | Bueno | Si | Alternativa rootless a Docker |
+
+**Notas importantes por driver:**
+
+- **docker**: El mas recomendado para aprendizaje. Usa Docker como hypervisor de contenedores. No requiere VM completa, por lo que arranca rapido y consume menos RAM. El networking usa port-forward en lugar de IPs directas.
+- **virtualbox**: Crea una VM completa. Mas aislamiento pero mayor consumo de recursos. Util como fallback si Docker no esta disponible.
+- **hyperkit**: Driver nativo para macOS (antes de Apple Silicon). Requiere permisos de sudo. Deprecado en favor de Docker Desktop en maquinas Apple.
+- **hyper-v**: Driver nativo de Windows. Requiere Windows Pro o Enterprise y que Hyper-V este habilitado en BIOS. No soporta virtualizacion anidada.
+- **kvm2**: Driver nativo de Linux usando KVM/QEMU. Ofrece el mejor rendimiento en servidores Linux bare metal. Requiere que el CPU soporte virtualizacion y el modulo kvm cargado.
+- **podman**: Alternativa rootless a Docker. Util en entornos corporativos donde Docker no esta permitido. Menos maduro que Docker para este caso de uso.
 
 **Para este curso usamos Docker** porque:
-- ✅ Instalación simple y rápida
-- ✅ Bajo consumo de recursos
-- ✅ Excelente para aprendizaje
-- ✅ Funciona en cualquier OS
-- ✅ Fácil limpieza y reinstalación
+- ✅ Instalacion simple y rapida en cualquier OS
+- ✅ Bajo consumo de recursos comparado con VMs completas
+- ✅ Excelente para aprendizaje y desarrollo
+- ✅ Compatibilidad multiplataforma (Linux, macOS, Windows WSL2)
+- ✅ Facil limpieza: `minikube delete` elimina solo el contenedor
 
-📖 **Ejemplo de comparación**: [`ejemplos/01-instalacion/comparativa-drivers.md`](./ejemplos/01-instalacion/comparativa-drivers.md)
+**Configurar el driver por defecto** (evita escribirlo en cada `minikube start`):
 
-#### 1.3 Componentes que Instalaremos
+```bash
+# Establecer docker como driver por defecto
+minikube config set driver docker
+
+# Verificar el driver configurado
+minikube config get driver
+# Salida esperada: docker
+
+# Ver toda la configuracion activa
+minikube config view
+# Salida esperada:
+# - driver: docker
+# - memory: 4096
+# - cpus: 2
+```
+
+📖 **Ejemplo de comparacion**: [`ejemplos/01-instalacion/comparativa-drivers.md`](./ejemplos/01-instalacion/comparativa-drivers.md)
+
+#### 1.3 Minikube vs Otras Herramientas de Cluster Local
+
+Ademas de Minikube existen otras herramientas para correr Kubernetes localmente. Cada una tiene un caso de uso diferente. Esta tabla ayuda a entender por que el curso usa Minikube:
+
+| Caracteristica | Minikube | Kind | k3d | k3s |
+|----------------|----------|------|-----|-----|
+| **Proposito principal** | Aprendizaje / Desarrollo | CI/Testing | Multi-nodo local | Edge / IoT / Produccion ligera |
+| **Multi-nodo** | Si (--nodes=N) | Si | Si | Si |
+| **Dashboard integrado** | Si (addon) | No | No | No |
+| **Addons (30+)** | Si | No | No | Solo Helm |
+| **Consumo de recursos** | Medio | Bajo | Bajo | Muy bajo |
+| **Velocidad de inicio** | 1-3 min | 30-60 seg | 20-40 seg | Variable |
+| **Ideal para** | Este curso | GitHub Actions / pipelines | Simular multi-cluster | Produccion en Raspberry Pi |
+
+**Cuando usar cada herramienta:**
+
+- **Minikube**: Cuando aprendes Kubernetes por primera vez o desarrollas localmente. El dashboard y los addons facilitan la exploracion visual del cluster.
+- **Kind** (Kubernetes in Docker): Cuando necesitas clusters efimeros en pipelines de CI/CD (GitHub Actions, Jenkins). Arranca rapido y no deja estado persistente.
+- **k3d**: Cuando necesitas simular un cluster multi-nodo en tu laptop para probar comportamiento de HA o scheduling. Wrapper de k3s en Docker.
+- **k3s**: Cuando deploys en dispositivos con recursos limitados (Raspberry Pi, IoT) o necesitas un cluster ligero en produccion. No es una herramienta de desarrollo local sino una distribucion de Kubernetes reducida.
+
+**Conclusion**: Para este curso, Minikube es la eleccion correcta. Su dashboard visual, sus mas de 30 addons preconfigurados y su documentacion extensa lo convierten en el mejor entorno de aprendizaje. Una vez que domines los conceptos aqui, trabajar con Kind, k3d o un cluster AKS real sera una transicion natural.
+
+#### 1.4 Componentes que Instalaremos
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -686,7 +745,138 @@ sudo netstat -tulpn | grep <puerto>
 # Liberar puerto o usar otro en el manifiesto
 ```
 
-📄 **Guía completa**: [`ejemplos/02-configuracion/troubleshooting-guide.md`](./ejemplos/02-configuracion/troubleshooting-guide.md)
+**Problema 6: minikube start se congela y no avanza**
+
+```bash
+# Sintoma:
+# El comando "minikube start" se queda colgado mas de 5 minutos
+# sin mostrar progreso ni errores.
+
+# Causa mas comun: el driver no esta instalado o la virtualizacion
+# no esta habilitada en el BIOS del host.
+
+# Diagnostico:
+minikube start --driver=docker --alsologtostderr -v=7
+# La salida verbosa mostrara el punto exacto donde se atasca.
+
+# Verificar que Docker esta activo:
+systemctl is-active docker
+# Salida esperada: active
+
+# Verificar virtualizacion del CPU (necesario para kvm2/virtualbox):
+grep -E 'vmx|svm' /proc/cpuinfo | head -1
+# Si no hay salida, la virtualizacion esta deshabilitada en BIOS.
+
+# Solucion con driver docker:
+minikube delete
+systemctl start docker
+minikube start --driver=docker
+```
+
+**Problema 7: PROVIDER_DOCKER_NOT_RUNNING**
+
+```bash
+# Error:
+# "Exiting due to PROVIDER_DOCKER_NOT_RUNNING: Found docker, but the
+#  docker service is not healthy: ..."
+
+# Causa: el daemon de Docker esta detenido o no tiene permisos.
+
+# Solucion paso a paso:
+# 1. Iniciar el daemon de Docker
+sudo systemctl start docker
+
+# 2. Verificar estado
+sudo systemctl status docker
+# Salida esperada: Active: active (running)
+
+# 3. Verificar que tu usuario esta en el grupo docker
+groups $USER | grep docker
+# Si no aparece "docker", agregar el usuario:
+sudo usermod -aG docker $USER
+newgrp docker  # Aplicar sin cerrar sesion
+
+# 4. Reintentar
+minikube start --driver=docker
+```
+
+**Problema 8: "Requested memory allocation X is less than..."**
+
+```bash
+# Error:
+# "Requested memory allocation (2048 MB) is less than the minimum
+#  recommended amount (4096 MB) for Kubernetes."
+
+# Causa: el host no tiene suficiente RAM libre o se esta asignando
+# muy poca memoria al cluster.
+
+# Verificar RAM disponible en el host:
+free -h
+# Salida de ejemplo:
+#               total        used        free
+# Mem:           15Gi        8.2Gi       6.8Gi
+
+# Solucion: aumentar la memoria asignada a Minikube
+minikube delete
+minikube start --driver=docker --memory=4096
+# O guardar como configuracion permanente:
+minikube config set memory 4096
+minikube start
+```
+
+**Problema 9: "Unable to connect to the server: dial tcp..."**
+
+```bash
+# Error:
+# "Unable to connect to the server: dial tcp 127.0.0.1:XXXXX:
+#  connect: connection refused"
+
+# Causa: Minikube no esta iniciado o el contexto de kubectl
+# apunta a otro cluster.
+
+# Verificar que Minikube este corriendo:
+minikube status
+# Si la salida es "host: Stopped" o "host: Nonexistent":
+minikube start
+
+# Verificar el contexto activo de kubectl:
+kubectl config current-context
+# Debe mostrar: minikube
+# Si muestra otro contexto:
+kubectl config use-context minikube
+
+# Regenerar kubeconfig si el problema persiste:
+minikube update-context
+kubectl config view --minify
+```
+
+**Problema 10: Problemas de DNS dentro del cluster**
+
+```bash
+# Sintoma: los Pods no pueden resolver nombres DNS internos
+# (p.ej., "my-service.default.svc.cluster.local" no resuelve).
+
+# Diagnostico: entrar al nodo y revisar la configuracion DNS:
+minikube ssh
+
+# Dentro del nodo Minikube:
+cat /etc/resolv.conf
+# Salida esperada: nameserver apuntando a la IP del cluster (10.96.0.10)
+
+# Salir del nodo y revisar el Pod de CoreDNS:
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+# Todos los pods CoreDNS deben estar en estado Running.
+
+# Si CoreDNS no esta corriendo, reiniciarlo:
+kubectl rollout restart deployment coredns -n kube-system
+
+# Probar resolucion DNS desde un Pod temporal:
+kubectl run dns-test --image=busybox:1.28 --rm -it --restart=Never -- \
+  nslookup kubernetes.default.svc.cluster.local
+# Salida esperada: Server: 10.96.0.10 / Address: ...
+```
+
+📄 **Guia completa**: [`ejemplos/02-configuracion/troubleshooting-guide.md`](./ejemplos/02-configuracion/troubleshooting-guide.md)
 
 #### 7.2 Comandos de Diagnóstico
 
@@ -929,99 +1119,6 @@ Durante este módulo has creado/usado estos recursos:
 - [Lab 3.6 - Troubleshooting](./laboratorios/lab-06-troubleshooting.md)
 
 ---
-
-## 🚀 Próximos Pasos
-
-Has completado la instalación y configuración de tu entorno Kubernetes local. Ahora estás listo para:
-
-### Módulos siguientes:
-- **Módulo 4**: Pods vs Contenedores - Comprender la unidad fundamental de Kubernetes
-- **Módulo 5**: Gestión de Pods - Ciclo de vida, probes, y debugging
-- **Módulo 6**: ReplicaSets y Réplicas - Alta disponibilidad y escalado
-- **Módulo 7**: Deployments y Rollouts - Despliegues controlados y rollbacks
-
-### Práctica adicional recomendada:
-1. Despliega una aplicación multi-contenedor (frontend + backend + database)
-2. Experimenta con diferentes tipos de Services (ClusterIP, NodePort, LoadBalancer)
-3. Prueba diferentes configuraciones de recursos
-4. Practica rollbacks con Deployments
-5. Configura Ingress para routing HTTP
-
-### Recursos para profundizar:
-- [Documentación oficial de Minikube](https://minikube.sigs.k8s.io/docs/)
-- [Tutorial interactivo de Kubernetes](https://kubernetes.io/docs/tutorials/kubernetes-basics/)
-- [Cheatsheet de kubectl](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
-- [Ejemplos de manifiestos](https://github.com/kubernetes/examples)
-
----
-
-## 🔗 Enlaces Rápidos
-
-### Documentación Oficial
-- [Minikube Docs](https://minikube.sigs.k8s.io/docs/)
-- [kubectl Reference](https://kubernetes.io/docs/reference/kubectl/)
-- [Docker Docs](https://docs.docker.com/)
-- [Kubernetes Docs](https://kubernetes.io/docs/home/)
-
-### Herramientas Útiles
-- [k9s](https://k9scli.io/) - Terminal UI para Kubernetes
-- [kubectx/kubens](https://github.com/ahmetb/kubectx) - Cambio rápido de contextos/namespaces
-- [Lens](https://k8slens.dev/) - IDE de Kubernetes
-- [Helm](https://helm.sh/) - Package manager para Kubernetes
-
-### Comunidad
-- [Kubernetes Slack](https://kubernetes.slack.com/)
-- [Stack Overflow - Kubernetes](https://stackoverflow.com/questions/tagged/kubernetes)
-- [Reddit r/kubernetes](https://www.reddit.com/r/kubernetes/)
-
----
-
-## ⚠️ Notas Finales
-
-### Gestión de Recursos
-
-Recuerda que Minikube consume recursos de tu sistema:
-
-```bash
-# Ver uso de recursos
-docker stats minikube
-
-# Detener cuando no uses (libera CPU/RAM)
-minikube stop
-
-# Eliminar completamente (libera disco)
-minikube delete
-```
-
-### Persistencia de Datos
-
-- Minikube usa volúmenes Docker para persistir datos
-- `minikube stop` mantiene todos los datos
-- `minikube delete` **elimina todo** (cluster, pods, volúmenes)
-- Para producción, siempre usa PersistentVolumes apropiados
-
-### Limitaciones de Minikube
-
-Minikube es **excelente para desarrollo y aprendizaje**, pero tiene limitaciones:
-
-- ❌ **No para producción**: Single-node, no HA
-- ❌ **LoadBalancer limitado**: Requiere `minikube tunnel`
-- ❌ **Performance**: No es tan rápido como cluster real
-- ✅ **Ideal para**: Desarrollo, testing, aprendizaje, CI/CD
-
----
-
-**🎓 ¡Felicitaciones!** Has completado el Módulo 3. Ahora tienes un entorno completo de Kubernetes funcionando y estás listo para aprender conceptos más avanzados.
-
-**⏱️ Tiempo total estimado**: 90-120 minutos  
-**📊 Progreso del curso**: Módulo 3 de 18 completado  
-**🎯 Nivel alcanzado**: Fundamentos de Kubernetes - Entorno configurado
-
----
-
-*Última actualización: Noviembre 2025*  
-*Versión del módulo: 2.0*  
-*Autor: Equipo de Kubernetes Training*
 
 ## Resumen del Capítulo
 

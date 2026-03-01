@@ -1,30 +1,42 @@
-# 🚀 Lab 1: Evolución Histórica Práctica
+# Laboratorio 01: Evolucion Historica - LXC vs Docker vs Kubernetes
 
-## 📋 Información del Laboratorio
+**Duracion estimada:** 30 minutos
+**Nivel:** Basico
+**Objetivo:** Experimentar de forma practica la diferencia entre tres enfoques de containerizacion comparando aislamiento de red, configuracion necesaria y facilidad de comunicacion entre contenedores
 
-- **Duración estimada**: 30 minutos
-- **Nivel**: Principiante
-- **Prerrequisitos**:
-  - Docker instalado
-  - kubectl configurado
-  - Cluster Kubernetes activo (minikube/kind)
+---
 
-## 🎯 Objetivo
+## Tecnicas y Conceptos Utilizados
 
-Experimentar de forma práctica la diferencia entre tres enfoques de containerización:
-1. **LXC** - Contenedores completamente aislados (sin networking)
-2. **Docker** - Contenedores con bridge network
-3. **Kubernetes** - Pods con networking compartido (localhost)
+| Tecnica | Descripcion |
+|---------|-------------|
+| **LXC networking** | Contenedores con `--network none` que simulan el aislamiento total del enfoque LXC tradicional. Sin interfaz de red, la comunicacion entre contenedores es imposible |
+| **Docker bridge network** | Red bridge personalizada que permite comunicacion entre contenedores usando nombres de contenedor como hostnames. Docker DNS interno resuelve los nombres automaticamente |
+| **Pod multi-container** | Unidad fundamental de Kubernetes. Dos o mas contenedores en el mismo Pod comparten network namespace, IPC y UTS namespace automaticamente |
+| **Shared network namespace** | Los contenedores dentro de un Pod tienen la misma IP y se comunican via localhost sin ninguna configuracion adicional |
+| **kubectl wait** | Comando para esperar a que un Pod alcance una condicion especifica (Ready, Initialized) antes de continuar. Util en scripts y automatizacion |
+| **kubectl exec -c** | Ejecuta un comando en un contenedor especifico de un Pod multi-container. Requiere el flag `-c nombre-contenedor` |
 
-## 🧪 Práctica
+---
 
-### Paso 1: Preparación del Entorno
+## Archivos del Laboratorio
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `evolution-pod.yaml` | 4 | Pod multi-container con nginx (web, puerto 80) y httpd (api, puerto 8080) para demostrar Kubernetes networking |
+| `cleanup.sh` | - | Script de limpieza de todos los recursos del laboratorio (Pods Kubernetes y contenedores Docker) |
+
+---
+
+## Practica
+
+### Paso 1: Preparacion del Entorno
 
 ```bash
 # Crear directorio para el lab
 mkdir -p ~/labs/modulo-04/evolution-demo && cd ~/labs/modulo-04/evolution-demo
 
-echo "🎯 DEMO: Evolución LXC → Docker → Kubernetes"
+echo "DEMO: Evolucion LXC - Docker - Kubernetes"
 echo "=============================================="
 ```
 
@@ -32,17 +44,17 @@ echo "=============================================="
 
 ```bash
 echo ""
-echo "📦 PASO 1: Enfoque LXC (Aislamiento total)"
-echo "├─ Crear 2 contenedores Docker aislados"
-echo "├─ Intentar comunicación directa"
-echo "└─ Observar complejidad"
+echo "PASO 1: Enfoque LXC (Aislamiento total)"
+echo "- Crear 2 contenedores Docker aislados"
+echo "- Intentar comunicacion directa"
+echo "- Observar complejidad"
 
 # Crear dos contenedores sin network bridge
 docker run -d --name lxc-app1 --network none nginx:alpine
 docker run -d --name lxc-app2 --network none nginx:alpine
 
 # Verificar aislamiento total
-echo "❌ Contenedores sin networking:"
+echo "Contenedores sin networking:"
 docker exec lxc-app1 ip addr show
 docker exec lxc-app2 ip addr show
 
@@ -50,19 +62,19 @@ docker exec lxc-app2 ip addr show
 docker stop lxc-app1 lxc-app2 && docker rm lxc-app1 lxc-app2
 ```
 
-**🔍 Observaciones**:
+**Observaciones:**
 - Ambos contenedores **NO tienen** interfaz de red (excepto `lo`)
-- No pueden comunicarse entre sí
+- No pueden comunicarse entre si
 - Representa el nivel de aislamiento de LXC tradicional
 
 ### Paso 3: Enfoque Docker (Bridge Network)
 
 ```bash
 echo ""
-echo "🌉 PASO 2: Enfoque Docker (Bridge Network)"  
-echo "├─ Crear red bridge personalizada"
-echo "├─ Contenedores se comunican vía IP interna"
-echo "└─ Comunicación funcional pero manual"
+echo "PASO 2: Enfoque Docker (Bridge Network)"
+echo "- Crear red bridge personalizada"
+echo "- Contenedores se comunican via IP interna"
+echo "- Comunicacion funcional pero manual"
 
 # Crear red bridge
 docker network create evolution-demo
@@ -71,8 +83,8 @@ docker network create evolution-demo
 docker run -d --name docker-web --network evolution-demo nginx:alpine
 docker run -d --name docker-api --network evolution-demo httpd:alpine
 
-# Probar comunicación
-echo "✅ Comunicación Docker bridge:"
+# Probar comunicacion
+echo "Comunicacion Docker bridge:"
 docker exec docker-web nslookup docker-api
 docker exec docker-web wget -qO- http://docker-api
 
@@ -81,92 +93,123 @@ docker stop docker-web docker-api && docker rm docker-web docker-api
 docker network rm evolution-demo
 ```
 
-**🔍 Observaciones**:
+**Observaciones:**
 - Los contenedores **pueden comunicarse** usando nombres de contenedor
 - Docker DNS interno resuelve `docker-api` a su IP interna
-- Requiere configuración manual de red
+- Requiere configuracion manual de red
 
 ### Paso 4: Enfoque Kubernetes (Pod Networking)
 
 ```bash
 echo ""
-echo "☸️ PASO 3: Enfoque Kubernetes (Pod Networking)"
-echo "├─ Crear Pod multi-container"
-echo "├─ Comunicación vía localhost"
-echo "└─ Networking automático"
+echo "PASO 3: Enfoque Kubernetes (Pod Networking)"
+echo "- Crear Pod multi-container"
+echo "- Comunicacion via localhost"
+echo "- Networking automatico"
+```
 
-cat > evolution-pod.yaml << 'EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: evolution-demo
-  labels:
-    demo: evolution
-spec:
-  containers:
-  - name: web
-    image: nginx:alpine
-    ports:
-    - containerPort: 80
-    
-  - name: api
-    image: httpd:alpine
-    ports:
-    - containerPort: 8080
-    # httpd usa puerto 80 por defecto
-    # nginx también usa 80, pero en el Pod solo uno puede usar cada puerto
-    # Cambiaremos httpd a puerto 8080
-    command: ["/bin/sh"]
-    args: ["-c", "sed 's/Listen 80/Listen 8080/' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && httpd -f /tmp/httpd.conf -D FOREGROUND"]
-EOF
+Revisa el archivo `evolution-pod.yaml` antes de aplicarlo:
 
+```bash
+cat evolution-pod.yaml
+```
+
+Puntos clave del manifiesto:
+- Dos contenedores en el mismo Pod: `web` (nginx, puerto 80) y `api` (httpd, puerto 8080)
+- Comparten el mismo network namespace automaticamente
+- `api` se reconfigura para escuchar en el puerto 8080 (httpd usa 80 por defecto, mismo que nginx)
+
+Aplica el Pod y verifica la comunicacion:
+
+```bash
 # Aplicar Pod
 kubectl apply -f evolution-pod.yaml
+```
 
-# Esperar a que esté listo
+Salida esperada:
+```
+pod/evolution-demo created
+```
+
+```bash
+# Esperar a que este listo
 kubectl wait --for=condition=Ready pod/evolution-demo --timeout=60s
+```
 
-# Probar comunicación localhost
-echo "✅ Comunicación Kubernetes (localhost):"
+Salida esperada:
+```
+pod/evolution-demo condition met
+```
+
+```bash
+# Probar comunicacion localhost: desde web hacia api
 kubectl exec evolution-demo -c web -- wget -qO- http://localhost:8080
+```
+
+Salida esperada (pagina por defecto de Apache httpd):
+```html
+<html><body><h1>It works!</h1></body></html>
+```
+
+```bash
+# Probar comunicacion localhost: desde api hacia web
 kubectl exec evolution-demo -c api -- wget -qO- http://localhost:80
+```
 
-# Ver información del Pod
+Salida esperada (pagina por defecto de nginx):
+```html
+<!DOCTYPE html>
+<html>
+<head><title>Welcome to nginx!</title></head>
+...
+```
+
+```bash
+# Ver informacion de IP del Pod
 kubectl describe pod evolution-demo | grep IP
-
-# Cleanup
-kubectl delete pod evolution-demo
 ```
 
-**🔍 Observaciones**:
+Salida esperada:
+```
+IP:           10.244.0.X
+IPs:          IP=10.244.0.X
+```
+
+**Observaciones:**
 - Los contenedores **comparten la misma interfaz de red**
-- Comunicación vía `localhost` sin configuración adicional
-- Kubernetes maneja el networking automáticamente
+- Comunicacion via `localhost` sin configuracion adicional
+- Kubernetes maneja el networking automaticamente
 
-## 📊 Resumen Comparativo
+## Resumen Comparativo
 
 ```
-┌─────────────┬──────────────────────┬───────────────────────┬─────────────────────┐
-│  Enfoque    │   LXC                │   Docker              │  Kubernetes         │
-├─────────────┼──────────────────────┼───────────────────────┼─────────────────────┤
-│ Networking  │ Aislamiento total    │ Bridge network        │ Shared namespace    │
-│ Comunicación│ ❌ Imposible         │ ✅ Via IP/nombre DNS  │ ✅ Via localhost    │
-│ Config      │ Manual complejo      │ Manual moderado       │ ✅ Automático       │
-│ Uso caso    │ Legacy systems       │ Single-host apps      │ Multi-host apps     │
-└─────────────┴──────────────────────┴───────────────────────┴─────────────────────┘
++-------------+----------------------+-----------------------+---------------------+
+|  Enfoque    |   LXC                |   Docker              |  Kubernetes         |
++-------------+----------------------+-----------------------+---------------------+
+| Networking  | Aislamiento total    | Bridge network        | Shared namespace    |
+| Comunicacion| Imposible            | Via IP/nombre DNS     | Via localhost       |
+| Config      | Manual complejo      | Manual moderado       | Automatico          |
+| Uso caso    | Legacy systems       | Single-host apps      | Multi-host apps     |
++-------------+----------------------+-----------------------+---------------------+
 ```
 
-## ✅ Resultados Esperados
+## Resultados Esperados
 
-Al completar este laboratorio, habrás experimentado:
+Al completar este laboratorio, habras experimentado:
 
-- ✅ **LXC**: Aislamiento total = Comunicación imposible
-- ✅ **Docker**: Bridge network = Comunicación por IP/nombre
-- ✅ **Kubernetes**: Shared networking = Comunicación localhost
+- **LXC**: Aislamiento total = Comunicacion imposible
+- **Docker**: Bridge network = Comunicacion por IP/nombre
+- **Kubernetes**: Shared networking = Comunicacion localhost
 
-## 🧹 Limpieza
+## Limpieza
 
-Los comandos de cleanup ya están incluidos en el script. Si necesitas limpiar manualmente:
+Ejecuta el script de limpieza incluido:
+
+```bash
+bash cleanup.sh
+```
+
+O si necesitas limpiar manualmente:
 
 ```bash
 # Docker cleanup
@@ -180,13 +223,13 @@ docker network rm evolution-demo 2>/dev/null
 kubectl delete pod evolution-demo 2>/dev/null
 ```
 
-## 🎓 Conceptos Clave Aprendidos
+## Conceptos Clave Aprendidos
 
-1. **Evolución del networking** en containerización
+1. **Evolucion del networking** en containerizacion
 2. **Trade-offs** entre aislamiento y simplicidad
-3. **Ventajas de Kubernetes** para comunicación entre contenedores
+3. **Ventajas de Kubernetes** para comunicacion entre contenedores
 4. **Shared network namespace** en Pods
 
-## ⏭️ Siguiente Paso
+## Siguiente Paso
 
-Continúa con **[Lab 2: Namespace Sharing Deep Dive](./lab-02-namespace-sharing.md)** para explorar en detalle qué namespaces comparten los contenedores en un Pod.
+Continua con **Lab 02: Namespace Sharing Deep Dive** para explorar en detalle que namespaces comparten los contenedores en un Pod.

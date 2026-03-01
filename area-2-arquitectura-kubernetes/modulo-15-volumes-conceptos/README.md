@@ -1,25 +1,34 @@
 # Capítulo 17: Volumes — Conceptos
 
-La configuración vive en ConfigMaps y Secrets. Pero los datos generados en runtime — bases de datos, logs, archivos subidos — necesitan persistencia. Entramos al mundo de los volúmenes.
+En los capítulos anteriores logramos externalizar completamente la configuración de nuestras
+aplicaciones: parámetros no sensibles en ConfigMaps, credenciales y certificados en Secrets.
+Los Pods arrancan con exactamente la configuración que necesitan, inyectada en tiempo de
+ejecución. Todo parece resuelto. Hasta que llega la primera base de datos.
 
----
+El problema es fundamental a la naturaleza de los contenedores. El sistema de archivos de un
+contenedor es efímero por diseño: cuando el contenedor muere, todo lo que escribió en su
+sistema de archivos desaparece. Kubernetes reinicia el Pod — algo que hace continuamente en
+respuesta a fallos, actualizaciones y rescheduling — y el nuevo Pod arranca con un sistema de
+archivos completamente limpio. Para una aplicación stateless esto es perfecto. Para una base
+de datos PostgreSQL, es catastrófico: todo el historial de transacciones, todas las tablas,
+todos los datos de usuarios — borrados con cada reinicio. Para un servidor de archivos que
+almacena documentos subidos por usuarios, cada reinicio del Pod vacía la carpeta de uploads
+y los usuarios pierden sus archivos. Sin persistencia, solo puedes ejecutar aplicaciones que
+no necesiten guardar nada entre reinicios.
 
-## 🎓 Metodología de Aprendizaje
+Los Volumes en Kubernetes desacoplan el almacenamiento de datos del ciclo de vida del Pod.
+Un volumen existe independientemente del contenedor que lo usa: si el contenedor muere y se
+reinicia, el nuevo contenedor se conecta al mismo volumen y encuentra los datos intactos.
 
-Este módulo sigue una progresión **conceptual pura**:
+Piensa en guardar tu trabajo en un USB (el volumen) en lugar de solo en la RAM del ordenador.
+Si el ordenador (el Pod) se apaga y reinicia, pierdes lo que estaba en RAM. Pero lo que
+guardaste en el USB sigue ahí. El USB sobrevive al ciclo de vida del ordenador.
 
-1. **📖 Teoría Fundamental** → ¿Qué son los volúmenes y por qué existen?
-2. **🎨 Diagramas** → Visualización de arquitecturas y flujos
-3. **📊 Tablas Comparativas** → Decisiones de diseño (cuándo usar qué)
-4. **💡 Ejemplos Conceptuales** → Snippets simples para ilustrar conceptos
-5. **🔗 Preparación para Práctica** → Base para el Módulo 16
-
-**⚠️ NO incluye**:
-- ❌ YAMLs complejos de producción
-- ❌ Laboratorios hands-on (están en Módulo 16)
-- ❌ Troubleshooting práctico con kubectl (Módulo 16)
-
-**Recomendación**: Lee este módulo completo para entender conceptos, luego pasa al Módulo 16 para implementar.
+En este capítulo entenderás la arquitectura conceptual de los volúmenes en Kubernetes, la
+diferencia entre almacenamiento efímero e persistente, los tipos básicos emptyDir y hostPath,
+y el modelo de abstracción PersistentVolume / PersistentVolumeClaim que separa la provisión
+del almacenamiento de su consumo. El capítulo siguiente implementará cada tipo de storage en
+detalle.
 
 ---
 
