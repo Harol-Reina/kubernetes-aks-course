@@ -1,0 +1,25 @@
+# Escenario 4: PVC Pending - Fix Opcion 3: Access Mode Corregido
+# Uso: kubectl apply -f scenario-04-pvc-fix-accessmode.yaml
+#
+# Descripcion:
+#   Recrea el PVC my-pvc con accessMode ReadWriteMany para casos donde los PVs
+#   disponibles usan ese modo de acceso. Aplicar cuando el problema es incompatibilidad
+#   de accessModes entre el PVC y los PVs existentes.
+#
+# Conceptos clave:
+#   - ReadWriteOnce (RWO): un solo nodo puede montar en lectura/escritura
+#   - ReadWriteMany (RWX): multiples nodos pueden montar en lectura/escritura
+#   - El PVC solo hace binding con PVs de accessMode compatible
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteMany  # Ajustar segun los PVs disponibles en el cluster
+  resources:
+    requests:
+      storage: 5Gi

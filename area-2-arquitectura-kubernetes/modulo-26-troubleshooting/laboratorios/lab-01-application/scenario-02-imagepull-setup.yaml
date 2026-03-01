@@ -1,0 +1,34 @@
+# Escenario 2: ImagePullBackOff - Deployment con tag de imagen inexistente
+# Uso: kubectl apply -f scenario-02-imagepull-setup.yaml
+#
+# Descripcion:
+#   Deployment api-server con 2 replicas que no puede iniciar porque el tag
+#   de la imagen nginx:nonexistent-tag-12345 no existe en Docker Hub. El pod
+#   entra en ImagePullBackOff. El estudiante diagnostica con kubectl describe.
+#
+# Conceptos clave:
+#   - ImagePullBackOff: estado cuando Kubernetes no puede descargar la imagen
+#   - La seccion Events de kubectl describe pod muestra el error exacto del registry
+#   - Fix: kubectl set image deployment/api-server api=nginx:1.21
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: nginx:nonexistent-tag-12345
+        ports:
+        - containerPort: 8080

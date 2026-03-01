@@ -1,0 +1,34 @@
+# Escenario 2: Security Breach - NetworkPolicy Permitir Frontend a Backend
+# Uso: kubectl apply -f scenario-02-netpol-allow-frontend.yaml
+#
+# Descripcion:
+#   Permite trafico Ingress al backend solo desde Pods con label app=frontend
+#   en el puerto 8080. Esta politica trabaja junto con default-deny-all para
+#   implementar micro-segmentacion en el namespace production.
+#
+# Conceptos clave:
+#   - Ingress selectivo: solo trafico autorizado desde frontend
+#   - Puerto especifico: limita la superficie de ataque al minimo necesario
+#   - Complementa la politica deny-all sin debilitarla
+#
+# Namespace: production
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8080

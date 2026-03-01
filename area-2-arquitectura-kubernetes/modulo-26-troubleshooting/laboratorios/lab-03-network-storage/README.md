@@ -1,25 +1,99 @@
 # Laboratorio 03: Network & Storage Advanced Troubleshooting
 
-> **Duración estimada**: 75-90 minutos  
-> **Dificultad**: ⭐⭐⭐⭐ (Experto)  
-> **Objetivos CKA**: Services & Networking (20%), Storage (10%), Troubleshooting (25-30%)
+**Duracion estimada:** 75-90 minutos
+**Nivel:** Experto
+**Objetivo:** Diagnosticar y resolver problemas avanzados de red y almacenamiento en Kubernetes
 
-## 📋 Objetivos de Aprendizaje
+---
 
-Al completar este laboratorio, serás capaz de:
-- ✅ Troubleshoot DNS (CoreDNS) issues
-- ✅ Diagnosticar Services sin endpoints
-- ✅ Resolver problemas de Network Policies
-- ✅ Troubleshoot Ingress Controllers
-- ✅ Diagnosticar PersistentVolumeClaims Pending
-- ✅ Resolver problemas con StatefulSets y storage
-- ✅ Troubleshoot volume mounts y permisos
-- ✅ Diagnosticar problemas de conectividad entre pods
+## Tecnicas y Conceptos Utilizados
 
-## 🎯 Escenarios
+| Tecnica | Descripcion |
+|---------|-------------|
+| **DNS / CoreDNS troubleshooting** | Diagnostico de fallos de resolucion DNS: verificacion de pods CoreDNS, ConfigMap de Corefile, endpoints del Service kube-dns, y configuracion de kubelet |
+| **Service Endpoints y label matching** | Identificacion de desincronizacion entre el selector del Service y los labels del Pod. Reparacion mediante patch de selector o re-etiquetado de Pods |
+| **Network Policies** | Diagnostico de trafico bloqueado por politicas restrictivas. Creacion de excepciones selectivas para Ingress y Egress conservando el aislamiento base |
+| **PersistentVolumeClaim lifecycle** | Resolucion de PVCs en estado Pending por StorageClass inexistente, falta de PVs disponibles, incompatibilidad de accessModes, o tamano excesivo |
+| **StatefulSet storage** | Troubleshooting de StatefulSets con volumeClaimTemplates que no pueden satisfacerse. Recreacion con StorageClass valida y provision manual de PVs |
+| **Volume permissions y SecurityContext** | Diagnostico de errores Permission denied en volumenes. Uso de initContainer y emptyDir para resolver incompatibilidades de fsGroup y hostPath |
+| **Ingress Controllers** | Verificacion del Ingress Controller, diagnostico de reglas con nombre de Service incorrecto, y correccion mediante patch o edicion del recurso Ingress |
 
-### Escenario 1: DNS Resolution Failure
-**Situación**: Los pods no pueden resolver nombres DNS.
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Escenario | Descripcion |
+|---------|-----------|-------------|
+| `scenario-01-dns-fix-configmap.yaml` | 1 | ConfigMap coredns con Corefile correcto para restaurar DNS |
+| `scenario-02-endpoints-setup.yaml` | 2 | Pod web-pod + Service web-service con label mismatch (setup del problema) |
+| `scenario-02-endpoints-fix.yaml` | 2 | Service web-service con selector correcto (fix) |
+| `scenario-03-netpol-setup.yaml` | 3 | NetworkPolicy deny-all que bloquea todo el trafico (setup) |
+| `scenario-03-netpol-fix.yaml` | 3 | NetworkPolicies allow-frontend-to-backend + allow-frontend-egress (fix) |
+| `scenario-04-pvc-setup.yaml` | 4 | PVC my-pvc con StorageClass inexistente (setup del problema) |
+| `scenario-04-pvc-fix-storageclass.yaml` | 4 | PVC my-pvc con StorageClass "standard" valida (fix opcion 1) |
+| `scenario-04-pvc-fix-manual-pv.yaml` | 4 | PersistentVolume my-pv manual para static provisioning (fix opcion 2) |
+| `scenario-04-pvc-fix-accessmode.yaml` | 4 | PVC my-pvc con accessMode ReadWriteMany corregido (fix opcion 3) |
+| `scenario-04-pvc-fix-size.yaml` | 4 | PVC my-pvc con solicitud de storage reducida a 1Gi (fix opcion 4) |
+| `scenario-05-statefulset-setup.yaml` | 5 | StatefulSet web con StorageClass inexistente (setup del problema) |
+| `scenario-05-statefulset-fix.yaml` | 5 | StatefulSet web con StorageClass "standard" valida (fix) |
+| `scenario-06-volume-setup.yaml` | 6 | Pod writer-pod con hostPath y permisos restrictivos (setup del problema) |
+| `scenario-06-volume-fix-initcontainer.yaml` | 6 | Pod writer-pod con initContainer que corrige permisos (fix opcion 1) |
+| `scenario-06-volume-fix-emptydir.yaml` | 6 | Pod writer-pod con emptyDir que respeta fsGroup (fix opcion 2) |
+| `scenario-07-ingress-setup.yaml` | 7 | Pod + Service + Ingress con nombre de Service incorrecto (setup del problema) |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster de Kubernetes funcional (minikube, kind, k3s, o cloud)
+- kubectl configurado y con permisos de administrador
+- Conocimientos de Services, NetworkPolicies y almacenamiento persistente
+
+### Verificacion del entorno
+
+```bash
+# Verificar cluster
+kubectl cluster-info
+
+# Verificar nodos
+kubectl get nodes
+
+# Verificar que puedes crear recursos
+kubectl auth can-i create networkpolicies
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
+```
+
+---
+
+## Objetivos CKA
+
+> **Distribucion CKA**: Services & Networking (20%), Storage (10%), Troubleshooting (25-30%)
+
+Al completar este laboratorio, seras capaz de:
+- Troubleshoot DNS (CoreDNS) issues
+- Diagnosticar Services sin endpoints
+- Resolver problemas de Network Policies
+- Troubleshoot Ingress Controllers
+- Diagnosticar PersistentVolumeClaims Pending
+- Resolver problemas con StatefulSets y storage
+- Troubleshoot volume mounts y permisos
+- Diagnosticar problemas de conectividad entre pods
+
+---
+
+## Escenario 1: DNS Resolution Failure
+
+**Situacion**: Los pods no pueden resolver nombres DNS.
 
 **Setup del Problema**:
 ```bash
@@ -29,15 +103,15 @@ kubectl run test-dns --image=busybox:1.28 -it --rm -- nslookup kubernetes.defaul
 ```
 
 <details>
-<summary>🔍 Diagnóstico Completo</summary>
+<summary>Diagnostico Completo</summary>
 
 ```bash
-# 1. Verificar CoreDNS está corriendo
+# 1. Verificar CoreDNS esta corriendo
 kubectl get pods -n kube-system -l k8s-app=kube-dns
 # NAME                       READY   STATUS    RESTARTS   AGE
 # coredns-xxxxxxxxxx-xxxxx   1/1     Running   0          10d
 
-# 2. Si no está running, ver logs
+# 2. Si no esta running, ver logs
 kubectl logs -n kube-system -l k8s-app=kube-dns
 
 # 3. Verificar Service de DNS
@@ -49,14 +123,14 @@ kubectl get svc -n kube-system kube-dns
 kubectl get endpoints -n kube-system kube-dns
 # Debe tener IPs de los pods de CoreDNS
 
-# 5. Verificar configuración de CoreDNS
+# 5. Verificar configuracion de CoreDNS
 kubectl get configmap -n kube-system coredns -o yaml
 
 # 6. Test manual desde un pod
 kubectl run test-dns --image=busybox:1.28 -it --rm -- sh
 # Dentro del pod:
 cat /etc/resolv.conf
-# Debe apuntar a la IP del kube-dns service (típicamente 10.96.0.10)
+# Debe apuntar a la IP del kube-dns service (tipicamente 10.96.0.10)
 
 nslookup kubernetes.default
 nslookup google.com  # Test DNS externo
@@ -65,14 +139,14 @@ nslookup google.com  # Test DNS externo
 </details>
 
 <details>
-<summary>✅ Soluciones por Problema</summary>
+<summary>Soluciones por Problema</summary>
 
-**Problema 1: CoreDNS pods no están Running**
+**Problema 1: CoreDNS pods no estan Running**
 ```bash
 # Ver estado
 kubectl get pods -n kube-system -l k8s-app=kube-dns
 
-# Si están Pending, ver recursos
+# Si estan Pending, ver recursos
 kubectl describe pod -n kube-system -l k8s-app=kube-dns
 
 # Escalar deployment si es necesario
@@ -104,39 +178,11 @@ kubectl edit svc -n kube-system kube-dns
 # Backup del ConfigMap actual
 kubectl get cm -n kube-system coredns -o yaml > /tmp/coredns-cm-backup.yaml
 
-# Ver configuración
+# Ver configuracion
 kubectl get cm -n kube-system coredns -o yaml
 
-# ConfigMap correcto básico:
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: coredns
-  namespace: kube-system
-data:
-  Corefile: |
-    .:53 {
-        errors
-        health {
-           lameduck 5s
-        }
-        ready
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-           pods insecure
-           fallthrough in-addr.arpa ip6.arpa
-           ttl 30
-        }
-        prometheus :9153
-        forward . /etc/resolv.conf {
-           max_concurrent 1000
-        }
-        cache 30
-        loop
-        reload
-        loadbalance
-    }
-EOF
+# Restaurar ConfigMap correcto basico:
+kubectl apply -f scenario-01-dns-fix-configmap.yaml
 
 # Reiniciar CoreDNS pods
 kubectl delete pod -n kube-system -l k8s-app=kube-dns
@@ -151,14 +197,14 @@ sudo cat /var/lib/kubelet/config.yaml | grep -A 5 clusterDNS
 # clusterDNS:
 # - 10.96.0.10  # IP del kube-dns service
 
-# Si no está, agregar y reiniciar kubelet
+# Si no esta, agregar y reiniciar kubelet
 sudo vi /var/lib/kubelet/config.yaml
 sudo systemctl restart kubelet
 ```
 
-**Verificación Final**:
+**Verificacion Final**:
 ```bash
-# Test resolución
+# Test resolucion
 kubectl run test-dns --image=busybox:1.28 -it --rm -- nslookup kubernetes.default
 # Debe funcionar
 
@@ -173,42 +219,17 @@ kubectl run test --image=busybox:1.28 -it --rm -- nslookup nginx-test.default.sv
 
 ---
 
-### Escenario 2: Service Without Endpoints
-**Situación**: Un Service existe pero no tiene endpoints, las requests fallan.
+## Escenario 2: Service Without Endpoints
+
+**Situacion**: Un Service existe pero no tiene endpoints, las requests fallan.
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-pod
-  labels:
-    app: web
-    tier: frontend
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: web-service
-spec:
-  selector:
-    app: webapp  # ← Label mismatch!
-    tier: frontend
-  ports:
-  - port: 80
-    targetPort: 80
-EOF
+kubectl apply -f scenario-02-endpoints-setup.yaml
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
 # 1. Verificar service
@@ -217,7 +238,7 @@ kubectl get svc web-service
 
 # 2. Verificar endpoints
 kubectl get endpoints web-service
-# ENDPOINTS: <none>  ← PROBLEMA!
+# ENDPOINTS: <none>  <- PROBLEMA!
 
 # 3. Ver selector del service
 kubectl describe svc web-service
@@ -225,7 +246,7 @@ kubectl describe svc web-service
 
 # 4. Ver labels de los pods
 kubectl get pods --show-labels | grep web-pod
-# Labels: app=web,tier=frontend  ← Mismatch en 'app'
+# Labels: app=web,tier=frontend  <- Mismatch en 'app'
 
 # 5. Comparar selectores
 kubectl get svc web-service -o yaml | grep -A 3 selector
@@ -235,9 +256,9 @@ kubectl get pod web-pod -o yaml | grep -A 3 labels
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Opción 1: Corregir labels del pod**
+**Opcion 1: Corregir labels del pod**
 ```bash
 kubectl label pod web-pod app=webapp --overwrite
 
@@ -246,7 +267,7 @@ kubectl get endpoints web-service
 # ENDPOINTS: 10.244.x.x:80
 ```
 
-**Opción 2: Corregir selector del service**
+**Opcion 2: Corregir selector del service**
 ```bash
 kubectl patch svc web-service -p '{"spec":{"selector":{"app":"web","tier":"frontend"}}}'
 
@@ -254,26 +275,13 @@ kubectl patch svc web-service -p '{"spec":{"selector":{"app":"web","tier":"front
 kubectl get endpoints web-service
 ```
 
-**Opción 3: Recrear el service**
+**Opcion 3: Recrear el service**
 ```bash
 kubectl delete svc web-service
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: web-service
-spec:
-  selector:
-    app: web
-    tier: frontend
-  ports:
-  - port: 80
-    targetPort: 80
-EOF
+kubectl apply -f scenario-02-endpoints-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Endpoints debe tener IP
 kubectl get endpoints web-service
@@ -286,8 +294,9 @@ kubectl run test --image=busybox:1.28 -it --rm -- wget -O- http://web-service
 
 ---
 
-### Escenario 3: Network Policy Blocking Traffic
-**Situación**: Después de aplicar Network Policies, los pods no pueden comunicarse.
+## Escenario 3: Network Policy Blocking Traffic
+
+**Situacion**: Despues de aplicar Network Policies, los pods no pueden comunicarse.
 
 **Setup**:
 ```bash
@@ -296,17 +305,7 @@ kubectl run frontend --image=nginx --labels=app=frontend
 kubectl run backend --image=nginx --labels=app=backend
 
 # Aplicar Network Policy muy restrictiva
-cat <<EOF | kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: deny-all
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
-EOF
+kubectl apply -f scenario-03-netpol-setup.yaml
 
 # Test - debe fallar
 kubectl exec frontend -- curl -m 5 backend
@@ -314,14 +313,14 @@ kubectl exec frontend -- curl -m 5 backend
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
 # 1. Listar Network Policies
 kubectl get networkpolicies
 kubectl describe networkpolicy deny-all
 
-# 2. Ver qué pods están afectados
+# 2. Ver que pods estan afectados
 kubectl get pods --show-labels
 
 # 3. Ver reglas de la policy
@@ -329,7 +328,7 @@ kubectl get networkpolicy deny-all -o yaml
 
 # 4. Verificar que el CNI soporta Network Policies
 kubectl get pods -n kube-system | grep -E "calico|cilium|weave"
-# Si no hay CNI que soporte policies, no funcionarán
+# Si no hay CNI que soporte policies, no funcionaran
 
 # 5. Test conectividad
 kubectl exec frontend -- curl -m 5 backend
@@ -339,72 +338,26 @@ kubectl exec frontend -- curl -m 5 backend
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Solución 1: Crear policy permisiva**
+**Solucion 1: Crear policy permisiva**
 ```bash
 # Permitir egress desde frontend a backend
-cat <<EOF | kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-to-backend
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-    ports:
-    - protocol: TCP
-      port: 80
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-egress
-spec:
-  podSelector:
-    matchLabels:
-      app: frontend
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: backend
-    ports:
-    - protocol: TCP
-      port: 80
-  - to:  # Permitir DNS
-    - namespaceSelector: {}
-      podSelector:
-        matchLabels:
-          k8s-app: kube-dns
-    ports:
-    - protocol: UDP
-      port: 53
-EOF
+kubectl apply -f scenario-03-netpol-fix.yaml
 ```
 
-**Solución 2: Eliminar policy restrictiva** (temporal):
+**Solucion 2: Eliminar policy restrictiva** (temporal):
 ```bash
 kubectl delete networkpolicy deny-all
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Test conectividad
 kubectl exec frontend -- curl -m 5 backend
 # Debe funcionar ahora
 
-# Ver políticas aplicadas
+# Ver politicas aplicadas
 kubectl get networkpolicies
 kubectl describe networkpolicy allow-frontend-to-backend
 ```
@@ -413,28 +366,17 @@ kubectl describe networkpolicy allow-frontend-to-backend
 
 ---
 
-### Escenario 4: PersistentVolumeClaim Pending
-**Situación**: Un PVC se queda en estado Pending indefinidamente.
+## Escenario 4: PersistentVolumeClaim Pending
+
+**Situacion**: Un PVC se queda en estado Pending indefinidamente.
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-pvc
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: nonexistent-storage-class
-EOF
+kubectl apply -f scenario-04-pvc-setup.yaml
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
 # 1. Ver estado del PVC
@@ -460,29 +402,16 @@ kubectl get sc nonexistent-storage-class
 </details>
 
 <details>
-<summary>✅ Soluciones</summary>
+<summary>Soluciones</summary>
 
 **Problema 1: StorageClass no existe**
 ```bash
 # Ver SC disponibles
 kubectl get sc
 
-# Recrear PVC con SC válido
+# Recrear PVC con SC valido
 kubectl delete pvc my-pvc
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-pvc
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: standard  # o el SC default del cluster
-EOF
+kubectl apply -f scenario-04-pvc-fix-storageclass.yaml
 
 # Verificar
 kubectl get pvc my-pvc
@@ -492,22 +421,9 @@ kubectl get pvc my-pvc
 **Problema 2: No hay PV disponible (sin dynamic provisioning)**
 ```bash
 # Crear PV manualmente
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: my-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-  - ReadWriteOnce
-  hostPath:
-    path: /mnt/data
-  persistentVolumeReclaimPolicy: Retain
-EOF
+kubectl apply -f scenario-04-pvc-fix-manual-pv.yaml
 
-# El PVC debe bind automáticamente si es compatible
+# El PVC debe bind automaticamente si es compatible
 kubectl get pvc my-pvc
 ```
 
@@ -518,88 +434,34 @@ kubectl get pv -o custom-columns=NAME:.metadata.name,CAPACITY:.spec.capacity.sto
 
 # Ajustar PVC al access mode disponible
 kubectl delete pvc my-pvc
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-pvc
-spec:
-  accessModes:
-  - ReadWriteMany  # Ajustar según PVs disponibles
-  resources:
-    requests:
-      storage: 5Gi
-EOF
+kubectl apply -f scenario-04-pvc-fix-accessmode.yaml
 ```
 
-**Problema 4: Tamaño solicitado mayor al disponible**
+**Problema 4: Tamano solicitado mayor al disponible**
 ```bash
 # Ver capacidades disponibles
 kubectl get pv -o custom-columns=NAME:.metadata.name,CAPACITY:.spec.capacity.storage,STATUS:.status.phase
 
 # Ajustar size en PVC
 kubectl delete pvc my-pvc
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-pvc
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi  # Menor tamaño
-EOF
+kubectl apply -f scenario-04-pvc-fix-size.yaml
 ```
 
 </details>
 
 ---
 
-### Escenario 5: StatefulSet Volume Mount Issues
-**Situación**: Un StatefulSet no puede iniciar porque falla el volume mount.
+## Escenario 5: StatefulSet Volume Mount Issues
+
+**Situacion**: Un StatefulSet no puede iniciar porque falla el volume mount.
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: web
-spec:
-  serviceName: "web"
-  replicas: 2
-  selector:
-    matchLabels:
-      app: web
-  template:
-    metadata:
-      labels:
-        app: web
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.21
-        volumeMounts:
-        - name: data
-          mountPath: /usr/share/nginx/html
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 1Gi
-      storageClassName: nonexistent-sc
-EOF
+kubectl apply -f scenario-05-statefulset-setup.yaml
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
 # 1. Ver estado del StatefulSet
@@ -618,7 +480,7 @@ kubectl describe pod web-0
 kubectl get pvc
 # STATUS: Pending (para data-web-0, data-web-1)
 
-# 5. Ver por qué están Pending
+# 5. Ver por que estan Pending
 kubectl describe pvc data-web-0
 # StorageClass not found
 ```
@@ -626,47 +488,16 @@ kubectl describe pvc data-web-0
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
 ```bash
 # El problema es el StorageClass
 
-# Opción 1: Usar StorageClass válido
+# Opcion 1: Usar StorageClass valido
 kubectl delete statefulset web
 kubectl delete pvc data-web-0 data-web-1
 
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: web
-spec:
-  serviceName: "web"
-  replicas: 2
-  selector:
-    matchLabels:
-      app: web
-  template:
-    metadata:
-      labels:
-        app: web
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:1.21
-        volumeMounts:
-        - name: data
-          mountPath: /usr/share/nginx/html
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 1Gi
-      storageClassName: standard  # SC válido
-EOF
+kubectl apply -f scenario-05-statefulset-fix.yaml
 
 # Verificar
 kubectl get statefulset web
@@ -674,9 +505,9 @@ kubectl get pods -l app=web
 kubectl get pvc
 ```
 
-**Opción 2: Crear PVs manualmente (sin dynamic provisioning)**
+**Opcion 2: Crear PVs manualmente (sin dynamic provisioning)**
 ```bash
-# Crear PVs para cada replica
+# Crear PVs para cada replica (usa variable de shell, se mantiene inline)
 for i in 0 1; do
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -694,7 +525,7 @@ spec:
 EOF
 done
 
-# Los PVCs deben bind automáticamente
+# Los PVCs deben bind automaticamente
 kubectl get pvc
 kubectl get pods -l app=web
 ```
@@ -703,41 +534,22 @@ kubectl get pods -l app=web
 
 ---
 
-### Escenario 6: Volume Permission Issues
-**Situación**: Un pod está Running pero la aplicación no puede escribir en el volume.
+## Escenario 6: Volume Permission Issues
+
+**Situacion**: Un pod esta Running pero la aplicacion no puede escribir en el volume.
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: writer-pod
-spec:
-  securityContext:
-    runAsUser: 1000
-    fsGroup: 2000
-  containers:
-  - name: writer
-    image: busybox:1.28
-    command: ["sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
-    volumeMounts:
-    - name: data
-      mountPath: /data
-  volumes:
-  - name: data
-    hostPath:
-      path: /mnt/readonly-dir  # Directorio con permisos restrictivos
-EOF
+kubectl apply -f scenario-06-volume-setup.yaml
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
 # 1. Ver estado del pod
 kubectl get pod writer-pod
-# STATUS: Running pero logs mostrarán errores
+# STATUS: Running pero logs mostraran errores
 
 # 2. Ver logs
 kubectl logs writer-pod
@@ -758,9 +570,9 @@ kubectl get pod writer-pod -o yaml | grep -A 10 securityContext
 </details>
 
 <details>
-<summary>✅ Soluciones</summary>
+<summary>Soluciones</summary>
 
-**Solución 1: Ajustar permisos en el node** (hostPath):
+**Solucion 1: Ajustar permisos en el node** (hostPath):
 ```bash
 # SSH al node donde corre el pod
 NODE=$(kubectl get pod writer-pod -o jsonpath='{.spec.nodeName}')
@@ -774,68 +586,19 @@ sudo chmod -R 775 /mnt/readonly-dir
 ls -la /mnt/readonly-dir
 ```
 
-**Solución 2: Usar initContainer para arreglar permisos**:
+**Solucion 2: Usar initContainer para arreglar permisos**:
 ```bash
 kubectl delete pod writer-pod
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: writer-pod
-spec:
-  securityContext:
-    fsGroup: 2000
-  initContainers:
-  - name: fix-perms
-    image: busybox:1.28
-    command: ["sh", "-c", "chmod -R 777 /data"]
-    volumeMounts:
-    - name: data
-      mountPath: /data
-  containers:
-  - name: writer
-    image: busybox:1.28
-    securityContext:
-      runAsUser: 1000
-    command: ["sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
-    volumeMounts:
-    - name: data
-      mountPath: /data
-  volumes:
-  - name: data
-    hostPath:
-      path: /mnt/readonly-dir
-EOF
+kubectl apply -f scenario-06-volume-fix-initcontainer.yaml
 ```
 
-**Solución 3: Usar emptyDir (temporal)**:
+**Solucion 3: Usar emptyDir (temporal)**:
 ```bash
 kubectl delete pod writer-pod
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: writer-pod
-spec:
-  securityContext:
-    runAsUser: 1000
-    fsGroup: 2000
-  containers:
-  - name: writer
-    image: busybox:1.28
-    command: ["sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
-    volumeMounts:
-    - name: data
-      mountPath: /data
-  volumes:
-  - name: data
-    emptyDir: {}  # emptyDir respeta fsGroup automáticamente
-EOF
+kubectl apply -f scenario-06-volume-fix-emptydir.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Ver logs - no debe haber errores de permisos
 kubectl logs writer-pod
@@ -848,59 +611,20 @@ kubectl exec writer-pod -- cat /data/log.txt
 
 ---
 
-### Escenario 7: Ingress Not Working
-**Situación**: Ingress configurado pero no enruta tráfico.
+## Escenario 7: Ingress Not Working
+
+**Situacion**: Ingress configurado pero no enruta trafico.
 
 **Setup** (requiere Ingress Controller instalado):
 ```bash
-# Crear recursos
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-pod
-  labels:
-    app: myapp
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.21
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: app-service
-spec:
-  selector:
-    app: myapp
-  ports:
-  - port: 80
-    targetPort: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: app-ingress
-spec:
-  rules:
-  - host: myapp.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: app-service-wrong  # ← Error: nombre incorrecto
-            port:
-              number: 80
-EOF
+kubectl apply -f scenario-07-ingress-setup.yaml
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
-# 1. Verificar Ingress Controller está corriendo
+# 1. Verificar Ingress Controller esta corriendo
 kubectl get pods -n ingress-nginx  # o el namespace correcto
 # O para minikube
 minikube addons list | grep ingress
@@ -927,7 +651,7 @@ curl -H "Host: myapp.example.com" http://$INGRESS_IP
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
 ```bash
 # Corregir nombre del service en Ingress
@@ -951,7 +675,7 @@ kubectl describe ingress app-ingress
 # Test
 INGRESS_IP=$(kubectl get ingress app-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 curl -H "Host: myapp.example.com" http://$INGRESS_IP
-# Debe mostrar página de nginx
+# Debe mostrar pagina de nginx
 ```
 
 **Troubleshooting adicional del Ingress Controller**:
@@ -959,7 +683,7 @@ curl -H "Host: myapp.example.com" http://$INGRESS_IP
 # Ver logs del controller
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
 
-# Verificar configuración generada por el controller
+# Verificar configuracion generada por el controller
 kubectl exec -n ingress-nginx <ingress-controller-pod> -- cat /etc/nginx/nginx.conf | grep -A 20 myapp.example.com
 ```
 
@@ -967,8 +691,9 @@ kubectl exec -n ingress-nginx <ingress-controller-pod> -- cat /etc/nginx/nginx.c
 
 ---
 
-### Escenario 8: Pod-to-Pod Communication Failure
-**Situación**: Pods no pueden comunicarse entre sí por IP.
+## Escenario 8: Pod-to-Pod Communication Failure
+
+**Situacion**: Pods no pueden comunicarse entre si por IP.
 
 **Setup**:
 ```bash
@@ -984,10 +709,10 @@ kubectl exec pod2 -- wget -T 5 -O- http://$POD1_IP
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
-# 1. Verificar CNI plugin está corriendo
+# 1. Verificar CNI plugin esta corriendo
 kubectl get pods -n kube-system | grep -E "calico|flannel|weave|cilium"
 
 # 2. Ver logs de CNI
@@ -1005,21 +730,21 @@ ip route
 kubectl get pods -n kube-system -l k8s-app=kube-proxy
 kubectl logs -n kube-system -l k8s-app=kube-proxy | tail -50
 
-# 6. Test básico de conectividad
+# 6. Test basico de conectividad
 kubectl exec pod2 -- ping -c 3 $POD1_IP
 ```
 
 </details>
 
 <details>
-<summary>✅ Solución según causa</summary>
+<summary>Solucion segun causa</summary>
 
-**Causa 1: CNI plugin no está corriendo**
+**Causa 1: CNI plugin no esta corriendo**
 ```bash
 # Reinstalar CNI (ejemplo: Calico)
 kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
-# Esperar a que los pods estén Ready
+# Esperar a que los pods esten Ready
 kubectl get pods -n kube-system -l k8s-app=calico-node -w
 ```
 
@@ -1037,7 +762,7 @@ kubectl exec pod2 -- wget -T 5 -O- http://$POD1_IP
 # Recrear kube-proxy pods
 kubectl delete pods -n kube-system -l k8s-app=kube-proxy
 
-# Verificar logs después de recrear
+# Verificar logs despues de recrear
 kubectl logs -n kube-system -l k8s-app=kube-proxy
 ```
 
@@ -1045,8 +770,13 @@ kubectl logs -n kube-system -l k8s-app=kube-proxy
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
+```bash
+bash cleanup.sh
+```
+
+O manualmente:
 ```bash
 # Eliminar recursos de prueba
 kubectl delete pod test-dns nginx-test test web-pod frontend backend app-pod pod1 pod2 writer-pod --ignore-not-found
@@ -1059,7 +789,7 @@ kubectl delete ingress app-ingress --ignore-not-found
 
 ---
 
-## 📊 Evaluación
+## Evaluacion
 
 - [ ] Escenario 1: DNS troubleshooting completado
 - [ ] Escenario 2: Service endpoints resuelto
@@ -1068,11 +798,11 @@ kubectl delete ingress app-ingress --ignore-not-found
 - [ ] Escenario 5: StatefulSet storage resuelto
 - [ ] Escenario 6: Volume permissions corregido
 - [ ] Escenario 7: Ingress reparado
-- [ ] Escenario 8: Pod comunicación resuelta
+- [ ] Escenario 8: Pod comunicacion resuelta
 
 ---
 
-## 🎯 Comandos Críticos para CKA
+## Comandos Criticos para CKA
 
 ### DNS
 ```bash
@@ -1105,16 +835,16 @@ kubectl get sc
 
 ---
 
-## 💡 Tips para el Examen
+## Tips para el Examen
 
 1. **DNS siempre primero**: Si hay problemas de conectividad, verifica DNS
-2. **Endpoints = conexión Service-Pod**: Si está vacío, el selector está mal
+2. **Endpoints = conexion Service-Pod**: Si esta vacio, el selector esta mal
 3. **Network Policies**: Recuerda que son whitelist, por defecto permiten todo
 4. **PVC Pending**: Busca StorageClass, capacidad, access modes
-5. **StatefulSets**: Los PVCs se crean automáticamente, uno por replica
+5. **StatefulSets**: Los PVCs se crean automaticamente, uno por replica
 6. **Permisos de volumes**: fsGroup y initContainers son tus amigos
 
 ---
 
-**Tiempo objetivo**: 8-12 minutos por escenario  
-**Siguiente**: [Lab 04 - Complete Cluster](./lab-04-complete-cluster.md)
+**Tiempo objetivo**: 8-12 minutos por escenario
+**Siguiente**: [Lab 04 - Complete Cluster](../lab-04-complete-cluster/README.md)

@@ -1,0 +1,30 @@
+# Escenario 3: Performance Degradation - LimitRange con Defaults
+# Uso: kubectl apply -f scenario-03-limitrange.yaml
+#
+# Descripcion:
+#   Crea un LimitRange default-limits en el namespace production que establece
+#   valores por defecto para requests y limits de containers sin especificacion.
+#   Previene que Pods sin resource spec consuman recursos ilimitados.
+#
+# Conceptos clave:
+#   - LimitRange: define defaults y limites min/max por container/Pod
+#   - default: se aplica como limits si el container no los especifica
+#   - defaultRequest: se aplica como requests si el container no los especifica
+#   - Pods sin requests/limits heredan estos valores automaticamente
+#
+# Namespace: production
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: production
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    type: Container

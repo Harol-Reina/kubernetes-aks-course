@@ -1,0 +1,29 @@
+# Escenario 2: Security Breach - RoleBinding para ServiceAccount
+# Uso: kubectl apply -f scenario-02-rbac-rolebinding.yaml
+#
+# Descripcion:
+#   Crea un RoleBinding read-pods que asigna el Role pod-reader al ServiceAccount
+#   app-sa en el namespace production. Aplicar despues de eliminar los bindings
+#   con permisos excesivos y crear el Role limitado.
+#
+# Conceptos clave:
+#   - RoleBinding: vincula un Role a un sujeto (user, group, ServiceAccount)
+#   - ServiceAccount: identidad de Pod dentro del cluster
+#   - Verificar con: kubectl auth can-i --list --as=system:serviceaccount:production:app-sa
+#
+# Namespace: production
+# Nota: Cambiar app-sa al nombre real del ServiceAccount auditado
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: production  # Cambiar al namespace del ServiceAccount auditado
+subjects:
+- kind: ServiceAccount
+  name: app-sa  # Cambiar al nombre del ServiceAccount auditado
+  namespace: production  # Cambiar al namespace del ServiceAccount
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io

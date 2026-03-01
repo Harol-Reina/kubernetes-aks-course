@@ -1,0 +1,45 @@
+# Escenario 5: StatefulSet Volume Mount Issues - Fix con StorageClass Valida
+# Uso: kubectl apply -f scenario-05-statefulset-fix.yaml
+#
+# Descripcion:
+#   Recrea el StatefulSet web usando la StorageClass "standard" (valida).
+#   Aplicar despues de eliminar el StatefulSet y los PVCs con StorageClass incorrecta.
+#   Los Pods deberan pasar a estado Running una vez que los PVCs sean satisfechos.
+#
+# Conceptos clave:
+#   - Los StatefulSets requieren eliminar PVCs manualmente al recrear
+#   - volumeClaimTemplates no se puede modificar en un StatefulSet existente
+#   - Verificar: kubectl get pvc y kubectl get pods -l app=web
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  serviceName: "web"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+      storageClassName: standard  # StorageClass valida

@@ -1,0 +1,44 @@
+# Escenario 7: Readiness Probe Never Ready - Pod con probe en puerto y path incorrectos
+# Uso: kubectl apply -f scenario-07-readiness-setup.yaml
+#
+# Descripcion:
+#   Pod api-pod con readiness probe que apunta al puerto 8080 y path /ready.
+#   nginx escucha en el puerto 80 y no tiene endpoint /ready, por lo que el probe
+#   siempre falla. El pod queda en READY: 0/1 y el Service no recibe endpoints.
+#
+# Conceptos clave:
+#   - Readiness probe: determina si el pod recibe trafico; si falla se excluye de Endpoints
+#   - Un pod puede estar Running pero no Ready si el readiness probe falla
+#   - kubectl get endpoints <service> mostrara none cuando ningun pod este Ready
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-pod
+  labels:
+    app: api
+spec:
+  containers:
+  - name: api
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 8080
+      initialDelaySeconds: 5
+      periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  selector:
+    app: api
+  ports:
+  - port: 80
+    targetPort: 80

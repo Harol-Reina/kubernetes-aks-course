@@ -1,0 +1,35 @@
+# Escenario 4: Init Container Failure - Pod bloqueado esperando servicio inexistente
+# Uso: kubectl apply -f scenario-04-initcontainer-setup.yaml
+#
+# Descripcion:
+#   Pod backend-app con un init container que espera indefinidamente al servicio
+#   postgres-service mediante nslookup. Como el servicio no existe el pod se queda
+#   en estado Init:0/1. El estudiante debe diagnosticar con logs del init container.
+#
+# Conceptos clave:
+#   - Init containers deben completarse exitosamente antes de que inicien los containers principales
+#   - kubectl logs <pod> -c <init-container-name> muestra logs del init container especifico
+#   - Estado Init:0/1 indica que el primer init container de uno total no ha completado
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-app
+spec:
+  initContainers:
+  - name: wait-for-database
+    image: busybox:1.28
+    command: ['sh', '-c']
+    args:
+    - |
+      until nslookup postgres-service.default.svc.cluster.local; do
+        echo "Waiting for database service..."
+        sleep 2
+      done
+  containers:
+  - name: app
+    image: nginx:1.21
+    ports:
+    - containerPort: 80

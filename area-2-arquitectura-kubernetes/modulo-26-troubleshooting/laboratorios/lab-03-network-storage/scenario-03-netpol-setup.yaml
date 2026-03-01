@@ -1,0 +1,24 @@
+# Escenario 3: Network Policy Blocking Traffic - Setup del Problema
+# Uso: kubectl apply -f scenario-03-netpol-setup.yaml
+#
+# Descripcion:
+#   Crea una NetworkPolicy deny-all que bloquea todo el trafico Ingress y Egress
+#   para todos los Pods del namespace (podSelector vacio). Simula el escenario donde
+#   una politica demasiado restrictiva corta la comunicacion entre Pods.
+#
+# Conceptos clave:
+#   - NetworkPolicy con podSelector vacio afecta a todos los Pods
+#   - policyTypes Ingress y Egress deniegan todo el trafico
+#   - Default deny como patron de seguridad (pero requiere excepciones)
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

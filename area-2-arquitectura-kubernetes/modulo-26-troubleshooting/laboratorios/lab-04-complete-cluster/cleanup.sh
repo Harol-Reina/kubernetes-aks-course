@@ -1,60 +1,108 @@
 #!/bin/bash
-# Cleanup and recovery for Lab 04
 
-echo "🧹 Limpiando recursos del Lab 04..."
-echo ""
+##############################################################################
+# Script de Limpieza - Lab 04: Complete Cluster Troubleshooting
+#
+# Descripcion: Elimina todos los recursos creados durante el laboratorio
+# Uso: ./cleanup.sh
+##############################################################################
 
-# Delete test resources
-echo "1. Eliminando recursos de prueba..."
-kubectl delete deployment test-nginx critical-app webapp-crash api-server config-app --ignore-not-found
-kubectl delete statefulset postgres-db web --ignore-not-found
-kubectl delete pod test-restore memory-hog backend-app --ignore-not-found
-kubectl delete svc api-service postgres-db web --ignore-not-found
-kubectl delete pvc data-postgres-db-0 data-postgres-db-1 data-postgres-db-2 data-web-0 data-web-1 --ignore-not-found
-kubectl delete configmap app-config app-settings --ignore-not-found
-kubectl delete secret app-secret --ignore-not-found
+set -e
 
-# Delete RBAC resources
-echo "2. Limpiando recursos RBAC..."
-kubectl delete sa app-sa production:app-sa --ignore-not-found
-kubectl delete role pod-reader --ignore-not-found
-kubectl delete rolebinding read-pods --ignore-not-found
-kubectl delete clusterrole cluster-viewer --ignore-not-found
-kubectl delete clusterrolebinding cluster-viewer-binding --ignore-not-found
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# Delete Network Policies
-echo "3. Eliminando Network Policies..."
-kubectl delete networkpolicy default-deny-all allow-frontend-to-backend allow-dns --ignore-not-found -n production
-kubectl delete networkpolicy default-deny-all --ignore-not-found
+echo -e "${YELLOW}🧹 Iniciando limpieza del Lab 04: Complete Cluster Troubleshooting...${NC}"
+echo
 
-# Delete ResourceQuotas and LimitRanges
-echo "4. Limpiando quotas y limits..."
-kubectl delete resourcequota namespace-quota test-quota --ignore-not-found -n production
-kubectl delete limitrange default-limits test-limits --ignore-not-found -n production
+# Funcion para eliminar recurso con verificacion
+delete_resource() {
+    local resource_type=$1
+    local resource_name=$2
+    local namespace=${3:-default}
 
-# Delete PriorityClasses
-echo "5. Eliminando PriorityClasses..."
-kubectl delete priorityclass high-priority low-priority --ignore-not-found
+    if kubectl get $resource_type $resource_name -n $namespace &> /dev/null; then
+        kubectl delete $resource_type $resource_name -n $namespace --ignore-not-found=true
+        echo -e "  ${GREEN}✓ $resource_type/$resource_name eliminado${NC}"
+    else
+        echo -e "  ${YELLOW}⚠ $resource_type/$resource_name no existe (skip)${NC}"
+    fi
+}
 
-# Delete namespaces if created
-echo "6. Limpiando namespaces..."
-kubectl delete namespace production test-ns --ignore-not-found
+echo "📦 Eliminando Deployments..."
+delete_resource deployment test-nginx
+delete_resource deployment critical-app
+delete_resource deployment webapp-crash
+delete_resource deployment api-server
+delete_resource deployment config-app
 
-echo ""
-echo "✅ Limpieza básica completada!"
-echo ""
-echo "⚠️  Si el cluster está en mal estado:"
-echo ""
-echo "1. Verificar control plane components:"
-echo "   sudo crictl ps | grep -E 'kube-apiserver|etcd|kube-scheduler|kube-controller'"
-echo ""
-echo "2. Si API server no responde, verificar logs:"
-echo "   sudo journalctl -u kubelet -n 100"
-echo ""
-echo "3. Si es necesario restaurar etcd:"
-echo "   ./restore-from-backup.sh"
-echo ""
-echo "4. Verificar nodes:"
-echo "   kubectl get nodes"
-echo "   kubectl describe node <node-name>"
-echo ""
+echo
+echo "📦 Eliminando StatefulSets..."
+delete_resource statefulset postgres-db
+delete_resource statefulset web
+
+echo
+echo "📦 Eliminando Pods..."
+delete_resource pod test-restore
+delete_resource pod memory-hog
+delete_resource pod backend-app
+delete_resource pod secure-pod
+
+echo
+echo "🌐 Eliminando Services..."
+delete_resource service api-service
+delete_resource service postgres-db
+delete_resource service web
+
+echo
+echo "💾 Eliminando PVCs..."
+delete_resource pvc data-postgres-db-0
+delete_resource pvc data-postgres-db-1
+delete_resource pvc data-postgres-db-2
+delete_resource pvc data-web-0
+delete_resource pvc data-web-1
+
+echo
+echo "📋 Eliminando ConfigMaps y Secrets..."
+delete_resource configmap app-config
+delete_resource configmap app-settings
+delete_resource secret app-secret
+
+echo
+echo "🔐 Eliminando RBAC..."
+delete_resource role pod-reader production
+delete_resource rolebinding read-pods production
+delete_resource clusterrole cluster-viewer
+delete_resource clusterrolebinding cluster-viewer-binding
+
+echo
+echo "🔒 Eliminando Network Policies..."
+delete_resource networkpolicy default-deny-all production
+delete_resource networkpolicy allow-frontend-to-backend production
+delete_resource networkpolicy allow-dns production
+delete_resource networkpolicy default-deny-all
+
+echo
+echo "📊 Eliminando ResourceQuotas y LimitRanges..."
+delete_resource resourcequota namespace-quota production
+delete_resource limitrange default-limits production
+
+echo
+echo "⚡ Eliminando PriorityClasses..."
+delete_resource priorityclass high-priority
+delete_resource priorityclass low-priority
+
+echo
+echo "🗂️ Eliminando Namespaces..."
+delete_resource namespace production
+delete_resource namespace test-ns
+
+echo
+echo -e "${GREEN}🎉 Limpieza del Lab 04 completada!${NC}"
+echo
+echo -e "${YELLOW}⚠ Si el cluster esta en mal estado:${NC}"
+echo "  1. Verificar components: sudo crictl ps | grep -E 'kube-apiserver|etcd'"
+echo "  2. Ver logs: sudo journalctl -u kubelet -n 100"
+echo "  3. Verificar nodes: kubectl get nodes"

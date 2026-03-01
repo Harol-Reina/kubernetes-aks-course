@@ -1,0 +1,36 @@
+# Escenario 1: CrashLoopBackOff - Deployment con ruta de configuracion incorrecta
+# Uso: kubectl apply -f scenario-01-crashloop-setup.yaml
+#
+# Descripcion:
+#   Deployment webapp-crash que falla constantemente porque nginx se invoca
+#   con una ruta de archivo de configuracion que no existe. El pod entra en
+#   CrashLoopBackOff. El estudiante debe diagnosticar la causa raiz con logs.
+#
+# Conceptos clave:
+#   - CrashLoopBackOff: estado cuando un contenedor falla repetidamente al iniciar
+#   - kubectl logs --previous: muestra logs del contenedor antes del ultimo crash
+#   - command/args en spec de contenedor sobreescribe el ENTRYPOINT/CMD de la imagen
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-crash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21
+        command: ["nginx"]
+        args: ["-g", "daemon off;", "-c", "/etc/nginx/nonexistent.conf"]
+        ports:
+        - containerPort: 80

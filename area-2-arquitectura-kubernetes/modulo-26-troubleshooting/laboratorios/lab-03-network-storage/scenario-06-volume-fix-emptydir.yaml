@@ -1,0 +1,33 @@
+# Escenario 6: Volume Permission Issues - Fix con emptyDir
+# Uso: kubectl apply -f scenario-06-volume-fix-emptydir.yaml
+#
+# Descripcion:
+#   Recrea el Pod writer-pod usando emptyDir en lugar de hostPath. emptyDir respeta
+#   automaticamente el fsGroup del securityContext del Pod, lo que permite al proceso
+#   no-root escribir sin necesidad de ajustar permisos manualmente.
+#
+# Conceptos clave:
+#   - emptyDir: volumen temporal efimero (se pierde al eliminar el Pod)
+#   - emptyDir respeta fsGroup automaticamente, a diferencia de hostPath
+#   - Solucion adecuada para datos temporales que no necesitan persistencia
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer-pod
+spec:
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: writer
+    image: busybox:1.28
+    command: ["sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    emptyDir: {}  # emptyDir respeta fsGroup automaticamente

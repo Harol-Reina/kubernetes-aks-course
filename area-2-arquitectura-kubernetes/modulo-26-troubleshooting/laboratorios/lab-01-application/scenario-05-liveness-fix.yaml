@@ -1,0 +1,32 @@
+# Escenario 5: Liveness Probe Failure - Pod corregido con path valido (Opcion 1)
+# Uso: kubectl delete pod web-server && kubectl apply -f scenario-05-liveness-fix.yaml
+#
+# Descripcion:
+#   Pod web-server corregido usando path: / en el liveness probe, que es un endpoint
+#   valido en nginx por defecto (retorna 200 OK). Se ajusto failureThreshold a 3
+#   para mayor tolerancia. Esta es la Opcion 1; ver README para la Opcion 2 alternativa.
+#
+# Conceptos clave:
+#   - nginx sirve / con 200 OK por defecto; es el path correcto para liveness de nginx
+#   - Opcion 2 alternativa: aumentar initialDelaySeconds y failureThreshold para mas tolerancia
+#   - En aplicaciones reales implementar un endpoint /healthz dedicado es la mejor practica
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3

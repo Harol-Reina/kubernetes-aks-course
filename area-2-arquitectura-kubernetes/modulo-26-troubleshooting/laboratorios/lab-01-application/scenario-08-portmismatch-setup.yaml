@@ -1,0 +1,39 @@
+# Escenario 8: Port Mismatch - Pod y Service con targetPort incorrecto
+# Uso: kubectl apply -f scenario-08-portmismatch-setup.yaml
+#
+# Descripcion:
+#   Pod python-app ejecutando un servidor HTTP en el puerto 8000 y Service
+#   python-service con targetPort: 80. El mismatch hace que el trafico del
+#   Service no llegue al proceso correcto aunque los Endpoints existan.
+#
+# Conceptos clave:
+#   - targetPort: puerto en el que el contenedor acepta conexiones (no el puerto del Service)
+#   - Los Endpoints pueden existir pero el trafico falla si targetPort no coincide con containerPort
+#   - Diagnostico: comparar containerPort del pod vs targetPort del Service
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: python-app
+  labels:
+    app: python
+spec:
+  containers:
+  - name: app
+    image: python:3.9-slim
+    command: ["python", "-m", "http.server", "8000"]
+    ports:
+    - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-service
+spec:
+  selector:
+    app: python
+  ports:
+  - port: 80
+    targetPort: 80

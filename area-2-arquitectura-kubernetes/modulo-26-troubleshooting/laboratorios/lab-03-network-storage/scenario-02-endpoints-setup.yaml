@@ -1,0 +1,40 @@
+# Escenario 2: Service Without Endpoints - Setup del Problema
+# Uso: kubectl apply -f scenario-02-endpoints-setup.yaml
+#
+# Descripcion:
+#   Crea un Pod web-pod con label app=web y un Service web-service con selector
+#   app=webapp (label incorrecto). El label mismatch causa que el Service no tenga
+#   endpoints, simulando el problema de conectividad a diagnosticar.
+#
+# Conceptos clave:
+#   - Label selector en Services
+#   - Endpoints automaticos basados en labels
+#   - Label mismatch como causa comun de fallo de conectividad
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+  labels:
+    app: web
+    tier: frontend
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  selector:
+    app: webapp  # Label incorrecto - mismatch con app=web del Pod
+    tier: frontend
+  ports:
+  - port: 80
+    targetPort: 80

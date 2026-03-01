@@ -1,0 +1,34 @@
+# Escenario 6: Volume Permission Issues - Setup del Problema
+# Uso: kubectl apply -f scenario-06-volume-setup.yaml
+#
+# Descripcion:
+#   Crea un Pod writer-pod que intenta escribir en /data/log.txt con usuario 1000
+#   y grupo 2000. El volumen usa hostPath apuntando a un directorio con permisos
+#   restrictivos (root:root), lo que causara errores de "Permission denied" en los logs.
+#
+# Conceptos clave:
+#   - runAsUser: usuario con el que corre el proceso del container
+#   - fsGroup: grupo que sera dueno de los archivos del volumen montado
+#   - hostPath con permisos de root bloquea escritura de usuarios no root
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer-pod
+spec:
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: writer
+    image: busybox:1.28
+    command: ["sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    hostPath:
+      path: /mnt/readonly-dir  # Directorio con permisos restrictivos

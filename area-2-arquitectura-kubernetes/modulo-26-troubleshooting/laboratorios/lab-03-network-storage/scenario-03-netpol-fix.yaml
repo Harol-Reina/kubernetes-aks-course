@@ -1,0 +1,60 @@
+# Escenario 3: Network Policy Blocking Traffic - Fix de Politicas de Red
+# Uso: kubectl apply -f scenario-03-netpol-fix.yaml
+#
+# Descripcion:
+#   Crea dos NetworkPolicies que permiten el trafico necesario tras la politica deny-all.
+#   La primera permite trafico Ingress al backend desde el frontend (puerto 80).
+#   La segunda permite trafico Egress desde el frontend al backend y al DNS (UDP 53).
+#
+# Conceptos clave:
+#   - NetworkPolicy como whitelist: se acumula con otras policies
+#   - Egress a DNS es necesario para resolucion de nombres de Service
+#   - namespaceSelector para permitir trafico al DNS de kube-system
+#
+# Namespace: default
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 80
+  - to:  # Permitir DNS
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53

@@ -1,0 +1,25 @@
+# Escenario 2: Security Breach - NetworkPolicy Default Deny All
+# Uso: kubectl apply -f scenario-02-netpol-deny-all.yaml
+#
+# Descripcion:
+#   Implementa una politica de denegacion por defecto en el namespace production.
+#   Bloquea todo el trafico Ingress y Egress para todos los Pods del namespace.
+#   Esta es la base del aislamiento de red; luego se agregan excepciones especificas.
+#
+# Conceptos clave:
+#   - podSelector vacio: aplica a todos los Pods del namespace
+#   - Default deny como patron de seguridad en produccion
+#   - Las NetworkPolicies son aditivas: se acumulan con las excepciones
+#
+# Namespace: production
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

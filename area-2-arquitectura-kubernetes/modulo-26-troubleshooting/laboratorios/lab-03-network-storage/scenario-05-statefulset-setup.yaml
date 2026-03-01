@@ -1,0 +1,45 @@
+# Escenario 5: StatefulSet Volume Mount Issues - Setup del Problema
+# Uso: kubectl apply -f scenario-05-statefulset-setup.yaml
+#
+# Descripcion:
+#   Crea un StatefulSet web con 2 replicas que solicita volumenes mediante
+#   volumeClaimTemplates usando una StorageClass inexistente (nonexistent-sc).
+#   Los Pods quedaran en estado Pending porque los PVCs no pueden ser satisfechos.
+#
+# Conceptos clave:
+#   - volumeClaimTemplates: crea un PVC por cada replica del StatefulSet
+#   - Kubernetes nombra los PVCs como data-web-0, data-web-1, etc.
+#   - StorageClass invalida impide el dynamic provisioning de los PVCs
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  serviceName: "web"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.21
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+      storageClassName: nonexistent-sc

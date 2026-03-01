@@ -1,0 +1,26 @@
+# Escenario 2: Service Without Endpoints - Fix del Service
+# Uso: kubectl apply -f scenario-02-endpoints-fix.yaml
+#
+# Descripcion:
+#   Recrea el Service web-service con el selector correcto (app=web) que coincide
+#   con los labels del Pod web-pod. Aplicar despues de eliminar el Service original
+#   con selector incorrecto.
+#
+# Conceptos clave:
+#   - Correccion de selector en Service
+#   - El Service se actualiza sin reiniciar los Pods
+#   - Verificar endpoints despues de la correccion
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  selector:
+    app: web
+    tier: frontend
+  ports:
+  - port: 80
+    targetPort: 80

@@ -1,0 +1,27 @@
+# Escenario 3: Performance Degradation - ResourceQuota para Namespace
+# Uso: kubectl apply -f scenario-03-resourcequota.yaml
+#
+# Descripcion:
+#   Crea una ResourceQuota namespace-quota en el namespace production que establece
+#   limites agregados de CPU, memoria y numero de Pods. Previene que un namespace
+#   consuma todos los recursos del cluster en detrimento de otros.
+#
+# Conceptos clave:
+#   - ResourceQuota: limites agregados a nivel de namespace
+#   - requests vs limits: ambos se contabilizan en la quota
+#   - pods: limite del numero total de Pods en el namespace
+#
+# Namespace: production
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: production
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    pods: "50"

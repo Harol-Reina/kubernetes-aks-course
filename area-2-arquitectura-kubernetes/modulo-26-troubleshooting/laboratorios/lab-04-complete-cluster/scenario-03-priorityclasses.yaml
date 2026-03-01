@@ -1,0 +1,30 @@
+# Escenario 3: Performance Degradation - PriorityClasses para Scheduling
+# Uso: kubectl apply -f scenario-03-priorityclasses.yaml
+#
+# Descripcion:
+#   Crea dos PriorityClasses: high-priority (1000) para aplicaciones criticas y
+#   low-priority (100) como default global. Cuando el cluster esta bajo presion,
+#   el scheduler evicta Pods de baja prioridad para ubicar los de alta prioridad.
+#
+# Conceptos clave:
+#   - PriorityClass: define la prioridad relativa de Pods en el scheduler
+#   - globalDefault: true hace que todos los Pods sin clase usen esta prioridad
+#   - Valor numerico mas alto = mayor prioridad en scheduling y menor probabilidad de eviccion
+#
+# Namespace: N/A (PriorityClass es un recurso de cluster, no de namespace)
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "High priority for critical apps"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 100
+globalDefault: true
+description: "Low priority for non-critical apps"

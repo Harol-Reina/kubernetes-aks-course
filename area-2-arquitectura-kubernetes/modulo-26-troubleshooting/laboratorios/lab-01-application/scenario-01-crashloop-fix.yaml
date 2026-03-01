@@ -1,0 +1,34 @@
+# Escenario 1: CrashLoopBackOff - Deployment corregido sin argumentos invalidos
+# Uso: kubectl delete deployment webapp-crash && kubectl apply -f scenario-01-crashloop-fix.yaml
+#
+# Descripcion:
+#   Deployment webapp-crash corregido. Se eliminaron los args incorrectos que
+#   forzaban a nginx a usar un archivo de configuracion inexistente. Ahora nginx
+#   usa su configuracion por defecto y el pod inicia correctamente.
+#
+# Conceptos clave:
+#   - Eliminar command/args incorrectos restaura el comportamiento por defecto
+#   - nginx:1.21 incluye configuracion por defecto funcional en /etc/nginx/nginx.conf
+#   - Despues del fix el RESTART count debe quedar en 0
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-crash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21
+        ports:
+        - containerPort: 80

@@ -1,45 +1,83 @@
 # Laboratorio 02: Control Plane & Worker Nodes Troubleshooting
 
-> **Duración estimada**: 75-90 minutos  
-> **Dificultad**: ⭐⭐⭐⭐ (Experto)  
+> **Duracion estimada**: 75-90 minutos
+> **Dificultad**: Experto
 > **Objetivos CKA**: Cluster Architecture (25%), Troubleshooting (25-30%)
 
-## 📋 Objetivos de Aprendizaje
+---
 
-Al completar este laboratorio, serás capaz de:
-- ✅ Diagnosticar problemas del API Server
-- ✅ Troubleshoot etcd (backup, restore, certificados)
-- ✅ Resolver problemas del Scheduler
-- ✅ Diagnosticar Controller Manager
-- ✅ Troubleshoot kubelet en worker nodes
-- ✅ Resolver problemas de kube-proxy
-- ✅ Diagnosticar nodes en estado NotReady
-- ✅ Trabajar con logs de componentes del sistema
+## Tecnicas y Conceptos Utilizados
 
-## ⚠️ Prerequisitos
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Diagnostico API Server** | Uso de `crictl ps -a`, `crictl logs`, `journalctl -u kubelet` y revision de manifests en `/etc/kubernetes/manifests/` para diagnosticar el API Server caido |
+| **etcd backup y restore** | Uso de `etcdctl snapshot save` para backup y `etcdctl snapshot restore` con `--data-dir` para restaurar. Incluye detencion del API Server y actualizacion del manifest de etcd |
+| **Diagnostico Scheduler** | Verificacion con `kubectl get pods -n kube-system` y logs del kube-scheduler. Identificacion de pods en Pending por scheduler inactivo o sin recursos disponibles |
+| **Controller Manager** | Diagnostico cuando Deployments no crean pods: verificar que el controller-manager esta Running y revisar su manifest y logs para errores de configuracion |
+| **Fallas de kubelet** | Diagnostico de nodes NotReady via `systemctl status kubelet`, `journalctl -u kubelet`, revision de certificados y configuracion en `/var/lib/kubelet/config.yaml` |
+| **kube-proxy** | Verificacion de DaemonSet kube-proxy, revision de ConfigMap de configuracion y reconstruccion de reglas iptables mediante reinicio de pods |
+| **Static Pod management** | Gestion de pods en `/etc/kubernetes/manifests/`. kubelet detecta cambios automaticamente; no se usa kubectl apply sino copia directa de archivos al directorio de manifests |
+
+---
+
+## Archivos del Laboratorio
+
+Este laboratorio utiliza un archivo YAML para el escenario de static pod. Los demas escenarios son de diagnostico (no requieren manifests separados):
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `scenario-08-staticpod-setup.yaml` | 8 | Pod static-web con imagen nginx:invalid-tag-xyz para copiar a /etc/kubernetes/manifests/ |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `etcd-backup.sh` | Script para realizar backup de etcd con etcdctl |
+| `cleanup.sh` | Script de limpieza de recursos de prueba del laboratorio |
+
+---
+
+## Objetivos de Aprendizaje
+
+Al completar este laboratorio, seras capaz de:
+- Diagnosticar problemas del API Server
+- Troubleshoot etcd (backup, restore, certificados)
+- Resolver problemas del Scheduler
+- Diagnosticar Controller Manager
+- Troubleshoot kubelet en worker nodes
+- Resolver problemas de kube-proxy
+- Diagnosticar nodes en estado NotReady
+- Trabajar con logs de componentes del sistema
+
+---
+
+## Prerequisitos
 
 - Cluster con acceso a control plane (minikube, kubeadm, o kind)
 - Acceso SSH a nodes (si aplica)
 - Permisos sudo en los nodes
 
-## 🎯 Escenarios
+---
+
+## Escenarios
 
 ### Escenario 1: API Server No Responde
-**Situación**: El API server no está respondiendo a kubectl commands.
 
-**Síntomas**:
+**Situacion**: El API server no esta respondiendo a kubectl commands.
+
+**Sintomas**:
 ```bash
 kubectl get nodes
 # Error: The connection to the server localhost:8080 was refused
 ```
 
 **Tareas**:
-1. Verificar que el API server está corriendo
+1. Verificar que el API server esta corriendo
 2. Revisar logs del API server
 3. Identificar y resolver el problema
 
 <details>
-<summary>💡 Pistas de Diagnóstico</summary>
+<summary>Pistas de Diagnostico</summary>
 
 ```bash
 # En el control plane node:
@@ -50,7 +88,7 @@ sudo crictl ps -a | grep kube-apiserver
 # 2. Ver logs del API server
 sudo crictl logs <container-id>
 
-# 3. Verificar configuración
+# 3. Verificar configuracion
 sudo cat /etc/kubernetes/manifests/kube-apiserver.yaml
 
 # 4. Verificar certificados
@@ -63,11 +101,11 @@ sudo journalctl -u kubelet -n 100 --no-pager
 </details>
 
 <details>
-<summary>🔧 Problemas Comunes y Soluciones</summary>
+<summary>Problemas Comunes y Soluciones</summary>
 
 **Problema 1: Certificados expirados**
 ```bash
-# Verificar expiración
+# Verificar expiracion
 sudo kubeadm certs check-expiration
 
 # Renovar certificados
@@ -79,7 +117,7 @@ sudo systemctl restart kubelet
 
 **Problema 2: Puerto en uso**
 ```bash
-# Verificar que el puerto 6443 está disponible
+# Verificar que el puerto 6443 esta disponible
 sudo netstat -tulpn | grep 6443
 
 # Si hay otro proceso usando el puerto
@@ -110,7 +148,7 @@ sudo ETCDCTL_API=3 etcdctl \
   --key=/etc/kubernetes/pki/etcd/server.key \
   endpoint health
 
-# Si etcd está down, revisar logs
+# Si etcd esta down, revisar logs
 sudo crictl logs <etcd-container-id>
 ```
 
@@ -119,7 +157,8 @@ sudo crictl logs <etcd-container-id>
 ---
 
 ### Escenario 2: etcd Troubleshooting
-**Situación**: Necesitas diagnosticar y recuperar un cluster con problemas de etcd.
+
+**Situacion**: Necesitas diagnosticar y recuperar un cluster con problemas de etcd.
 
 #### Parte A: Health Check
 
@@ -155,7 +194,7 @@ sudo ETCDCTL_API=3 etcdctl \
 **Escenario**: Necesitas hacer backup de etcd antes de un upgrade.
 
 <details>
-<summary>✅ Solución Completa</summary>
+<summary>Solucion Completa</summary>
 
 **Backup**:
 ```bash
@@ -178,7 +217,7 @@ sudo ETCDCTL_API=3 etcdctl \
 
 **Simular Desastre** (SOLO EN LAB):
 ```bash
-# Eliminar todos los pods (simulación)
+# Eliminar todos los pods (simulacion)
 kubectl delete pods --all -n default
 
 # Ver que se eliminaron
@@ -222,7 +261,8 @@ kubectl get pods
 ---
 
 ### Escenario 3: Scheduler No Asigna Pods
-**Situación**: Los pods se quedan en estado Pending indefinidamente.
+
+**Situacion**: Los pods se quedan en estado Pending indefinidamente.
 
 **Setup del Problema**:
 ```bash
@@ -230,7 +270,7 @@ kubectl get pods
 kubectl -n kube-system scale deployment coredns --replicas=3
 ```
 
-**Síntomas**:
+**Sintomas**:
 ```bash
 kubectl get pods
 # NAME                    READY   STATUS    RESTARTS   AGE
@@ -238,10 +278,10 @@ kubectl get pods
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
-# 1. Verificar que el scheduler está corriendo
+# 1. Verificar que el scheduler esta corriendo
 kubectl get pods -n kube-system | grep scheduler
 
 # 2. Ver logs del scheduler
@@ -261,9 +301,9 @@ sudo journalctl -u kubelet | grep scheduler
 </details>
 
 <details>
-<summary>✅ Soluciones Comunes</summary>
+<summary>Soluciones Comunes</summary>
 
-**Problema 1: Scheduler no está corriendo**
+**Problema 1: Scheduler no esta corriendo**
 ```bash
 # Verificar manifest
 sudo cat /etc/kubernetes/manifests/kube-scheduler.yaml
@@ -274,7 +314,7 @@ sudo journalctl -u kubelet -n 50
 # Reiniciar kubelet
 sudo systemctl restart kubelet
 
-# Verificar que scheduler inició
+# Verificar que scheduler inicio
 kubectl get pods -n kube-system -l component=kube-scheduler
 ```
 
@@ -286,7 +326,7 @@ kubectl get pod -n kube-system kube-scheduler-<node> -o yaml | grep command -A 2
 # Si hay error en config, editar manifest
 sudo vi /etc/kubernetes/manifests/kube-scheduler.yaml
 
-# kubelet automáticamente reiniciará el pod
+# kubelet automaticamente reiniciara el pod
 ```
 
 **Problema 3: No hay recursos disponibles**
@@ -304,7 +344,8 @@ kubectl delete pod <pod-name>
 ---
 
 ### Escenario 4: Controller Manager Issues
-**Situación**: Los ReplicaSets no crean pods, Deployments no funcionan.
+
+**Situacion**: Los ReplicaSets no crean pods, Deployments no funcionan.
 
 **Setup**:
 ```bash
@@ -317,7 +358,7 @@ kubectl get deployment test-nginx
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
 # 1. Verificar controller-manager
@@ -336,14 +377,14 @@ sudo journalctl -u kubelet | grep controller-manager | tail -20
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Problema: Controller Manager no está corriendo**
+**Problema: Controller Manager no esta corriendo**
 ```bash
 # Ver manifest
 sudo cat /etc/kubernetes/manifests/kube-controller-manager.yaml
 
-# Buscar errores de configuración comunes:
+# Buscar errores de configuracion comunes:
 # - Certificados incorrectos
 # - Flags mal formateados
 # - Paths incorrectos
@@ -354,7 +395,7 @@ sudo crictl logs <controller-manager-container-id>
 # Si hay error en manifest, corregir
 sudo vi /etc/kubernetes/manifests/kube-controller-manager.yaml
 
-# kubelet reiniciará automáticamente
+# kubelet reiniciara automaticamente
 
 # Verificar que funciona
 kubectl get pods -n kube-system -l component=kube-controller-manager
@@ -369,7 +410,8 @@ kubectl get pods -l app=test-nginx
 ---
 
 ### Escenario 5: Node NotReady - kubelet Issues
-**Situación**: Un worker node está en estado NotReady.
+
+**Situacion**: Un worker node esta en estado NotReady.
 
 **Simular** (en worker node):
 ```bash
@@ -385,7 +427,7 @@ kubectl get nodes
 ```
 
 <details>
-<summary>🔍 Diagnóstico Completo</summary>
+<summary>Diagnostico Completo</summary>
 
 ```bash
 # 1. Describir el node
@@ -401,7 +443,7 @@ sudo systemctl status kubelet
 # 4. Ver logs de kubelet
 sudo journalctl -u kubelet -n 100 --no-pager
 
-# 5. Verificar configuración
+# 5. Verificar configuracion
 sudo cat /var/lib/kubelet/config.yaml
 
 # 6. Verificar certificados
@@ -417,7 +459,7 @@ sudo crictl ps
 </details>
 
 <details>
-<summary>✅ Soluciones por Causa</summary>
+<summary>Soluciones por Causa</summary>
 
 **Causa 1: kubelet stopped**
 ```bash
@@ -433,11 +475,11 @@ sudo systemctl status kubelet
 
 **Causa 2: Certificados expirados**
 ```bash
-# Ver expiración
+# Ver expiracion
 sudo openssl x509 -in /var/lib/kubelet/pki/kubelet-client-current.pem \
   -text -noout | grep "Not After"
 
-# Si expiró, regenerar en el master
+# Si expiro, regenerar en el master
 kubectl certificate approve <csr-name>
 
 # Reiniciar kubelet
@@ -449,7 +491,7 @@ sudo systemctl restart kubelet
 # Verificar espacio en disco
 df -h
 
-# Limpiar imágenes no usadas
+# Limpiar imagenes no usadas
 sudo crictl rmi --prune
 
 # Limpiar contenedores stopped
@@ -459,7 +501,7 @@ sudo crictl rm $(sudo crictl ps -a -q)
 sudo systemctl restart kubelet
 ```
 
-**Causa 4: Configuración incorrecta**
+**Causa 4: Configuracion incorrecta**
 ```bash
 # Verificar config
 sudo cat /var/lib/kubelet/config.yaml
@@ -488,9 +530,10 @@ kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 ---
 
 ### Escenario 6: kube-proxy Issues
-**Situación**: Los Services no funcionan, pods no pueden comunicarse entre sí.
 
-**Síntomas**:
+**Situacion**: Los Services no funcionan, pods no pueden comunicarse entre si.
+
+**Sintomas**:
 ```bash
 # Crear test
 kubectl run test-1 --image=nginx
@@ -500,16 +543,16 @@ kubectl run test-2 --image=busybox:1.28 -it --rm -- wget -O- http://test-1
 ```
 
 <details>
-<summary>🔍 Diagnóstico</summary>
+<summary>Diagnostico</summary>
 
 ```bash
-# 1. Verificar kube-proxy está corriendo
+# 1. Verificar kube-proxy esta corriendo
 kubectl get pods -n kube-system | grep kube-proxy
 
 # 2. Ver logs de kube-proxy
 kubectl logs -n kube-system kube-proxy-<xxxxx>
 
-# 3. Verificar configuración
+# 3. Verificar configuracion
 kubectl get configmap kube-proxy -n kube-system -o yaml
 
 # 4. En worker node: verificar iptables rules
@@ -522,7 +565,7 @@ kubectl logs -n kube-system kube-proxy-<xxxxx> | grep "Using"
 </details>
 
 <details>
-<summary>✅ Soluciones</summary>
+<summary>Soluciones</summary>
 
 **Problema 1: kube-proxy pods no running**
 ```bash
@@ -539,7 +582,7 @@ kubectl get ds -n kube-system kube-proxy
 kubectl delete pod -n kube-system -l k8s-app=kube-proxy
 ```
 
-**Problema 2: Configuración incorrecta**
+**Problema 2: Configuracion incorrecta**
 ```bash
 # Ver config
 kubectl get cm kube-proxy -n kube-system -o yaml
@@ -554,17 +597,17 @@ kubectl delete pod -n kube-system -l k8s-app=kube-proxy
 **Problema 3: iptables corrupto**
 ```bash
 # En worker node
-# Flush iptables (CUIDADO en producción!)
+# Flush iptables (CUIDADO en produccion!)
 sudo iptables -F
 sudo iptables -t nat -F
 
 # Reiniciar kube-proxy en ese node
 kubectl delete pod -n kube-system kube-proxy-<node-specific-pod>
 
-# kube-proxy recreará las reglas
+# kube-proxy recreara las reglas
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Test conectividad
 kubectl run test-1 --image=nginx
@@ -579,9 +622,10 @@ kubectl run test-2 --image=busybox:1.28 -it --rm -- wget -O- http://test-1
 ---
 
 ### Escenario 7: Node Disk Pressure
-**Situación**: Node reporta DiskPressure, pods son evicted.
 
-**Simular** (NO en producción):
+**Situacion**: Node reporta DiskPressure, pods son evicted.
+
+**Simular** (NO en produccion):
 ```bash
 # En worker node, crear archivo grande
 sudo dd if=/dev/zero of=/tmp/bigfile bs=1G count=10
@@ -599,7 +643,7 @@ kubectl describe node worker-01 | grep -A 5 "Conditions"
 ```
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
 ```bash
 # 1. SSH al node
@@ -608,22 +652,22 @@ ssh worker-01
 # 2. Identificar uso de disco
 df -h
 
-# 3. Ver qué consume espacio
+# 3. Ver que consume espacio
 sudo du -sh /* | sort -rh | head -20
 
-# 4. Limpiar según sea necesario
+# 4. Limpiar segun sea necesario
 
-# Opción A: Limpiar imágenes Docker/containerd
+# Opcion A: Limpiar imagenes Docker/containerd
 sudo crictl rmi --prune
 
-# Opción B: Limpiar logs
+# Opcion B: Limpiar logs
 sudo journalctl --vacuum-size=100M
 sudo find /var/log -name "*.log" -exec truncate -s 0 {} \;
 
-# Opción C: Limpiar contenedores stopped
+# Opcion C: Limpiar contenedores stopped
 sudo crictl rm $(sudo crictl ps -a -q --state=exited)
 
-# Opción D: Limpiar cache de paquetes
+# Opcion D: Limpiar cache de paquetes
 sudo apt-get clean
 sudo rm -rf /var/cache/apt/archives/*
 
@@ -643,27 +687,17 @@ kubectl describe node worker-01 | grep DiskPressure
 ---
 
 ### Escenario 8: Static Pod Not Starting
-**Situación**: Un static pod definido en `/etc/kubernetes/manifests/` no está corriendo.
+
+**Situacion**: Un static pod definido en `/etc/kubernetes/manifests/` no esta corriendo.
 
 **Setup**:
 ```bash
-# En control plane, crear static pod con error
-sudo tee /etc/kubernetes/manifests/static-web.yaml > /dev/null <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: static-web
-spec:
-  containers:
-  - name: web
-    image: nginx:invalid-tag-xyz
-    ports:
-    - containerPort: 80
-EOF
+# Copiar el manifiesto del static pod con imagen invalida al directorio de manifests
+sudo cp scenario-08-staticpod-setup.yaml /etc/kubernetes/manifests/static-web.yaml
 ```
 
 <details>
-<summary>🔍 Diagnóstico y Solución</summary>
+<summary>Diagnostico y Solucion</summary>
 
 ```bash
 # 1. Verificar si kubelet ve el pod
@@ -684,11 +718,11 @@ sudo cat /etc/kubernetes/manifests/static-web.yaml | yamllint -
 # 6. Ver en crictl directamente
 sudo crictl ps -a | grep static-web
 
-# Solución: Corregir el manifest
+# Solucion: Corregir el manifest
 sudo vi /etc/kubernetes/manifests/static-web.yaml
-# Cambiar image: nginx:invalid-tag-xyz → nginx:1.21
+# Cambiar image: nginx:invalid-tag-xyz a nginx:1.21
 
-# kubelet detectará el cambio automáticamente en ~20 segundos
+# kubelet detectara el cambio automaticamente en ~20 segundos
 
 # Verificar
 kubectl get pods | grep static-web
@@ -698,10 +732,13 @@ kubectl get pods | grep static-web
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
-# Eliminar recursos de prueba
+# Ejecutar el script de limpieza
+bash cleanup.sh
+
+# O limpiar manualmente
 kubectl delete deployment test-nginx
 kubectl delete pod test-1 test-2 --ignore-not-found
 
@@ -718,7 +755,7 @@ sudo systemctl enable kubelet
 
 ---
 
-## 📊 Evaluación
+## Evaluacion
 
 - [ ] Escenario 1: API Server diagnosticado y reparado
 - [ ] Escenario 2: etcd backup/restore completado
@@ -731,14 +768,14 @@ sudo systemctl enable kubelet
 
 ---
 
-## 🎯 Comandos Críticos para CKA
+## Comandos Criticos para CKA
 
 ### Control Plane Components
 ```bash
 # Ver todos los componentes
 kubectl get pods -n kube-system
 
-# Logs de componentes estáticos
+# Logs de componentes estaticos
 sudo crictl logs <container-id>
 sudo journalctl -u kubelet -n 100
 
@@ -772,9 +809,9 @@ sudo journalctl -u kubelet -f
 
 ---
 
-## 💡 Tips para el Examen
+## Tips para el Examen
 
-1. **Memoriza paths críticos**:
+1. **Memoriza paths criticos**:
    - `/etc/kubernetes/manifests/` - Static pods
    - `/var/lib/kubelet/config.yaml` - kubelet config
    - `/etc/kubernetes/pki/` - Certificados
@@ -792,11 +829,11 @@ sudo journalctl -u kubelet -f
    sudo crictl inspect <id>
    ```
 
-4. **Siempre verifica certificados en issues de autenticación**
+4. **Siempre verifica certificados en issues de autenticacion**
 
-5. **etcd backup/restore es CRÍTICO** - practica múltiples veces
+5. **etcd backup/restore es CRITICO** - practica multiples veces
 
 ---
 
-**Tiempo objetivo**: 8-12 minutos por escenario  
-**Siguiente**: [Lab 03 - Network & Storage](./lab-03-network-storage.md)
+**Tiempo objetivo**: 8-12 minutos por escenario
+**Siguiente**: Lab 03 - Network & Storage

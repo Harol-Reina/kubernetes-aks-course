@@ -1,0 +1,32 @@
+# Escenario 5: Liveness Probe Failure - Pod con probe apuntando a path inexistente
+# Uso: kubectl apply -f scenario-05-liveness-setup.yaml
+#
+# Descripcion:
+#   Pod web-server con un liveness probe HTTP que busca el path /healthz en el
+#   puerto 80. nginx no expone ese endpoint por defecto y retorna 404, lo que
+#   hace que Kubernetes reinicie el pod cada ~30 segundos indefinidamente.
+#
+# Conceptos clave:
+#   - Liveness probe: si falla failureThreshold veces seguidas Kubernetes reinicia el contenedor
+#   - httpGet probe hace una peticion HTTP; codigo 2xx/3xx = exito, cualquier otro = fallo
+#   - El contador RESTARTS en kubectl get pods sube cuando el liveness probe falla
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-server
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 2

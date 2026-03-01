@@ -1,33 +1,82 @@
 # Laboratorio 04: Complete Cluster Troubleshooting - CKA Simulation
 
-> **Duración estimada**: 90-120 minutos  
-> **Dificultad**: ⭐⭐⭐⭐ (CKA Exam Level)  
-> **Objetivos CKA**: All domains - Exam Simulation
+**Duracion estimada:** 90-120 minutos
+**Nivel:** CKA Exam Level
+**Objetivo:** Simular escenarios complejos del examen CKA con multiples componentes fallando
 
-## 📋 Objetivos de Aprendizaje
+---
 
-Este laboratorio simula escenarios complejos del examen CKA donde:
-- ✅ Múltiples componentes fallan simultáneamente
-- ✅ Los problemas están interrelacionados
-- ✅ Debes priorizar bajo presión de tiempo
-- ✅ Aplicar metodología sistemática
-- ✅ Documentar soluciones
+## Tecnicas y Conceptos Utilizados
 
-## ⚠️ Formato del Examen CKA
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Multi-component failure diagnosis** | Metodologia sistematica para diagnosticar fallos simultaneos en API server, worker nodes, DNS y Pods. Priorizacion de componentes para restaurar el cluster de forma ordenada |
+| **RBAC auditing y hardening** | Auditoria de ServiceAccounts con permisos excesivos, eliminacion de ClusterRoleBindings peligrosos, y creacion de Roles con principio de minimo privilegio |
+| **Network Policy segmentation** | Implementacion de micro-segmentacion: default-deny-all en namespace de produccion, excepciones selectivas de Ingress/Egress, y permiso de trafico DNS esencial |
+| **ResourceQuota y LimitRange** | Control de consumo de recursos a nivel de namespace: quotas agregadas de CPU/memoria/Pods, y defaults automaticos para containers sin especificacion |
+| **PriorityClasses** | Gestion de prioridad de scheduling bajo presion de recursos: clases high-priority para apps criticas y low-priority como default global |
+| **etcd disaster recovery** | Proceso completo de backup y restore de etcd: detener control plane, restaurar snapshot, reiniciar componentes y verificar integridad de datos |
+| **StatefulSet data recovery** | Diagnostico de fallos de montaje de volumenes en StatefulSets, detach forzado de volumes stuck, y uso de initContainers para permisos de datos |
 
-- **Duración**: 2 horas
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Las operaciones de los escenarios 2 y 3 se realizan mediante archivos YAML:
+
+| Archivo | Escenario | Descripcion |
+|---------|-----------|-------------|
+| `scenario-02-rbac-role.yaml` | 2 | Role pod-reader con permisos minimos (get, list de Pods) |
+| `scenario-02-rbac-rolebinding.yaml` | 2 | RoleBinding read-pods que asigna pod-reader al ServiceAccount app-sa |
+| `scenario-02-netpol-deny-all.yaml` | 2 | NetworkPolicy default-deny-all en namespace production |
+| `scenario-02-netpol-allow-frontend.yaml` | 2 | NetworkPolicy que permite trafico frontend a backend (puerto 8080) |
+| `scenario-02-netpol-allow-dns.yaml` | 2 | NetworkPolicy que permite trafico Egress UDP al DNS (puerto 53) |
+| `scenario-02-secure-pod.yaml` | 2 | Pod secure-pod con SecurityContext reforzado (non-root, read-only FS) |
+| `scenario-03-resourcequota.yaml` | 3 | ResourceQuota namespace-quota con limites de CPU, memoria y Pods |
+| `scenario-03-limitrange.yaml` | 3 | LimitRange default-limits con valores por defecto para containers |
+| `scenario-03-priorityclasses.yaml` | 3 | PriorityClass high-priority (1000) + low-priority (100, default global) |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `pre-flight-check.sh` | Verificaciones previas del entorno antes de iniciar el laboratorio |
+| `create-backup.sh` | Script para crear backup de etcd (Escenario 5) |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster de Kubernetes funcional con acceso SSH a los nodos
+- kubectl configurado con permisos de cluster-admin
+- Acceso a los nodos de control plane (para escenarios 1 y 5)
+- etcdctl instalado en el control plane (para escenario 5)
+
+### Verificacion del entorno
+
+```bash
+bash pre-flight-check.sh
+```
+
+---
+
+## Formato del Examen CKA
+
+- **Duracion**: 2 horas
 - **Passing score**: 66%
-- **Distribución aproximada**:
+- **Distribucion aproximada**:
   - 25% Cluster Architecture, Installation & Configuration
   - 15% Workloads & Scheduling
   - 20% Services & Networking
   - 10% Storage
-  - 30% Troubleshooting ← **Este lab**
+  - 30% Troubleshooting (este lab)
 
-## 🎯 Escenarios Complejos
+---
 
-### Escenario 1: Cluster Upgrade Failed - Multi-Component Failure
-**Contexto**: Un upgrade del cluster falló a medias, dejando el cluster en estado inconsistente.
+## Escenario 1: Cluster Upgrade Failed - Multi-Component Failure
+
+**Contexto**: Un upgrade del cluster fallo a medias, dejando el cluster en estado inconsistente.
 
 **Estado Inicial**:
 - Control plane node: API server no responde
@@ -39,7 +88,7 @@ Este laboratorio simula escenarios complejos del examen CKA donde:
 **Tiempo estimado**: 25-30 minutos
 
 <details>
-<summary>🎯 Tareas Priorizadas</summary>
+<summary>Tareas Priorizadas</summary>
 
 **Prioridad 1: Restaurar API Server** (8 min)
 ```bash
@@ -61,9 +110,9 @@ sudo crictl logs <apiserver-container-id> 2>&1 | tail -50
 sudo kubeadm certs check-expiration
 
 # Common issues:
-# - Certificado expirado → kubeadm certs renew all
-# - Manifest corrupto → restaurar desde backup
-# - etcd no accesible → verificar etcd health
+# - Certificado expirado -> kubeadm certs renew all
+# - Manifest corrupto -> restaurar desde backup
+# - etcd no accesible -> verificar etcd health
 ```
 
 **Prioridad 2: Resolver Worker Node NotReady** (7 min)
@@ -76,7 +125,7 @@ ssh worker-01
 
 # Verificar kubelet
 sudo systemctl status kubelet
-sudo systemctl start kubelet  # si está stopped
+sudo systemctl start kubelet  # si esta stopped
 
 # Ver logs
 sudo journalctl -u kubelet -n 100 | grep -i error
@@ -94,7 +143,7 @@ kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 # Verificar CoreDNS pods
 kubectl get pods -n kube-system -l k8s-app=kube-dns
 
-# Si no están corriendo
+# Si no estan corriendo
 kubectl logs -n kube-system -l k8s-app=kube-dns
 
 # Escalar si es necesario
@@ -114,26 +163,26 @@ kubectl describe pod <pod-name> -n <namespace>
 kubectl logs <pod-name> -n <namespace> --previous
 
 # Soluciones comunes:
-# - Imagen incorrecta → kubectl set image
-# - ConfigMap faltante → kubectl create configmap
-# - Resource limits → ajustar resources
+# - Imagen incorrecta -> kubectl set image
+# - ConfigMap faltante -> kubectl create configmap
+# - Resource limits -> ajustar resources
 ```
 
 </details>
 
 <details>
-<summary>✅ Procedimiento Completo</summary>
+<summary>Procedimiento Completo</summary>
 
-**Paso 1: Diagnóstico rápido (2 min)**
+**Paso 1: Diagnostico rapido (2 min)**
 ```bash
 # Intentar kubectl
 kubectl get nodes
-# Si falla → API server issue
+# Si falla -> API server issue
 
 # Si funciona, ver estado general
 kubectl get nodes
 kubectl get pods --all-namespaces | grep -v Running
-kubectl get componentstatuses  # deprecated pero útil
+kubectl get componentstatuses  # deprecated pero util
 ```
 
 **Paso 2: Restaurar API Server (6 min)**
@@ -144,7 +193,7 @@ ssh control-plane
 # Verificar kubelet primero (maneja static pods)
 sudo systemctl status kubelet
 
-# Si está failed
+# Si esta failed
 sudo systemctl start kubelet
 sudo journalctl -u kubelet -n 50
 
@@ -158,11 +207,11 @@ sudo ls -la /etc/kubernetes/manifests/*.backup
 # Si kube-apiserver.yaml tiene errores
 sudo cp /etc/kubernetes/manifests/kube-apiserver.yaml /tmp/kube-apiserver.yaml.broken
 sudo vi /etc/kubernetes/manifests/kube-apiserver.yaml
-# Revisar syntax, indentación, certificados
+# Revisar syntax, indentacion, certificados
 
 # Verificar certificados
 sudo kubeadm certs check-expiration
-# Si expiró
+# Si expiro
 sudo kubeadm certs renew all
 sudo systemctl restart kubelet
 
@@ -197,7 +246,7 @@ sudo ls -la /var/lib/kubelet/pki/
 
 # 3. Disk pressure
 df -h
-sudo crictl rmi --prune  # limpiar imágenes
+sudo crictl rmi --prune  # limpiar imagenes
 
 # Verificar en master
 kubectl get nodes  # Debe estar Ready
@@ -228,7 +277,7 @@ kubectl run test-dns --image=busybox:1.28 --rm -it -- nslookup kubernetes.defaul
 # Listar todos
 kubectl get pods --all-namespaces -o wide | grep -E "CrashLoopBackOff|Error"
 
-# Para cada pod problemático
+# Para cada pod problematico
 POD_NAME=<pod-name>
 NAMESPACE=<namespace>
 
@@ -236,10 +285,10 @@ kubectl describe pod $POD_NAME -n $NAMESPACE
 kubectl logs $POD_NAME -n $NAMESPACE
 kubectl logs $POD_NAME -n $NAMESPACE --previous
 
-# Diagnóstico según logs:
-# - Exit code 137 → OOMKilled → aumentar memory limits
-# - Exit code 1 → error de aplicación → revisar config/secrets/configmaps
-# - ImagePullBackOff → corregir imagen
+# Diagnostico segun logs:
+# - Exit code 137 -> OOMKilled -> aumentar memory limits
+# - Exit code 1 -> error de aplicacion -> revisar config/secrets/configmaps
+# - ImagePullBackOff -> corregir imagen
 
 # Ejemplo: Si falta ConfigMap
 kubectl create configmap app-config --from-literal=KEY=VALUE -n $NAMESPACE
@@ -248,7 +297,7 @@ kubectl create configmap app-config --from-literal=KEY=VALUE -n $NAMESPACE
 kubectl set resources deployment/<name> -n $NAMESPACE --limits=memory=512Mi
 ```
 
-**Verificación Final (5 min)**
+**Verificacion Final (5 min)**
 ```bash
 # 1. Todos los nodes Ready
 kubectl get nodes
@@ -274,8 +323,9 @@ kubectl delete deployment test-nginx
 
 ---
 
-### Escenario 2: Security Breach - RBAC & Network Isolation
-**Contexto**: Se detectó acceso no autorizado. Debes implementar seguridad estricta.
+## Escenario 2: Security Breach - RBAC & Network Isolation
+
+**Contexto**: Se detecto acceso no autorizado. Debes implementar seguridad estricta.
 
 **Tareas**:
 1. Auditar permisos actuales
@@ -286,7 +336,7 @@ kubectl delete deployment test-nginx
 **Tiempo estimado**: 20-25 minutos
 
 <details>
-<summary>✅ Solución Completa</summary>
+<summary>Solucion Completa</summary>
 
 **Paso 1: Auditar ServiceAccounts y permisos (5 min)**
 ```bash
@@ -297,11 +347,11 @@ kubectl get serviceaccounts --all-namespaces
 kubectl get clusterrolebindings -o json | \
   jq '.items[] | select(.roleRef.name=="cluster-admin") | .metadata.name'
 
-# Auditar un SA específico
+# Auditar un SA especifico
 SA_NAME=<suspicious-sa>
 NAMESPACE=<namespace>
 
-# Ver qué puede hacer
+# Ver que puede hacer
 kubectl auth can-i --list --as=system:serviceaccount:$NAMESPACE:$SA_NAME
 
 # Ver bindings de este SA
@@ -315,102 +365,29 @@ kubectl get rolebindings,clusterrolebindings --all-namespaces -o json | \
 kubectl delete clusterrolebinding <dangerous-binding>
 
 # Crear Role limitado
-cat <<EOF | kubectl apply -f -
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: pod-reader
-  namespace: $NAMESPACE
-rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list"]
-EOF
+kubectl apply -f scenario-02-rbac-role.yaml
 
 # Crear RoleBinding
-cat <<EOF | kubectl apply -f -
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: read-pods
-  namespace: $NAMESPACE
-subjects:
-- kind: ServiceAccount
-  name: $SA_NAME
-  namespace: $NAMESPACE
-roleRef:
-  kind: Role
-  name: pod-reader
-  apiGroup: rbac.authorization.k8s.io
-EOF
+kubectl apply -f scenario-02-rbac-rolebinding.yaml
 
 # Verificar
-kubectl auth can-i create pods --as=system:serviceaccount:$NAMESPACE:$SA_NAME
+kubectl auth can-i create pods --as=system:serviceaccount:production:app-sa
 # Output: no
 ```
 
 **Paso 3: Implementar Network Policies (10 min)**
 ```bash
-# Default deny all
-cat <<EOF | kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-all
-  namespace: production
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
-EOF
+# Primero crear el namespace si no existe
+kubectl create namespace production 2>/dev/null || true
 
-# Permitir solo tráfico necesario: frontend → backend
-cat <<EOF | kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-frontend-to-backend
-  namespace: production
-spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: frontend
-    ports:
-    - protocol: TCP
-      port: 8080
-EOF
+# Default deny all
+kubectl apply -f scenario-02-netpol-deny-all.yaml
+
+# Permitir solo trafico necesario: frontend -> backend
+kubectl apply -f scenario-02-netpol-allow-frontend.yaml
 
 # Permitir egress a DNS
-cat <<EOF | kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-dns
-  namespace: production
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          name: kube-system
-      podSelector:
-        matchLabels:
-          k8s-app: kube-dns
-    ports:
-    - protocol: UDP
-      port: 53
-EOF
+kubectl apply -f scenario-02-netpol-allow-dns.yaml
 ```
 
 **Paso 4: Verificar SecurityContext (5 min)**
@@ -423,33 +400,14 @@ kubectl get pods --all-namespaces -o json | \
 kubectl get pods --all-namespaces -o json | \
   jq '.items[] | select(.spec.securityContext?.runAsNonRoot!=true) | .metadata.name'
 
-# Corregir pod problemático
+# Corregir pod problematico
 kubectl delete pod <privileged-pod>
 
 # Recrear con SecurityContext apropiado
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: secure-pod
-spec:
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-    fsGroup: 2000
-  containers:
-  - name: app
-    image: nginx:1.21
-    securityContext:
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
-      capabilities:
-        drop:
-        - ALL
-EOF
+kubectl apply -f scenario-02-secure-pod.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Test RBAC
 kubectl auth can-i create pods --as=system:serviceaccount:production:app-sa
@@ -469,10 +427,11 @@ kubectl run test-inside -n production --labels=app=frontend --image=busybox:1.28
 
 ---
 
-### Escenario 3: Performance Degradation - Resource Exhaustion
-**Contexto**: El cluster está lento, algunos pods son evicted, nodes bajo presión.
+## Escenario 3: Performance Degradation - Resource Exhaustion
 
-**Síntomas**:
+**Contexto**: El cluster esta lento, algunos pods son evicted, nodes bajo presion.
+
+**Sintomas**:
 - Pods en Pending (insufficient resources)
 - Pods evicted (DiskPressure, MemoryPressure)
 - API server slow
@@ -481,9 +440,9 @@ kubectl run test-inside -n production --labels=app=frontend --image=busybox:1.28
 **Tiempo estimado**: 20-25 minutos
 
 <details>
-<summary>✅ Solución Completa</summary>
+<summary>Solucion Completa</summary>
 
-**Paso 1: Identificar recursos más consumidos (5 min)**
+**Paso 1: Identificar recursos mas consumidos (5 min)**
 ```bash
 # Top nodes
 kubectl top nodes
@@ -517,46 +476,21 @@ kubectl get deployments --all-namespaces -o json | \
 
 **Paso 3: Implementar ResourceQuotas y LimitRanges (5 min)**
 ```bash
+# Primero crear el namespace si no existe
+kubectl create namespace production 2>/dev/null || true
+
 # ResourceQuota para namespace
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: namespace-quota
-  namespace: production
-spec:
-  hard:
-    requests.cpu: "10"
-    requests.memory: 20Gi
-    limits.cpu: "20"
-    limits.memory: 40Gi
-    pods: "50"
-EOF
+kubectl apply -f scenario-03-resourcequota.yaml
 
 # LimitRange para defaults
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: LimitRange
-metadata:
-  name: default-limits
-  namespace: production
-spec:
-  limits:
-  - default:
-      cpu: 500m
-      memory: 512Mi
-    defaultRequest:
-      cpu: 100m
-      memory: 128Mi
-    type: Container
-EOF
+kubectl apply -f scenario-03-limitrange.yaml
 
 # Verificar
 kubectl describe resourcequota -n production
 kubectl describe limitrange -n production
 ```
 
-**Paso 4: Escalar o eliminar pods problemáticos (5 min)**
+**Paso 4: Escalar o eliminar pods problematicos (5 min)**
 ```bash
 # Identificar deployment que consume mucho
 TOP_CONSUMER=$(kubectl top pods --all-namespaces --sort-by=memory | head -2 | tail -1 | awk '{print $2}')
@@ -582,7 +516,7 @@ ssh $NODE
 # Ver uso de disco
 df -h
 
-# Limpiar imágenes no usadas
+# Limpiar imagenes no usadas
 sudo crictl rmi --prune
 
 # Limpiar contenedores stopped
@@ -603,30 +537,14 @@ kubectl describe node $NODE | grep DiskPressure
 **Paso 6: Implementar PriorityClasses (5 min)**
 ```bash
 # Crear PriorityClasses
-cat <<EOF | kubectl apply -f -
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: high-priority
-value: 1000
-globalDefault: false
-description: "High priority for critical apps"
----
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: low-priority
-value: 100
-globalDefault: true
-description: "Low priority for non-critical apps"
-EOF
+kubectl apply -f scenario-03-priorityclasses.yaml
 
-# Asignar a deployments críticos
+# Asignar a deployments criticos
 kubectl patch deployment critical-app -p \
   '{"spec":{"template":{"spec":{"priorityClassName":"high-priority"}}}}'
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Todos los nodes sin pressure
 kubectl get nodes -o json | \
@@ -644,10 +562,11 @@ kubectl get resourcequotas --all-namespaces
 
 ---
 
-### Escenario 4: StatefulSet Data Loss - Recovery
-**Contexto**: Un StatefulSet crítico (base de datos) tiene pods que no inician después de un reinicio del node.
+## Escenario 4: StatefulSet Data Loss - Recovery
 
-**Síntomas**:
+**Contexto**: Un StatefulSet critico (base de datos) tiene pods que no inician despues de un reinicio del node.
+
+**Sintomas**:
 - Pods en Pending (waiting for volume to be attached)
 - PVCs en estado Bound pero pods no inician
 - Data directory mount failures
@@ -655,9 +574,9 @@ kubectl get resourcequotas --all-namespaces
 **Tiempo estimado**: 15-20 minutos
 
 <details>
-<summary>✅ Solución Completa</summary>
+<summary>Solucion Completa</summary>
 
-**Paso 1: Diagnóstico (5 min)**
+**Paso 1: Diagnostico (5 min)**
 ```bash
 # Ver StatefulSet
 kubectl get statefulset postgres-db
@@ -684,14 +603,14 @@ kubectl get sc
 
 **Paso 2: Identificar problema (5 min)**
 ```bash
-# Problema común 1: Volume stuck attached a node down
+# Problema comun 1: Volume stuck attached a node down
 kubectl describe pv <pv-name>
 # Ver Node Affinity
 
 # Ver eventos del namespace
 kubectl get events --sort-by='.lastTimestamp' | grep postgres-db
 
-# Problema común 2: CSI driver issues
+# Problema comun 2: CSI driver issues
 kubectl get pods -n kube-system | grep csi
 
 # Logs del CSI driver
@@ -700,10 +619,10 @@ kubectl logs -n kube-system <csi-driver-pod>
 
 **Paso 3: Forzar detach del volume (si aplica)**
 ```bash
-# Si el volume está stuck en un node que ya no existe
+# Si el volume esta stuck en un node que ya no existe
 kubectl get pv <pv-name> -o yaml | grep claimRef -A 10
 
-# Eliminar el pod (será recreado por StatefulSet)
+# Eliminar el pod (sera recreado por StatefulSet)
 kubectl delete pod postgres-db-0 --force --grace-period=0
 
 # Si sigue stuck, patch el PV para remover node affinity
@@ -743,7 +662,7 @@ kubectl scale statefulset postgres-db --replicas=0
 # Esperar a que todos terminen
 kubectl get pods -l app=postgres-db -w
 
-# Eliminar PVCs problemáticos (CUIDADO - solo si tienes backup)
+# Eliminar PVCs problematicos (CUIDADO - solo si tienes backup)
 # kubectl delete pvc data-postgres-db-0
 
 # Scale up
@@ -753,7 +672,7 @@ kubectl scale statefulset postgres-db --replicas=3
 kubectl get pods -l app=postgres-db -w
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Todos los pods Running
 kubectl get pods -l app=postgres-db
@@ -772,13 +691,14 @@ kubectl run psql-client --image=postgres:13 --rm -it -- \
 
 ---
 
-### Escenario 5: Complete Disaster Recovery
+## Escenario 5: Complete Disaster Recovery
+
 **Contexto**: etcd corrupto, necesitas restore desde backup.
 
 **Tiempo estimado**: 20-25 minutos
 
 <details>
-<summary>✅ Solución Completa</summary>
+<summary>Solucion Completa</summary>
 
 **Prerequisito: Tener backup de etcd**
 ```bash
@@ -804,7 +724,7 @@ sudo mv /etc/kubernetes/manifests/*.yaml /tmp/
 sudo crictl ps
 # No debe haber kube-apiserver, etcd, etc.
 
-# Alternativamente (más drástico)
+# Alternativamente (mas drastico)
 sudo systemctl stop kubelet
 ```
 
@@ -854,9 +774,9 @@ watch sudo crictl ps
 
 **Paso 5: Verificar cluster (7 min)**
 ```bash
-# Esperar a que API server esté disponible (puede tomar 1-2 min)
+# Esperar a que API server este disponible (puede tomar 1-2 min)
 kubectl get nodes
-# Si da error de conexión, esperar más
+# Si da error de conexion, esperar mas
 
 # Verificar componentes
 kubectl get pods -n kube-system
@@ -871,7 +791,7 @@ kubectl get deployments --all-namespaces
 kubectl get pods --all-namespaces
 kubectl get pv,pvc
 
-# Si hay pods en estado problemático después del restore
+# Si hay pods en estado problematico despues del restore
 kubectl delete pod --all-namespaces --field-selector=status.phase!=Running --force --grace-period=0
 ```
 
@@ -880,7 +800,7 @@ kubectl delete pod --all-namespaces --field-selector=status.phase!=Running --for
 # Test API funciona
 kubectl api-resources
 
-# Test creación de recursos
+# Test creacion de recursos
 kubectl run test-restore --image=nginx
 kubectl get pod test-restore
 kubectl delete pod test-restore
@@ -906,14 +826,14 @@ sudo ETCDCTL_API=3 etcdctl \
 
 ---
 
-## 📊 CKA Exam Simulation - Full Practice
+## CKA Exam Simulation - Full Practice
 
-**Tiempo total**: 120 minutos  
+**Tiempo total**: 120 minutos
 **Passing score**: 4/5 escenarios completos
 
 ### Scoring Rubric
 
-| Escenario | Puntos | Criterios de Éxito |
+| Escenario | Puntos | Criterios de Exito |
 |-----------|--------|--------------------|
 | 1. Multi-Component Failure | 25 | API funcionando, nodes Ready, DNS OK, pods no crashing |
 | 2. Security Breach | 20 | RBAC limitado, Network Policies activas, no privileged pods |
@@ -921,14 +841,14 @@ sudo ETCDCTL_API=3 etcdctl \
 | 4. StatefulSet Recovery | 15 | Pods Running, PVCs Bound, data accesible |
 | 5. Disaster Recovery | 20 | etcd restaurado, cluster funcional, datos recuperados |
 
-**Total**: 100 puntos  
+**Total**: 100 puntos
 **Passing**: 66+ puntos
 
 ---
 
-## 🎯 Checklist Final - Pre-Exam
+## Checklist Final - Pre-Exam
 
-Antes del examen CKA, asegúrate de poder hacer sin documentación:
+Antes del examen CKA, asegurate de poder hacer sin documentacion:
 
 **Control Plane**:
 - [ ] Diagnosticar API server down
@@ -974,7 +894,7 @@ Antes del examen CKA, asegúrate de poder hacer sin documentación:
 
 ---
 
-## 💡 Time Management Tips
+## Time Management Tips
 
 **Si tienes 30 min para un problema complejo**:
 - 2 min: Read and understand the problem
@@ -982,10 +902,10 @@ Antes del examen CKA, asegúrate de poder hacer sin documentación:
 - 20 min: Implement solution
 - 5 min: Verify and test
 
-**Priorización en el examen**:
+**Priorizacion en el examen**:
 1. **Quick wins primero**: Problemas simples que conoces bien
 2. **Alto valor**: Problemas con muchos puntos
-3. **Skip temporalmente**: Si estás stuck >10 min, marca y continúa
+3. **Skip temporalmente**: Si estas stuck >10 min, marca y continua
 
 **Comandos que DEBES memorizar**:
 ```bash

@@ -1,0 +1,26 @@
+# Escenario 4: PVC Pending - Fix Opcion 1: StorageClass Valida
+# Uso: kubectl apply -f scenario-04-pvc-fix-storageclass.yaml
+#
+# Descripcion:
+#   Recrea el PVC my-pvc usando la StorageClass "standard" (disponible en la mayoria
+#   de clusters). Aplicar despues de eliminar el PVC con StorageClass incorrecta.
+#   El PVC deberia pasar a estado Bound con dynamic provisioning.
+#
+# Conceptos clave:
+#   - Dynamic provisioning con StorageClass valida
+#   - "standard" es la StorageClass por defecto en muchos clusters
+#   - kubectl get sc para listar StorageClasses disponibles
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard  # Usar el SC default del cluster

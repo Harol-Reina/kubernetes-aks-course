@@ -1,0 +1,25 @@
+# Escenario 8: Port Mismatch - Service corregido con targetPort: 8000
+# Uso: kubectl delete svc python-service && kubectl apply -f scenario-08-portmismatch-fix.yaml
+#
+# Descripcion:
+#   Service python-service corregido con targetPort: 8000 para que coincida con
+#   el puerto en el que python-app escucha. El pod no necesita recrearse; solo
+#   se corrige el Service para alinear el targetPort con el containerPort real.
+#
+# Conceptos clave:
+#   - port: 80 es el puerto que expone el Service internamente en el cluster
+#   - targetPort: 8000 es el puerto real del proceso dentro del contenedor
+#   - Verificar: kubectl run test --image=busybox:1.28 -it --rm -- wget -O- http://python-service
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-service
+spec:
+  selector:
+    app: python
+  ports:
+  - port: 80
+    targetPort: 8000

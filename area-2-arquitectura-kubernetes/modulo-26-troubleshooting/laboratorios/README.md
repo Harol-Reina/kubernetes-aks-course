@@ -1,8 +1,22 @@
-# Laboratorios - Módulo 26: Troubleshooting
+# Laboratorios - Modulo 26: Troubleshooting
 
-> **Objetivo**: Desarrollar habilidades avanzadas de troubleshooting para el examen CKA  
-> **Tiempo total estimado**: 5-7 horas  
+> **Objetivo**: Desarrollar habilidades avanzadas de troubleshooting para el examen CKA
+> **Tiempo total estimado**: 5-7 horas
 > **Nivel**: Avanzado a Experto
+
+---
+
+## 📚 Indice de Laboratorios
+
+| Lab | Titulo | Dificultad | Duracion | Archivos |
+|-----|--------|------------|----------|----------|
+| [01](./lab-01-application/) | Application Troubleshooting | ⭐⭐⭐ Avanzado | 60-75 min | YAML: 15 \| Scripts: 1 |
+| [02](./lab-02-control-plane/) | Control Plane & Worker Nodes | ⭐⭐⭐⭐ Experto | 75-90 min | YAML: 1 \| Scripts: 2 |
+| [03](./lab-03-network-storage/) | Network & Storage | ⭐⭐⭐⭐ Experto | 75-90 min | YAML: 16 \| Scripts: 1 |
+| [04](./lab-04-complete-cluster/) | Complete Cluster - CKA Simulation | ⭐⭐⭐⭐ CKA Level | 90-120 min | YAML: 9 \| Scripts: 3 |
+| [Resumen](./lab-resumen-troubleshooting/) | Resumen: Troubleshooting | Repaso | 15 min | YAML: 1 |
+
+---
 
 ## 📁 Estructura
 
@@ -10,30 +24,44 @@
 laboratorios/
 ├── README.md                          # Este archivo
 ├── lab-01-application/                # Application troubleshooting
-│   ├── README.md                      # Instrucciones completas
-│   ├── SETUP.md                       # Guía de setup
-│   └── cleanup.sh                     # Script de limpieza
+│   ├── README.md                      # 8 escenarios con setup + fix
+│   ├── README.md.backup
+│   ├── SETUP.md
+│   ├── cleanup.sh
+│   └── scenario-*.yaml (15 archivos)  # Setup y fix para cada escenario
 ├── lab-02-control-plane/              # Control plane & nodes
-│   ├── README.md
+│   ├── README.md                      # 8 escenarios diagnosticos
+│   ├── README.md.backup
 │   ├── SETUP.md
-│   ├── etcd-backup.sh                 # Backup de etcd
-│   └── cleanup.sh
+│   ├── etcd-backup.sh
+│   ├── cleanup.sh
+│   └── scenario-08-staticpod-setup.yaml
 ├── lab-03-network-storage/            # Networking & storage
-│   ├── README.md
+│   ├── README.md                      # 8 escenarios con setup + fix
+│   ├── README.md.backup
 │   ├── SETUP.md
-│   └── cleanup.sh
-└── lab-04-complete-cluster/           # CKA simulation
+│   ├── cleanup.sh
+│   └── scenario-*.yaml (16 archivos)  # Setup y fix para cada escenario
+├── lab-04-complete-cluster/           # CKA simulation
+│   ├── README.md                      # 5 escenarios complejos
+│   ├── README.md.backup
+│   ├── SETUP.md
+│   ├── pre-flight-check.sh
+│   ├── create-backup.sh
+│   ├── cleanup.sh
+│   └── scenario-*.yaml (9 archivos)   # RBAC, NetPol, Quotas, Priorities
+└── lab-resumen-troubleshooting/       # Resumen rapido
     ├── README.md
-    ├── SETUP.md
-    ├── pre-flight-check.sh            # Verificar prerrequisitos
-    ├── create-backup.sh               # Backup completo
+    ├── troubleshooting-lab.yaml
     └── cleanup.sh
 ```
+
+---
 
 ## 📋 Laboratorios Disponibles
 
 ### [Lab 01: Application Troubleshooting](./lab-01-application/) ⭐⭐⭐
-**Duración**: 60-75 minutos | **Dificultad**: Avanzado
+**Duracion**: 60-75 minutos | **Dificultad**: Avanzado
 
 **8 escenarios de troubleshooting de aplicaciones**:
 - CrashLoopBackOff diagnosis
@@ -44,17 +72,14 @@ laboratorios/
 - Missing ConfigMaps/Secrets
 - Port mismatches
 
-**Archivos**:
-- `README.md` - Instrucciones completas con soluciones
-- `SETUP.md` - Guía de preparación
-- `cleanup.sh` - Limpieza
+**Archivos**: 15 YAML (setup + fix), cleanup.sh
 
 **CKA Coverage**: Application Lifecycle (15%) + Troubleshooting (10%)
 
 ---
 
 ### [Lab 02: Control Plane & Nodes](./lab-02-control-plane/) ⭐⭐⭐⭐
-**Duración**: 75-90 minutos | **Dificultad**: Experto
+**Duracion**: 75-90 minutos | **Dificultad**: Experto
 
 **8 escenarios de infraestructura del cluster**:
 - API Server troubleshooting
@@ -66,115 +91,101 @@ laboratorios/
 - Node NotReady states
 - Static pod management
 
-**Archivos**:
-- `README.md` - Guía completa
-- `SETUP.md` - Prerrequisitos
-- `etcd-backup.sh` - Script de backup de etcd
-- `cleanup.sh` - Limpieza
+**Archivos**: 1 YAML, etcd-backup.sh, cleanup.sh
 
-**Prerrequisitos**:
-- Acceso SSH a control plane y workers
-- Permisos sudo
-- Familiaridad con systemd
+**Prerrequisitos**: Acceso SSH a control plane y workers, permisos sudo
 
 **CKA Coverage**: Cluster Architecture (15%) + Troubleshooting (10%)
 
 ---
 
 ### [Lab 03: Network & Storage](./lab-03-network-storage/) ⭐⭐⭐⭐
-**Duración**: 75-90 minutos | **Dificultad**: Experto
+**Duracion**: 75-90 minutos | **Dificultad**: Experto
 
 **8 escenarios avanzados de networking y storage**:
 - DNS (CoreDNS) troubleshooting
 - Service without endpoints
 - Network Policy debugging
-- Ingress issues
 - PVC Pending states
 - StatefulSet storage problems
 - Volume mount failures
+- Ingress issues
 - Pod-to-pod connectivity
 
-**Archivos**:
-- `README.md` - Guía completa con soluciones
-- `SETUP.md` - Verificación de prerrequisitos
-- `cleanup.sh` - Limpieza
+**Archivos**: 16 YAML (setup + fix), cleanup.sh
 
-**Prerrequisitos**:
-- CNI plugin (Calico, Flannel)
-- Ingress Controller
-- Dynamic provisioning o capacidad para crear PVs
+**Prerrequisitos**: CNI compatible (Calico), Ingress Controller, StorageClass
 
 **CKA Coverage**: Services & Networking (15%) + Storage (5%) + Troubleshooting (10%)
 
 ---
 
 ### [Lab 04: Complete Cluster](./lab-04-complete-cluster/) ⭐⭐⭐⭐
-**Duración**: 90-120 minutos | **Dificultad**: CKA Exam Level
+**Duracion**: 90-120 minutos | **Dificultad**: CKA Exam Level
 
-**5 escenarios complejos de simulación de examen**:
+**5 escenarios complejos de simulacion de examen**:
 1. Multi-Component Failure (25 pts)
 2. Security Breach - RBAC (20 pts)
 3. Performance Degradation (20 pts)
 4. StatefulSet Data Recovery (15 pts)
 5. Disaster Recovery - etcd (20 pts)
 
-**Archivos**:
-- `README.md` - Escenarios completos tipo examen
-- `SETUP.md` - Advertencias y preparación
-- `pre-flight-check.sh` - Verificar cluster está listo
-- `create-backup.sh` - Backup completo antes de empezar
-- `cleanup.sh` - Recuperación
+**Archivos**: 9 YAML, pre-flight-check.sh, create-backup.sh, cleanup.sh
 
-**⚠️ ADVERTENCIA**: Solo para clusters de prueba, simula fallos críticos
+**⚠️ ADVERTENCIA**: Solo para clusters de prueba, simula fallos criticos
 
-**CKA Coverage**: All domains - Full exam simulation
-
-**Scoring**: Passing score 66/100
+**CKA Coverage**: All domains - Full exam simulation | **Passing**: 66/100
 
 ---
 
-## 🚀 Guía de Uso
+### [Lab Resumen: Troubleshooting](./lab-resumen-troubleshooting/)
+**Duracion**: 15 minutos | **Nivel**: Repaso
 
-### Opción 1: Lab Individual
+Resumen rapido de troubleshooting con recursos con errores intencionales para practica de diagnostico. Cubre application issues, networking y probes en un solo namespace.
+
+**Archivos**: troubleshooting-lab.yaml, cleanup.sh
+
+---
+
+## 🚀 Guia de Uso
+
+### Opcion 1: Lab Individual
 
 ```bash
 # Navegar al lab
 cd lab-01-application/
 
-# Leer instrucciones
-cat README.md
+# Revisar setup
 cat SETUP.md
 
-# Ejecutar lab (seguir instrucciones del README)
-# ...
+# Aplicar escenario con error
+kubectl apply -f scenario-01-crashloop-setup.yaml
+
+# Diagnosticar y resolver (ver README.md)
 
 # Limpiar al finalizar
-chmod +x cleanup.sh
 ./cleanup.sh
 ```
 
-### Opción 2: Secuencia Completa (Preparación CKA)
+### Opcion 2: Secuencia Completa (Preparacion CKA)
 
 ```bash
 # Semana 1: Fundamentos
-cd lab-01-application/
-# Completar 3 veces hasta dominar (60-75 min cada vez)
+cd lab-01-application/    # Completar 3 veces (60-75 min)
 
 # Semana 2: Infraestructura
-cd ../lab-02-control-plane/
-# Completar 3 veces (75-90 min cada vez)
+cd ../lab-02-control-plane/    # Completar 3 veces (75-90 min)
 
 # Semana 3: Networking & Storage
-cd ../lab-03-network-storage/
-# Completar 3 veces (75-90 min cada vez)
+cd ../lab-03-network-storage/    # Completar 3 veces (75-90 min)
 
-# Semana 4: Simulación de Examen
-cd ../lab-04-complete-cluster/
-# Completar bajo condiciones de examen
-# Objetivo: 66+ puntos en 120 minutos
+# Semana 4: Simulacion de Examen
+cd ../lab-04-complete-cluster/    # Objetivo: 66+ en 120 min
 ```
 
-## 📊 Progresión de Dificultad
+---
+
+## 📊 Progresion de Dificultad
 
 ```
 Lab 01 (⭐⭐⭐)      Lab 02 (⭐⭐⭐⭐)     Lab 03 (⭐⭐⭐⭐)     Lab 04 (⭐⭐⭐⭐)
@@ -184,39 +195,9 @@ Probes, Configs    kubelet, kube-proxy PV/PVC           Disaster Recovery
                    Scheduler          Network Policies   Exam Simulation
 ```
 
-## 🎯 Preparación para el Examen CKA
+---
 
-### Checklist de Habilidades
-
-Después de completar todos los labs, debes poder:
-
-**Lab 01 Skills**:
-- [ ] Diagnosticar CrashLoopBackOff en <3 minutos
-- [ ] Resolver ImagePullBackOff rápidamente
-- [ ] Identificar OOMKilled por exit code
-- [ ] Debuggear liveness/readiness probes
-- [ ] Resolver ConfigMap/Secret issues
-
-**Lab 02 Skills**:
-- [ ] Hacer backup de etcd en <5 minutos
-- [ ] Restaurar etcd desde backup
-- [ ] Diagnosticar API server down
-- [ ] Resolver node NotReady
-- [ ] Troubleshoot kubelet con journalctl
-
-**Lab 03 Skills**:
-- [ ] Diagnosticar DNS failures
-- [ ] Fix service sin endpoints
-- [ ] Crear y debuggear Network Policies
-- [ ] Resolver PVC Pending
-- [ ] Troubleshoot volume mounts
-
-**Lab 04 Skills**:
-- [ ] Manejar fallos multi-componente
-- [ ] Resolver bajo presión de tiempo
-- [ ] Priorizar problemas correctamente
-- [ ] Documentar soluciones
-- [ ] Lograr 66+ puntos en 120 minutos
+## 🎯 Preparacion para el Examen CKA
 
 ### Matriz de Cobertura CKA
 
@@ -230,95 +211,26 @@ Después de completar todos los labs, debes poder:
 
 **Cobertura Total**: 100% del dominio de Troubleshooting + 70% de otros dominios
 
-## 💡 Tips de Estudio
+---
 
-### Primera Pasada - Aprendizaje (Sin tiempo)
-1. Lee cada escenario completo antes de empezar
-2. Intenta resolver sin ver soluciones
-3. Si te atascas >10 min, revisa pistas
-4. Estudia la solución completa
-5. Toma notas de comandos nuevos
+## ✅ Preparacion Final
 
-### Segunda Pasada - Práctica (Con tiempo)
-1. Establece timer según duración estimada
-2. Intenta sin ayuda
-3. Documenta tu proceso
-4. Compara con solución oficial
-5. Identifica gaps de conocimiento
-
-### Tercera Pasada - Simulación (Examen)
-1. Timer estricto (70% del tiempo)
-2. Solo kubernetes.io/docs como ayuda
-3. Marca problemas difíciles
-4. Continúa si te atascas
-5. Revisa al final
-
-## 🔧 Troubleshooting de los Labs
-
-### "No tengo acceso SSH a los nodes"
-```bash
-# Para minikube
-minikube ssh
-
-# Para kind
-docker exec -it <control-plane-container> bash
-
-# Ver containers de kind
-docker ps | grep kind
-```
-
-### "No tengo permisos sudo"
-Los labs 02 y 04 requieren acceso sudo. Usa minikube o kind donde tengas control completo.
-
-### "etcd commands fallan"
-```bash
-# Verificar paths de certificados
-ls -la /etc/kubernetes/pki/etcd/
-
-# Usar alias completo
-alias etcdctl='sudo ETCDCTL_API=3 etcdctl \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/server.crt \
-  --key=/etc/kubernetes/pki/etcd/server.key'
-```
-
-### "Network Policies no funcionan"
-Tu CNI debe soportar Network Policies. Calico y Cilium sí, Flannel NO.
-
-```bash
-# Verificar CNI
-kubectl get pods -n kube-system | grep -E "calico|cilium"
-
-# Instalar Calico si es necesario
-kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
-```
-
-## 📚 Recursos Adicionales
-
-- **Documentación**: [Kubernetes Troubleshooting](https://kubernetes.io/docs/tasks/debug/)
-- **CKA Info**: [Linux Foundation CKA](https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/)
-- **Practice**: [Killer.sh](https://killer.sh) - Simulador incluido con registro CKA
-- **Cheatsheet**: Ver [RESUMEN-MODULO.md](../RESUMEN-MODULO.md)
-
-## ✅ Preparación Final
-
-Estás listo para el CKA cuando:
+Estas listo para el CKA cuando:
 
 1. **Lab 01**: Completas en <60 minutos sin ayuda
 2. **Lab 02**: Completas en <75 minutos sin ayuda
 3. **Lab 03**: Completas en <75 minutos sin ayuda
 4. **Lab 04**: Logras 70+ puntos en 120 minutos consistentemente
 
-## 🎓 Próximos Pasos
+---
 
-1. Completa los 4 laboratorios en orden
-2. Practica cada lab mínimo 3 veces
-3. Toma Lab 04 como simulacro de examen (múltiples veces)
-4. Cuando logres 66+ puntos consistentemente → **¡Estás listo para el CKA!**
+## 📚 Recursos Adicionales
+
+- **Documentacion**: [Kubernetes Troubleshooting](https://kubernetes.io/docs/tasks/debug/)
+- **CKA Info**: [Linux Foundation CKA](https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/)
+- **Practice**: [Killer.sh](https://killer.sh) - Simulador incluido con registro CKA
+- **Cheatsheet**: Ver [RESUMEN-MODULO.md](../RESUMEN-MODULO.md)
 
 ---
 
-**¡Buena suerte en tu preparación! 🚀**
-
-[Volver al README del módulo](../README.md)
+[Volver al README del modulo](../README.md)

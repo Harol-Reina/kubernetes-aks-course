@@ -1,0 +1,25 @@
+# Escenario 2: Security Breach - Role de Lectura de Pods
+# Uso: kubectl apply -f scenario-02-rbac-role.yaml
+#
+# Descripcion:
+#   Crea un Role pod-reader con permisos minimos: solo get y list de Pods.
+#   Este Role reemplaza permisos excesivos (ej. cluster-admin) por permisos
+#   de minimo privilegio siguiendo el principio de least privilege.
+#
+# Conceptos clave:
+#   - Role: permisos limitados a un namespace especifico
+#   - Principio de minimo privilegio en RBAC
+#   - verbs: get y list son suficientes para monitoreo de Pods
+#
+# Namespace: production
+# Nota: Cambiar el namespace segun corresponda al entorno
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: production  # Cambiar al namespace del ServiceAccount auditado
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]

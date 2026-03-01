@@ -1,0 +1,27 @@
+# Escenario 4: PVC Pending - Fix Opcion 2: PersistentVolume Manual
+# Uso: kubectl apply -f scenario-04-pvc-fix-manual-pv.yaml
+#
+# Descripcion:
+#   Crea un PersistentVolume my-pv de forma manual para clusters sin dynamic
+#   provisioning. El PVC my-pvc deberia hacer binding automatico con este PV
+#   si los accessModes y storage son compatibles.
+#
+# Conceptos clave:
+#   - Static provisioning: el admin crea PVs manualmente
+#   - hostPath como tipo de volumen para pruebas locales
+#   - Retain policy: los datos persisten despues de eliminar el PVC
+#
+# Namespace: N/A (PersistentVolume es un recurso de cluster, no de namespace)
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: my-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  hostPath:
+    path: /mnt/data
+  persistentVolumeReclaimPolicy: Retain

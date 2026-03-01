@@ -1,0 +1,25 @@
+# Escenario 4: Init Container Failure - Pod corregido sin init container bloqueante
+# Uso: kubectl delete pod backend-app && kubectl apply -f scenario-04-initcontainer-fix.yaml
+#
+# Descripcion:
+#   Pod backend-app corregido eliminando el init container que esperaba un servicio
+#   inexistente. Esta es la Opcion 2 del fix (la Opcion 1 crea el postgres-service).
+#   El pod inicia directamente sin dependencias externas bloqueantes.
+#
+# Conceptos clave:
+#   - Remover init containers innecesarios es valido cuando la dependencia no existe
+#   - La Opcion 1 alternativa: crear postgres pod y service para satisfacer el init container
+#   - En produccion evaluar si la dependencia es real antes de eliminar el init container
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: backend-app
+spec:
+  containers:
+  - name: app
+    image: nginx:1.21
+    ports:
+    - containerPort: 80

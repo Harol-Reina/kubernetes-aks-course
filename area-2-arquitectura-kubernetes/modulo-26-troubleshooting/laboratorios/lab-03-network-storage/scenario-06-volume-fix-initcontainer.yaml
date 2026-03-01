@@ -1,0 +1,42 @@
+# Escenario 6: Volume Permission Issues - Fix con initContainer
+# Uso: kubectl apply -f scenario-06-volume-fix-initcontainer.yaml
+#
+# Descripcion:
+#   Recrea el Pod writer-pod usando un initContainer que corrige los permisos
+#   del directorio /data antes de que el container principal intente escribir.
+#   El initContainer corre como root y ejecuta chmod -R 777 /data.
+#
+# Conceptos clave:
+#   - initContainer: corre a completitud antes del container principal
+#   - chmod en initContainer permite al container principal (no-root) escribir
+#   - fsGroup controla el grupo de los archivos en el volumen montado
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer-pod
+spec:
+  securityContext:
+    fsGroup: 2000
+  initContainers:
+  - name: fix-perms
+    image: busybox:1.28
+    command: ["sh", "-c", "chmod -R 777 /data"]
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  containers:
+  - name: writer
+    image: busybox:1.28
+    securityContext:
+      runAsUser: 1000
+    command: ["sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    hostPath:
+      path: /mnt/readonly-dir

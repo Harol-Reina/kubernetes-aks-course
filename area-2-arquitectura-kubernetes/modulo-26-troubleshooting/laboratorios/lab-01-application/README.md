@@ -1,75 +1,102 @@
 # Laboratorio 01: Application Troubleshooting
 
-> **Duración estimada**: 60-75 minutos  
-> **Dificultad**: ⭐⭐⭐ (Avanzado)  
+> **Duracion estimada**: 60-75 minutos
+> **Dificultad**: Avanzado
 > **Objetivos CKA**: Application Lifecycle Management (15%), Troubleshooting (25-30%)
 
-## 📋 Objetivos de Aprendizaje
+---
 
-Al completar este laboratorio, serás capaz de:
-- ✅ Diagnosticar pods en estados de error (CrashLoopBackOff, ImagePullBackOff, OOMKilled)
-- ✅ Resolver problemas con init containers
-- ✅ Troubleshoot liveness y readiness probes
-- ✅ Identificar y corregir problemas con ConfigMaps y Secrets
-- ✅ Usar kubectl logs, describe y exec efectivamente
-- ✅ Aplicar metodología sistemática de troubleshooting
+## Tecnicas y Conceptos Utilizados
 
-## 🎯 Escenarios
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Diagnostico CrashLoopBackOff** | Uso de `kubectl logs --previous` para ver logs del contenedor antes del ultimo crash. Identificacion de errores en command/args del spec |
+| **Diagnostico ImagePullBackOff** | Uso de `kubectl describe pod` para inspeccionar la seccion Events y obtener el mensaje exacto del registry sobre el tag invalido |
+| **OOMKilled y resource limits** | Identificacion de exit code 137 (SIGKILL por OOM). Ajuste de memory limits y requests para que el limit supere el uso real del proceso |
+| **Init Containers** | Diagnostico con `kubectl logs <pod> -c <init-container>`. Estado Init:0/1 indica init container bloqueado. Dos opciones de fix: crear la dependencia o eliminar el init container |
+| **Liveness y Readiness Probes** | Diferencia entre liveness (reinicia el pod) y readiness (excluye del Service). Configuracion correcta de path, port, initialDelaySeconds y failureThreshold |
+| **Referencias a ConfigMap y Secret** | Estado CreateContainerConfigError cuando envFrom referencia un ConfigMap inexistente. Crear el recurso faltante resuelve el problema sin recrear el Deployment |
+| **Diagnostico Port Mismatch** | Comparacion de containerPort del pod vs targetPort del Service. Los Endpoints pueden existir pero el trafico falla si los puertos no coinciden |
+
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque declarativo. Todas las operaciones de setup y fix se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `scenario-01-crashloop-setup.yaml` | 1 | Deployment webapp-crash con ruta de configuracion nginx inexistente |
+| `scenario-01-crashloop-fix.yaml` | 1 | Deployment webapp-crash corregido sin argumentos invalidos |
+| `scenario-02-imagepull-setup.yaml` | 2 | Deployment api-server con tag de imagen nonexistent-tag-12345 |
+| `scenario-03-oomkilled-setup.yaml` | 3 | Pod memory-hog con memory limit de 100Mi insuficiente para 250M de uso |
+| `scenario-03-oomkilled-fix.yaml` | 3 | Pod memory-hog corregido con memory limit de 512Mi |
+| `scenario-04-initcontainer-setup.yaml` | 4 | Pod backend-app con init container esperando postgres-service inexistente |
+| `scenario-04-initcontainer-fix.yaml` | 4 | Pod backend-app sin init container bloqueante (Opcion 2 del fix) |
+| `scenario-05-liveness-setup.yaml` | 5 | Pod web-server con liveness probe apuntando a /healthz (path invalido en nginx) |
+| `scenario-05-liveness-fix.yaml` | 5 | Pod web-server con liveness probe corregido a path: / (Opcion 1) |
+| `scenario-06-configmap-setup.yaml` | 6 | Deployment config-app referenciando ConfigMap app-settings inexistente |
+| `scenario-06-configmap-fix.yaml` | 6 | ConfigMap app-settings creado para satisfacer la referencia del Deployment |
+| `scenario-07-readiness-setup.yaml` | 7 | Pod api-pod + Service api-service con readiness probe en puerto 8080 y path /ready incorrectos |
+| `scenario-07-readiness-fix.yaml` | 7 | Pod api-pod corregido con readiness probe en puerto 80 y path / |
+| `scenario-08-portmismatch-setup.yaml` | 8 | Pod python-app + Service python-service con targetPort: 80 incorrecto (app usa 8000) |
+| `scenario-08-portmismatch-fix.yaml` | 8 | Service python-service corregido con targetPort: 8000 |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Objetivos de Aprendizaje
+
+Al completar este laboratorio, seras capaz de:
+- Diagnosticar pods en estados de error (CrashLoopBackOff, ImagePullBackOff, OOMKilled)
+- Resolver problemas con init containers
+- Troubleshoot liveness y readiness probes
+- Identificar y corregir problemas con ConfigMaps y Secrets
+- Usar kubectl logs, describe y exec efectivamente
+- Aplicar metodologia sistematica de troubleshooting
+
+---
+
+## Escenarios
 
 ### Escenario 1: Pod en CrashLoopBackOff
-**Situación**: Un deployment de una aplicación está fallando constantemente.
+
+**Situacion**: Un deployment de una aplicacion esta fallando constantemente.
 
 **Tareas**:
-1. Investigar por qué el pod `webapp-crash` está en CrashLoopBackOff
-2. Identificar la causa raíz usando logs
+1. Investigar por que el pod `webapp-crash` esta en CrashLoopBackOff
+2. Identificar la causa raiz usando logs
 3. Corregir el problema
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: webapp-crash
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: webapp
-  template:
-    metadata:
-      labels:
-        app: webapp
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.21
-        command: ["nginx"]
-        args: ["-g", "daemon off;", "-c", "/etc/nginx/nonexistent.conf"]
-        ports:
-        - containerPort: 80
-EOF
+kubectl apply -f scenario-01-crashloop-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
 1. Usa `kubectl get pods` para ver el estado
 2. Usa `kubectl logs <pod-name>` para ver los logs actuales
 3. Usa `kubectl logs <pod-name> --previous` para ver logs del crash anterior
-4. El error estará en los argumentos del comando
+4. El error estara en los argumentos del comando
 
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado del pod
 kubectl get pods -l app=webapp
 
-# Ver logs (puede estar vacío si crashea inmediatamente)
+# Ver logs (puede estar vacio si crashea inmediatamente)
 kubectl logs -l app=webapp
 
 # Ver logs del container anterior
@@ -79,40 +106,19 @@ kubectl logs -l app=webapp --previous
 # nginx: [emerg] open() "/etc/nginx/nonexistent.conf" failed (2: No such file or directory)
 ```
 
-**Causa raíz**: El archivo de configuración `/etc/nginx/nonexistent.conf` no existe.
+**Causa raiz**: El archivo de configuracion `/etc/nginx/nonexistent.conf` no existe.
 
 **Fix**:
 ```bash
-# Opción 1: Usar config por defecto
+# Opcion 1: Usar config por defecto mediante patch
 kubectl patch deployment webapp-crash -p '{"spec":{"template":{"spec":{"containers":[{"name":"app","command":["nginx"],"args":["-g","daemon off;"]}]}}}}'
 
-# Opción 2: Recrear sin args incorrectos
+# Opcion 2: Recrear sin args incorrectos
 kubectl delete deployment webapp-crash
-
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: webapp-crash
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: webapp
-  template:
-    metadata:
-      labels:
-        app: webapp
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.21
-        ports:
-        - containerPort: 80
-EOF
+kubectl apply -f scenario-01-crashloop-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 kubectl get pods -l app=webapp
 # Estado: Running
@@ -126,51 +132,32 @@ kubectl logs -l app=webapp
 ---
 
 ### Escenario 2: ImagePullBackOff
-**Situación**: Un nuevo deployment no puede iniciar sus pods.
+
+**Situacion**: Un nuevo deployment no puede iniciar sus pods.
 
 **Tareas**:
-1. Diagnosticar por qué `api-server` está en ImagePullBackOff
-2. Identificar qué está mal con la imagen
+1. Diagnosticar por que `api-server` esta en ImagePullBackOff
+2. Identificar que esta mal con la imagen
 3. Corregir el problema
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-server
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: api
-  template:
-    metadata:
-      labels:
-        app: api
-    spec:
-      containers:
-      - name: api
-        image: nginx:nonexistent-tag-12345
-        ports:
-        - containerPort: 8080
-EOF
+kubectl apply -f scenario-02-imagepull-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
 1. Usa `kubectl describe pod` para ver eventos
-2. El error estará en la sección "Events"
+2. El error estara en la seccion "Events"
 3. Verifica el tag de la imagen
 
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado
 kubectl get pods -l app=api
@@ -182,19 +169,19 @@ kubectl describe pod -l app=api
 # Failed to pull image "nginx:nonexistent-tag-12345": rpc error: code = Unknown desc = Error response from daemon: manifest for nginx:nonexistent-tag-12345 not found
 ```
 
-**Causa raíz**: El tag `nonexistent-tag-12345` no existe en Docker Hub.
+**Causa raiz**: El tag `nonexistent-tag-12345` no existe en Docker Hub.
 
 **Fix**:
 ```bash
-# Actualizar a un tag válido
+# Actualizar a un tag valido
 kubectl set image deployment/api-server api=nginx:1.21
 
 # O editar directamente
 kubectl edit deployment api-server
-# Cambiar image: nginx:nonexistent-tag-12345 → nginx:1.21
+# Cambiar image: nginx:nonexistent-tag-12345 a nginx:1.21
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 kubectl get pods -l app=api
 # Estado: Running
@@ -207,38 +194,21 @@ kubectl describe pod -l app=api | grep "Successfully pulled"
 ---
 
 ### Escenario 3: OOMKilled - Out of Memory
-**Situación**: Una aplicación se reinicia constantemente con exit code 137.
+
+**Situacion**: Una aplicacion se reinicia constantemente con exit code 137.
 
 **Tareas**:
-1. Identificar que el pod está siendo killed por falta de memoria
+1. Identificar que el pod esta siendo killed por falta de memoria
 2. Ver los resource limits actuales
 3. Ajustar los limits apropiadamente
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: memory-hog
-spec:
-  containers:
-  - name: stress
-    image: polinux/stress
-    command: ["stress"]
-    args: ["--vm", "1", "--vm-bytes", "250M", "--vm-hang", "0"]
-    resources:
-      requests:
-        memory: "64Mi"
-        cpu: "100m"
-      limits:
-        memory: "100Mi"
-        cpu: "200m"
-EOF
+kubectl apply -f scenario-03-oomkilled-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
 1. Usa `kubectl describe pod` y busca "Last State"
 2. Exit code 137 = SIGKILL por OOM
@@ -247,9 +217,9 @@ EOF
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado
 kubectl get pod memory-hog
@@ -262,40 +232,21 @@ kubectl describe pod memory-hog | grep -A 10 "Last State"
 #     Reason:       OOMKilled
 #     Exit Code:    137
 
-# Ver límites actuales
+# Ver limites actuales
 kubectl get pod memory-hog -o jsonpath='{.spec.containers[0].resources.limits.memory}'
 # Output: 100Mi
 ```
 
-**Causa raíz**: El container necesita 250M de memoria pero el limit es solo 100Mi.
+**Causa raiz**: El container necesita 250M de memoria pero el limit es solo 100Mi.
 
 **Fix**:
 ```bash
-# Recrear con límites apropiados
+# Recrear con limites apropiados
 kubectl delete pod memory-hog
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: memory-hog
-spec:
-  containers:
-  - name: stress
-    image: polinux/stress
-    command: ["stress"]
-    args: ["--vm", "1", "--vm-bytes", "250M", "--vm-hang", "0"]
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "100m"
-      limits:
-        memory: "512Mi"  # Suficiente headroom
-        cpu: "200m"
-EOF
+kubectl apply -f scenario-03-oomkilled-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 kubectl get pod memory-hog
 # Estado: Running
@@ -309,52 +260,32 @@ watch kubectl get pod memory-hog
 ---
 
 ### Escenario 4: Init Container Failure
-**Situación**: Un pod está stuck en Init:0/1 y no puede iniciar.
+
+**Situacion**: Un pod esta stuck en Init:0/1 y no puede iniciar.
 
 **Tareas**:
-1. Identificar qué init container está fallando
-2. Diagnosticar por qué está fallando
+1. Identificar que init container esta fallando
+2. Diagnosticar por que esta fallando
 3. Resolver el problema
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: backend-app
-spec:
-  initContainers:
-  - name: wait-for-database
-    image: busybox:1.28
-    command: ['sh', '-c']
-    args:
-    - |
-      until nslookup postgres-service.default.svc.cluster.local; do
-        echo "Waiting for database service..."
-        sleep 2
-      done
-  containers:
-  - name: app
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
-EOF
+kubectl apply -f scenario-04-initcontainer-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
-1. El pod está esperando por un servicio que no existe
+1. El pod esta esperando por un servicio que no existe
 2. Usa `kubectl describe pod` para ver init containers
 3. Usa `kubectl logs <pod> -c <init-container-name>` para ver logs del init container
 
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado
 kubectl get pod backend-app
@@ -365,14 +296,14 @@ kubectl describe pod backend-app | grep -A 20 "Init Containers"
 
 # Ver logs del init container
 kubectl logs backend-app -c wait-for-database
-# Output: 
+# Output:
 # Waiting for database service...
 # nslookup: can't resolve 'postgres-service.default.svc.cluster.local'
 ```
 
-**Causa raíz**: El servicio `postgres-service` no existe.
+**Causa raiz**: El servicio `postgres-service` no existe.
 
-**Fix - Opción 1: Crear el servicio**:
+**Fix - Opcion 1: Crear el servicio**:
 ```bash
 # Crear un pod de postgres
 kubectl run postgres --image=postgres:13 --env="POSTGRES_PASSWORD=password"
@@ -380,29 +311,17 @@ kubectl run postgres --image=postgres:13 --env="POSTGRES_PASSWORD=password"
 # Crear el servicio
 kubectl expose pod postgres --port=5432 --name=postgres-service
 
-# Ahora el init container debería completarse
+# Ahora el init container deberia completarse
 kubectl get pod backend-app -w
 ```
 
-**Fix - Opción 2: Remover el init container**:
+**Fix - Opcion 2: Remover el init container**:
 ```bash
 kubectl delete pod backend-app
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: backend-app
-spec:
-  containers:
-  - name: app
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
-EOF
+kubectl apply -f scenario-04-initcontainer-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 kubectl get pod backend-app
 # Estado: Running
@@ -413,38 +332,21 @@ kubectl get pod backend-app
 ---
 
 ### Escenario 5: Liveness Probe Failure
-**Situación**: Un pod se reinicia cada ~30 segundos sin razón aparente.
+
+**Situacion**: Un pod se reinicia cada ~30 segundos sin razon aparente.
 
 **Tareas**:
-1. Identificar que el liveness probe está fallando
-2. Entender por qué está fallando
+1. Identificar que el liveness probe esta fallando
+2. Entender por que esta fallando
 3. Ajustar el probe apropiadamente
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-server
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
-    livenessProbe:
-      httpGet:
-        path: /healthz
-        port: 80
-      initialDelaySeconds: 5
-      periodSeconds: 10
-      failureThreshold: 2
-EOF
+kubectl apply -f scenario-05-liveness-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
 1. El pod se reinicia por liveness probe failure
 2. nginx no tiene endpoint `/healthz` por defecto
@@ -453,9 +355,9 @@ EOF
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado y restarts
 kubectl get pod web-server
@@ -470,34 +372,15 @@ kubectl describe pod web-server | grep -A 10 "Liveness"
 kubectl get events --field-selector involvedObject.name=web-server
 ```
 
-**Causa raíz**: El liveness probe busca `/healthz` que no existe en nginx default. nginx retorna 404.
+**Causa raiz**: El liveness probe busca `/healthz` que no existe en nginx default. nginx retorna 404.
 
-**Fix - Opción 1: Usar path válido**:
+**Fix - Opcion 1: Usar path valido**:
 ```bash
 kubectl delete pod web-server
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: web-server
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
-    livenessProbe:
-      httpGet:
-        path: /  # Path válido
-        port: 80
-      initialDelaySeconds: 5
-      periodSeconds: 10
-      failureThreshold: 3
-EOF
+kubectl apply -f scenario-05-liveness-fix.yaml
 ```
 
-**Fix - Opción 2: Ajustar tolerancia**:
+**Fix - Opcion 2: Ajustar tolerancia** (alternativa, mantener inline):
 ```bash
 kubectl delete pod web-server
 
@@ -516,14 +399,14 @@ spec:
       httpGet:
         path: /
         port: 80
-      initialDelaySeconds: 30  # Más tiempo para iniciar
+      initialDelaySeconds: 30
       periodSeconds: 15
       failureThreshold: 3
       timeoutSeconds: 5
 EOF
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 # Ver que no se reinicia
 watch kubectl get pod web-server
@@ -535,7 +418,8 @@ watch kubectl get pod web-server
 ---
 
 ### Escenario 6: Missing ConfigMap
-**Situación**: Un deployment no puede crear pods debido a un ConfigMap faltante.
+
+**Situacion**: Un deployment no puede crear pods debido a un ConfigMap faltante.
 
 **Tareas**:
 1. Identificar que el ConfigMap no existe
@@ -544,45 +428,22 @@ watch kubectl get pod web-server
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: config-app
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: config-app
-  template:
-    metadata:
-      labels:
-        app: config-app
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.21
-        envFrom:
-        - configMapRef:
-            name: app-settings
-        ports:
-        - containerPort: 80
-EOF
+kubectl apply -f scenario-06-configmap-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
-1. El pod estará en CreateContainerConfigError
+1. El pod estara en CreateContainerConfigError
 2. Usa `kubectl describe pod` para ver el error
 3. Necesitas crear el ConfigMap `app-settings`
 
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado
 kubectl get pods -l app=config-app
@@ -594,32 +455,23 @@ kubectl describe pod -l app=config-app
 # Error: configmap "app-settings" not found
 ```
 
-**Causa raíz**: El ConfigMap `app-settings` no existe.
+**Causa raiz**: El ConfigMap `app-settings` no existe.
 
 **Fix**:
 ```bash
-# Crear el ConfigMap
+# Opcion 1: Crear el ConfigMap con kubectl
 kubectl create configmap app-settings \
   --from-literal=APP_ENV=production \
   --from-literal=LOG_LEVEL=info \
   --from-literal=MAX_CONNECTIONS=100
 
-# O con YAML
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: app-settings
-data:
-  APP_ENV: "production"
-  LOG_LEVEL: "info"
-  MAX_CONNECTIONS: "100"
-EOF
+# Opcion 2: Crear con YAML declarativo
+kubectl apply -f scenario-06-configmap-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
-# Ver que el pod ahora está Running
+# Ver que el pod ahora esta Running
 kubectl get pods -l app=config-app
 
 # Verificar variables de entorno
@@ -631,61 +483,32 @@ kubectl exec -l app=config-app -- env | grep -E 'APP_ENV|LOG_LEVEL|MAX_CONNECTIO
 ---
 
 ### Escenario 7: Readiness Probe Never Ready
-**Situación**: Un pod está Running pero no recibe tráfico del Service.
+
+**Situacion**: Un pod esta Running pero no recibe trafico del Service.
 
 **Tareas**:
-1. Identificar que el pod no está Ready (0/1)
+1. Identificar que el pod no esta Ready (0/1)
 2. Diagnosticar el readiness probe
 3. Corregir el problema
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: api-pod
-  labels:
-    app: api
-spec:
-  containers:
-  - name: api
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
-    readinessProbe:
-      httpGet:
-        path: /ready
-        port: 8080
-      initialDelaySeconds: 5
-      periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: api-service
-spec:
-  selector:
-    app: api
-  ports:
-  - port: 80
-    targetPort: 80
-EOF
+kubectl apply -f scenario-07-readiness-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
-1. El pod está Running pero READY es 0/1
+1. El pod esta Running pero READY es 0/1
 2. El readiness probe tiene dos problemas: path y port
 3. nginx no tiene `/ready` y usa puerto 80, no 8080
 
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado
 kubectl get pod api-pod
@@ -698,42 +521,22 @@ kubectl describe pod api-pod | grep -A 10 "Readiness"
 
 # Ver endpoints del servicio
 kubectl get endpoints api-service
-# ENDPOINTS: <none>  ← Sin endpoints porque pod no está ready
+# ENDPOINTS: <none>  <- Sin endpoints porque pod no esta ready
 ```
 
-**Causa raíz**: 
+**Causa raiz**:
 - El readiness probe busca puerto 8080 pero nginx usa 80
 - El path `/ready` no existe
 
 **Fix**:
 ```bash
 kubectl delete pod api-pod
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: api-pod
-  labels:
-    app: api
-spec:
-  containers:
-  - name: api
-    image: nginx:1.21
-    ports:
-    - containerPort: 80
-    readinessProbe:
-      httpGet:
-        path: /  # Path válido
-        port: 80  # Puerto correcto
-      initialDelaySeconds: 5
-      periodSeconds: 5
-EOF
+kubectl apply -f scenario-07-readiness-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
-# Ver que ahora está Ready
+# Ver que ahora esta Ready
 kubectl get pod api-pod
 # READY: 1/1
 
@@ -750,56 +553,32 @@ kubectl run test --image=busybox:1.28 -it --rm -- wget -O- http://api-service
 ---
 
 ### Escenario 8: Application Port Mismatch
-**Situación**: El Service está configurado pero no puede conectarse a los pods.
+
+**Situacion**: El Service esta configurado pero no puede conectarse a los pods.
 
 **Tareas**:
 1. Identificar el port mismatch
-2. Corregir la configuración
+2. Corregir la configuracion
 3. Verificar conectividad
 
 **Setup**:
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: python-app
-  labels:
-    app: python
-spec:
-  containers:
-  - name: app
-    image: python:3.9-slim
-    command: ["python", "-m", "http.server", "8000"]
-    ports:
-    - containerPort: 8000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: python-service
-spec:
-  selector:
-    app: python
-  ports:
-  - port: 80
-    targetPort: 80
-EOF
+kubectl apply -f scenario-08-portmismatch-setup.yaml
 ```
 
 <details>
-<summary>💡 Pistas</summary>
+<summary>Pistas</summary>
 
 1. El servicio apunta al puerto 80
-2. La aplicación escucha en el puerto 8000
+2. La aplicacion escucha en el puerto 8000
 3. targetPort debe ser 8000
 
 </details>
 
 <details>
-<summary>✅ Solución</summary>
+<summary>Solucion</summary>
 
-**Diagnóstico**:
+**Diagnostico**:
 ```bash
 # Ver estado
 kubectl get pod python-app
@@ -816,34 +595,22 @@ kubectl get pod python-app -o jsonpath='{.spec.containers[0].ports[0].containerP
 # Output: 8000
 
 kubectl get svc python-service -o jsonpath='{.spec.ports[0].targetPort}'
-# Output: 80  ← MISMATCH!
+# Output: 80  <- MISMATCH!
 ```
 
-**Causa raíz**: Service targetPort es 80 pero el container escucha en 8000.
+**Causa raiz**: Service targetPort es 80 pero el container escucha en 8000.
 
 **Fix**:
 ```bash
-# Patch el servicio
+# Patch el servicio directamente
 kubectl patch svc python-service -p '{"spec":{"ports":[{"port":80,"targetPort":8000}]}}'
 
-# O recrear
+# O recrear el servicio
 kubectl delete svc python-service
-
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: python-service
-spec:
-  selector:
-    app: python
-  ports:
-  - port: 80
-    targetPort: 8000  # Correcto
-EOF
+kubectl apply -f scenario-08-portmismatch-fix.yaml
 ```
 
-**Verificación**:
+**Verificacion**:
 ```bash
 kubectl run test --image=busybox:1.28 -it --rm -- wget -O- http://python-service
 # Ahora debe funcionar y mostrar el HTML
@@ -853,10 +620,13 @@ kubectl run test --image=busybox:1.28 -it --rm -- wget -O- http://python-service
 
 ---
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
-# Eliminar todos los recursos del lab
+# Ejecutar el script de limpieza
+bash cleanup.sh
+
+# O limpiar manualmente
 kubectl delete deployment webapp-crash api-server config-app
 kubectl delete pod memory-hog backend-app web-server api-pod python-app
 kubectl delete svc api-service python-service postgres-service
@@ -866,7 +636,7 @@ kubectl delete configmap app-settings
 
 ---
 
-## 📊 Evaluación
+## Evaluacion
 
 Marca las tareas completadas:
 
@@ -881,12 +651,12 @@ Marca las tareas completadas:
 
 ---
 
-## 🎯 Puntos Clave para el Examen CKA
+## Puntos Clave para el Examen CKA
 
-1. **Siempre usa `kubectl describe pod`** - Los Events son críticos
+1. **Siempre usa `kubectl describe pod`** - Los Events son criticos
 2. **Logs anteriores con `--previous`** - Para ver crashes
 3. **Exit Code 137 = OOMKilled** - Aumentar memory limits
-4. **Init containers** - Diagnosticar con logs específicos del container
+4. **Init containers** - Diagnosticar con logs especificos del container
 5. **Probes** - Verificar path, port, y timing
 6. **ConfigMaps/Secrets** - CreateContainerConfigError indica faltantes
 7. **Port mismatch** - Verificar containerPort vs targetPort
@@ -894,5 +664,5 @@ Marca las tareas completadas:
 
 ---
 
-**Tiempo objetivo**: Resolver cada escenario en 5-8 minutos  
-**Siguiente**: [Lab 02 - Control Plane & Nodes](./lab-02-control-plane-nodes.md)
+**Tiempo objetivo**: Resolver cada escenario en 5-8 minutos
+**Siguiente**: Lab 02 - Control Plane & Nodes

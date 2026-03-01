@@ -1,0 +1,26 @@
+# Escenario 8: Static Pod Not Starting - Pod con tag de imagen invalido
+# Uso: sudo cp scenario-08-staticpod-setup.yaml /etc/kubernetes/manifests/static-web.yaml
+#
+# Descripcion:
+#   Manifiesto de static pod static-web con una imagen nginx:invalid-tag-xyz que no
+#   existe en Docker Hub. Al copiarlo al directorio de manifests del control plane,
+#   kubelet intenta iniciar el pod pero falla con ImagePullBackOff. El pod aparece
+#   en kubectl get pods pero nunca pasa a Running.
+#
+# Conceptos clave:
+#   - Static pods son gestionados directamente por kubelet, no por el API Server
+#   - kubelet vigila /etc/kubernetes/manifests/ y crea/destruye pods al detectar cambios
+#   - Fix: editar el archivo en /etc/kubernetes/manifests/ y cambiar el tag de la imagen
+#
+# Namespace: default (kubelet los crea en el namespace del nodo)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: static-web
+spec:
+  containers:
+  - name: web
+    image: nginx:invalid-tag-xyz
+    ports:
+    - containerPort: 80

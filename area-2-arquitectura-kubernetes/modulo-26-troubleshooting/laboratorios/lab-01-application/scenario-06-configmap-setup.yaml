@@ -1,0 +1,37 @@
+# Escenario 6: Missing ConfigMap - Deployment referenciando ConfigMap inexistente
+# Uso: kubectl apply -f scenario-06-configmap-setup.yaml
+#
+# Descripcion:
+#   Deployment config-app que referencia el ConfigMap app-settings mediante envFrom.
+#   Como el ConfigMap no existe el pod entra en estado CreateContainerConfigError.
+#   El estudiante debe identificar el ConfigMap faltante y crearlo para resolver.
+#
+# Conceptos clave:
+#   - CreateContainerConfigError: el contenedor no puede iniciarse por ConfigMap o Secret faltante
+#   - envFrom.configMapRef inyecta todas las claves del ConfigMap como variables de entorno
+#   - kubectl describe pod muestra en Events: "configmap app-settings not found"
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-app
+  template:
+    metadata:
+      labels:
+        app: config-app
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21
+        envFrom:
+        - configMapRef:
+            name: app-settings
+        ports:
+        - containerPort: 80

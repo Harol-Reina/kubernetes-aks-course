@@ -1,0 +1,32 @@
+# Escenario 3: OOMKilled - Pod con memory limit insuficiente
+# Uso: kubectl apply -f scenario-03-oomkilled-setup.yaml
+#
+# Descripcion:
+#   Pod memory-hog que ejecuta stress solicitando 250M de RAM pero tiene un
+#   memory limit de solo 100Mi. El kernel envia SIGKILL (exit code 137) cuando
+#   el proceso excede el limite. El pod entra en OOMKilled repetidamente.
+#
+# Conceptos clave:
+#   - OOMKilled: el kernel termina el proceso por superar el memory limit del cgroup
+#   - Exit code 137 = 128 + 9 (SIGKILL), identificador de OOM en Kubernetes
+#   - kubectl describe pod muestra "Last State: Terminated, Reason: OOMKilled"
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-hog
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "250M", "--vm-hang", "0"]
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "100Mi"
+        cpu: "200m"

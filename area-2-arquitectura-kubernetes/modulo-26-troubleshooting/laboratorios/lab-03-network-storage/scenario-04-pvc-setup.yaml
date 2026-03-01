@@ -1,0 +1,26 @@
+# Escenario 4: PersistentVolumeClaim Pending - Setup del Problema
+# Uso: kubectl apply -f scenario-04-pvc-setup.yaml
+#
+# Descripcion:
+#   Crea un PVC my-pvc que solicita una StorageClass inexistente (nonexistent-storage-class).
+#   El PVC quedara en estado Pending indefinidamente porque no hay provisioner para esa SC.
+#   Este es el escenario de diagnostico a resolver.
+#
+# Conceptos clave:
+#   - StorageClass como provisioner de almacenamiento dinamico
+#   - PVC en estado Pending cuando no se encuentra StorageClass o PV compatible
+#   - accessModes y storage como criterios de matching con PVs
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nonexistent-storage-class

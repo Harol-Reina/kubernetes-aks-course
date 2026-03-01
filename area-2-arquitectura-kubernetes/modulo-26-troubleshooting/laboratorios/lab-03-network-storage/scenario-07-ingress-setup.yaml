@@ -1,0 +1,54 @@
+# Escenario 7: Ingress Not Working - Setup del Problema
+# Uso: kubectl apply -f scenario-07-ingress-setup.yaml
+#
+# Descripcion:
+#   Crea un Pod app-pod con nginx, un Service app-service que lo expone, y un
+#   Ingress app-ingress que referencia el nombre de Service incorrecto (app-service-wrong).
+#   El Ingress no podra enrutar trafico porque el Service referenciado no existe.
+#
+# Conceptos clave:
+#   - Ingress: recurso que gestiona acceso HTTP/HTTPS externo al cluster
+#   - El nombre del Service en el backend del Ingress debe coincidir exactamente
+#   - Error tipico: typo en el nombre del Service en la regla del Ingress
+#
+# Namespace: default
+# Nota: Requiere Ingress Controller instalado (ej. nginx-ingress, minikube addons enable ingress)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+spec:
+  selector:
+    app: myapp
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+spec:
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service-wrong  # Nombre incorrecto - el Service no existe
+            port:
+              number: 80

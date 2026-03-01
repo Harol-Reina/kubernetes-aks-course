@@ -1,0 +1,24 @@
+# Escenario 4: PVC Pending - Fix Opcion 4: Tamano de Storage Reducido
+# Uso: kubectl apply -f scenario-04-pvc-fix-size.yaml
+#
+# Descripcion:
+#   Recrea el PVC my-pvc con una solicitud de almacenamiento menor (1Gi en lugar de 5Gi).
+#   Aplicar cuando los PVs disponibles tienen capacidad menor a la solicitada por el PVC.
+#
+# Conceptos clave:
+#   - El PVC solo hace binding con PVs de capacidad igual o mayor a la solicitada
+#   - kubectl get pv para ver capacidades disponibles en el cluster
+#   - Balancear necesidades de la aplicacion con recursos disponibles
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi  # Solicitud reducida para hacer binding con PVs pequenos

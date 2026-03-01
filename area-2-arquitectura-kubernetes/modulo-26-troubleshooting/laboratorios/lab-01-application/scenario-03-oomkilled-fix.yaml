@@ -1,0 +1,32 @@
+# Escenario 3: OOMKilled - Pod corregido con memory limits suficientes
+# Uso: kubectl delete pod memory-hog && kubectl apply -f scenario-03-oomkilled-fix.yaml
+#
+# Descripcion:
+#   Pod memory-hog corregido con memory limit de 512Mi, suficiente headroom para
+#   el proceso stress que necesita 250M. Los requests se ajustaron a 256Mi para
+#   reflejar el uso real esperado. El pod debe permanecer en Running sin reinicios.
+#
+# Conceptos clave:
+#   - Memory limit debe superar el pico de uso real del proceso
+#   - Agregar headroom (margen) al limit previene OOMKilled por picos transitorios
+#   - requests define la garantia minima; limits define el techo absoluto
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-hog
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "250M", "--vm-hang", "0"]
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "200m"

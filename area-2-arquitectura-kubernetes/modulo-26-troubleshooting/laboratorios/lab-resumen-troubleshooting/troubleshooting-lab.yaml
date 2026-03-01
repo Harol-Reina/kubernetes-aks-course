@@ -1,0 +1,290 @@
+# ============================================================
+# troubleshooting-lab.yaml
+# Ejercicio Resumen: Troubleshooting Kubernetes - Verificacion Completa
+# Uso: kubectl apply -f troubleshooting-lab.yaml
+#
+# Descripcion:
+#   Despliega un conjunto de recursos con errores intencionales para
+#   practicar troubleshooting rapido. Incluye escenarios de application,
+#   networking y storage en un solo namespace.
+#
+# Duracion: ~15 minutos
+# ============================================================
+
+# 1) NAMESPACE DE PRUEBA
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-troubleshooting-test
+  labels:
+    purpose: verification
+    module: "26"
+
+# ============================================================
+# SECCION A: APPLICATION TROUBLESHOOTING
+# ============================================================
+
+# 2) ESCENARIO: CrashLoopBackOff - Configuracion incorrecta
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-crash
+  namespace: lab-troubleshooting-test
+  labels:
+    app: webapp
+    scenario: crashloop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21
+        command: ["nginx"]
+        args: ["-g", "daemon off;", "-c", "/etc/nginx/nonexistent.conf"]
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+
+# 3) ESCENARIO: ImagePullBackOff - Tag inexistente
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-broken
+  namespace: lab-troubleshooting-test
+  labels:
+    app: api
+    scenario: imagepull
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: nginx:nonexistent-tag-12345
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+
+# ============================================================
+# SECCION B: NETWORKING TROUBLESHOOTING
+# ============================================================
+
+# 4) DEPLOYMENT funcional para tests de networking
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-ok
+  namespace: lab-troubleshooting-test
+  labels:
+    app: backend
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+      tier: api
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: api
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+
+# 5) ESCENARIO: Service sin Endpoints - Label mismatch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-broken-svc
+  namespace: lab-troubleshooting-test
+  labels:
+    app: backend
+    scenario: no-endpoints
+spec:
+  selector:
+    app: backend-wrong  # Label mismatch intencional!
+    tier: api
+  ports:
+  - port: 80
+    targetPort: 80
+
+# 6) SERVICE funcional para comparacion
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-ok-svc
+  namespace: lab-troubleshooting-test
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+    tier: api
+  ports:
+  - port: 80
+    targetPort: 80
+
+# ============================================================
+# SECCION C: PROBES TROUBLESHOOTING
+# ============================================================
+
+# 7) ESCENARIO: Liveness Probe fallido - Path inexistente
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-liveness-broken
+  namespace: lab-troubleshooting-test
+  labels:
+    app: web-liveness
+    scenario: probe-failure
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /healthz  # No existe en nginx default
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 2
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# 8) ESCENARIO: Readiness Probe - Puerto incorrecto
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-readiness-broken
+  namespace: lab-troubleshooting-test
+  labels:
+    app: web-readiness
+    scenario: not-ready
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 8080  # Puerto incorrecto! nginx usa 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# ============================================================
+# SECCION D: PODS DE VERIFICACION
+# ============================================================
+
+# 9) POD DE VERIFICACION DNS
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox-dns-test
+  namespace: lab-troubleshooting-test
+  labels:
+    app: dns-test
+    purpose: verification
+spec:
+  containers:
+  - name: busybox
+    image: busybox:1.36
+    command:
+    - sleep
+    - "3600"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 50m
+        memory: 64Mi
+  restartPolicy: Never
+
+# 10) POD DE VERIFICACION CURL
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: curl-test
+  namespace: lab-troubleshooting-test
+  labels:
+    app: curl-test
+    purpose: verification
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:latest
+    command:
+    - sleep
+    - "3600"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 50m
+        memory: 64Mi
+  restartPolicy: Never

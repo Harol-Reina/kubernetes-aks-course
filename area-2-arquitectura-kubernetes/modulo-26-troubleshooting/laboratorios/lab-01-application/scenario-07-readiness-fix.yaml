@@ -1,0 +1,33 @@
+# Escenario 7: Readiness Probe Never Ready - Pod corregido con puerto y path validos
+# Uso: kubectl delete pod api-pod && kubectl apply -f scenario-07-readiness-fix.yaml
+#
+# Descripcion:
+#   Pod api-pod corregido con readiness probe apuntando a path: / y port: 80,
+#   que son los valores correctos para nginx. Una vez que el probe pase el pod
+#   aparecera en los Endpoints del Service api-service y comenzara a recibir trafico.
+#
+# Conceptos clave:
+#   - El Service api-service no necesita recrearse; detecta automaticamente el nuevo pod Ready
+#   - path: / en nginx retorna 200 OK; es un endpoint valido para readiness
+#   - Verificar con: kubectl get endpoints api-service (debe mostrar IP del pod)
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-pod
+  labels:
+    app: api
+spec:
+  containers:
+  - name: api
+    image: nginx:1.21
+    ports:
+    - containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5

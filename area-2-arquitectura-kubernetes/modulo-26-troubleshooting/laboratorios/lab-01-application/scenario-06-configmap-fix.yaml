@@ -1,0 +1,23 @@
+# Escenario 6: Missing ConfigMap - ConfigMap app-settings creado como fix
+# Uso: kubectl apply -f scenario-06-configmap-fix.yaml
+#
+# Descripcion:
+#   ConfigMap app-settings con las variables de entorno que necesita config-app.
+#   Una vez aplicado este ConfigMap el Deployment detecta automaticamente la
+#   disponibilidad del recurso y el pod pasa a estado Running.
+#
+# Conceptos clave:
+#   - ConfigMap almacena datos de configuracion no confidenciales como pares clave-valor
+#   - No es necesario recrear el Deployment; Kubernetes reintentara el pod automaticamente
+#   - Para datos confidenciales usar Secret en lugar de ConfigMap
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-settings
+data:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"
+  MAX_CONNECTIONS: "100"

@@ -1,0 +1,34 @@
+# Escenario 2: Security Breach - Pod con SecurityContext Reforzado
+# Uso: kubectl apply -f scenario-02-secure-pod.yaml
+#
+# Descripcion:
+#   Crea un Pod secure-pod con SecurityContext que implementa las mejores practicas
+#   de seguridad: corre como non-root, sin privilege escalation, sistema de archivos
+#   de solo lectura, y con todas las capabilities eliminadas.
+#
+# Conceptos clave:
+#   - runAsNonRoot: garantiza que el proceso no corra como root (uid 0)
+#   - allowPrivilegeEscalation: false previene que el proceso gane privilegios extra
+#   - readOnlyRootFilesystem: el sistema de archivos del container es inmutable
+#   - capabilities drop ALL: elimina todas las Linux capabilities del proceso
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secure-pod
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: app
+    image: nginx:1.21
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
