@@ -1,0 +1,98 @@
+# Ejercicio 3: Node.js con Endpoints Dedicados - Probes HTTP en app real
+# Uso: kubectl apply -f nodejs-production.yaml
+#
+# Descripcion:
+#   Deployment de 3 replicas de una API Node.js/Express con endpoints
+#   dedicados para cada tipo de probe: /startup, /health, /ready.
+#   La app simula 15 segundos de carga inicial antes de estar lista.
+#
+# Conceptos clave:
+#   - Endpoints dedicados para cada probe (best practice)
+#   - startupProbe protege arranque de npm install + carga inicial
+#   - Readiness controla trafico al Service
+#   - Requiere acceso a internet para npm install
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nodejs
+  template:
+    metadata:
+      labels:
+        app: nodejs
+    spec:
+      containers:
+      - name: api
+        image: node:20-alpine
+        workingDir: /app
+        command:
+        - sh
+        - -c
+        - |
+          # Crear servidor Express
+          cat > server.js <<'EOF'
+          const express = require('express');
+          const app = express();
+
+          let started = false;
+          let ready = false;
+
+          // Simula carga inicial
+          setTimeout(() => { started = true; ready = true; }, 15000);
+
+          app.get('/startup', (req, res) => {
+            res.status(started ? 200 : 503).send(started ? 'Started' : 'Starting');
+          });
+
+          app.get('/health', (req, res) => {
+            res.status(200).send('OK');
+          });
+
+          app.get('/ready', (req, res) => {
+            res.status(ready ? 200 : 503).send(ready ? 'Ready' : 'Not Ready');
+          });
+
+          app.listen(3000, () => console.log('Server running'));
+          EOF
+
+          npm init -y && npm install express && node server.js
+
+        ports:
+        - name: http
+          containerPort: 3000
+
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: http
+          periodSeconds: 5
+          failureThreshold: 12    # 1 minuto
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          periodSeconds: 5
+          failureThreshold: 2

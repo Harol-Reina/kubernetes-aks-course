@@ -1,0 +1,46 @@
+# Ejercicio 4: Probes Combinadas - Liveness Exec + Readiness HTTP
+# Uso: kubectl apply -f combined-probes.yaml
+#
+# Descripcion:
+#   Pod nginx con ambas probes configuradas para demostrar la diferencia:
+#   - Liveness (exec): verifica que el proceso nginx este vivo con `pidof`
+#   - Readiness (httpGet): verifica que el servidor responda en puerto 80
+#   Permite experimentar matando nginx (reinicio) vs eliminando index.html (not ready).
+#
+# Conceptos clave:
+#   - Liveness fallo = contenedor se reinicia
+#   - Readiness fallo = Pod se quita del Service (sin reinicio)
+#   - Pueden usar metodos diferentes (exec vs httpGet)
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: combined-test
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+    ports:
+    - containerPort: 80
+
+    # Liveness: Detecta si el proceso nginx esta vivo
+    livenessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - 'pidof nginx'
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      failureThreshold: 3
+
+    # Readiness: Verifica que el servidor responda
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 2

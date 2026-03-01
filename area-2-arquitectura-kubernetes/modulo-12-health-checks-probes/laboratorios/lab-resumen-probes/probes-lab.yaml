@@ -1,0 +1,264 @@
+# ============================================================
+# probes-lab.yaml
+# Ejercicio Resumen: Health Checks - Liveness, Readiness y Startup Probes
+# Uso: kubectl apply -f probes-lab.yaml
+# Duracion: ~15 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# conceptos principales de Health Checks en Kubernetes:
+#   - Namespace dedicado lab-probes
+#   - Pod con livenessProbe HTTP GET
+#   - Pod con livenessProbe exec
+#   - Deployment + Service con readinessProbe
+#   - Pod con startupProbe para inicio lento
+#   - Pod con las 3 probes combinadas
+#   - Pod con probe rota (para troubleshooting)
+#   - Pod de prueba para verificaciones
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-probes
+#    Namespace aislado para todos los recursos del lab resumen.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-probes
+  labels:
+    lab: probes-resumen
+
+---
+# =============================================================
+# 2) POD: Liveness HTTP GET
+#    Verifica que el contenedor responde en /. Si falla,
+#    kubelet reinicia el contenedor automaticamente.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-http
+  namespace: lab-probes
+  labels:
+    app: liveness-demo
+    probe-type: http
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 3
+
+---
+# =============================================================
+# 3) POD: Liveness Exec
+#    Verifica existencia de /tmp/healthy. El archivo se borra
+#    tras 30s, provocando reinicio automatico.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-exec
+  namespace: lab-probes
+  labels:
+    app: liveness-demo
+    probe-type: exec
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 3
+
+---
+# =============================================================
+# 4) DEPLOYMENT: App con readinessProbe (3 replicas)
+#    Los Pods solo reciben trafico cuando la probe pasa.
+#    Demuestra integracion con Service y Endpoints.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-ready
+  namespace: lab-probes
+  labels:
+    app: webapp-ready
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp-ready
+  template:
+    metadata:
+      labels:
+        app: webapp-ready
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          failureThreshold: 3
+
+---
+# =============================================================
+# 5) SERVICE: Expone el Deployment webapp-ready
+#    Solo enruta trafico a Pods cuya readinessProbe pasa.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-ready
+  namespace: lab-probes
+spec:
+  selector:
+    app: webapp-ready
+  ports:
+  - port: 80
+    targetPort: http
+    name: http
+  type: ClusterIP
+
+---
+# =============================================================
+# 6) POD: Startup Probe para app con inicio lento
+#    La startupProbe protege al contenedor durante el arranque.
+#    Liveness y readiness no se ejecutan hasta que startup pase.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: slow-startup-app
+  namespace: lab-probes
+  labels:
+    app: startup-demo
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+    ports:
+    - containerPort: 80
+    startupProbe:
+      httpGet:
+        path: /
+        port: 80
+      periodSeconds: 2
+      failureThreshold: 15       # Permite hasta 30s de arranque
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      periodSeconds: 10
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      periodSeconds: 5
+
+---
+# =============================================================
+# 7) POD: Las 3 probes combinadas (patron produccion)
+#    Demuestra el flujo completo:
+#    startup → (pasa) → liveness + readiness activas
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: combined-probes
+  namespace: lab-probes
+  labels:
+    app: combined-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.27-alpine
+    ports:
+    - containerPort: 80
+    startupProbe:
+      httpGet:
+        path: /
+        port: 80
+      periodSeconds: 2
+      failureThreshold: 10
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      periodSeconds: 10
+      failureThreshold: 3
+      timeoutSeconds: 3
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      periodSeconds: 5
+      failureThreshold: 3
+
+---
+# =============================================================
+# 8) POD: Probe rota (troubleshooting)
+#    livenessProbe apunta a /nonexistent → 404 → CrashLoopBackOff.
+#    Para diagnostico con kubectl describe y kubectl logs.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-probe
+  namespace: lab-probes
+  labels:
+    app: troubleshooting-demo
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+    ports:
+    - containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /nonexistent     # Retorna 404 → probe falla
+        port: 80
+      initialDelaySeconds: 3
+      periodSeconds: 3
+      failureThreshold: 2      # Solo 2 fallos para reinicio rapido
+
+---
+# =============================================================
+# 9) POD: test-tools para verificaciones
+#    Pod con herramientas para probar endpoints y Services.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tools
+  namespace: lab-probes
+  labels:
+    app: test-tools
+spec:
+  containers:
+  - name: tools
+    image: busybox:1.36
+    command: ['sh', '-c', 'sleep 3600']

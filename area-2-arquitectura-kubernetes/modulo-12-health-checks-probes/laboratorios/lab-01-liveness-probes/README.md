@@ -1,28 +1,62 @@
-# Laboratorio 1: Health Checks Básicos - Liveness y Readiness Probes
+# Laboratorio 01: Liveness y Readiness Probes
 
-## Objetivos
+**Duracion estimada:** 45 minutos
+**Nivel:** Basico
+**Objetivo:** Configurar Liveness y Readiness Probes, entender la diferencia entre ambas, y diagnosticar problemas comunes con health checks
 
-Al finalizar este laboratorio, podrás:
+---
 
-✅ Configurar Liveness Probes para detectar contenedores fallidos  
-✅ Configurar Readiness Probes para controlar tráfico  
-✅ Entender la diferencia entre Liveness y Readiness  
-✅ Diagnosticar problemas con health checks
+## Tecnicas y Conceptos Utilizados
 
-**Duración estimada**: 45 minutos
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Liveness Probe HTTP** | Verificacion periodica via HTTP GET. Si retorna status >= 400, Kubernetes reinicia el contenedor |
+| **Liveness Probe Exec** | Ejecuta un comando dentro del contenedor. Exit code 0 = exito, otro valor = fallo y reinicio |
+| **Readiness Probe** | Controla si el Pod recibe trafico del Service. Si falla, el Pod se remueve de Endpoints pero NO se reinicia |
+| **failureThreshold** | Numero de fallos consecutivos antes de tomar accion (reinicio o exclusion de trafico) |
+| **initialDelaySeconds** | Tiempo de espera antes de la primera verificacion, permitiendo que la app arranque |
+| **Probes combinadas** | Usar Liveness + Readiness juntas: liveness detecta procesos muertos, readiness controla trafico |
+| **CrashLoopBackOff** | Estado que indica reinicios continuos. Frecuentemente causado por probes mal configuradas |
+
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `liveness-http.yaml` | 1 | Pod con Liveness Probe HTTP usando agnhost que simula fallos despues de 10s |
+| `liveness-exec.yaml` | 2 | Pod con Liveness Probe Exec que verifica existencia de archivo /tmp/healthy |
+| `readiness-deployment.yaml` | 3 | Deployment 3 replicas con Readiness + Liveness para control de trafico |
+| `combined-probes.yaml` | 4 | Pod con Liveness (exec/pidof) y Readiness (httpGet) combinadas |
+| `broken-liveness.yaml` | 5 | Pod con probe rota para practicar troubleshooting de CrashLoopBackOff |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
 
 ---
 
 ## Requisitos Previos
 
-- Cluster de Kubernetes funcionando (minikube, kind, AKS, etc.)
+- Cluster de Kubernetes funcional (Minikube, kind, AKS, etc.)
 - `kubectl` configurado
 - Conocimientos de Pods y Services
 
+> Este laboratorio funciona con la configuracion por defecto de Minikube.
+
+### Verificacion del entorno
+
 ```bash
-# Verificar cluster
 kubectl cluster-info
 kubectl get nodes
+kubectl auth can-i create pods
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
 ```
 
 ---
@@ -31,34 +65,16 @@ kubectl get nodes
 
 ### Paso 1.1: Crear Pod con Liveness Probe
 
-Crea un archivo `liveness-http.yaml`:
+Revisa el archivo `liveness-http.yaml` antes de aplicarlo:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: liveness-http
-  labels:
-    app: demo
-spec:
-  containers:
-  - name: webapp
-    image: registry.k8s.io/e2e-test-images/agnhost:2.40
-    args:
-    - liveness
-    ports:
-    - containerPort: 8080
-    
-    livenessProbe:
-      httpGet:
-        path: /healthz
-        port: 8080
-      initialDelaySeconds: 3
-      periodSeconds: 3
-      failureThreshold: 3
+```bash
+cat liveness-http.yaml
 ```
 
-Aplica el manifiesto:
+Puntos clave del manifiesto:
+- Imagen `agnhost:2.40` con argumento `liveness` simula una app que falla despues de 10s
+- `livenessProbe.httpGet` verifica `/healthz` en puerto 8080
+- `failureThreshold: 3` con `periodSeconds: 3` = reinicio tras ~9s de fallos
 
 ```bash
 kubectl apply -f liveness-http.yaml
@@ -73,18 +89,18 @@ kubectl get pods liveness-http -w
 # En otra terminal, ver eventos
 kubectl describe pod liveness-http
 
-# Ver logs de la aplicación
+# Ver logs de la aplicacion
 kubectl logs liveness-http -f
 ```
 
-**❓ Pregunta**: ¿Qué observas después de ~30-40 segundos?
+**Pregunta**: Que observas despues de ~30-40 segundos?
 
 <details>
-<summary>💡 Respuesta</summary>
+<summary>Respuesta</summary>
 
-El Pod empieza a reiniciarse. Esto es porque la imagen `agnhost:2.40` con el argumento `liveness` simula una aplicación que:
+El Pod empieza a reiniciarse. Esto es porque la imagen `agnhost:2.40` con el argumento `liveness` simula una aplicacion que:
 - Primeros 10 segundos: Devuelve `200 OK`
-- Después de 10 segundos: Devuelve `500 Internal Server Error`
+- Despues de 10 segundos: Devuelve `500 Internal Server Error`
 
 Kubernetes detecta 3 fallos consecutivos (failureThreshold: 3) y reinicia el contenedor.
 
@@ -95,10 +111,13 @@ Kubernetes detecta 3 fallos consecutivos (failureThreshold: 3) y reinicia el con
 ```bash
 # Ver conteo de reinicios
 kubectl get pod liveness-http
+```
 
-# Salida esperada:
-# NAME            READY   STATUS    RESTARTS   AGE
-# liveness-http   1/1     Running   2          2m
+**Salida esperada:**
+
+```
+NAME            READY   STATUS    RESTARTS   AGE
+liveness-http   1/1     Running   2          2m
 ```
 
 El campo `RESTARTS` incrementa cada vez que la Liveness Probe falla.
@@ -109,7 +128,7 @@ El campo `RESTARTS` incrementa cada vez que la Liveness Probe falla.
 kubectl describe pod liveness-http | grep -A15 "Events:"
 ```
 
-Busca líneas como:
+Busca lineas como:
 
 ```
 Warning  Unhealthy  1m (x6 over 3m)  kubelet  Liveness probe failed: HTTP probe failed with statuscode: 500
@@ -122,32 +141,16 @@ Normal   Killing    1m (x3 over 3m)  kubelet  Container webapp failed liveness p
 
 ### Paso 2.1: Crear Pod con Exec Probe
 
-Crea `liveness-exec.yaml`:
+Revisa el archivo `liveness-exec.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: liveness-exec
-spec:
-  containers:
-  - name: app
-    image: registry.k8s.io/busybox:1.36
-    args:
-    - /bin/sh
-    - -c
-    - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
-    
-    livenessProbe:
-      exec:
-        command:
-        - cat
-        - /tmp/healthy
-      initialDelaySeconds: 5
-      periodSeconds: 5
+```bash
+cat liveness-exec.yaml
 ```
 
-Aplica y observa:
+Puntos clave:
+- El contenedor crea `/tmp/healthy` al inicio y lo elimina despues de 30s
+- La probe ejecuta `cat /tmp/healthy` cada 5s
+- Cuando el archivo no existe, la probe falla (exit code 1)
 
 ```bash
 kubectl apply -f liveness-exec.yaml
@@ -158,15 +161,15 @@ kubectl get pods liveness-exec -w
 
 ```
 Segundo 0-30:  Archivo /tmp/healthy existe
-               cat /tmp/healthy → Exit 0 → ✅ Probe OK
+               cat /tmp/healthy -> Exit 0 -> Probe OK
 
 Segundo 30:    rm -f /tmp/healthy (archivo eliminado)
 
-Segundo 35:    cat /tmp/healthy → Exit 1 (archivo no existe) → ❌ Probe FALLA
-Segundo 40:    cat /tmp/healthy → Exit 1 → ❌ Probe FALLA (2do fallo)
-Segundo 45:    cat /tmp/healthy → Exit 1 → ❌ Probe FALLA (3er fallo)
-               
-               → Kubernetes REINICIA el contenedor
+Segundo 35:    cat /tmp/healthy -> Exit 1 (archivo no existe) -> Probe FALLA
+Segundo 40:    cat /tmp/healthy -> Exit 1 -> Probe FALLA (2do fallo)
+Segundo 45:    cat /tmp/healthy -> Exit 1 -> Probe FALLA (3er fallo)
+
+               -> Kubernetes REINICIA el contenedor
 ```
 
 ### Paso 2.3: Experimento Manual
@@ -175,8 +178,8 @@ Segundo 45:    cat /tmp/healthy → Exit 1 → ❌ Probe FALLA (3er fallo)
 # Ejecutar el comando de la probe manualmente
 kubectl exec liveness-exec -- cat /tmp/healthy
 
-# Si el Pod aún no se reinició, verás el contenido
-# Si ya pasaron 30s, verás un error
+# Si el Pod aun no se reinicio, veras el contenido
+# Si ya pasaron 30s, veras un error
 ```
 
 ---
@@ -185,46 +188,16 @@ kubectl exec liveness-exec -- cat /tmp/healthy
 
 ### Paso 3.1: Crear Deployment con Readiness
 
-Crea `readiness-deployment.yaml`:
+Revisa el archivo `readiness-deployment.yaml`:
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: webapp-readiness
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: webapp
-  template:
-    metadata:
-      labels:
-        app: webapp
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.27-alpine
-        ports:
-        - name: http
-          containerPort: 80
-        
-        readinessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          successThreshold: 1
-          failureThreshold: 3
-        
-        livenessProbe:
-          httpGet:
-            path: /
-            port: http
-          initialDelaySeconds: 10
-          periodSeconds: 10
+```bash
+cat readiness-deployment.yaml
 ```
+
+Puntos clave:
+- 3 replicas de nginx con Readiness + Liveness Probes
+- Readiness verifica en named port `http`
+- `successThreshold: 1` para marcar Ready rapidamente
 
 ```bash
 kubectl apply -f readiness-deployment.yaml
@@ -241,29 +214,32 @@ kubectl expose deployment webapp-readiness --port=80 --type=ClusterIP
 ```bash
 # Ver endpoints del Service
 kubectl get endpoints webapp-readiness
+```
 
-# Deberías ver 3 IPs (una por cada Pod)
-# NAME               ENDPOINTS                           AGE
-# webapp-readiness   10.244.0.5:80,10.244.0.6:80,...    1m
+**Salida esperada (3 IPs, una por cada Pod):**
+
+```
+NAME               ENDPOINTS                           AGE
+webapp-readiness   10.244.0.5:80,10.244.0.6:80,...    1m
 ```
 
 ### Paso 3.4: Simular Fallo de Readiness
 
 ```bash
-# Obtén el nombre de un Pod
+# Obtener el nombre de un Pod
 POD_NAME=$(kubectl get pods -l app=webapp -o jsonpath='{.items[0].metadata.name}')
 
-# Ejecuta dentro del Pod para simular que no está listo
+# Ejecutar dentro del Pod para simular que no esta listo
 kubectl exec $POD_NAME -- sh -c 'rm /usr/share/nginx/html/index.html'
 
-# Observa cómo la readiness probe falla
+# Observar como la readiness probe falla
 kubectl describe pod $POD_NAME | grep -A5 "Readiness"
 
-# Ver endpoints (el Pod fallido NO aparecerá)
+# Ver endpoints (el Pod fallido NO aparecera)
 kubectl get endpoints webapp-readiness
 ```
 
-**💡 Clave**: El Pod sigue corriendo, pero ya no recibe tráfico del Service.
+**Clave**: El Pod sigue corriendo, pero ya no recibe trafico del Service.
 
 ### Paso 3.5: Restaurar el Pod
 
@@ -278,44 +254,20 @@ kubectl get endpoints webapp-readiness
 
 ---
 
-## Parte 4: Liveness vs Readiness - Comparación
+## Parte 4: Liveness vs Readiness - Comparacion
 
-### Ejercicio: Configuración Combinada
+### Ejercicio: Configuracion Combinada
 
-Crea `combined-probes.yaml`:
+Revisa el archivo `combined-probes.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: combined-test
-spec:
-  containers:
-  - name: app
-    image: nginx:1.27-alpine
-    ports:
-    - containerPort: 80
-    
-    # Liveness: Detecta si el proceso nginx está vivo
-    livenessProbe:
-      exec:
-        command:
-        - sh
-        - -c
-        - 'pidof nginx'
-      initialDelaySeconds: 10
-      periodSeconds: 10
-      failureThreshold: 3
-    
-    # Readiness: Verifica que el servidor responda
-    readinessProbe:
-      httpGet:
-        path: /
-        port: 80
-      initialDelaySeconds: 5
-      periodSeconds: 5
-      failureThreshold: 2
+```bash
+cat combined-probes.yaml
 ```
+
+Puntos clave:
+- **Liveness (exec)**: verifica que el proceso nginx este vivo con `pidof nginx`
+- **Readiness (httpGet)**: verifica que el servidor responda en puerto 80
+- Permite experimentar con dos escenarios diferentes
 
 ```bash
 kubectl apply -f combined-probes.yaml
@@ -334,7 +286,7 @@ kubectl get pod combined-test -w
 kubectl describe pod combined-test | tail -20
 ```
 
-**Resultado**: Pod se REINICIA (Liveness falló)
+**Resultado**: Pod se REINICIA (Liveness fallo)
 
 ---
 
@@ -356,36 +308,26 @@ kubectl describe pod combined-test | grep -A5 Readiness
 
 ### Problema 1: CrashLoopBackOff
 
-Crea este Pod problemático:
+Revisa el archivo `broken-liveness.yaml`:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: broken-liveness
-spec:
-  containers:
-  - name: app
-    image: nginx:1.27-alpine
-    
-    livenessProbe:
-      httpGet:
-        path: /nonexistent
-        port: 80
-      initialDelaySeconds: 1
-      periodSeconds: 2
-      failureThreshold: 1  # ← MUY AGRESIVO
+```bash
+cat broken-liveness.yaml
 ```
+
+El manifiesto tiene una probe intencionalmente rota:
+- Ruta `/nonexistent` que nginx no sirve
+- `failureThreshold: 1` (un solo fallo = reinicio)
+- `periodSeconds: 2` (verificacion muy frecuente)
 
 ```bash
 kubectl apply -f broken-liveness.yaml
 kubectl get pods broken-liveness -w
 ```
 
-**❓ ¿Qué observas?**
+**Pregunta**: Que observas?
 
 <details>
-<summary>💡 Respuesta</summary>
+<summary>Respuesta</summary>
 
 El Pod entra en `CrashLoopBackOff` porque:
 1. Liveness probe falla (ruta `/nonexistent` no existe)
@@ -393,20 +335,20 @@ El Pod entra en `CrashLoopBackOff` porque:
 3. `periodSeconds: 2` = Verifica muy frecuentemente
 4. Ciclo infinito de reinicio
 
-**Solución**: Incrementar `failureThreshold` y `initialDelaySeconds`
+**Solucion**: Incrementar `failureThreshold` y `initialDelaySeconds`
 
 </details>
 
-### Problema 2: Pod Ready pero sin Tráfico
+### Problema 2: Pod Ready pero sin Trafico
 
 ```bash
-# Verificar que el Pod esté Ready
+# Verificar que el Pod este Ready
 kubectl get pods combined-test
 
 # Verificar endpoints del Service
 kubectl get endpoints combined-test
 
-# Si el Pod está Ready pero no aparece en endpoints:
+# Si el Pod esta Ready pero no aparece en endpoints:
 # - Verificar labels (selector del Service)
 kubectl get pod combined-test --show-labels
 kubectl get service combined-test -o yaml | grep selector -A3
@@ -418,52 +360,58 @@ kubectl get service combined-test -o yaml | grep selector -A3
 
 ### Pregunta 1
 
-¿Qué pasa si un Pod tiene Liveness Probe pero NO tiene Readiness Probe?
+Que pasa si un Pod tiene Liveness Probe pero NO tiene Readiness Probe?
 
 <details>
-<summary>💡 Respuesta</summary>
+<summary>Respuesta</summary>
 
 El Pod:
-- Se reiniciará si Liveness falla
-- Se marcará como Ready inmediatamente al iniciar (sin verificación)
-- Recibirá tráfico desde el primer momento (puede ser prematuro)
+- Se reiniciara si Liveness falla
+- Se marcara como Ready inmediatamente al iniciar (sin verificacion)
+- Recibira trafico desde el primer momento (puede ser prematuro)
 
 </details>
 
 ### Pregunta 2
 
-¿Qué valores de `failureThreshold` y `periodSeconds` dan un tiempo de tolerancia de 30 segundos?
+Que valores de `failureThreshold` y `periodSeconds` dan un tiempo de tolerancia de 30 segundos?
 
 <details>
-<summary>💡 Respuesta</summary>
+<summary>Respuesta</summary>
 
-Opciones válidas:
-- `periodSeconds: 10`, `failureThreshold: 3` → 30s
-- `periodSeconds: 5`, `failureThreshold: 6` → 30s
-- `periodSeconds: 15`, `failureThreshold: 2` → 30s
+Opciones validas:
+- `periodSeconds: 10`, `failureThreshold: 3` -> 30s
+- `periodSeconds: 5`, `failureThreshold: 6` -> 30s
+- `periodSeconds: 15`, `failureThreshold: 2` -> 30s
 
-Fórmula: Tiempo total = `periodSeconds × failureThreshold`
+Formula: Tiempo total = `periodSeconds x failureThreshold`
 
 </details>
 
 ### Pregunta 3
 
-¿En qué situación usarías Liveness Probe con `exec` en lugar de `httpGet`?
+En que situacion usarias Liveness Probe con `exec` en lugar de `httpGet`?
 
 <details>
-<summary>💡 Respuesta</summary>
+<summary>Respuesta</summary>
 
 Usa `exec` cuando:
-- La aplicación no tiene endpoint HTTP
-- Necesitas verificar múltiples condiciones
-- Aplicación legacy sin instrumentación
-- Verificación de archivos o procesos del sistema
+- La aplicacion no tiene endpoint HTTP
+- Necesitas verificar multiples condiciones
+- Aplicacion legacy sin instrumentacion
+- Verificacion de archivos o procesos del sistema
 
 </details>
 
 ---
 
 ## Limpieza
+
+```bash
+./cleanup.sh
+```
+
+O manualmente:
 
 ```bash
 kubectl delete pod liveness-http liveness-exec combined-test broken-liveness
@@ -475,20 +423,20 @@ kubectl delete service webapp-readiness combined-test
 
 ## Resumen
 
-Has aprendido a:
+Al completar este laboratorio has practicado:
 
-✅ Configurar Liveness Probe (HTTP, TCP, exec)  
-✅ Configurar Readiness Probe  
-✅ Entender cuándo se reinicia un Pod vs cuándo se quita del Service  
-✅ Diagnosticar problemas con probes  
-✅ Combinar Liveness y Readiness
+- Configurar Liveness Probe (HTTP y exec)
+- Configurar Readiness Probe y su efecto en Services/Endpoints
+- Combinar Liveness y Readiness en un mismo Pod
+- Diagnosticar CrashLoopBackOff causado por probes mal configuradas
+- Entender cuando un Pod se reinicia vs cuando se quita del trafico
 
 ## Siguiente Laboratorio
 
-Continúa con:
-- **[Laboratorio 2 - Startup Probes Avanzado](lab-02-startup-avanzado.md)**
+Continua con:
+- **[Laboratorio 02 - Startup Probes y Casos Avanzados](../lab-02-readiness-probes/)**
 
 ## Recursos
 
-- **[README del Módulo](../README.md)**: Teoría completa
-- **[Ejemplos](../ejemplos/README.md)**: Más ejemplos de probes
+- **[README del Modulo](../../README.md)**: Teoria completa
+- **[Ejemplos](../../ejemplos/README.md)**: Mas ejemplos de probes

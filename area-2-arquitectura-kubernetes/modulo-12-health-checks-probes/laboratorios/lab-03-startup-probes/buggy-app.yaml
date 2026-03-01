@@ -1,0 +1,57 @@
+# Ejercicio Final: Debugging Completo - Deployment con multiples errores de probes
+# Uso: kubectl apply -f buggy-app.yaml
+#
+# Descripcion:
+#   Deployment de 3 replicas con tres problemas deliberados que el alumno
+#   debe identificar y corregir:
+#   1. livenessProbe apunta a /healthz (no existe en nginx)
+#   2. readinessProbe usa puerto 8080 (nginx escucha en 80)
+#   3. livenessProbe demasiado agresiva (failureThreshold: 2, timeoutSeconds: 1)
+#
+# Conceptos clave:
+#   - Ruta de probe inexistente causa reinicios permanentes
+#   - Puerto incorrecto en readinessProbe bloquea trafico
+#   - Configuracion agresiva genera falsos positivos
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buggy-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: buggy
+  template:
+    metadata:
+      labels:
+        app: buggy
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.27-alpine
+        ports:
+        - containerPort: 80
+
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 2
+          failureThreshold: 5
+
+        livenessProbe:
+          httpGet:
+            path: /healthz    # No existe en nginx
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 2
+          timeoutSeconds: 1
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080        # Puerto incorrecto
+          periodSeconds: 5

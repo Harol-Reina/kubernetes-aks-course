@@ -1,0 +1,35 @@
+# Ejercicio 2: Liveness Probe Exec - Verificacion por comando
+# Uso: kubectl apply -f liveness-exec.yaml
+#
+# Descripcion:
+#   Pod que crea un archivo /tmp/healthy y lo elimina despues de 30 segundos.
+#   La Liveness Probe ejecuta `cat /tmp/healthy` periodicamente. Cuando el
+#   archivo se elimina, la probe falla y Kubernetes reinicia el contenedor.
+#
+# Conceptos clave:
+#   - Liveness Probe con exec (ejecutar comando dentro del contenedor)
+#   - Exit code 0 = exito, cualquier otro = fallo
+#   - Util para apps sin endpoint HTTP
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-exec
+spec:
+  containers:
+  - name: app
+    image: registry.k8s.io/busybox:1.36
+    args:
+    - /bin/sh
+    - -c
+    - touch /tmp/healthy; sleep 30; rm -f /tmp/healthy; sleep 600
+
+    livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5
+      periodSeconds: 5

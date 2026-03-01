@@ -1,0 +1,34 @@
+# Ejercicio 1: App Lenta Sin Startup Probe - Problema de reinicios prematuros
+# Uso: kubectl apply -f slow-app-without-startup.yaml
+#
+# Descripcion:
+#   Pod que simula una aplicacion con arranque lento (120 segundos).
+#   Sin Startup Probe, la Liveness Probe reinicia el contenedor antes
+#   de que termine de arrancar, causando un ciclo infinito de reinicios.
+#
+# Conceptos clave:
+#   - initialDelaySeconds insuficiente para apps con arranque lento
+#   - Liveness Probe prematura causa reinicios innecesarios
+#   - Problema tipico en bases de datos y apps Java/Spring
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: slow-app-without-startup
+spec:
+  containers:
+  - name: app
+    image: alpine:3.19
+    command:
+    - sh
+    - -c
+    - 'echo "Iniciando..."; sleep 120; echo "Listo!"; sleep 3600'
+
+    livenessProbe:
+      exec:
+        command: ['sh', '-c', 'pgrep -f sleep']
+      initialDelaySeconds: 30  # No es suficiente para 120s de arranque
+      periodSeconds: 10
+      failureThreshold: 3      # 3 x 10 = 30s de tolerancia

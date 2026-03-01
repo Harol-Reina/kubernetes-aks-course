@@ -136,7 +136,7 @@ metadata:
   labels:
     app: webapp
 spec:
-  replicas: 2
+  replicas: 20
   selector:
     matchLabels:
       app: webapp
@@ -153,10 +153,10 @@ spec:
           containerPort: 80
         resources:
           requests:
-            cpu: "50m"
-            memory: "64Mi"
+            cpu: "300m"
+            memory: "128Mi"
           limits:
-            cpu: "100m"
+            cpu: "800m"
             memory: "128Mi"
         env:
         - name: POD_NAME

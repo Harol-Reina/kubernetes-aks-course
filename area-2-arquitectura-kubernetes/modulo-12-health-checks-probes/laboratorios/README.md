@@ -1,74 +1,38 @@
 # 🏥 Laboratorios - Health Checks y Probes
 
-Este módulo contiene laboratorios prácticos para dominar health checks y probes en Kubernetes.
+Este modulo contiene laboratorios practicos para dominar health checks y probes en Kubernetes.
 
-## 📋 Índice de Laboratorios
+## Indice de Laboratorios
 
-### [Lab 01: Probes Básico](./lab-01-liveness-probes/)
-**Duración:** 60-75 minutos | **Dificultad:** ⭐⭐☆☆☆
-
-Introducción a liveness y readiness probes.
-
-**Objetivos:**
-- Configurar liveness probes
-- Configurar readiness probes
-- Entender diferencias entre tipos
-- Observar restart automático
+| Lab | Nombre | Duracion | Nivel | Descripcion |
+|-----|--------|----------|-------|-------------|
+| [Lab 01](./lab-01-liveness-probes/) | Probes Basico | 60-75 min | Basico | Liveness (HTTP y exec), readiness con Deployment, probes combinadas |
+| [Lab 02](./lab-02-readiness-probes/) | Startup y Produccion | 75-90 min | Intermedio | Startup probes, configuraciones avanzadas, patrones de produccion |
+| [Lab 03](./lab-03-startup-probes/) | Troubleshooting | 45 min | Intermedio | Diagnosticar CrashLoopBackOff, label mismatch, timeouts, cascading failures |
+| [Lab Resumen](./lab-resumen-probes/) | Resumen Practico | 15 min | Repaso | Un solo YAML con todos los conceptos: liveness, readiness, startup, troubleshooting |
 
 ---
 
-### [Lab 02: Startup Avanzado](./lab-02-readiness-probes/)
-**Duración:** 75-90 minutos | **Dificultad:** ⭐⭐⭐☆☆
+## Ruta de Aprendizaje Recomendada
 
-Startup probes y configuraciones avanzadas.
+1. **Nivel Basico** → Lab 01 (Probes basico: liveness y readiness)
+2. **Nivel Intermedio** → Lab 02 (Startup probes y produccion)
+3. **Nivel Avanzado** → Lab 03 (Troubleshooting de probes)
+4. **Repaso Rapido** → Lab Resumen (15 min, todos los conceptos)
 
-**Objetivos:**
-- Implementar startup probes
-- Configurar tiempos y umbrales
-- HTTP, TCP, y Exec probes
-- Best practices
+**Tiempo total estimado:** ~3.5 horas (labs completos) + 15 min (resumen)
 
 ---
 
-### [Lab 03: Troubleshooting](./lab-03-startup-probes/)
-**Duración:** 75-90 minutos | **Dificultad:** ⭐⭐⭐⭐☆
+## Tipos de Probes
 
-Diagnóstico de problemas con probes.
+| Tipo | Proposito | Si falla... | Caso de uso |
+|------|-----------|-------------|-------------|
+| **Liveness** | Esta vivo el contenedor? | Kubelet reinicia el contenedor | Deadlocks, crashes |
+| **Readiness** | Esta listo para trafico? | Removido de Endpoints del Service | Carga de cache, conexion BD |
+| **Startup** | Termino de iniciar? | Cuenta como fallo de startup | Apps con inicio lento (>30s) |
 
-**Objetivos:**
-- Diagnosticar fallas de probes
-- Analizar logs y eventos
-- Optimizar configuraciones
-- Casos de uso complejos
-
----
-
-## 🎯 Ruta de Aprendizaje Recomendada
-
-1. **Nivel Básico** → Lab 01 (Probes básico)
-2. **Nivel Intermedio** → Lab 02 (Startup avanzado)
-3. **Nivel Avanzado** → Lab 03 (Troubleshooting)
-
-**Tiempo total estimado:** 4-4.5 horas
-
-## 📚 Tipos de Probes
-
-### Liveness Probe
-- ¿El container está vivo?
-- Si falla → restart del container
-- Detecta deadlocks y crashes
-
-### Readiness Probe
-- ¿El container está listo para tráfico?
-- Si falla → removido de endpoints
-- No recibe tráfico hasta que pase
-
-### Startup Probe
-- ¿El container terminó de iniciar?
-- Para apps con inicio lento
-- Deshabilita liveness/readiness durante startup
-
-## 📊 Métodos de Probe
+## Metodos de Probe
 
 ### HTTP GET
 ```yaml
@@ -94,29 +58,24 @@ livenessProbe:
     - /tmp/healthy
 ```
 
-## ⚠️ Antes de Comenzar
+---
+
+## Antes de Comenzar
 
 ```bash
 # Verificar cluster
 kubectl cluster-info
 
-# Ver pods en ejecución
+# Ver pods en ejecucion
 kubectl get pods
 
 # Monitorear eventos
 kubectl get events --watch
 ```
 
-## 🧹 Limpieza
+## Limpieza
 
 ```bash
 cd lab-XX-nombre
 ./cleanup.sh
 ```
-
-## 💡 Best Practices
-
-- Siempre usa readiness probes en producción
-- Liveness probes solo si detecta problemas irrecuperables
-- Startup probes para apps con inicio lento (>30s)
-- Evita probes muy agresivos (frecuentes)

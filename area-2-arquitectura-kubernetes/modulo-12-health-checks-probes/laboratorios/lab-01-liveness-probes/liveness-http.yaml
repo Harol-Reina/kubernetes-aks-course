@@ -1,0 +1,38 @@
+# Ejercicio 1: Liveness Probe HTTP - Deteccion de contenedores fallidos
+# Uso: kubectl apply -f liveness-http.yaml
+#
+# Descripcion:
+#   Pod que usa la imagen agnhost para simular una aplicacion que deja de
+#   responder despues de 10 segundos. La Liveness Probe HTTP detecta el
+#   fallo (status 500) y Kubernetes reinicia el contenedor automaticamente.
+#
+# Conceptos clave:
+#   - Liveness Probe con httpGet (path + port)
+#   - initialDelaySeconds: tiempo antes de la primera verificacion
+#   - periodSeconds: frecuencia de verificacion
+#   - failureThreshold: fallos consecutivos antes de reiniciar
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: liveness-http
+  labels:
+    app: demo
+spec:
+  containers:
+  - name: webapp
+    image: registry.k8s.io/e2e-test-images/agnhost:2.40
+    args:
+    - liveness
+    ports:
+    - containerPort: 8080
+
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8080
+      initialDelaySeconds: 3
+      periodSeconds: 3
+      failureThreshold: 3

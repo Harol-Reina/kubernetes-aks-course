@@ -1,13 +1,63 @@
-# Laboratorio 2: Startup Probes y Casos Avanzados
+# Laboratorio 02: Startup Probes y Casos Avanzados
 
-## Objetivos
+**Duracion estimada:** 60 minutos
+**Nivel:** Intermedio
+**Objetivo:** Configurar Startup Probes para aplicaciones de arranque lento, combinar las 3 probes correctamente, e implementar configuraciones optimizadas para produccion
 
-✅ Configurar Startup Probes para aplicaciones de arranque lento  
-✅ Combinar Startup, Liveness y Readiness correctamente  
-✅ Implementar probes en aplicaciones reales  
-✅ Optimizar configuración para producción
+---
 
-**Duración estimada**: 60 minutos
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Startup Probe** | Probe que protege durante el arranque inicial. Liveness y Readiness se activan solo despues de que Startup tenga exito |
+| **App de arranque lento** | Patron comun en bases de datos y apps Java/Spring. Sin Startup Probe, la Liveness reinicia prematuramente |
+| **PostgreSQL con 3 probes** | Caso real: Startup espera inicializacion, Liveness verifica proceso, Readiness verifica queries SQL |
+| **Endpoints dedicados** | Best practice: crear rutas /startup, /health, /ready para cada probe en lugar de reutilizar la misma |
+| **Optimizacion HA** | Liveness tolerante (evita cascading failures) + Readiness sensible (control rapido de trafico) |
+| **Cascading failures** | Probes agresivas bajo carga causan reinicios en cadena que saturan el cluster |
+
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `slow-app-without-startup.yaml` | 1 | Pod de arranque lento SIN Startup Probe (demuestra el problema) |
+| `slow-app-with-startup.yaml` | 1 | Mismo Pod CON Startup Probe (solucion correcta) |
+| `postgres-production.yaml` | 2 | Pod PostgreSQL con Startup + Liveness + Readiness |
+| `nodejs-production.yaml` | 3 | Deployment Node.js 3 replicas con endpoints dedicados por probe |
+| `critical-app.yaml` | 4 | Deployment 5 replicas con probes optimizadas para alta disponibilidad |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
+
+---
+
+## Requisitos Previos
+
+- Cluster de Kubernetes funcional (Minikube recomendado)
+- `kubectl` configurado
+- Lab 01 completado (conceptos de Liveness y Readiness)
+
+> Este laboratorio funciona con la configuracion por defecto de Minikube.
+
+> **Nota:** El Ejercicio 3 (Node.js) requiere acceso a internet para `npm install`.
+
+### Verificacion del entorno
+
+```bash
+kubectl cluster-info
+kubectl get nodes
+
+# Verificar archivos YAML del laboratorio
+ls -la *.yaml
+```
 
 ---
 
@@ -15,74 +65,40 @@
 
 ### Escenario
 
-Tienes una aplicación que tarda 2-3 minutos en arrancar. Sin Startup Probe, la Liveness Probe la reiniciaría prematuramente.
+Tienes una aplicacion que tarda 2-3 minutos en arrancar. Sin Startup Probe, la Liveness Probe la reiniciaria prematuramente.
 
-### Paso 1.1: Sin Startup Probe (Problemático)
+### Paso 1.1: Sin Startup Probe (Problematico)
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: slow-app-without-startup
-spec:
-  containers:
-  - name: app
-    image: alpine:3.19
-    command:
-    - sh
-    - -c
-    - 'echo "Iniciando..."; sleep 120; echo "Listo!"; sleep 3600'
-    
-    livenessProbe:
-      exec:
-        command: ['sh', '-c', 'pgrep -f sleep']
-      initialDelaySeconds: 30  # No es suficiente
-      periodSeconds: 10
-      failureThreshold: 3      # 3 × 10 = 30s de tolerancia
+Revisa el archivo `slow-app-without-startup.yaml`:
+
+```bash
+cat slow-app-without-startup.yaml
 ```
+
+Puntos clave:
+- La app tarda 120 segundos en arrancar (simula Java/Spring)
+- `initialDelaySeconds: 30` no es suficiente
+- Tolerancia total: 30s + (10s x 3) = 60s, pero la app necesita 120s
 
 ```bash
 kubectl apply -f slow-app-without-startup.yaml
 kubectl get pods slow-app-without-startup -w
 ```
 
-**Problema**: El Pod se reinicia porque tarda más de 60s (initialDelay 30s + 30s de tolerancia)
+**Problema**: El Pod se reinicia porque tarda mas de 60s (initialDelay 30s + 30s de tolerancia)
 
-### Paso 1.2: Con Startup Probe (Solución)
+### Paso 1.2: Con Startup Probe (Solucion)
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: slow-app-with-startup
-spec:
-  containers:
-  - name: app
-    image: alpine:3.19
-    command:
-    - sh
-    - -c
-    - |
-      echo "Iniciando aplicación..."
-      sleep 120
-      touch /tmp/started
-      echo "Aplicación iniciada!"
-      sleep 3600
-    
-    # Startup: Permite hasta 5 minutos para arrancar
-    startupProbe:
-      exec:
-        command: ['test', '-f', '/tmp/started']
-      periodSeconds: 10
-      failureThreshold: 30    # 30 × 10s = 300s = 5 min
-    
-    # Liveness: Se activa DESPUÉS de Startup
-    livenessProbe:
-      exec:
-        command: ['pgrep', '-f', 'sleep']
-      periodSeconds: 10
-      failureThreshold: 3
+Revisa el archivo `slow-app-with-startup.yaml`:
+
+```bash
+cat slow-app-with-startup.yaml
 ```
+
+Puntos clave:
+- **Startup Probe**: `failureThreshold: 30` x `periodSeconds: 10` = 300s (5 min) de arranque
+- La Liveness Probe se activa SOLO despues de que Startup tenga exito
+- El archivo `/tmp/started` se crea despues de los 120s de arranque
 
 ```bash
 kubectl apply -f slow-app-with-startup.yaml
@@ -90,7 +106,7 @@ kubectl get pods slow-app-with-startup -w
 kubectl describe pod slow-app-with-startup
 ```
 
-**✅ Resultado**: El Pod arranca correctamente sin reinicios.
+**Resultado**: El Pod arranca correctamente sin reinicios.
 
 ---
 
@@ -98,51 +114,16 @@ kubectl describe pod slow-app-with-startup
 
 ### Paso 2.1: Desplegar PostgreSQL
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: postgres-production
-spec:
-  containers:
-  - name: postgres
-    image: postgres:16-alpine
-    env:
-    - name: POSTGRES_PASSWORD
-      value: "securepassword"
-    - name: POSTGRES_DB
-      value: "appdb"
-    ports:
-    - containerPort: 5432
-    
-    # 1. Startup: Espera inicialización de DB
-    startupProbe:
-      exec:
-        command:
-        - sh
-        - -c
-        - pg_isready -U postgres
-      initialDelaySeconds: 10
-      periodSeconds: 5
-      failureThreshold: 60    # 5 minutos max
-    
-    # 2. Liveness: Verifica proceso vivo
-    livenessProbe:
-      exec:
-        command: ['pg_isready', '-U', 'postgres']
-      periodSeconds: 10
-      failureThreshold: 3
-    
-    # 3. Readiness: Verifica queries
-    readinessProbe:
-      exec:
-        command:
-        - sh
-        - -c
-        - pg_isready -U postgres && psql -U postgres -d appdb -c 'SELECT 1'
-      periodSeconds: 5
-      failureThreshold: 3
+Revisa el archivo `postgres-production.yaml`:
+
+```bash
+cat postgres-production.yaml
 ```
+
+Puntos clave:
+- **Startup**: `pg_isready` verifica que PostgreSQL acepte conexiones (hasta 5 min)
+- **Liveness**: `pg_isready` periodico para detectar proceso caido
+- **Readiness**: `pg_isready` + query SQL `SELECT 1` para verificar que la DB funcione
 
 ```bash
 kubectl apply -f postgres-production.yaml
@@ -152,104 +133,32 @@ kubectl logs postgres-production -f
 ### Paso 2.2: Verificar Secuencia de Probes
 
 ```bash
-# Ver orden de ejecución de probes
+# Ver orden de ejecucion de probes
 kubectl describe pod postgres-production | grep -A5 "Startup\|Liveness\|Readiness"
 ```
 
 Observa que:
 1. **Startup** se ejecuta primero
-2. **Liveness** y **Readiness** se activan después de Startup exitosa
+2. **Liveness** y **Readiness** se activan despues de Startup exitosa
 
 ---
 
-## Parte 3: Aplicación Node.js con Endpoints Dedicados
+## Parte 3: Aplicacion Node.js con Endpoints Dedicados
 
 ### Paso 3.1: Deployment Completo
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nodejs-production
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: nodejs
-  template:
-    metadata:
-      labels:
-        app: nodejs
-    spec:
-      containers:
-      - name: api
-        image: node:20-alpine
-        workingDir: /app
-        command:
-        - sh
-        - -c
-        - |
-          # Crear servidor Express
-          cat > server.js <<'EOF'
-          const express = require('express');
-          const app = express();
-          
-          let started = false;
-          let ready = false;
-          
-          // Simula carga inicial
-          setTimeout(() => { started = true; ready = true; }, 15000);
-          
-          app.get('/startup', (req, res) => {
-            res.status(started ? 200 : 503).send(started ? 'Started' : 'Starting');
-          });
-          
-          app.get('/health', (req, res) => {
-            res.status(200).send('OK');
-          });
-          
-          app.get('/ready', (req, res) => {
-            res.status(ready ? 200 : 503).send(ready ? 'Ready' : 'Not Ready');
-          });
-          
-          app.listen(3000, () => console.log('Server running'));
-          EOF
-          
-          npm init -y && npm install express && node server.js
-        
-        ports:
-        - name: http
-          containerPort: 3000
-        
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-        
-        startupProbe:
-          httpGet:
-            path: /startup
-            port: http
-          periodSeconds: 5
-          failureThreshold: 12    # 1 minuto
-        
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: http
-          periodSeconds: 10
-          failureThreshold: 3
-        
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: http
-          periodSeconds: 5
-          failureThreshold: 2
+Revisa el archivo `nodejs-production.yaml`:
+
+```bash
+cat nodejs-production.yaml
 ```
+
+Puntos clave:
+- 3 replicas de una API Express con endpoints dedicados
+- `/startup` retorna 503 durante los primeros 15s, luego 200
+- `/health` siempre retorna 200 (el proceso esta vivo)
+- `/ready` retorna 200 solo cuando la app esta completamente lista
+- Startup Probe permite hasta 60s para npm install + carga inicial
 
 ```bash
 kubectl apply -f nodejs-production.yaml
@@ -270,73 +179,31 @@ curl http://localhost:3000/ready
 
 ---
 
-## Parte 4: Optimización de Probes para Producción
+## Parte 4: Optimizacion de Probes para Produccion
 
 ### Escenario: Alta Disponibilidad
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: critical-app
-spec:
-  replicas: 5
-  selector:
-    matchLabels:
-      app: critical
-  template:
-    metadata:
-      labels:
-        app: critical
-    spec:
-      containers:
-      - name: app
-        image: nginx:1.27-alpine
-        ports:
-        - name: http
-          containerPort: 80
-        
-        resources:
-          requests:
-            cpu: "200m"
-            memory: "256Mi"
-          limits:
-            cpu: "1000m"
-            memory: "512Mi"
-        
-        # Startup: Rápido (app ligera)
-        startupProbe:
-          httpGet:
-            path: /
-            port: http
-          periodSeconds: 2
-          failureThreshold: 10    # 20s max
-        
-        # Liveness: MUY TOLERANTE (evita cascading failures)
-        livenessProbe:
-          httpGet:
-            path: /
-            port: http
-          periodSeconds: 30       # Menos frecuente
-          failureThreshold: 5     # 150s de tolerancia
-          timeoutSeconds: 5
-        
-        # Readiness: Sensible (control de tráfico rápido)
-        readinessProbe:
-          httpGet:
-            path: /
-            port: http
-          periodSeconds: 5        # Frecuente
-          successThreshold: 1     # Rápido para marcar Ready
-          failureThreshold: 2     # Rápido para quitar
-          timeoutSeconds: 3
+Revisa el archivo `critical-app.yaml`:
+
+```bash
+cat critical-app.yaml
 ```
 
-### Análisis de Configuración
+Puntos clave:
+- **Startup** rapido: app ligera, 20s max (2s x 10)
+- **Liveness** muy tolerante: 150s (30s x 5) para evitar cascading failures
+- **Readiness** sensible: 10s (5s x 2) para control rapido de trafico
+
+```bash
+kubectl apply -f critical-app.yaml
+kubectl get pods -l app=critical -w
+```
+
+### Analisis de Configuracion
 
 | Probe | periodSeconds | failureThreshold | Tiempo Total | Estrategia |
 |-------|---------------|------------------|--------------|------------|
-| Startup | 2s | 10 | 20s | Rápido (app ligera) |
+| Startup | 2s | 10 | 20s | Rapido (app ligera) |
 | Liveness | 30s | 5 | 150s | Muy tolerante |
 | Readiness | 5s | 2 | 10s | Sensible |
 
@@ -346,12 +213,12 @@ spec:
 
 ### Caso 1: Cascading Failures bajo Carga
 
-**Síntoma**: Pods se reinician en cadena bajo alta carga
+**Sintoma**: Pods se reinician en cadena bajo alta carga
 
 **Causa**: Liveness Probe muy agresiva
 
 ```yaml
-# ❌ MAL
+# MAL: Muy agresiva
 livenessProbe:
   httpGet:
     path: /health
@@ -361,10 +228,10 @@ livenessProbe:
   timeoutSeconds: 1      # 1s de timeout
 ```
 
-**Solución**:
+**Solucion**:
 
 ```yaml
-# ✅ BIEN
+# BIEN: Tolerante
 livenessProbe:
   httpGet:
     path: /health
@@ -379,6 +246,12 @@ livenessProbe:
 ## Limpieza
 
 ```bash
+./cleanup.sh
+```
+
+O manualmente:
+
+```bash
 kubectl delete pod slow-app-without-startup slow-app-with-startup postgres-production
 kubectl delete deployment nodejs-production critical-app
 ```
@@ -387,11 +260,14 @@ kubectl delete deployment nodejs-production critical-app
 
 ## Resumen
 
-✅ Startup Probes evitan reinicios prematuros  
-✅ Combina las 3 probes para producción  
-✅ Liveness tolerante evita cascading failures  
-✅ Readiness sensible controla tráfico efectivamente
+Al completar este laboratorio has practicado:
 
-## Siguiente Paso
+- Startup Probes para evitar reinicios prematuros en apps de arranque lento
+- Las 3 probes combinadas en un caso real (PostgreSQL)
+- Endpoints dedicados para cada tipo de probe (Node.js)
+- Optimizacion de probes para alta disponibilidad
+- Liveness tolerante para evitar cascading failures
 
-**[Laboratorio 3 - Troubleshooting de Probes](lab-03-troubleshooting.md)**
+## Siguiente Laboratorio
+
+**[Laboratorio 03 - Troubleshooting de Health Checks](../lab-03-startup-probes/)**

@@ -1,0 +1,31 @@
+# Ejercicio 1: CrashLoopBackOff - Liveness Probe con ruta invalida
+# Uso: kubectl apply -f crashloop-pod.yaml
+#
+# Descripcion:
+#   Pod con una Liveness Probe que apunta a una ruta inexistente (/nonexistent).
+#   La configuracion agresiva (failureThreshold: 1, periodSeconds: 2) provoca
+#   reinicios inmediatos y lleva al Pod al estado CrashLoopBackOff.
+#
+# Conceptos clave:
+#   - CrashLoopBackOff causado por livenessProbe mal configurada
+#   - failureThreshold: 1 es demasiado agresivo
+#   - Diagnostico con kubectl describe y kubectl logs --previous
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashloop-pod
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+
+    livenessProbe:
+      httpGet:
+        path: /nonexistent
+        port: 80
+      initialDelaySeconds: 1
+      periodSeconds: 2
+      failureThreshold: 1

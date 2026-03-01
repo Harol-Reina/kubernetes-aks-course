@@ -1,0 +1,72 @@
+# Ejercicio 4: Alta Disponibilidad - Probes optimizadas para produccion
+# Uso: kubectl apply -f critical-app.yaml
+#
+# Descripcion:
+#   Deployment de 5 replicas con probes calibradas para alta disponibilidad:
+#   - Startup rapido (app ligera, 20s max)
+#   - Liveness MUY tolerante (150s) para evitar cascading failures
+#   - Readiness sensible (10s) para control rapido de trafico
+#
+# Conceptos clave:
+#   - Liveness tolerante evita cascading failures bajo carga
+#   - Readiness sensible permite control fino del trafico
+#   - Startup rapido para apps que arrancan en segundos
+#   - Balance entre deteccion rapida y estabilidad
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-app
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: critical
+  template:
+    metadata:
+      labels:
+        app: critical
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.27-alpine
+        ports:
+        - name: http
+          containerPort: 80
+
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+
+        # Startup: Rapido (app ligera)
+        startupProbe:
+          httpGet:
+            path: /
+            port: http
+          periodSeconds: 2
+          failureThreshold: 10    # 20s max
+
+        # Liveness: MUY TOLERANTE (evita cascading failures)
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          periodSeconds: 30       # Menos frecuente
+          failureThreshold: 5     # 150s de tolerancia
+          timeoutSeconds: 5
+
+        # Readiness: Sensible (control de trafico rapido)
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          periodSeconds: 5        # Frecuente
+          successThreshold: 1     # Rapido para marcar Ready
+          failureThreshold: 2     # Rapido para quitar
+          timeoutSeconds: 3

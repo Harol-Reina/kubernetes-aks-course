@@ -1,0 +1,46 @@
+# Ejercicio 1: App Lenta Con Startup Probe - Solucion correcta
+# Uso: kubectl apply -f slow-app-with-startup.yaml
+#
+# Descripcion:
+#   Misma aplicacion de arranque lento (120 segundos) pero con Startup Probe.
+#   La Startup Probe permite hasta 5 minutos para arrancar. La Liveness Probe
+#   se activa SOLO despues de que la Startup Probe tenga exito.
+#
+# Conceptos clave:
+#   - startupProbe protege durante el arranque inicial
+#   - Liveness y Readiness se activan solo DESPUES de Startup exitosa
+#   - failureThreshold x periodSeconds = tiempo maximo de arranque
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: slow-app-with-startup
+spec:
+  containers:
+  - name: app
+    image: alpine:3.19
+    command:
+    - sh
+    - -c
+    - |
+      echo "Iniciando aplicacion..."
+      sleep 120
+      touch /tmp/started
+      echo "Aplicacion iniciada!"
+      sleep 3600
+
+    # Startup: Permite hasta 5 minutos para arrancar
+    startupProbe:
+      exec:
+        command: ['test', '-f', '/tmp/started']
+      periodSeconds: 10
+      failureThreshold: 30    # 30 x 10s = 300s = 5 min
+
+    # Liveness: Se activa DESPUES de Startup
+    livenessProbe:
+      exec:
+        command: ['pgrep', '-f', 'sleep']
+      periodSeconds: 10
+      failureThreshold: 3

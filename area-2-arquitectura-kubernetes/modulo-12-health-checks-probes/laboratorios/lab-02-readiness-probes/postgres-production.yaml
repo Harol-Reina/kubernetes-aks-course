@@ -1,0 +1,59 @@
+# Ejercicio 2: PostgreSQL con Probes Completas - Las 3 probes en accion
+# Uso: kubectl apply -f postgres-production.yaml
+#
+# Descripcion:
+#   Pod PostgreSQL con las 3 probes configuradas para un escenario realista:
+#   - Startup: espera a que la base de datos termine de inicializarse
+#   - Liveness: verifica que el proceso postgres responda
+#   - Readiness: verifica que la DB acepte queries SQL
+#
+# Conceptos clave:
+#   - pg_isready verifica conexion al servidor PostgreSQL
+#   - Readiness mas estricta que Liveness (query SQL vs solo conexion)
+#   - Secuencia: Startup -> Liveness + Readiness
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres-production
+spec:
+  containers:
+  - name: postgres
+    image: postgres:16-alpine
+    env:
+    - name: POSTGRES_PASSWORD
+      value: "securepassword"
+    - name: POSTGRES_DB
+      value: "appdb"
+    ports:
+    - containerPort: 5432
+
+    # 1. Startup: Espera inicializacion de DB
+    startupProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      failureThreshold: 60    # 5 minutos max
+
+    # 2. Liveness: Verifica proceso vivo
+    livenessProbe:
+      exec:
+        command: ['pg_isready', '-U', 'postgres']
+      periodSeconds: 10
+      failureThreshold: 3
+
+    # 3. Readiness: Verifica queries
+    readinessProbe:
+      exec:
+        command:
+        - sh
+        - -c
+        - pg_isready -U postgres && psql -U postgres -d appdb -c 'SELECT 1'
+      periodSeconds: 5
+      failureThreshold: 3

@@ -1,0 +1,52 @@
+# Ejercicio 3: Readiness Probe con Service - Control de trafico
+# Uso: kubectl apply -f readiness-deployment.yaml
+#
+# Descripcion:
+#   Deployment con 3 replicas de nginx que incluye Readiness y Liveness Probes.
+#   La Readiness Probe controla si el Pod recibe trafico del Service.
+#   Si falla, el Pod se remueve de los Endpoints pero NO se reinicia.
+#
+# Conceptos clave:
+#   - Readiness Probe determina si el Pod recibe trafico
+#   - Pod not-ready se excluye de Endpoints del Service
+#   - Diferencia con Liveness: readiness no reinicia, solo quita trafico
+#   - successThreshold: exitos consecutivos para marcar Ready
+#
+# Namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-readiness
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.27-alpine
+        ports:
+        - name: http
+          containerPort: 80
+
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10

@@ -1,0 +1,32 @@
+# Ejercicio 5: Troubleshooting - Liveness Probe Rota (CrashLoopBackOff)
+# Uso: kubectl apply -f broken-liveness.yaml
+#
+# Descripcion:
+#   Pod con una Liveness Probe intencionalmente mal configurada para
+#   demostrar CrashLoopBackOff. La ruta /nonexistent no existe y los
+#   parametros son muy agresivos (failureThreshold: 1, periodSeconds: 2).
+#
+# Conceptos clave:
+#   - failureThreshold: 1 es demasiado agresivo (un fallo = reinicio)
+#   - initialDelaySeconds bajo puede no dar tiempo al arranque
+#   - Ruta incorrecta causa fallo permanente de la probe
+#   - Resultado: ciclo infinito de reinicios (CrashLoopBackOff)
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: broken-liveness
+spec:
+  containers:
+  - name: app
+    image: nginx:1.27-alpine
+
+    livenessProbe:
+      httpGet:
+        path: /nonexistent
+        port: 80
+      initialDelaySeconds: 1
+      periodSeconds: 2
+      failureThreshold: 1  # MUY AGRESIVO
