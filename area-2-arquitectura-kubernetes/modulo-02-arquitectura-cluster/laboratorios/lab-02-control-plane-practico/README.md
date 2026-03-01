@@ -1,17 +1,17 @@
-# Laboratorio 02: Control Plane Práctico en Minikube
+# Laboratorio 02: Control Plane Practico en Minikube
 
 ## Objetivos
 
-Al finalizar este laboratorio, serás capaz de:
-- ✓ Interactuar directamente con el API Server de Minikube
-- ✓ Realizar backup y restore de etcd en Minikube
-- ✓ Analizar el funcionamiento del Scheduler
-- ✓ Entender el reconciliation loop del Controller Manager
-- ✓ Troubleshooting de componentes del Control Plane
+Al finalizar este laboratorio, seras capaz de:
+- Interactuar directamente con el API Server de Minikube
+- Realizar backup y restore de etcd en Minikube
+- Analizar el funcionamiento del Scheduler
+- Entender el reconciliation loop del Controller Manager
+- Troubleshooting de componentes del Control Plane
 
-## Duración Estimada
+## Duracion Estimada
 
-⏱️ 90-120 minutos
+90-120 minutos
 
 ## Pre-requisitos
 
@@ -20,23 +20,59 @@ Al finalizar este laboratorio, serás capaz de:
 - `jq` instalado para parsing de JSON: `sudo apt install jq`
 - `kubectl` configurado
 
-## ⚠️ Nota sobre el Entorno
+---
+
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica / Concepto | Descripcion |
+|---|---|
+| Interaccion con API Server via REST | Peticiones HTTP directas al API Server usando curl y tokens Bearer |
+| Autenticacion RBAC | Generacion de tokens con `kubectl create token` para autenticar peticiones |
+| Watch API | Streaming de eventos en tiempo real mediante el parametro `?watch=true` |
+| Backup de etcd | Snapshot del datastore con `etcdctl snapshot save` desde dentro del contenedor |
+| Restore de etcd | Proceso conceptual de restauracion en clusters de produccion |
+| Decisiones del Scheduler | Observacion de eventos de scheduling y asignacion de pods a nodos |
+| nodeSelector | Restriccion de pods a nodos con etiquetas especificas |
+| Scheduling manual con nodeName | Asignacion directa de pods a nodos sin usar el Scheduler |
+| schedulerName personalizado | Uso de un scheduler inexistente para demostrar el estado Pending |
+| Limites de recursos del Scheduler | Pod con recursos imposibles para observar FailedScheduling |
+| Reconciliation Loop | Observacion del ReplicaSet Controller recreando pods eliminados |
+| Endpoint Controller | Verificacion de actualizacion automatica de endpoints al cambiar pods |
+| Troubleshooting con logs | Consulta de logs de API Server, Scheduler, Controller Manager y etcd |
+| Health checks del Control Plane | Verificacion con /healthz, /livez y /readyz |
+| Diagnostico de ImagePullBackOff | Identificacion y resolucion de errores de imagen inexistente |
+
+## Archivos YAML del Laboratorio
+
+| Archivo | Ejercicio | Descripcion |
+|---|---|---|
+| `pod-via-api.json` | 1.4 | Definicion JSON del pod `created-via-api` para crear via POST al API Server |
+| `scheduler-test-pod.yaml` | 3.1 | Pod simple sin restricciones para observar decisiones del Scheduler |
+| `ssd-pod.yaml` | 3.2 | Pod con nodeSelector disktype=ssd para practica de seleccion por etiqueta |
+| `unschedulable-pod.yaml` | 3.2 | Pod con nodeSelector disktype=nvme (etiqueta inexistente) para observar Pending |
+| `huge-pod.yaml` | 3.3 | Pod con 1000 CPU y 1000Gi de memoria para observar FailedScheduling |
+| `manual-schedule-pod.yaml` | 3.4 | Pod con schedulerName inexistente para practicar asignacion manual con nodeName |
+| `broken-pod.yaml` | 5.3 | Pod con imagen nginx:nonexistent-tag-12345 para practica de troubleshooting |
+
+---
+
+## Nota sobre el Entorno
 
 Este laboratorio explora el Control Plane de Minikube:
 - Todos los componentes corren como **contenedores Docker** dentro del nodo Minikube
 - El acceso a etcd se hace desde **dentro del contenedor** etcd
-- No necesitas acceso SSH a múltiples nodos (todo está en Minikube)
-- Los conceptos son idénticos a un cluster real, solo cambia el método de acceso
+- No necesitas acceso SSH a multiples nodos (todo esta en Minikube)
+- Los conceptos son identicos a un cluster real, solo cambia el metodo de acceso
 
 ---
 
-## Parte 1: Interacción con el API Server (30 minutos)
+## Parte 1: Interaccion con el API Server (30 minutos)
 
-### 📝 Ejercicio 1.1: API Server sin kubectl
+### Ejercicio 1.1: API Server sin kubectl
 
 **Objetivo:** Entender que `kubectl` es solo un cliente HTTP del API Server.
 
-**Paso 1:** Obtén el token de autenticación
+**Paso 1:** Obtener el token de autenticacion
 
 ```bash
 # Crear un token temporal para el ServiceAccount default
@@ -45,17 +81,17 @@ TOKEN=$(kubectl create token default)
 echo $TOKEN
 ```
 
-**Paso 2:** Obtén la URL del API Server de Minikube
+**Paso 2:** Obtener la URL del API Server de Minikube
 
 ```bash
-# En Minikube, el API Server está en https://192.168.49.2:8443 (o similar)
+# En Minikube, el API Server esta en https://192.168.49.2:8443 (o similar)
 API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 echo $API_SERVER
 
-# Debería mostrar algo como: https://192.168.49.2:8443
+# Deberia mostrar algo como: https://192.168.49.2:8443
 ```
 
-**Paso 3:** Realiza una petición HTTP directa
+**Paso 3:** Realizar una peticion HTTP directa
 
 ```bash
 # Listar namespaces (equivalente a: kubectl get namespaces)
@@ -63,11 +99,11 @@ curl -k -H "Authorization: Bearer $TOKEN" \
   $API_SERVER/api/v1/namespaces | jq '.items[].metadata.name'
 ```
 
-**Pregunta:** ¿Qué namespaces existen en tu cluster Minikube?
+**Pregunta:** Que namespaces existen en tu cluster Minikube?
 
 <details>
-<summary>💡 Respuesta esperada</summary>
-Deberías ver al menos:
+<summary>Respuesta esperada</summary>
+Deberias ver al menos:
 - default
 - kube-system
 - kube-public
@@ -76,50 +112,50 @@ Deberías ver al menos:
 
 ---
 
-### 📝 Ejercicio 1.2: Explorar la API
+### Ejercicio 1.2: Explorar la API
 
-**Paso 1:** Lista todas las API versions disponibles
+**Paso 1:** Listar todas las API versions disponibles
 
 ```bash
 curl -k -H "Authorization: Bearer $TOKEN" \
   $API_SERVER/apis | jq '.groups[].name'
 ```
 
-**Paso 2:** Lista recursos en la API core
+**Paso 2:** Listar recursos en la API core
 
 ```bash
 curl -k -H "Authorization: Bearer $TOKEN" \
   $API_SERVER/api/v1 | jq '.resources[] | select(.namespaced==true) | .name' | head -10
 ```
 
-**Paso 3:** Obtén un pod específico vía API REST
+**Paso 3:** Obtener un pod especifico via API REST
 
 ```bash
 # Primero crea un pod de prueba
 kubectl run api-test --image=nginx
 
-# Espera a que esté listo
+# Espera a que este listo
 kubectl wait --for=condition=Ready pod/api-test --timeout=60s
 
-# Obtén el pod via API REST
+# Obtener el pod via API REST
 curl -k -H "Authorization: Bearer $TOKEN" \
   $API_SERVER/api/v1/namespaces/default/pods/api-test | jq '.status.phase'
 ```
 
-**Pregunta:** ¿Qué fase (phase) está el pod?
+**Pregunta:** Que fase (phase) esta el pod?
 
 <details>
-<summary>💡 Respuesta esperada</summary>
-Debería mostrar: "Running"
+<summary>Respuesta esperada</summary>
+Deberia mostrar: "Running"
 </details>
 
 ---
 
-### 📝 Ejercicio 1.3: Watch API en Acción
+### Ejercicio 1.3: Watch API en Accion
 
-**Paso 1:** Abre dos terminales en tu VM de Azure
+**Paso 1:** Abrir dos terminales en tu VM de Azure
 
-**Terminal 1:** Inicia un watch de pods
+**Terminal 1:** Iniciar un watch de pods
 
 ```bash
 TOKEN=$(kubectl create token default)
@@ -129,9 +165,9 @@ curl -k -H "Authorization: Bearer $TOKEN" \
   "$API_SERVER/api/v1/namespaces/default/pods?watch=true"
 ```
 
-**Deja esto corriendo...**
+**Dejar esto corriendo...**
 
-**Terminal 2:** Crea y elimina pods
+**Terminal 2:** Crear y eliminar pods
 
 ```bash
 kubectl run watch-test-1 --image=nginx
@@ -143,48 +179,22 @@ sleep 5
 kubectl delete pod watch-test-2
 ```
 
-**Observa en Terminal 1:** Deberías ver eventos `ADDED`, `MODIFIED`, `DELETED` en tiempo real.
+**Observar en Terminal 1:** Deberias ver eventos `ADDED`, `MODIFIED`, `DELETED` en tiempo real.
 
-**Pregunta:** ¿Cuántos eventos ves por cada pod creado? ¿Por qué hay múltiples eventos `MODIFIED`?
+**Pregunta:** Cuantos eventos ves por cada pod creado? Por que hay multiples eventos `MODIFIED`?
 
 ---
 
-### 📝 Ejercicio 1.4: Crear Recurso via API REST
+### Ejercicio 1.4: Crear Recurso via API REST
 
-**Paso 1:** Crea un pod usando POST directo
+**Paso 1:** Crear un pod usando POST directo al API Server
 
 ```bash
-# Define el pod en JSON
-cat > pod-via-api.json <<EOF
-{
-  "apiVersion": "v1",
-  "kind": "Pod",
-  "metadata": {
-    "name": "created-via-api",
-    "labels": {
-      "method": "rest-api"
-    }
-  },
-  "spec": {
-    "containers": [
-      {
-        "name": "nginx",
-        "image": "nginx",
-        "ports": [
-          {
-            "containerPort": 80
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
-
-# POST al API Server
+# Obtener credenciales
 TOKEN=$(kubectl create token default)
 API_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 
+# POST al API Server usando el archivo JSON
 curl -k -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -192,23 +202,25 @@ curl -k -X POST \
   $API_SERVER/api/v1/namespaces/default/pods | jq '.metadata.name'
 ```
 
-**Paso 2:** Verifica que el pod existe
+El archivo `pod-via-api.json` contiene la definicion del pod `created-via-api` en formato JSON.
+
+**Paso 2:** Verificar que el pod existe
 
 ```bash
 kubectl get pod created-via-api
 ```
 
-**Pregunta:** ¿Qué ventajas tiene usar `kubectl` sobre llamadas REST directas?
+**Pregunta:** Que ventajas tiene usar `kubectl` sobre llamadas REST directas?
 
 ---
 
 ## Parte 2: Backup y Restore de etcd en Minikube (35 minutos)
 
-### 📝 Ejercicio 2.1: Snapshot de etcd
+### Ejercicio 2.1: Snapshot de etcd
 
-**⚠️ IMPORTANTE:** En Minikube accederemos a etcd desde dentro del contenedor Docker.
+**IMPORTANTE:** En Minikube accederemos a etcd desde dentro del contenedor Docker.
 
-**Paso 1:** Verifica la salud de etcd
+**Paso 1:** Verificar la salud de etcd
 
 ```bash
 # Acceder al contenedor etcd en Minikube
@@ -232,7 +244,7 @@ exit
 exit
 ```
 
-**Paso 2:** Crea datos de prueba en el cluster
+**Paso 2:** Crear datos de prueba en el cluster
 
 ```bash
 # Desde tu VM de Azure (fuera de Minikube SSH)
@@ -242,14 +254,14 @@ kubectl create deployment nginx --image=nginx --replicas=3 -n backup-test
 kubectl create configmap test-config --from-literal=key1=value1 -n backup-test
 kubectl create secret generic test-secret --from-literal=password=secret123 -n backup-test
 
-# Espera a que estén listos
+# Espera a que esten listos
 kubectl wait --for=condition=Available deployment/nginx -n backup-test --timeout=60s
 
 # Verifica
 kubectl get all,configmap,secret -n backup-test
 ```
 
-**Paso 3:** Toma un snapshot de etcd
+**Paso 3:** Tomar un snapshot de etcd
 
 ```bash
 # Acceder a Minikube
@@ -269,26 +281,26 @@ ETCDCTL_API=3 etcdctl snapshot save /tmp/etcd-backup.db \
 ETCDCTL_API=3 etcdctl snapshot status /tmp/etcd-backup.db --write-out=table
 ```
 
-**Anota el tamaño del snapshot:** _______ MB
+**Anota el tamano del snapshot:** _______ MB
 
-**Pregunta:** ¿Cuántas keys (llaves) hay en etcd?
+**Pregunta:** Cuantas keys (llaves) hay en etcd?
 
 ---
 
-### 📝 Ejercicio 2.2: Simular Pérdida de Datos
+### Ejercicio 2.2: Simular Perdida de Datos
 
-**Paso 1:** Elimina el namespace de prueba (simula pérdida de datos)
+**Paso 1:** Eliminar el namespace de prueba (simula perdida de datos)
 
 ```bash
 # Desde tu VM de Azure
 kubectl delete namespace backup-test
 
-# Verifica que se eliminó
+# Verifica que se elimino
 kubectl get namespace backup-test
-# Debería dar error: "not found"
+# Deberia dar error: "not found"
 ```
 
-**Paso 2:** Crea otro recurso que NO queremos conservar
+**Paso 2:** Crear otro recurso que NO queremos conservar
 
 ```bash
 kubectl create namespace temporal
@@ -300,18 +312,18 @@ kubectl get pod -n temporal
 
 ---
 
-### 📝 Ejercicio 2.3: Restore desde Snapshot (Conceptual)
+### Ejercicio 2.3: Restore desde Snapshot (Conceptual)
 
-**⚠️ IMPORTANTE:** El restore completo de etcd en Minikube requiere reiniciar todo el cluster y puede ser complejo. 
+**IMPORTANTE:** El restore completo de etcd en Minikube requiere reiniciar todo el cluster y puede ser complejo.
 
-**Concepto clave**: En producción, el proceso sería:
+**Concepto clave**: En produccion, el proceso seria:
 1. Detener API Server
 2. Restore del snapshot de etcd
 3. Reiniciar componentes
 
-**Para Minikube**, en lugar de hacer un restore real (que podría romper el cluster), vamos a:
+**Para Minikube**, en lugar de hacer un restore real (que podria romper el cluster), vamos a:
 
-**Paso 1:** Copiar el snapshot fuera de Minikube (para práctica)
+**Paso 1:** Copiar el snapshot fuera de Minikube (para practica)
 
 ```bash
 # Desde Minikube SSH (dentro del contenedor etcd)
@@ -331,8 +343,8 @@ ls -lh etcd-backup-minikube.db
 **Paso 2:** Entender el proceso de restore (REFERENCIA - NO ejecutar)
 
 ```bash
-# EJEMPLO TEÓRICO - SOLO PARA COMPRENSIÓN
-# En un cluster real harías:
+# EJEMPLO TEORICO - SOLO PARA COMPRENSION
+# En un cluster real harias:
 
 # 1. Detener API Server y etcd
 # sudo mv /etc/kubernetes/manifests/kube-apiserver.yaml /tmp/
@@ -350,23 +362,23 @@ ls -lh etcd-backup-minikube.db
 # sudo mv /tmp/kube-apiserver.yaml /etc/kubernetes/manifests/
 ```
 
-**Paso 3:** Verificación de conceptos
+**Paso 3:** Verificacion de conceptos
 
-**Pregunta:** ¿Por qué NO hacemos el restore real en Minikube?
+**Pregunta:** Por que NO hacemos el restore real en Minikube?
 
 <details>
-<summary>💡 Respuesta</summary>
+<summary>Respuesta</summary>
 - Minikube gestiona su propia infraestructura de forma especial
-- Un restore manual podría romper el cluster
-- En producción usarías managed Kubernetes (AKS) con backups automáticos
-- El objetivo es entender el CONCEPTO, no romper nuestro entorno de práctica
+- Un restore manual podria romper el cluster
+- En produccion usarias managed Kubernetes (AKS) con backups automaticos
+- El objetivo es entender el CONCEPTO, no romper nuestro entorno de practica
 </details>
 
-**Paso 4:** Restaura el namespace manualmente (simulación)
+**Paso 4:** Restaurar el namespace manualmente (simulacion)
 
 ```bash
 # Como no hicimos restore real, volvemos a crear los recursos
-# En producción, esto vendría del backup de etcd automáticamente
+# En produccion, esto vendria del backup de etcd automaticamente
 
 kubectl create namespace backup-test
 kubectl create deployment nginx --image=nginx --replicas=3 -n backup-test
@@ -375,39 +387,28 @@ kubectl create secret generic test-secret --from-literal=password=secret123 -n b
 
 # Verifica
 kubectl get all,configmap,secret -n backup-test
-# Debería dar error "not found" (no existía en el snapshot)
 ```
 
-**Pregunta:** ¿Por qué el namespace `temporal` no existe después del restore?
+**Pregunta:** Por que el namespace `temporal` no existe despues del restore?
 
 <details>
-<summary>💡 Respuesta</summary>
-Porque el snapshot se tomó ANTES de crear el namespace temporal. El restore volvió el cluster al estado exacto de cuando se tomó el snapshot.
+<summary>Respuesta</summary>
+Porque el snapshot se tomo ANTES de crear el namespace temporal. El restore volvio el cluster al estado exacto de cuando se tomo el snapshot.
 </details>
 
 ---
 
-## Parte 3: Scheduler en Acción (25 minutos)
+## Parte 3: Scheduler en Accion (25 minutos)
 
-### 📝 Ejercicio 3.1: Observar Decisiones del Scheduler
+### Ejercicio 3.1: Observar Decisiones del Scheduler
 
-**Paso 1:** Crea un pod sin especificar nodo
+**Paso 1:** Crear un pod sin especificar nodo
 
 ```bash
-# Desde tu VM de Azure
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: scheduler-test
-spec:
-  containers:
-  - name: nginx
-    image: nginx
-EOF
+kubectl apply -f scheduler-test-pod.yaml
 ```
 
-**Paso 2:** Observa el evento de scheduling
+**Paso 2:** Observar el evento de scheduling
 
 ```bash
 kubectl get events --field-selector involvedObject.name=scheduler-test
@@ -415,26 +416,26 @@ kubectl get events --field-selector involvedObject.name=scheduler-test
 # Busca el evento: "Successfully assigned default/scheduler-test to minikube"
 ```
 
-**Paso 3:** Verifica la asignación
+**Paso 3:** Verificar la asignacion
 
 ```bash
 kubectl get pod scheduler-test -o wide
 
-# Observa la columna NODE - debería mostrar "minikube"
+# Observa la columna NODE - deberia mostrar "minikube"
 ```
 
-**Pregunta:** ¿A qué nodo asignó el pod? ¿Por qué siempre es el mismo nodo?
+**Pregunta:** A que nodo asigno el pod? Por que siempre es el mismo nodo?
 
 <details>
-<summary>💡 Respuesta</summary>
-En Minikube (single-node), todos los pods se asignan al nodo "minikube" porque es el único disponible. En un cluster multi-nodo, el Scheduler elegiría basándose en recursos disponibles, taints, tolerations, affinity, etc.
+<summary>Respuesta</summary>
+En Minikube (single-node), todos los pods se asignan al nodo "minikube" porque es el unico disponible. En un cluster multi-nodo, el Scheduler elegiria basandose en recursos disponibles, taints, tolerations, affinity, etc.
 </details>
 
 ---
 
-### 📝 Ejercicio 3.2: Node Selector
+### Ejercicio 3.2: Node Selector
 
-**Paso 1:** Etiqueta el nodo
+**Paso 1:** Etiquetar el nodo
 
 ```bash
 # En Minikube solo tenemos un nodo, pero podemos practicar el concepto
@@ -444,24 +445,13 @@ kubectl label node minikube disktype=ssd
 kubectl get nodes --show-labels | grep disktype
 ```
 
-**Paso 2:** Crea un pod con nodeSelector
+**Paso 2:** Crear un pod con nodeSelector
 
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ssd-pod
-spec:
-  nodeSelector:
-    disktype: ssd
-  containers:
-  - name: nginx
-    image: nginx
-EOF
+kubectl apply -f ssd-pod.yaml
 ```
 
-**Paso 3:** Verifica que se asignó correctamente
+**Paso 3:** Verificar que se asigno correctamente
 
 ```bash
 kubectl get pod ssd-pod -o wide
@@ -471,37 +461,26 @@ kubectl describe pod ssd-pod | grep "Node:"
 kubectl describe pod ssd-pod | grep "Node-Selectors:"
 ```
 
-**Pregunta:** ¿Qué pasaría si crearas un nodeSelector con una etiqueta que no existe?
+**Pregunta:** Que pasaria si crearas un nodeSelector con una etiqueta que no existe?
 
 <details>
-<summary>💡 Pruébalo</summary>
+<summary>Pruebalo</summary>
 
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: unschedulable-pod
-spec:
-  nodeSelector:
-    disktype: nvme  # Etiqueta que NO existe
-  containers:
-  - name: nginx
-    image: nginx
-EOF
+kubectl apply -f unschedulable-pod.yaml
 
 # Observa el estado
 kubectl get pod unschedulable-pod
 kubectl describe pod unschedulable-pod | grep -A 3 "Events:"
-# Debería mostrar: "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector"
+# Deberia mostrar: "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector"
 ```
 </details>
 
 ---
 
-### 📝 Ejercicio 3.3: Pod con Recursos Grandes (Límites del Scheduler)
+### Ejercicio 3.3: Pod con Recursos Grandes (Limites del Scheduler)
 
-**Paso 1:** Verifica los recursos disponibles en Minikube
+**Paso 1:** Verificar los recursos disponibles en Minikube
 
 ```bash
 # Desde tu VM de Azure
@@ -510,40 +489,27 @@ kubectl describe node minikube | grep -A 5 "Allocatable:"
 # Anota los valores de cpu y memory disponibles
 ```
 
-**Paso 2:** Crea un pod que requiere recursos imposibles
+**Paso 2:** Crear un pod que requiere recursos imposibles
 
 ```bash
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: huge-pod
-spec:
-  containers:
-  - name: app
-    image: nginx
-    resources:
-      requests:
-        cpu: "1000"  # 1000 cores - imposible en Minikube!
-        memory: "1000Gi"
-EOF
+kubectl apply -f huge-pod.yaml
 ```
 
-**Paso 3:** Observa por qué no se puede programar
+**Paso 3:** Observar por que no se puede programar
 
 ```bash
 kubectl get pod huge-pod
 
-# Debería mostrar estado "Pending"
+# Deberia mostrar estado "Pending"
 
 kubectl describe pod huge-pod | grep -A 10 "Events:"
 ```
 
-**Pregunta:** ¿Qué mensaje de error ves del Scheduler?
+**Pregunta:** Que mensaje de error ves del Scheduler?
 
 <details>
-<summary>💡 Respuesta esperada</summary>
-Deberías ver algo como:
+<summary>Respuesta esperada</summary>
+Deberias ver algo como:
 ```
 Warning  FailedScheduling  ... 0/1 nodes are available: 1 Insufficient cpu, 1 Insufficient memory
 ```
@@ -558,56 +524,45 @@ kubectl delete pod huge-pod
 
 ---
 
-### 📝 Ejercicio 3.4: Manual Scheduling (Sin usar el Scheduler)
+### Ejercicio 3.4: Manual Scheduling (Sin usar el Scheduler)
 
-**Paso 1:** Crea un pod SIN scheduler
+**Paso 1:** Crear un pod SIN scheduler
 
 ```bash
-# Desde tu VM de Azure
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: manual-schedule
-spec:
-  schedulerName: manual-scheduler  # Scheduler que NO existe
-  containers:
-  - name: nginx
-    image: nginx
-EOF
+kubectl apply -f manual-schedule-pod.yaml
 ```
 
-**Paso 2:** Verifica que está en estado Pending
+**Paso 2:** Verificar que esta en estado Pending
 
 ```bash
 kubectl get pod manual-schedule
 
-# STATUS debería ser: Pending
+# STATUS deberia ser: Pending
 
 kubectl describe pod manual-schedule | grep "Events:"
-# Debería ver: "FailedScheduling" porque "manual-scheduler" no existe
+# Deberia ver: "FailedScheduling" porque "manual-scheduler" no existe
 ```
 
-**Paso 3:** Asigna manualmente el pod al nodo
+**Paso 3:** Asignar manualmente el pod al nodo
 
 ```bash
 # Asignar directamente al nodo minikube
 kubectl patch pod manual-schedule -p '{"spec":{"nodeName":"minikube"}}'
 ```
 
-**Paso 4:** Verifica que ahora corre
+**Paso 4:** Verificar que ahora corre
 
 ```bash
 kubectl get pod manual-schedule -o wide
 
-# Ahora debería estar Running en el nodo minikube
+# Ahora deberia estar Running en el nodo minikube
 ```
 
-**Pregunta:** ¿Por qué el pod no requiere al Scheduler cuando le asignas `nodeName`?
+**Pregunta:** Por que el pod no requiere al Scheduler cuando le asignas `nodeName`?
 
 <details>
-<summary>💡 Respuesta</summary>
-El campo `nodeName` es el resultado final del proceso de scheduling. Cuando lo asignas manualmente, estás "haciendo el trabajo del Scheduler" - le dices a Kubernetes exactamente dónde correr el pod, saltándote la lógica de selección automática.
+<summary>Respuesta</summary>
+El campo `nodeName` es el resultado final del proceso de scheduling. Cuando lo asignas manualmente, estas "haciendo el trabajo del Scheduler" - le dices a Kubernetes exactamente donde correr el pod, saltandote la logica de seleccion automatica.
 </details>
 
 **Paso 5:** Limpieza
@@ -620,9 +575,9 @@ kubectl delete pod manual-schedule scheduler-test ssd-pod unschedulable-pod --ig
 
 ## Parte 4: Controller Manager (20 minutos)
 
-### 📝 Ejercicio 4.1: Reconciliation Loop del ReplicaSet Controller
+### Ejercicio 4.1: Reconciliation Loop del ReplicaSet Controller
 
-**Paso 1:** Crea un Deployment
+**Paso 1:** Crear un Deployment
 
 ```bash
 # Desde tu VM de Azure
@@ -632,15 +587,15 @@ kubectl create deployment test-reconcile --image=nginx --replicas=3
 kubectl wait --for=condition=ready pod -l app=test-reconcile --timeout=60s
 ```
 
-**Paso 2:** Verifica los pods
+**Paso 2:** Verificar los pods
 
 ```bash
 kubectl get pods -l app=test-reconcile
 
-# Deberías ver 3 pods en estado Running
+# Deberias ver 3 pods en estado Running
 ```
 
-**Paso 3:** Elimina un pod manualmente (simula falla)
+**Paso 3:** Eliminar un pod manualmente (simula falla)
 
 ```bash
 POD=$(kubectl get pods -l app=test-reconcile -o jsonpath='{.items[0].metadata.name}')
@@ -649,23 +604,23 @@ echo "Eliminando pod: $POD"
 kubectl delete pod $POD
 ```
 
-**Paso 4:** Observa la reconciliación en tiempo real
+**Paso 4:** Observar la reconciliacion en tiempo real
 
 ```bash
-# Ejecuta rápidamente después de eliminar
+# Ejecuta rapidamente despues de eliminar
 kubectl get pods -l app=test-reconcile -w
 
-# Presiona Ctrl+C después de unos segundos
+# Presiona Ctrl+C despues de unos segundos
 ```
 
-**Pregunta:** ¿Qué sucede? ¿Cuánto tiempo tarda en aparecer un nuevo pod?
+**Pregunta:** Que sucede? Cuanto tiempo tarda en aparecer un nuevo pod?
 
 <details>
-<summary>💡 Explicación</summary>
-El ReplicaSet Controller detecta que hay solo 2 pods (desired: 3, actual: 2) y crea uno nuevo inmediatamente (generalmente en menos de 5 segundos). Esto es el "reconciliation loop" en acción - el controller continuamente compara el estado deseado (3 réplicas) con el estado actual y toma acciones correctivas.
+<summary>Explicacion</summary>
+El ReplicaSet Controller detecta que hay solo 2 pods (desired: 3, actual: 2) y crea uno nuevo inmediatamente (generalmente en menos de 5 segundos). Esto es el "reconciliation loop" en accion - el controller continuamente compara el estado deseado (3 replicas) con el estado actual y toma acciones correctivas.
 </details>
 
-**Paso 5:** Verifica el evento de creación
+**Paso 5:** Verificar el evento de creacion
 
 ```bash
 kubectl get events --field-selector reason=SuccessfulCreate | tail -5
@@ -673,29 +628,29 @@ kubectl get events --field-selector reason=SuccessfulCreate | tail -5
 
 ---
 
-### 📝 Ejercicio 4.2: Node Controller (Conceptual en Minikube)
+### Ejercicio 4.2: Node Controller (Conceptual en Minikube)
 
-**⚠️ NOTA:** Este ejercicio es conceptual porque en Minikube solo tenemos un nodo. Detenerlo romperá todo el cluster.
+**NOTA:** Este ejercicio es conceptual porque en Minikube solo tenemos un nodo. Detenerlo rompera todo el cluster.
 
 **Concepto a entender:**
 
 En un cluster multi-nodo, el Node Controller:
 1. Monitorea el estado de cada nodo via heartbeats
 2. Si un nodo no responde por 40 segundos → marca como "NotReady"
-3. Si está NotReady por 5 minutos → evict pods (los elimina y los recrea en otros nodos)
+3. Si esta NotReady por 5 minutos → evict pods (los elimina y los recrea en otros nodos)
 
-**Paso 1:** Observa el estado del nodo
+**Paso 1:** Observar el estado del nodo
 
 ```bash
 # Desde tu VM de Azure
 kubectl get nodes
 
-# Debería mostrar:
+# Deberia mostrar:
 # NAME       STATUS   ROLES           AGE   VERSION
 # minikube   Ready    control-plane   Xd    vX.XX.X
 ```
 
-**Paso 2:** Inspecciona las condiciones del nodo
+**Paso 2:** Inspeccionar las condiciones del nodo
 
 ```bash
 kubectl describe node minikube | grep -A 10 "Conditions:"
@@ -707,29 +662,29 @@ kubectl describe node minikube | grep -A 10 "Conditions:"
 # - Ready: True
 ```
 
-**Pregunta:** ¿Qué pasaría si "Ready" cambiara a "False"?
+**Pregunta:** Que pasaria si "Ready" cambiara a "False"?
 
 <details>
-<summary>💡 Respuesta (Teoría)</summary>
+<summary>Respuesta (Teoria)</summary>
 Si el nodo pasa a NotReady:
-1. Pods ya existentes siguen corriendo (el container runtime aún funciona)
+1. Pods ya existentes siguen corriendo (el container runtime aun funciona)
 2. NO se programan nuevos pods en ese nodo
-3. Después de 5 minutos, el Node Controller marca los pods para eviction
+3. Despues de 5 minutos, el Node Controller marca los pods para eviction
 4. Los pods se recrean en otros nodos (si los hay)
 
 En Minikube (single-node): Si el nodo se cae, todo el cluster se detiene.
 </details>
 
-**Paso 3:** Verifica los heartbeats del kubelet
+**Paso 3:** Verificar los heartbeats del kubelet
 
 ```bash
-# Conéctate a Minikube
+# Conectate a Minikube
 minikube ssh
 
 # Dentro de Minikube, verifica el kubelet
 sudo systemctl status kubelet | grep "Active:"
 
-# Debería mostrar "active (running)"
+# Deberia mostrar "active (running)"
 
 # Sal de Minikube
 exit
@@ -738,34 +693,34 @@ exit
 **REFERENCIA - NO ejecutar:** En un cluster real para simular falla
 
 ```bash
-# ⚠️ NO EJECUTAR EN MINIKUBE - SOLO REFERENCIA
+# NO EJECUTAR EN MINIKUBE - SOLO REFERENCIA
 # sudo systemctl stop kubelet
-# 
-# Esto haría que el nodo pase a NotReady en ~40 segundos
+#
+# Esto haria que el nodo pase a NotReady en ~40 segundos
 ```
 
 ---
 
-### 📝 Ejercicio 4.3: Endpoint Controller
+### Ejercicio 4.3: Endpoint Controller
 
-**Paso 1:** Crea un Service sin pods
+**Paso 1:** Crear un Service sin pods
 
 ```bash
 # Desde tu VM de Azure
 kubectl create service clusterip test-endpoints --tcp=80:80
 ```
 
-**Paso 2:** Verifica los endpoints (deberían estar vacíos)
+**Paso 2:** Verificar los endpoints (deberian estar vacios)
 
 ```bash
 kubectl get endpoints test-endpoints
 
-# Debería mostrar:
+# Deberia mostrar:
 # NAME              ENDPOINTS   AGE
 # test-endpoints    <none>      10s
 ```
 
-**Paso 3:** Crea pods que coincidan con el selector del Service
+**Paso 3:** Crear pods que coincidan con el selector del Service
 
 ```bash
 # El Service busca app=test-endpoints por defecto
@@ -773,30 +728,30 @@ kubectl run pod1 --image=nginx --labels=app=test-endpoints
 kubectl run pod2 --image=nginx --labels=app=test-endpoints
 kubectl run pod3 --image=nginx --labels=app=test-endpoints
 
-# Espera que los pods estén listos
+# Espera que los pods esten listos
 kubectl wait --for=condition=ready pod -l app=test-endpoints --timeout=60s
 ```
 
-**Paso 4:** Verifica que el Endpoint Controller actualizó los endpoints
+**Paso 4:** Verificar que el Endpoint Controller actualizo los endpoints
 
 ```bash
 kubectl get endpoints test-endpoints
 
-# Ahora debería mostrar 3 IPs
+# Ahora deberia mostrar 3 IPs
 kubectl get endpoints test-endpoints -o yaml | grep "ip:"
 ```
 
-**Paso 5:** Compara con las IPs de los pods
+**Paso 5:** Comparar con las IPs de los pods
 
 ```bash
 kubectl get pods -l app=test-endpoints -o wide
 
-# Las IPs deberían coincidir exactamente
+# Las IPs deberian coincidir exactamente
 ```
 
-**Pregunta:** ¿Cuántas IPs ves en los endpoints? ¿Coinciden con las IPs de los pods?
+**Pregunta:** Cuantas IPs ves en los endpoints? Coinciden con las IPs de los pods?
 
-**Paso 6:** Elimina un pod y observa
+**Paso 6:** Eliminar un pod y observar
 
 ```bash
 kubectl delete pod pod1
@@ -804,13 +759,13 @@ kubectl delete pod pod1
 # Verifica inmediatamente
 kubectl get endpoints test-endpoints
 
-# Debería mostrar solo 2 IPs ahora
+# Deberia mostrar solo 2 IPs ahora
 ```
 
-**Pregunta:** ¿Cuánto tiempo tardó en actualizarse el endpoint?
+**Pregunta:** Cuanto tiempo tardo en actualizarse el endpoint?
 
 <details>
-<summary>💡 Explicación</summary>
+<summary>Explicacion</summary>
 El Endpoint Controller monitorea continuamente:
 - Servicios que necesitan endpoints
 - Pods que coinciden con los selectores del Service
@@ -831,7 +786,7 @@ kubectl delete pod pod2 pod3 --ignore-not-found=true
 
 ## Parte 5: Troubleshooting del Control Plane (15 minutos)
 
-### 📝 Ejercicio 5.1: Logs de Componentes
+### Ejercicio 5.1: Logs de Componentes
 
 **Paso 1:** Ver logs del API Server
 
@@ -839,7 +794,7 @@ kubectl delete pod pod2 pod3 --ignore-not-found=true
 # Desde tu VM de Azure
 kubectl logs -n kube-system kube-apiserver-minikube --tail=50
 
-# Si quieres buscar errores específicos:
+# Si quieres buscar errores especificos:
 kubectl logs -n kube-system kube-apiserver-minikube --tail=200 | grep -i error
 ```
 
@@ -857,7 +812,7 @@ kubectl logs -n kube-system kube-scheduler-minikube --tail=200 | grep -i "succes
 ```bash
 kubectl logs -n kube-system kube-controller-manager-minikube --tail=50
 
-# Buscar eventos de reconciliación:
+# Buscar eventos de reconciliacion:
 kubectl logs -n kube-system kube-controller-manager-minikube --tail=200 | grep -i "scaled"
 ```
 
@@ -867,10 +822,10 @@ kubectl logs -n kube-system kube-controller-manager-minikube --tail=200 | grep -
 kubectl logs -n kube-system etcd-minikube --tail=50
 ```
 
-**Tarea:** Busca en los logs algún mensaje de WARNING o ERROR. ¿Qué dicen?
+**Tarea:** Busca en los logs algun mensaje de WARNING o ERROR. Que dicen?
 
 <details>
-<summary>💡 Tip de búsqueda</summary>
+<summary>Tip de busqueda</summary>
 
 ```bash
 # Buscar todos los warnings/errors en componentes del Control Plane
@@ -883,26 +838,26 @@ done
 
 ---
 
-### 📝 Ejercicio 5.2: Health Checks
+### Ejercicio 5.2: Health Checks
 
-**Paso 1:** Verifica el health del API Server
+**Paso 1:** Verificar el health del API Server
 
 ```bash
 # Desde tu VM de Azure
-# Opción 1: Usando el endpoint de healthz
+# Opcion 1: Usando el endpoint de healthz
 kubectl get --raw /healthz
 
-# Debería retornar: ok
+# Deberia retornar: ok
 
-# Opción 2: Usando curl
+# Opcion 2: Usando curl
 APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 echo "API Server: $APISERVER"
 
 curl -k $APISERVER/healthz
-# Debería retornar: ok
+# Deberia retornar: ok
 ```
 
-**Paso 2:** Verifica endpoints específicos de salud
+**Paso 2:** Verificar endpoints especificos de salud
 
 ```bash
 # Livez (liveness)
@@ -912,10 +867,10 @@ kubectl get --raw /livez?verbose
 kubectl get --raw /readyz?verbose
 ```
 
-**Paso 3:** Verifica el health de etcd desde dentro del contenedor
+**Paso 3:** Verificar el health de etcd desde dentro del contenedor
 
 ```bash
-# Conéctate a Minikube
+# Conectate a Minikube
 minikube ssh
 
 # Ejecuta el comando dentro del contenedor etcd
@@ -928,45 +883,35 @@ docker exec -it $(docker ps -q -f "name=k8s_etcd_etcd") sh -c '
     endpoint health
 '
 
-# Debería mostrar: "127.0.0.1:2379 is healthy"
+# Deberia mostrar: "127.0.0.1:2379 is healthy"
 
 # Sal de Minikube
 exit
 ```
 
-**Paso 4:** Verifica componentes desde `kubectl`
+**Paso 4:** Verificar componentes desde `kubectl`
 
 ```bash
 # Desde tu VM de Azure
 kubectl get componentstatuses 2>/dev/null || echo "componentstatuses deprecated - use podmapping"
 
-# Método alternativo: Verificar todos los pods del sistema
+# Metodo alternativo: Verificar todos los pods del sistema
 kubectl get pods -n kube-system
 
-# Todos deberían estar Running/Completed
+# Todos deberian estar Running/Completed
 ```
 
 ---
 
-### 📝 Ejercicio 5.3: Simular y Resolver un Problema
+### Ejercicio 5.3: Simular y Resolver un Problema
 
-**Paso 1:** Crea un pod problemático
+**Paso 1:** Crear un pod problematico
 
 ```bash
-# Pod que intenta usar una imagen inexistente
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: broken-pod
-spec:
-  containers:
-  - name: app
-    image: nginx:nonexistent-tag-12345
-EOF
+kubectl apply -f broken-pod.yaml
 ```
 
-**Paso 2:** Diagnostica el problema
+**Paso 2:** Diagnosticar el problema
 
 ```bash
 # Verifica el estado
@@ -975,20 +920,20 @@ kubectl get pod broken-pod
 # Revisa los eventos
 kubectl describe pod broken-pod | grep -A 10 "Events:"
 
-# Revisa los logs (probablemente no habrá porque no arrancó)
+# Revisa los logs (probablemente no habra porque no arranco)
 kubectl logs broken-pod 2>&1
 ```
 
-**Pregunta:** ¿Qué evento indica el problema? ¿En qué estado está el pod?
+**Pregunta:** Que evento indica el problema? En que estado esta el pod?
 
 <details>
-<summary>💡 Respuesta esperada</summary>
+<summary>Respuesta esperada</summary>
 - Estado: `ImagePullBackOff` o `ErrImagePull`
 - Evento: `Failed to pull image "nginx:nonexistent-tag-12345": ... not found`
-- El Scheduler asignó el pod, pero el kubelet no puede descargar la imagen
+- El Scheduler asigno el pod, pero el kubelet no puede descargar la imagen
 </details>
 
-**Paso 3:** Corrige el problema
+**Paso 3:** Corregir el problema
 
 ```bash
 # Elimina el pod roto
@@ -1003,22 +948,22 @@ kubectl get pod fixed-pod
 
 ---
 
-## Verificación Final
+## Verificacion Final
 
-### ✅ Checklist de Conocimientos
+### Checklist de Conocimientos
 
-Verifica que puedas responder SÍ a cada pregunta:
+Verifica que puedas responder SI a cada pregunta:
 
-- [ ] ¿Puedo hacer peticiones REST al API Server sin kubectl?
-- [ ] ¿Entiendo el formato de la API de Kubernetes (apiVersion, kind, metadata, spec)?
-- [ ] ¿Sé cómo tomar un snapshot de etcd en Minikube?
-- [ ] ¿Entiendo los conceptos de restore de etcd (aunque no lo ejecute en Minikube)?
-- [ ] ¿Entiendo cómo el Scheduler asigna pods a nodos?
-- [ ] ¿Puedo forzar un pod a un nodo específico con `nodeName` y `nodeSelector`?
-- [ ] ¿Entiendo el reconciliation loop de los Controllers?
-- [ ] ¿Sé cómo verificar el health de componentes del Control Plane?
-- [ ] ¿Puedo troubleshootear problemas del Control Plane con logs y describe?
-- [ ] ¿Entiendo las diferencias entre Minikube y un cluster de producción?
+- [ ] Puedo hacer peticiones REST al API Server sin kubectl?
+- [ ] Entiendo el formato de la API de Kubernetes (apiVersion, kind, metadata, spec)?
+- [ ] Se como tomar un snapshot de etcd en Minikube?
+- [ ] Entiendo los conceptos de restore de etcd (aunque no lo ejecute en Minikube)?
+- [ ] Entiendo como el Scheduler asigna pods a nodos?
+- [ ] Puedo forzar un pod a un nodo especifico con `nodeName` y `nodeSelector`?
+- [ ] Entiendo el reconciliation loop de los Controllers?
+- [ ] Se como verificar el health de componentes del Control Plane?
+- [ ] Puedo troubleshootear problemas del Control Plane con logs y describe?
+- [ ] Entiendo las diferencias entre Minikube y un cluster de produccion?
 
 ---
 
@@ -1037,54 +982,49 @@ kubectl delete namespace backup-test temporal --ignore-not-found=true
 kubectl label node minikube disktype-
 
 # Eliminar archivos temporales
-rm -f pod-via-api.json etcd-backup-minikube.db
+rm -f etcd-backup-minikube.db
 
 # Verificar limpieza
 kubectl get all
-# Solo debería mostrar el service "kubernetes"
+# Solo deberia mostrar el service "kubernetes"
 ```
 
 ---
 
-## 🎓 Resumen del Laboratorio
+## Resumen del Laboratorio
 
-En este laboratorio práctico has:
+En este laboratorio practico has:
 
-1. **API Server**: Interactuado directamente con la API REST, creado recursos vía curl
+1. **API Server**: Interactuado directamente con la API REST, creado recursos via curl
 2. **etcd**: Realizado backup del datastore (conceptualmente aprendido restore)
 3. **Scheduler**: Observado decisiones de scheduling, usado nodeSelector y scheduling manual
-4. **Controller Manager**: Visto reconciliation loops en acción (ReplicaSet, Endpoint Controllers)
+4. **Controller Manager**: Visto reconciliation loops en accion (ReplicaSet, Endpoint Controllers)
 5. **Troubleshooting**: Diagnosticado problemas usando logs, events, y health checks
 
-### 🔑 Conceptos Clave
+### Conceptos Clave
 
 - El Control Plane es el "cerebro" de Kubernetes
-- Cada componente tiene una responsabilidad específica
-- Los Controllers implementan el patrón de "reconciliation loop"
-- En Minikube todo corre en un solo nodo, pero los conceptos aplican a producción
+- Cada componente tiene una responsabilidad especifica
+- Los Controllers implementan el patron de "reconciliation loop"
+- En Minikube todo corre en un solo nodo, pero los conceptos aplican a produccion
 - El troubleshooting efectivo combina: logs + events + describe + health checks
 
-### 📚 Próximos Pasos
+### Proximos Pasos
 
 - **Lab 03**: Worker Nodes (kubelet, kube-proxy, container runtime)
 - **Lab 04**: Troubleshooting y Networking avanzado
 
 ---
 
-**⏱️ Tiempo completado:** ~90 minutos  
-**📊 Progreso del módulo:** 66% (Lab 2/3)
-
-# Si hiciste el restore, puedes limpiar
-sudo rm -f /tmp/etcd-backup.db
-sudo rm -rf /var/lib/etcd.backup  # Cuidado con este comando
-```
+**Tiempo completado:** ~90 minutos
+**Progreso del modulo:** 66% (Lab 2/3)
 
 ---
 
-## Próximo Laboratorio
+## Proximo Laboratorio
 
-➡️ **Laboratorio 03**: Worker Nodes - kubelet, kube-proxy y Container Runtime en profundidad
+> **Laboratorio 03**: Worker Nodes - kubelet, kube-proxy y Container Runtime en profundidad
 
 ---
 
-**¿Completaste el laboratorio?** ✅
+**Completaste el laboratorio?**

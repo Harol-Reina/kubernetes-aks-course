@@ -64,11 +64,11 @@ kube-scheduler-minikube            1/1     Running   0          Xd
 
 | Archivo | Ejercicio | Descripcion |
 |---------|-----------|-------------|
-| `scheduler-test.yaml` | Ejercicio 3.1 | Pod sin nodeSelector para observar scheduling |
+| `scheduler-test-pod.yaml` | Ejercicio 3.1 | Pod sin nodeSelector para observar scheduling |
 | `ssd-pod.yaml` | Ejercicio 3.2 | Pod con nodeSelector disktype=ssd |
 | `unschedulable-pod.yaml` | Ejercicio 3.2 | Pod con nodeSelector inexistente (Pending) |
 | `huge-pod.yaml` | Ejercicio 3.3 | Pod con recursos imposibles (Pending) |
-| `manual-schedule.yaml` | Ejercicio 3.4 | Pod con schedulerName inexistente para asignacion manual |
+| `manual-schedule-pod.yaml` | Ejercicio 3.4 | Pod con schedulerName inexistente para asignacion manual |
 | `broken-pod.yaml` | Ejercicio 5.3 | Pod con imagen inexistente (ImagePullBackOff) |
 | `pod-via-api.json` | Ejercicio 1.4 | Definicion JSON para crear Pod via REST API |
 

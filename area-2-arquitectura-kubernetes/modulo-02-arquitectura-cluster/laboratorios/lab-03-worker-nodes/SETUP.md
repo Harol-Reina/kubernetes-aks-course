@@ -64,12 +64,12 @@ minikube   XXXm         XX%    XXXXMi          XX%
 |---------|-----------|-------------|
 | `unhealthy-pod.yaml` | Ejercicio 1.2 | Pod con livenessProbe que falla (ruta inexistente) |
 | `high-cpu-pod.yaml` | Ejercicio 1.3 | Pod con stress para consumo de CPU con resource limits |
-| `memory-hog.yaml` | Ejercicio 1.4 | Pod que consume memoria para demostrar eviction |
-| `multi-container.yaml` | Ejercicio 2.1 | Pod multi-contenedor para crictl inspection |
-| `guaranteed.yaml` | Ejercicio 2.2 | Pod con QoS Guaranteed (requests == limits) |
-| `external-db.yaml` | Ejercicio 3.2 | Service + Endpoints para base de datos externa |
-| `deny-all.yaml` | Ejercicio 4.1 | NetworkPolicy deny-all para el namespace default |
-| `allow-from-frontend.yaml` | Ejercicio 4.2 | NetworkPolicy que permite trafico solo desde frontend |
+| `memory-hog-pod.yaml` | Ejercicio 1.4 | Pod que consume memoria para demostrar eviction |
+| `multi-container-pod.yaml` | Ejercicio 2.1 | Pod multi-contenedor para crictl inspection |
+| `guaranteed-pod.yaml` | Ejercicio 2.2 | Pod con QoS Guaranteed (requests == limits) |
+| `external-db-service.yaml` | Ejercicio 3.2 | Service + Endpoints para base de datos externa |
+| `netpol-deny-all.yaml` | Ejercicio 4.1 | NetworkPolicy deny-all para el namespace default |
+| `netpol-allow-frontend.yaml` | Ejercicio 4.2 | NetworkPolicy que permite trafico solo desde frontend |
 
 ## Limpieza
 

@@ -1,0 +1,211 @@
+# Lab Resumen: Arquitectura del Cluster de Kubernetes
+# Uso: kubectl apply -f arquitectura-lab.yaml
+#
+# Descripcion:
+#   YAML unificado que despliega un conjunto de recursos para revisar rapidamente
+#   los conceptos clave de la arquitectura del cluster: API Server, Scheduler,
+#   kubelet, kube-proxy y container runtime. Usa el namespace lab-arquitectura-test
+#   para facilitar la limpieza completa con un solo comando.
+#
+# Recursos desplegados:
+#   - Namespace:     lab-arquitectura-test
+#   - Deployment:    web-app (3 replicas, nginx) con resource limits
+#   - Service:       web-app-svc (ClusterIP) para demostrar kube-proxy
+#   - Pod:           scheduler-demo con nodeSelector (demostrar Scheduler)
+#   - Pod:           kubelet-demo con livenessProbe (demostrar kubelet)
+#   - NetworkPolicy: frontend-only (demostrar kube-proxy / CNI)
+#   - Pod:           netshoot (herramienta de debug de red)
+#
+# Conceptos demostrados:
+#   - API Server:     kubectl apply envia manifests al API Server
+#   - Scheduler:      nodeSelector dirige pods a nodos especificos
+#   - kubelet:        livenessProbe gestionada por kubelet en el nodo
+#   - kube-proxy:     ClusterIP + NetworkPolicy implementadas con iptables/IPVS
+#   - Runtime:        contenedores nginx y netshoot gestionados por containerd/CRI-O
+#
+# Namespace: lab-arquitectura-test
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-arquitectura-test
+  labels:
+    lab: resumen-arquitectura
+    modulo: "02"
+---
+# Deployment: demuestra como API Server, Scheduler y kubelet colaboran
+# para crear y mantener 3 replicas de nginx
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: lab-arquitectura-test
+  labels:
+    app: web-app
+    tier: frontend
+    lab: resumen-arquitectura
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+# Service ClusterIP: demuestra como kube-proxy implementa balanceo de carga
+# usando reglas iptables/IPVS en cada nodo del cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-svc
+  namespace: lab-arquitectura-test
+  labels:
+    app: web-app
+    lab: resumen-arquitectura
+spec:
+  selector:
+    app: web-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  type: ClusterIP
+---
+# Pod con nodeSelector: demuestra la decision de scheduling del kube-scheduler
+# En Minikube (single-node) siempre va al nodo minikube
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scheduler-demo
+  namespace: lab-arquitectura-test
+  labels:
+    app: scheduler-demo
+    purpose: scheduler-test
+    lab: resumen-arquitectura
+spec:
+  nodeSelector:
+    kubernetes.io/os: linux
+  containers:
+  - name: nginx
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+---
+# Pod con livenessProbe: demuestra como kubelet monitorea y reinicia contenedores
+# La probe verifica /healthz cada 10 segundos; si falla 3 veces, kubelet reinicia
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kubelet-demo
+  namespace: lab-arquitectura-test
+  labels:
+    app: kubelet-demo
+    purpose: probe-test
+    lab: resumen-arquitectura
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25
+    ports:
+    - name: http
+      containerPort: 80
+    livenessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /
+        port: 80
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+---
+# NetworkPolicy: demuestra que kube-proxy (+ CNI) implementa politicas de red
+# Solo permite trafico entrante a web-app desde pods con label tier=frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-only
+  namespace: lab-arquitectura-test
+  labels:
+    lab: resumen-arquitectura
+spec:
+  podSelector:
+    matchLabels:
+      app: web-app
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: frontend
+    ports:
+    - protocol: TCP
+      port: 80
+---
+# Pod netshoot: herramienta de diagnostico de red para verificar conectividad
+# Incluye: curl, dig, nslookup, tcpdump, netstat, ss, traceroute, nmap
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot
+  namespace: lab-arquitectura-test
+  labels:
+    app: netshoot
+    purpose: network-debug
+    tier: frontend
+    lab: resumen-arquitectura
+spec:
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot
+    command: ["sleep", "3600"]
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
