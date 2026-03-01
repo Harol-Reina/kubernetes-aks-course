@@ -1,360 +1,228 @@
-# Laboratorios - Cluster Maintenance & Upgrades
+# Laboratorios - Modulo 23: Cluster Maintenance & Upgrades
 
-Guía completa de laboratorios prácticos para dominar mantenimiento y upgrades de Kubernetes.
-
-## 📚 Índice de Laboratorios
-
-| Lab | Título | Duración | Dificultad | CKA % |
-|-----|--------|----------|------------|-------|
-| 01 | Cluster Upgrade 1.27→1.28 | 60-90 min | ⭐⭐⭐ | ~10% |
-| 02 | Node Maintenance | 45-60 min | ⭐⭐ | ~5% |
-| 03 | Certificate Management | 45-60 min | ⭐⭐⭐ | ~5% |
-
-**Total:** 150-210 minutos (~3-4 horas) | **CKA Coverage:** ~20% del examen
+> **Objetivo**: Dominar operaciones de mantenimiento, upgrade y disaster recovery de clusters Kubernetes
+> **Tiempo total estimado**: 4-6 horas
+> **Nivel**: Avanzado a Experto
 
 ---
 
-## 🎯 Lab 01: Cluster Upgrade
+## Indice de Laboratorios
 
-**Archivo:** `lab-01-cluster-upgrade.md`
-
-### Objetivos
-- Planificar y ejecutar upgrade de cluster completo
-- Realizar backups completos (etcd, configs, resources)
-- Upgrader control plane y workers de forma segura
-- Aplicar version skew policy correctamente
-- Verificar integridad post-upgrade
-
-### Lo que aprenderás
-- `kubeadm upgrade plan` y `kubeadm upgrade apply`
-- Workflow completo de upgrade (kubeadm → kubelet → kubectl)
-- Drain y uncordon durante upgrades
-- Backup y restore de etcd
-- Smoke tests post-upgrade
-
-### Arquitectura
-```
-1.27.x  →  Upgrade  →  1.28.x
-Master + 2 Workers
-```
-
-### Prerequisitos
-- Cluster funcional en 1.27.x
-- Acceso root a todos los nodos
-- kubectl configurado
-- ~10GB espacio libre en cada nodo
+| Lab | Titulo | Dificultad | Duracion | Archivos |
+|-----|--------|------------|----------|----------|
+| [01](./lab-01-etcd-backup-restore/) | etcd Backup y Restore | ⭐⭐⭐ Avanzado | 30-45 min | Scripts: 3 |
+| [02](./lab-02-cluster-upgrade-minor/) | Cluster Upgrade (Minor Version) | ⭐⭐⭐ Avanzado | 45-60 min | Scripts: 3 |
+| [03](./lab-03-node-drain-cordon/) | Node Drain, Cordon & Maintenance | ⭐⭐ Intermedio | 30-45 min | YAML: 3 \| Scripts: 2 |
+| [04](./lab-04-certificate-management/) | Gestion de Certificados | ⭐⭐⭐ Avanzado | 90-120 min | Scripts: 3 |
+| [Resumen](./lab-resumen-maintenance/) | Resumen: Maintenance | Repaso | 15 min | YAML: 1 |
 
 ---
 
-## 🛠️ Lab 02: Node Maintenance
+## Estructura
 
-**Archivo:** `lab-02-node-maintenance.md`
+```
+laboratorios/
+├── README.md                              # Este archivo
+├── lab-01-etcd-backup-restore/            # etcd backup y disaster recovery
+│   ├── README.md                          # Procedimiento backup/restore
+│   ├── README.md.backup
+│   ├── SETUP.md
+│   ├── backup-etcd.sh                     # Script de backup automatizado
+│   ├── restore-etcd.sh                    # Script de disaster recovery
+│   ├── verify-data.sh                     # Verificacion de datos restaurados
+│   └── cleanup.sh
+├── lab-02-cluster-upgrade-minor/          # Upgrade de cluster v1.27 → v1.28
+│   ├── README.md                          # Procedimiento de upgrade paso a paso
+│   ├── README.md.backup
+│   ├── SETUP.md
+│   ├── upgrade-control-plane.sh           # Upgrade automatizado del control plane
+│   ├── upgrade-worker.sh                  # Upgrade de worker nodes
+│   ├── verify-upgrade.sh                  # 12 tests de verificacion post-upgrade
+│   └── cleanup.sh
+├── lab-03-node-drain-cordon/              # Mantenimiento de nodos
+│   ├── README.md                          # Procedimiento drain/cordon/uncordon
+│   ├── README.md.backup
+│   ├── SETUP.md
+│   ├── nginx-demo-deployment.yaml         # Deployment con 6 replicas
+│   ├── critical-app-deployment-pdb.yaml   # Deployment + PDB (minAvailable: 2)
+│   ├── node-monitor-daemonset.yaml        # DaemonSet que permanece durante drain
+│   ├── drain-demo.sh                      # Demo interactiva de drain
+│   ├── verify-drain.sh                    # Verificacion del estado
+│   └── cleanup.sh
+├── lab-04-certificate-management/         # Gestion de certificados PKI
+│   ├── README.md                          # Verificacion, renovacion, troubleshooting
+│   ├── README.md.backup
+│   ├── SETUP.md
+│   ├── check-certs.sh                     # Verificacion detallada de certs
+│   ├── renew-certs.sh                     # Renovacion con backup y restart
+│   ├── verify-certs.sh                    # 8 verificaciones post-renovacion
+│   └── cleanup.sh
+└── lab-resumen-maintenance/               # Resumen rapido
+    ├── README.md
+    ├── maintenance-lab.yaml
+    └── cleanup.sh
+```
 
-### Objetivos
-- Dominar `kubectl drain`, `cordon`, `uncordon`
-- Gestionar mantenimiento de nodos sin downtime
-- Trabajar con PodDisruptionBudgets
-- Simular escenarios reales (reboot, hardware maintenance)
-
-### Escenarios cubiertos
-1. **Node Reboot:** Drain → Reboot → Uncordon
-2. **Cordon:** Marcar unschedulable sin evacuar
-3. **PodDisruptionBudgets:** Proteger apps críticas durante drain
-
-### Lo que aprenderás
-- Diferencia entre drain y cordon
-- Cuándo usar `--ignore-daemonsets`
-- Cuándo usar `--delete-emptydir-data`
-- Cómo PDBs protegen aplicaciones
-- Estrategias de capacidad N-1
+> **Nota:** Este modulo tambien contiene 3 archivos legacy en formato antiguo
+> (`lab-01-cluster-upgrade.md`, `lab-02-node-maintenance.md`, `lab-03-certificate-management.md`)
+> que han sido reemplazados por los laboratorios en subdirectorios.
 
 ---
 
-## 🔐 Lab 03: Certificate Management
+## Laboratorios Disponibles
 
-**Archivo:** `lab-03-certificate-management.md`
+### [Lab 01: etcd Backup y Restore](./lab-01-etcd-backup-restore/) ⭐⭐⭐
+**Duracion**: 30-45 minutos | **Dificultad**: Avanzado
 
-### Objetivos
-- Verificar expiración de certificados
-- Renovar certificados con kubeadm
-- Configurar certificate rotation automática
-- Entender PKI de Kubernetes
+Procedimiento completo de backup y restore de etcd para disaster recovery:
+- Configuracion de etcdctl con certificados TLS
+- Snapshot save/status/restore
+- Simulacion de perdida de datos y recuperacion
+- Automatizacion con cron jobs
 
-### Exercises cubiertos
-1. **Check Expiration:** Ver todos los certificados y su validez
-2. **Manual Renewal:** Renovar todos los certificados
-3. **Selective Renewal:** Renovar certificados específicos (API server, etcd)
-4. **kubelet Rotation:** Configurar rotación automática
-5. **Monitoring:** Setup de monitoreo con cron
+**Archivos**: backup-etcd.sh, restore-etcd.sh, verify-data.sh, cleanup.sh
 
-### Lo que aprenderás
-- `kubeadm certs check-expiration`
-- `kubeadm certs renew all`
-- Actualizar kubeconfig después de renovar
-- Aprobar CSRs (Certificate Signing Requests)
-- Setup de alertas de expiración
+**CKA Coverage**: Troubleshooting (30%) - etcd backup/restore
 
 ---
 
-## 🚀 Rutas de Aprendizaje
+### [Lab 02: Cluster Upgrade (Minor Version)](./lab-02-cluster-upgrade-minor/) ⭐⭐⭐
+**Duracion**: 45-60 minutos | **Dificultad**: Avanzado
 
-### Ruta 1: CKA Completa (3-4 horas)
-**Objetivo:** Cubrir 20% del examen CKA
-```
-Lab 01 (90 min) → Lab 02 (60 min) → Lab 03 (60 min)
-```
+Upgrade completo de cluster Kubernetes de v1.27 a v1.28:
+- Version skew policy y compatibilidad
+- Upgrade de control plane con kubeadm
+- Upgrade de worker nodes con drain/uncordon
+- Verificacion post-upgrade con 12 tests
 
-**Ideal para:**
-- Preparación para CKA
-- Administradores de clusters nuevos
-- Práctica exhaustiva
+**Archivos**: upgrade-control-plane.sh, upgrade-worker.sh, verify-upgrade.sh, cleanup.sh
 
-### Ruta 2: Express (2 horas)
-**Objetivo:** Conceptos esenciales
-```
-Lab 01 (60 min, skip challenges) → Lab 02 (30 min, scenarios 1-2) → Lab 03 (30 min, exercises 1-2)
-```
-
-**Ideal para:**
-- Refrescar conocimientos
-- Focus en upgrades
-- Tiempo limitado
-
-### Ruta 3: Mantenimiento Operacional (1.5 horas)
-**Objetivo:** Day-2 operations
-```
-Lab 02 (45 min) → Lab 03 (45 min)
-```
-
-**Ideal para:**
-- Operadores que no hacen upgrades
-- Focus en mantenimiento diario
-- Certificate management
+**CKA Coverage**: Cluster Architecture (25%) - Cluster Maintenance
 
 ---
 
-## 📋 Pre-Lab Setup
+### [Lab 03: Node Drain, Cordon & Maintenance](./lab-03-node-drain-cordon/) ⭐⭐
+**Duracion**: 30-45 minutos | **Dificultad**: Intermedio
 
-### Requisitos de Hardware
+Mantenimiento de nodos sin downtime de aplicaciones:
+- Cordon, drain y uncordon de nodos
+- PodDisruptionBudgets para proteger apps criticas
+- Comportamiento de DaemonSets durante drain
+- Graceful shutdown y rebalanceo
 
-#### Opción A: VMs Locales (Recommended)
-```
-Control Plane:  2 CPU, 4GB RAM, 50GB disk
-Worker 1:       2 CPU, 2GB RAM, 30GB disk
-Worker 2:       2 CPU, 2GB RAM, 30GB disk
-```
+**Archivos**: 3 YAML (Deployment, PDB, DaemonSet), drain-demo.sh, verify-drain.sh, cleanup.sh
 
-#### Opción B: Cloud (AWS/Azure/GCP)
-```
-Master:  t3.medium (2 vCPU, 4GB)
-Workers: t3.small  (2 vCPU, 2GB) x2
-```
+**CKA Coverage**: Cluster Architecture (25%) - Node Maintenance (15%)
 
-#### Opción C: Minikube/Kind (Solo Lab 02 y 03)
-```
-minikube start --nodes 3 --cpus 2 --memory 3072
-```
+---
 
-### Software Prerequisites
+### [Lab 04: Gestion de Certificados](./lab-04-certificate-management/) ⭐⭐⭐
+**Duracion**: 90-120 minutos | **Dificultad**: Avanzado
+
+Verificacion, renovacion y gestion de certificados PKI:
+- Estructura PKI de Kubernetes (CA, API Server, etcd, front-proxy)
+- kubeadm certs check-expiration y renew
+- Restart de componentes static pod
+- Simulacion de certificado expirado y recuperacion
+
+**Archivos**: check-certs.sh, renew-certs.sh, verify-certs.sh, cleanup.sh
+
+**CKA Coverage**: Cluster Architecture (25%) - PKI & Certificates (15%)
+
+---
+
+### [Lab Resumen: Maintenance](./lab-resumen-maintenance/)
+**Duracion**: 15 minutos | **Nivel**: Repaso
+
+Resumen rapido de mantenimiento de clusters con recursos de prueba para practica de drain/cordon, PDBs y verificacion de datos. Cubre los conceptos clave de los 4 labs en un solo ejercicio.
+
+**Archivos**: maintenance-lab.yaml, cleanup.sh
+
+---
+
+## Guia de Uso
+
+### Opcion 1: Lab Individual
 
 ```bash
-# En todos los nodos
+# Navegar al lab
+cd lab-03-node-drain-cordon/
 
-# 1. kubectl
-curl -LO "https://dl.k8s.io/release/v1.27.8/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+# Revisar setup
+cat SETUP.md
 
-# 2. kubeadm, kubelet (versión 1.27.x para Lab 01)
-sudo apt-get update
-sudo apt-get install -y apt-transport-https ca-certificates curl
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.27/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.27/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-sudo apt-get update
-sudo apt-get install -y kubelet=1.27.8-00 kubeadm=1.27.8-00
-sudo apt-mark hold kubelet kubeadm
+# Aplicar recursos
+kubectl apply -f nginx-demo-deployment.yaml
 
-# 3. containerd
-sudo apt-get install -y containerd
-sudo systemctl enable --now containerd
+# Seguir ejercicios del README.md
 
-# 4. Utilidades
-sudo apt-get install -y jq tmux
+# Limpiar al finalizar
+./cleanup.sh
 ```
 
-### Cluster Setup (para Lab 01)
+### Opcion 2: Secuencia Completa (Preparacion CKA)
 
 ```bash
-# Inicializar cluster con 1.27.x
-sudo kubeadm init --kubernetes-version=v1.27.8 --pod-network-cidr=10.244.0.0/16
+# Semana 1: Disaster Recovery
+cd lab-01-etcd-backup-restore/    # 30-45 min
 
-# Setup kubeconfig
-mkdir -p $HOME/.kube
-sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
+# Semana 2: Cluster Upgrade
+cd ../lab-02-cluster-upgrade-minor/    # 45-60 min
 
-# Instalar CNI (Calico)
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+# Semana 3: Node Maintenance
+cd ../lab-03-node-drain-cordon/    # 30-45 min
 
-# Join workers
-# (ejecutar comando que muestra kubeadm init)
+# Semana 4: Certificados
+cd ../lab-04-certificate-management/    # 90-120 min
 ```
 
 ---
 
-## 📊 Checklist Pre-Lab
+## Progresion de Dificultad
 
-### Antes de empezar CUALQUIER lab:
-
-- [ ] Cluster en estado saludable: `kubectl get nodes`
-- [ ] Todos los pods Running: `kubectl get pods --all-namespaces`
-- [ ] Sin eventos de error: `kubectl get events | grep -i error`
-- [ ] Espacio suficiente: `df -h /var/lib/etcd` (>10GB libre)
-- [ ] Backup actualizado (etcd): Ver Lab 01, Paso 2
-- [ ] tmux/screen iniciado (evitar desconexiones)
-
-### Antes de Lab 01 (Upgrade):
-
-- [ ] Versión actual verificada: `kubectl version --short` (debe ser 1.27.x)
-- [ ] Release notes leídas: https://kubernetes.io/docs/setup/release/notes/
-- [ ] Staging cluster testeado (si disponible)
-- [ ] Ventana de mantenimiento acordada
-
-### Antes de Lab 02 (Maintenance):
-
-- [ ] Al menos 2 workers disponibles (para capacidad N-1)
-- [ ] Apps con múltiples réplicas (para testing)
-- [ ] Conocimiento de PodDisruptionBudgets
-
-### Antes de Lab 03 (Certificates):
-
-- [ ] Backup de `/etc/kubernetes/pki`
-- [ ] Acceso root al control plane
-- [ ] Verificación de expiration actual: `sudo kubeadm certs check-expiration`
-
----
-
-## 🎯 Tips para el Éxito
-
-### General
-- ✅ Usa `tmux` o `screen` para evitar perder sesión
-- ✅ Copia comandos en bloc de notas (no confiar en memoria)
-- ✅ Verifica CADA paso antes de continuar al siguiente
-- ✅ Lee TODOS los outputs de comandos importantes
-
-### Lab 01 (Upgrade)
-- ✅ **SIEMPRE** backup antes de upgrade
-- ✅ Un nodo a la vez (nunca draines múltiples workers simultáneamente)
-- ✅ Espera a que pods reschedulen antes de siguiente nodo
-- ✅ Si algo falla, DETENTE y diagnostica (no continúes a ciegas)
-
-### Lab 02 (Maintenance)
-- ✅ Drain puede tardar (especialmente con PDBs restrictivos)
-- ✅ Usa `--dry-run=client` primero para ver impacto
-- ✅ Verifica que hay capacidad antes de drain
-
-### Lab 03 (Certificates)
-- ✅ Backup de PKI antes de renovar
-- ✅ Actualiza kubeconfig SIEMPRE después de renovar
-- ✅ Reinicia kubelet después de cambios de certs
-
----
-
-## 🐛 Troubleshooting General
-
-### kubectl no funciona
-```bash
-# Verificar kubeconfig
-cat ~/.kube/config
-
-# Verificar conectividad a API server
-kubectl cluster-info
-
-# Regenerar kubeconfig (como root)
-sudo cp /etc/kubernetes/admin.conf ~/.kube/config
-sudo chown $(id -u):$(id -g) ~/.kube/config
 ```
-
-### Nodo NotReady
-```bash
-# Ver detalles
-kubectl describe node <node-name>
-
-# Ver logs de kubelet
-ssh <node> 'sudo journalctl -u kubelet -f'
-
-# Errores comunes:
-# - Swap habilitado: sudo swapoff -a
-# - CNI issues: kubectl get pods -n kube-system -l k8s-app=calico-node
-# - containerd down: sudo systemctl status containerd
-```
-
-### Pods Pending
-```bash
-# Ver por qué no schedules
-kubectl describe pod <pod-name>
-
-# Causas comunes:
-# - Nodo cordoned: kubectl get nodes
-# - Recursos insuficientes: kubectl top nodes
-# - Taints: kubectl describe node <node> | grep Taint
+Lab 01 (⭐⭐⭐)      Lab 02 (⭐⭐⭐)      Lab 03 (⭐⭐)       Lab 04 (⭐⭐⭐)
+etcd Backup        Cluster Upgrade    Node Drain         Certificates
+snapshot save      kubeadm upgrade    cordon/drain       check-expiration
+snapshot restore   version skew       PDB management     renew all
+cron automation    rolling upgrade    DaemonSets         PKI structure
 ```
 
 ---
 
-## ✅ Criterios de Completitud Global
+## Preparacion para el Examen CKA
 
-Has completado exitosamente TODOS los labs si:
+### Matriz de Cobertura CKA
 
-- [ ] **Lab 01:** Cluster upgraded de 1.27.x a 1.28.4
-- [ ] **Lab 01:** Todos los nodos muestran v1.28.4 en `kubectl get nodes`
-- [ ] **Lab 01:** Smoke test pasado (nginx deployment)
-- [ ] **Lab 02:** Node reboot completado sin downtime
-- [ ] **Lab 02:** PDB respetado durante drain
-- [ ] **Lab 03:** Certificados renovados exitosamente
-- [ ] **Lab 03:** Rotación automática de kubelet configurada
-- [ ] **General:** Cluster funcional y saludable al final
+| Dominio CKA | % Examen | Labs que cubren |
+|-------------|----------|-----------------|
+| Cluster Architecture | 25% | Lab 01, Lab 02, Lab 03, Lab 04 |
+| Workloads & Scheduling | 15% | Lab 03 |
+| Services & Networking | 20% | - |
+| Storage | 10% | Lab 01 (etcd) |
+| **Troubleshooting** | **30%** | Lab 01, Lab 02, Lab 04 |
 
----
-
-## 📚 Recursos Adicionales
-
-### Documentación Oficial
-- [Upgrading kubeadm clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
-- [Safely Drain Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
-- [Certificate Management](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/)
-- [Version Skew Policy](https://kubernetes.io/releases/version-skew-policy/)
-
-### Scripts de Apoyo
-- `../scripts/upgrade-cluster.sh` - Upgrade automatizado
-- `../scripts/safe-drain.sh` - Drain con verificaciones
-- `../scripts/cert-monitor.sh` - Monitoreo de certificados
-
-### Ejemplos
-- `../ejemplos/pdb-examples.yaml` - PodDisruptionBudgets
-- `../ejemplos/pre-upgrade-checklist.md` - Checklist completo
+**Cobertura Total**: ~20% directo del examen CKA (Cluster Maintenance)
 
 ---
 
-## 🎓 Después de Completar
+## Preparacion Final
 
-### Próximos Pasos
-1. **Práctica adicional:** Repetir labs en diferentes entornos
-2. **Automatización:** Crear tus propios scripts de upgrade
-3. **Documentación:** Crear runbooks para tu organización
-4. **Mock Exam:** Practicar escenarios de CKA
+Estas listo para la seccion de mantenimiento del CKA cuando:
 
-### Habilidades Adquiridas
-- ✅ Upgrade seguro de clusters Kubernetes
-- ✅ Mantenimiento de nodos sin downtime
-- ✅ Gestión de certificados y PKI
-- ✅ Troubleshooting de upgrades
-- ✅ Automatización de tareas operacionales
-
-**🎯 CKA Readiness:** Has cubierto ~20% del examen CKA con estos 3 labs.
+1. **Lab 01**: Completas backup+restore de etcd en <15 minutos
+2. **Lab 02**: Completas upgrade de cluster en <20 minutos
+3. **Lab 03**: Completas drain/uncordon en <10 minutos
+4. **Lab 04**: Completas renovacion de certificados en <10 minutos
 
 ---
 
-**Ver también:**
-- [README Principal](../README.md)
-- [RESUMEN](../RESUMEN-MODULO.md)
-- [Ejemplos](../ejemplos/README.md)
+## Recursos Adicionales
+
+- **Documentacion**: [Cluster Administration](https://kubernetes.io/docs/tasks/administer-cluster/)
+- **CKA Info**: [Linux Foundation CKA](https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/)
+- **Cheatsheet**: Ver [RESUMEN-MODULO.md](../RESUMEN-MODULO.md)
+
+---
+
+[Volver al README del modulo](../README.md)

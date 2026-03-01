@@ -1,0 +1,208 @@
+# ============================================================
+# maintenance-lab.yaml
+# Ejercicio Resumen: Cluster Maintenance & Upgrades
+# Uso: kubectl apply -f maintenance-lab.yaml
+# Duracion: ~15 minutos
+#
+# Descripcion:
+#   Recursos consolidados para practicar las 4 areas clave de
+#   mantenimiento de clusters: drain/cordon, PodDisruptionBudgets,
+#   DaemonSets, y verificacion de backup/restore via ConfigMap y Secret.
+#
+# Conceptos clave:
+#   - Node drain y cordon con PodDisruptionBudget
+#   - DaemonSet que permanece durante operaciones de drain
+#   - ConfigMap y Secret como datos de verificacion post-restore
+#
+# Namespace: lab-maintenance-test
+# ============================================================
+
+# 1) NAMESPACE
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-maintenance-test
+  labels:
+    purpose: lab-resumen
+    module: "23"
+
+# 2) DEPLOYMENT: App principal con multiples replicas (para practica de drain)
+# nginx con 4 replicas distribuidas entre nodos
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: lab-maintenance-test
+  labels:
+    app: web-app
+    tier: frontend
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+
+# 3) POD DISRUPTION BUDGET: Proteccion durante drain
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app-pdb
+  namespace: lab-maintenance-test
+  labels:
+    app: web-app
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: web-app
+
+# 4) DEPLOYMENT: App critica con anti-affinity (simula produccion)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-service
+  namespace: lab-maintenance-test
+  labels:
+    app: critical-service
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: critical-service
+  template:
+    metadata:
+      labels:
+        app: critical-service
+        tier: backend
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ['sh', '-c', 'while true; do echo "$(date) - Service running on $(hostname)"; sleep 30; done']
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+
+# 5) POD DISRUPTION BUDGET: Para critical-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: critical-service-pdb
+  namespace: lab-maintenance-test
+  labels:
+    app: critical-service
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: critical-service
+
+# 6) DAEMONSET: Monitoreo de nodos (permanece durante drain)
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-agent
+  namespace: lab-maintenance-test
+  labels:
+    app: node-agent
+    tier: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: node-agent
+  template:
+    metadata:
+      labels:
+        app: node-agent
+        tier: monitoring
+    spec:
+      tolerations:
+      - key: node.kubernetes.io/unschedulable
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: agent
+        image: busybox:1.36
+        command: ['sh', '-c', 'while true; do echo "Node: $(hostname) | $(date)"; sleep 60; done']
+        resources:
+          requests:
+            cpu: 25m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
+
+# 7) SERVICE: Para web-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-svc
+  namespace: lab-maintenance-test
+  labels:
+    app: web-app
+spec:
+  selector:
+    app: web-app
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+
+# 8) CONFIGMAP: Datos de prueba para verificar backup/restore
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-data
+  namespace: lab-maintenance-test
+  labels:
+    purpose: backup-verification
+data:
+  version: "1.0.0"
+  environment: "test"
+  backup-note: "Este ConfigMap sirve para verificar que el backup/restore de etcd funciona correctamente"
+
+# 9) SECRET: Datos sensibles de prueba
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-credentials
+  namespace: lab-maintenance-test
+  labels:
+    purpose: backup-verification
+type: Opaque
+stringData:
+  username: admin
+  password: test-secret-123

@@ -1,25 +1,58 @@
 # Lab 03: Node Drain, Cordon & Maintenance
 
-**Duración estimada:** 30-45 minutos  
-**Dificultad:** ⭐⭐ Intermedio  
-**Relevancia CKA:** 🔴 CRÍTICO (Node Maintenance 15%)
+**Duracion estimada:** 30-45 minutos
+**Nivel:** Intermedio
+**Objetivo:** Dominar operaciones de mantenimiento de nodos (drain, cordon, uncordon) y PodDisruptionBudgets
+
+---
+
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica | Descripcion |
+|---------|-------------|
+| **kubectl cordon** | Marcar un nodo como SchedulingDisabled para prevenir nuevos pods |
+| **kubectl drain** | Evacuar pods de un nodo de forma segura respetando PDBs |
+| **kubectl uncordon** | Restaurar scheduling en un nodo despues de mantenimiento |
+| **PodDisruptionBudget** | Definir minimo de replicas disponibles durante disrupciones voluntarias |
+| **DaemonSet behavior** | Entender por que los DaemonSets permanecen durante drain |
+| **Graceful shutdown** | Proceso SIGTERM + terminationGracePeriodSeconds durante evacuacion |
+
+---
+
+## Archivos YAML del Laboratorio
+
+Este laboratorio utiliza un enfoque **100% declarativo**. Todas las operaciones se realizan mediante archivos YAML:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `nginx-demo-deployment.yaml` | 1 | Deployment con 6 replicas para demostrar distribucion y migracion de pods |
+| `critical-app-deployment-pdb.yaml` | 2 | Deployment critico (4 replicas) + PDB con minAvailable: 2 |
+| `node-monitor-daemonset.yaml` | 3 | DaemonSet de monitoreo que permanece durante drain |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `drain-demo.sh` | Demo interactiva guiada de drain con 8 pasos |
+| `verify-drain.sh` | Script de verificacion del estado del lab (nodos, PDBs, pods) |
+| `cleanup.sh` | Script de limpieza de todos los recursos del laboratorio |
 
 ---
 
 ## 🎯 Objetivos de Aprendizaje
 
-Al completar este laboratorio, serás capaz de:
+Al completar este laboratorio, seras capaz de:
 
-- ✅ Realizar mantenimiento de nodos sin causar downtime de aplicaciones
-- ✅ Usar `kubectl drain` para evacuar pods de forma segura
-- ✅ Entender la diferencia entre `drain`, `cordon` y `uncordon`
-- ✅ Manejar PodDisruptionBudgets (PDBs) durante mantenimiento
-- ✅ Trabajar con node taints y tolerations
-- ✅ Implementar graceful shutdown de aplicaciones
+- Realizar mantenimiento de nodos sin causar downtime de aplicaciones
+- Usar `kubectl drain` para evacuar pods de forma segura
+- Entender la diferencia entre `drain`, `cordon` y `uncordon`
+- Manejar PodDisruptionBudgets (PDBs) durante mantenimiento
+- Trabajar con node taints y tolerations
+- Implementar graceful shutdown de aplicaciones
 
 ---
 
-## 📋 Prerequisitos
+## Prerequisitos
 
 Antes de comenzar, asegúrate de:
 
@@ -197,33 +230,8 @@ spec:
 # Crear namespace de prueba
 kubectl create namespace drain-test
 
-# Deployment con 6 réplicas (distribuidas entre workers)
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nginx-demo
-  namespace: drain-test
-spec:
-  replicas: 6
-  selector:
-    matchLabels:
-      app: nginx-demo
-  template:
-    metadata:
-      labels:
-        app: nginx-demo
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 80
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-EOF
+# Deployment con 6 replicas (distribuidas entre workers)
+kubectl apply -f nginx-demo-deployment.yaml
 ```
 
 **Verificar distribución:**
@@ -236,39 +244,8 @@ kubectl get pods -n drain-test -o wide
 #### Paso 1.2: Deployment con PodDisruptionBudget
 
 ```bash
-# Deployment crítico con PDB
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: critical-app
-  namespace: drain-test
-spec:
-  replicas: 4
-  selector:
-    matchLabels:
-      app: critical-app
-  template:
-    metadata:
-      labels:
-        app: critical-app
-    spec:
-      containers:
-      - name: app
-        image: busybox:1.28
-        command: ['sh', '-c', 'while true; do echo "Running..."; sleep 30; done']
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: critical-app-pdb
-  namespace: drain-test
-spec:
-  minAvailable: 2  # Siempre mantener al menos 2 pods
-  selector:
-    matchLabels:
-      app: critical-app
-EOF
+# Deployment critico con PDB (minAvailable: 2)
+kubectl apply -f critical-app-deployment-pdb.yaml
 ```
 
 **Verificar PDB:**
@@ -284,26 +261,7 @@ kubectl get pdb -n drain-test
 
 ```bash
 # DaemonSet de ejemplo (simula node monitoring)
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: node-monitor
-  namespace: drain-test
-spec:
-  selector:
-    matchLabels:
-      app: node-monitor
-  template:
-    metadata:
-      labels:
-        app: node-monitor
-    spec:
-      containers:
-      - name: monitor
-        image: busybox:1.28
-        command: ['sh', '-c', 'while true; do echo "Monitoring $(hostname)..."; sleep 60; done']
-EOF
+kubectl apply -f node-monitor-daemonset.yaml
 ```
 
 **Verificar que hay 1 pod por nodo:**

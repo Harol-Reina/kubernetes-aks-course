@@ -12,6 +12,29 @@
 
 ---
 
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica / Concepto | Descripcion |
+|---|---|
+| `kubeadm certs check-expiration` | Verificacion del estado y fecha de expiracion de todos los certificados |
+| `kubeadm certs renew` | Renovacion de certificados PKI del cluster sin necesidad de recrearlo |
+| Verificacion con `openssl x509` | Inspeccion detallada de certificados (fechas, SANs, emisor) |
+| Estructura PKI de Kubernetes | Jerarquia de CAs y certificados de componentes (API Server, kubelet, etcd) |
+| Reinicio de static pods | Recarga de componentes del control plane tras renovar certificados |
+| Actualizacion de kubeconfig | Regeneracion de kubeconfig tras cambios en certificados de acceso |
+| Backup y restore de PKI | Copia de seguridad del directorio `/etc/kubernetes/pki` antes de renovar |
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---|---|
+| `check-certs.sh` | Script de verificacion detallada de certificados con color coding |
+| `renew-certs.sh` | Script de renovacion con backup automatico y restart de componentes |
+| `verify-certs.sh` | Suite de 8 verificaciones post-renovacion |
+| `cleanup.sh` | Script de limpieza con opcion de restaurar backup de PKI |
+
+---
+
 ## 🎯 Objetivos de Aprendizaje
 
 Al completar este laboratorio, podrás:

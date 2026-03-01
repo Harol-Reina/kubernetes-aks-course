@@ -6,6 +6,29 @@
 
 ---
 
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica / Concepto | Descripcion |
+|---|---|
+| `etcdctl snapshot save` | Creacion de snapshots del estado del cluster etcd |
+| `etcdctl snapshot restore` | Recuperacion del cluster desde un snapshot previo |
+| Verificacion de snapshot | Comprobacion de integridad con `etcdctl snapshot status` |
+| Automatizacion con cron | Programacion de backups periodicos mediante cron jobs |
+| Variable `ETCDCTL_API` | Seleccion de la version de API de etcdctl (v3) |
+| Autenticacion por certificados | Uso de TLS (cacert, cert, key) para conexion segura a etcd |
+| Modificacion de `data-dir` | Configuracion del directorio de datos al restaurar etcd |
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---|---|
+| `backup-etcd.sh` | Script de backup automatizado con rotacion y verificacion |
+| `restore-etcd.sh` | Script de disaster recovery con validaciones de seguridad |
+| `verify-data.sh` | Script de verificacion de datos restaurados |
+| `cleanup.sh` | Script de limpieza y restauracion del entorno |
+
+---
+
 ## 🎯 Objetivos de Aprendizaje
 
 Al completar este laboratorio, serás capaz de:

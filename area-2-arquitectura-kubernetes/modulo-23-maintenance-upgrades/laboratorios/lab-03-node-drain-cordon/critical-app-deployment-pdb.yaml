@@ -1,0 +1,45 @@
+# Ejercicio 2: Deployment Critico con PodDisruptionBudget
+# Uso: kubectl apply -f critical-app-deployment-pdb.yaml
+#
+# Descripcion:
+#   Deployment de una aplicacion critica con 4 replicas y un PodDisruptionBudget
+#   que garantiza que siempre haya al menos 2 pods disponibles. Esto demuestra
+#   como kubectl drain respeta los PDBs durante operaciones de mantenimiento.
+#
+# Conceptos clave:
+#   - PodDisruptionBudget (PDB) para proteger aplicaciones criticas
+#   - minAvailable: numero minimo de pods que deben estar disponibles
+#   - Interaccion entre drain y PDB durante mantenimiento
+#
+# Namespace: drain-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-app
+  namespace: drain-test
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: critical-app
+  template:
+    metadata:
+      labels:
+        app: critical-app
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.28
+        command: ['sh', '-c', 'while true; do echo "Running..."; sleep 30; done']
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: critical-app-pdb
+  namespace: drain-test
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: critical-app

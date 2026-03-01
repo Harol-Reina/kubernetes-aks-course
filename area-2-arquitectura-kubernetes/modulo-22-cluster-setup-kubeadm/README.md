@@ -1,45 +1,6 @@
-# Módulo 22: Cluster Setup con kubeadm
+# Capitulo 24: Cluster Setup con kubeadm
 
-## 📋 Información del Módulo
-
-| Atributo | Detalle |
-|----------|---------|
-| **Duración estimada** | 2.5 horas |
-| **Nivel** | 🔴 Avanzado |
-| **Prerequisitos** | Módulos 1-21, Linux básico, Networking básico |
-| **Objetivos de aprendizaje** | Instalar y configurar clusters Kubernetes con kubeadm |
-| **Certificación** | CKA (25% del examen) |
-| **Laboratorios** | 4 labs prácticos |
-
----
-
-## 🎯 Objetivos de Aprendizaje
-
-Al completar este módulo, serás capaz de:
-
-- ✅ **Instalar** un cluster Kubernetes desde cero con kubeadm
-- ✅ **Configurar** control plane y worker nodes
-- ✅ **Implementar** clusters High Availability (HA)
-- ✅ **Gestionar** etcd y realizar backup/restore
-- ✅ **Configurar** networking con CNI plugins
-- ✅ **Troubleshootear** problemas comunes de instalación
-- ✅ **Escalar** clusters agregando/removiendo nodos
-- ✅ **Actualizar** versiones de Kubernetes
-
----
-
-## 📚 Contenido
-
-1. [Introducción a kubeadm](#1-introducción-a-kubeadm)
-2. [Prerequisites del Sistema](#2-prerequisites-del-sistema)
-3. [Instalación de Componentes](#3-instalación-de-componentes)
-4. [Inicializar Control Plane](#4-inicializar-control-plane)
-5. [Configurar Networking (CNI)](#5-configurar-networking-cni)
-6. [Agregar Worker Nodes](#6-agregar-worker-nodes)
-7. [High Availability (HA)](#7-high-availability-ha)
-8. [Gestión de etcd](#8-gestión-de-etcd)
-9. [Troubleshooting](#9-troubleshooting)
-10. [Mejores Prácticas](#10-mejores-prácticas)
+Helm empaqueta aplicaciones. Ahora montamos clusters reales desde cero con kubeadm: inicializacion del control plane, union de nodos y configuracion de red.
 
 ---
 
@@ -1281,54 +1242,8 @@ Storage:
 
 ---
 
-## 📝 Resumen
+## Cierre del Capitulo
 
-En este módulo aprendiste:
+Montar un cluster Kubernetes desde cero con kubeadm revela la mecanica interna que los servicios managed ocultan: container runtimes, certificados PKI, modulos del kernel, etcd como unica fuente de verdad y CNI plugins que conectan los pods entre nodos. La topologia HA con multiples control planes y load balancer garantiza que la perdida de un nodo no derribe el cluster. Y el backup de etcd es la unica red de seguridad real ante un desastre: sin snapshot, no hay recuperacion posible.
 
-✅ **Instalar Kubernetes** con kubeadm desde cero  
-✅ **Configurar control plane** y worker nodes  
-✅ **Implementar HA** con múltiples control planes  
-✅ **Gestionar etcd** incluyendo backup/restore  
-✅ **Configurar networking** con CNI plugins  
-✅ **Troubleshootear** problemas comunes  
-✅ **Aplicar mejores prácticas** de producción
-
-### Comandos Esenciales
-
-```bash
-# Inicializar cluster
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
-
-# Agregar worker
-sudo kubeadm join <endpoint>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
-
-# Backup etcd
-sudo ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-snapshot.db ...
-
-# Verificar salud
-kubectl get nodes
-kubectl get pods -A
-kubectl get componentstatuses
-```
-
----
-
-## 🔗 Referencias
-
-- [kubeadm Documentation](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/)
-- [Kubernetes The Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way)
-- [CNI Plugins](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/)
-- [etcd Documentation](https://etcd.io/docs/)
-- [Cluster Administration](https://kubernetes.io/docs/tasks/administer-cluster/)
-
----
-
-## ⏭️ Próximos Pasos
-
-- **Laboratorios**: Practicar instalación hands-on
-- **Módulo 23**: Maintenance & Upgrades
-- **Módulo 26**: Troubleshooting avanzado
-
----
-
-**¡Felicitaciones!** 🎉 Ahora sabes cómo instalar y gestionar clusters Kubernetes production-ready con kubeadm.
+El cluster esta montado. El siguiente paso es mantenerlo operativo: upgrades de version, drain de nodos para mantenimiento, renovacion de certificados y procedimientos de rollback cuando algo sale mal.

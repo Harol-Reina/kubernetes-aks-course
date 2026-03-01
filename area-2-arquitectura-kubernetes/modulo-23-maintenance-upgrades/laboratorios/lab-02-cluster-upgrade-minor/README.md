@@ -6,6 +6,30 @@
 
 ---
 
+## Tecnicas y Conceptos Utilizados
+
+| Tecnica / Concepto | Descripcion |
+|---|---|
+| `kubeadm upgrade plan` | Evaluacion de versiones disponibles y verificacion de compatibilidad |
+| `kubeadm upgrade apply` | Aplicacion del upgrade al control plane |
+| Version skew policy | Politica de compatibilidad entre versiones de componentes Kubernetes |
+| Rolling upgrade strategy | Estrategia de actualizacion secuencial sin downtime de aplicaciones |
+| `kubectl drain` durante upgrade | Vaciado seguro de nodos antes de actualizar kubelet y kubeadm |
+| `apt-mark hold/unhold` | Control de versiones de paquetes para evitar upgrades no deseados |
+| Reinicio de kubelet | Recarga del servicio kubelet tras la actualizacion de binarios |
+| Verificacion post-upgrade | Comprobacion del estado del cluster despues del upgrade |
+
+## Archivos del Laboratorio
+
+| Archivo | Descripcion |
+|---|---|
+| `upgrade-control-plane.sh` | Script automatizado de upgrade del control plane (7 fases) |
+| `upgrade-worker.sh` | Script de upgrade de worker nodes con drain/uncordon |
+| `verify-upgrade.sh` | Suite de 12 tests de verificacion post-upgrade |
+| `cleanup.sh` | Script de limpieza con soporte de rollback |
+
+---
+
 ## 🎯 Objetivos de Aprendizaje
 
 Al completar este laboratorio, serás capaz de:

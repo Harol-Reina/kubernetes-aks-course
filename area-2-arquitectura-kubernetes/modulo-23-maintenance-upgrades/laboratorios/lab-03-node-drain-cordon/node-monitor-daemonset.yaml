@@ -1,0 +1,34 @@
+# Ejercicio 3: DaemonSet de Monitoreo de Nodos
+# Uso: kubectl apply -f node-monitor-daemonset.yaml
+#
+# Descripcion:
+#   DaemonSet que simula un agente de monitoreo ejecutandose en cada nodo.
+#   Los DaemonSets NO se evacuan durante operaciones de drain (requieren
+#   --ignore-daemonsets). Esto demuestra el comportamiento especial de los
+#   DaemonSets durante mantenimiento de nodos.
+#
+# Conceptos clave:
+#   - DaemonSet: ejecuta exactamente 1 pod por nodo
+#   - Los DaemonSets permanecen durante drain (no se evacuan)
+#   - Flag --ignore-daemonsets necesario para drain exitoso
+#
+# Namespace: drain-test
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-monitor
+  namespace: drain-test
+spec:
+  selector:
+    matchLabels:
+      app: node-monitor
+  template:
+    metadata:
+      labels:
+        app: node-monitor
+    spec:
+      containers:
+      - name: monitor
+        image: busybox:1.28
+        command: ['sh', '-c', 'while true; do echo "Monitoring $(hostname)..."; sleep 60; done']

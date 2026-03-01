@@ -1,0 +1,39 @@
+# Ejercicio 1: Deployment con Multiples Replicas - nginx-demo
+# Uso: kubectl apply -f nginx-demo-deployment.yaml
+#
+# Descripcion:
+#   Deployment de nginx con 6 replicas que se distribuiran entre los worker nodes.
+#   Se usa para demostrar como los pods migran durante operaciones de drain
+#   y como el scheduler los redistribuye entre nodos disponibles.
+#
+# Conceptos clave:
+#   - Deployment con multiples replicas para alta disponibilidad
+#   - Distribucion automatica de pods entre worker nodes
+#   - Resource requests para scheduling correcto
+#
+# Namespace: drain-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-demo
+  namespace: drain-test
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: nginx-demo
+  template:
+    metadata:
+      labels:
+        app: nginx-demo
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
