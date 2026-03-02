@@ -1,0 +1,124 @@
+# Ejercicio 6: Pod con Init Containers - init-pod.yaml
+# Uso: kubectl apply -f init-pod.yaml
+#
+# Descripcion:
+#   Pod con 3 Init Containers que se ejecutan secuencialmente antes
+#   de iniciar el contenedor principal de la app Flask:
+#   1. wait-for-db: espera a que PostgreSQL este listo (pg_isready)
+#   2. db-migration: ejecuta migraciones SQL (migrate.sql via ConfigMap)
+#   3. config-setup: descarga configuracion (download-config.sh via ConfigMap)
+#   Solo cuando los 3 completan exitosamente inicia el contenedor app.
+#
+# Conceptos clave:
+#   - initContainers ejecutan en orden, uno a la vez
+#   - Si un init container falla, Kubernetes lo reintenta automaticamente
+#   - Los volumenes emptyDir se comparten entre init containers y app
+#   - ConfigMaps montados como volumenes (uno con defaultMode: 0755)
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-with-init
+  labels:
+    app: myapp
+    pattern: init-containers
+spec:
+  # Init containers run sequentially BEFORE main containers
+  initContainers:
+
+  # Init 1: Wait for database to be ready
+  - name: wait-for-db
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "⏳ Waiting for database to be ready..."
+        until pg_isready -h db-service -p 5432 -U user; do
+          echo "Database not ready, waiting..."
+          sleep 2
+        done
+        echo "✅ Database is ready!"
+    env:
+    - name: PGPASSWORD
+      value: "pass"
+
+  # Init 2: Run database migrations
+  - name: db-migration
+    image: postgres:13
+    command: ['sh', '-c']
+    args:
+      - |
+        echo "🗄️ Running database migrations..."
+        psql -h db-service -U user -d myapp -f /migrations/migrate.sql
+        echo "✅ Migrations completed!"
+    env:
+    - name: PGPASSWORD
+      value: "pass"
+    volumeMounts:
+    - name: migration-scripts
+      mountPath: /migrations
+
+  # Init 3: Download configuration
+  - name: config-setup
+    image: busybox
+    command: ['/setup/download-config.sh']
+    volumeMounts:
+    - name: setup-scripts
+      mountPath: /setup
+    - name: app-config
+      mountPath: /app/config
+    - name: setup-status
+      mountPath: /app/setup
+
+  # Main application container (starts AFTER all init containers complete)
+  containers:
+  - name: app
+    image: python:3.9-slim
+    command: ['sh', '-c']
+    args:
+      - |
+        pip install flask psycopg2-binary
+        python /app/app.py
+    ports:
+    - containerPort: 5000
+    env:
+    - name: DB_HOST
+      value: "db-service"
+    - name: DB_NAME
+      value: "myapp"
+    - name: DB_USER
+      value: "user"
+    - name: DB_PASSWORD
+      value: "pass"
+    volumeMounts:
+    - name: app-code
+      mountPath: /app
+    - name: app-config
+      mountPath: /app/config
+    - name: setup-status
+      mountPath: /app/setup
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  volumes:
+  - name: app-code
+    configMap:
+      name: app-code
+  - name: migration-scripts
+    configMap:
+      name: migration-scripts
+  - name: setup-scripts
+    configMap:
+      name: setup-scripts
+      defaultMode: 0755
+  - name: app-config
+    emptyDir: {}
+  - name: setup-status
+    emptyDir: {}

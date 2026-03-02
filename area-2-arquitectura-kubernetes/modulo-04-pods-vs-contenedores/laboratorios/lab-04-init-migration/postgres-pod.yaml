@@ -1,0 +1,46 @@
+# Ejercicio 5: Pod PostgreSQL + Service - postgres-pod.yaml
+# Uso: kubectl apply -f postgres-pod.yaml
+#
+# Descripcion:
+#   Pod con PostgreSQL 13 y su Service ClusterIP correspondiente.
+#   El Init Container wait-for-db usara pg_isready para verificar
+#   que este Pod esta listo antes de continuar la secuencia.
+#
+# Conceptos clave:
+#   - Pod de base de datos con variables de entorno para credenciales
+#   - Service ClusterIP para acceso interno al cluster por DNS (db-service)
+#   - Los Init Containers de app-with-init referencian este servicio
+#
+# Namespace: default
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db
+  labels:
+    app: database
+spec:
+  containers:
+  - name: postgres
+    image: postgres:13
+    ports:
+    - containerPort: 5432
+    env:
+    - name: POSTGRES_DB
+      value: myapp
+    - name: POSTGRES_USER
+      value: user
+    - name: POSTGRES_PASSWORD
+      value: pass
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+spec:
+  selector:
+    app: database
+  ports:
+  - port: 5432
+    targetPort: 5432

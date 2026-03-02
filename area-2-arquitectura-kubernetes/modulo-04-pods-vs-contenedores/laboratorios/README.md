@@ -1,156 +1,133 @@
-# 🐳 Laboratorios - Pods vs Contenedores
+# Laboratorios - Modulo 04: Pods vs Contenedores
 
-Este módulo contiene laboratorios prácticos para comprender las diferencias entre Pods y Contenedores.
-
-## 📋 Índice de Laboratorios
-
-### [Lab 01: Evolución](./lab-01-evolucion/)
-**Duración:** 60-75 minutos | **Dificultad:** ⭐⭐☆☆☆
-
-Evolución de contenedores a Pods.
-
-**Objetivos:**
-- Comparar Docker containers vs Pods
-- Entender por qué existen los Pods
-- Limitaciones de containers standalone
-- Ventajas del modelo Pod
+Laboratorios practicos para comprender las diferencias fundamentales entre Pods y Contenedores,
+los patrones de diseno multi-container y la migracion desde Docker Compose.
 
 ---
 
-### [Lab 02: Namespace Sharing](./lab-02-namespace-sharing/)
-**Duración:** 75-90 minutos | **Dificultad:** ⭐⭐⭐☆☆
+## Estructura de Directorios
 
-Compartición de namespaces en Pods.
-
-**Objetivos:**
-- Network namespace compartido
-- IPC namespace compartido
-- PID namespace sharing
-- Comunicación localhost entre containers
-
----
-
-### [Lab 03: Sidecar Real World](./lab-03-sidecar-real-world/)
-**Duración:** 90-120 minutos | **Dificultad:** ⭐⭐⭐⭐☆
-
-Casos de uso reales de sidecar containers.
-
-**Objetivos:**
-- Logging sidecar
-- Monitoring sidecar
-- Proxy sidecar
-- Patterns de producción
-
----
-
-### [Lab 04: Init Migration](./lab-04-init-migration/)
-**Duración:** 75-90 minutos | **Dificultad:** ⭐⭐⭐☆☆
-
-Migración de scripts init a Init Containers.
-
-**Objetivos:**
-- Migrar setup scripts
-- Init Containers patterns
-- Dependencias y orden
-- Best practices
-
----
-
-### [Lab 05: Compose Migration](./lab-05-compose-migration/)
-**Duración:** 90-120 minutos | **Dificultad:** ⭐⭐⭐⭐☆
-
-Migración de Docker Compose a Pods.
-
-**Objetivos:**
-- Analizar docker-compose.yml
-- Convertir a manifiestos de Pod
-- Networking equivalente
-- Volúmenes compartidos
-
----
-
-## 🎯 Ruta de Aprendizaje Recomendada
-
-1. **Nivel Básico** → Labs 01-02 (Conceptos fundamentales)
-2. **Nivel Intermedio** → Labs 03-04 (Patrones reales)
-3. **Nivel Avanzado** → Lab 05 (Migraciones complejas)
-
-**Tiempo total estimado:** 6-8 horas
-
-## 📚 Conceptos Clave
-
-### Pod vs Container
-
-**Container (Docker):**
-- Unidad de ejecución individual
-- Aislamiento completo
-- Networking separado
-- Gestión independiente
-
-**Pod (Kubernetes):**
-- Grupo de 1+ containers
-- Namespaces compartidos
-- IP compartida (localhost)
-- Ciclo de vida común
-
-### ¿Por qué Pods?
-
-1. **Cohesión**: Containers relacionados juntos
-2. **Comunicación**: localhost entre containers
-3. **Recursos**: Compartición de volúmenes, network
-4. **Despliegue**: Unidad atómica de deployment
-
-### Namespaces Compartidos en Pods
-
-```yaml
-# Network: Misma IP, puertos únicos
-containers:
-- name: app
-  ports:
-  - containerPort: 8080
-- name: sidecar
-  ports:
-  - containerPort: 9090  # Diferente puerto
-
-# Volúmenes: Mismo emptyDir
-volumes:
-- name: shared-data
-  emptyDir: {}
+```
+laboratorios/
+├── README.md                        # Este indice
+├── lab-01-evolucion/
+│   ├── README.md                    # Lab: LXC -> Docker -> Kubernetes
+│   ├── SETUP.md                     # Prerequisitos y verificacion
+│   └── cleanup.sh                   # Limpieza de recursos Docker y Kubernetes
+├── lab-02-namespace-sharing/
+│   ├── README.md                    # Lab: Network, IPC y PID namespace sharing
+│   ├── SETUP.md
+│   └── cleanup.sh
+├── lab-03-sidecar-real-world/
+│   ├── README.md                    # Lab: Logging, monitoring y proxy sidecar
+│   ├── SETUP.md
+│   └── cleanup.sh
+├── lab-04-init-migration/
+│   ├── README.md                    # Lab: Migracion de setup scripts a init containers
+│   ├── SETUP.md
+│   └── cleanup.sh
+├── lab-05-compose-migration/
+│   ├── README.md                    # Lab: Migracion de Docker Compose a Kubernetes
+│   ├── SETUP.md
+│   ├── cleanup.sh
+│   ├── db-deployment.yaml           # PVC + ConfigMap + Secret + Deployment + Service PostgreSQL
+│   ├── api-deployment.yaml          # ConfigMap + Deployment + Service API Node.js
+│   └── web-deployment.yaml          # ConfigMap (nginx.conf) + Deployment + Service NodePort Nginx
+└── lab-resumen-pods/
+    ├── README.md                    # Lab resumen: repaso integral de 15 minutos
+    ├── cleanup.sh                   # Elimina namespace lab-pods-test
+    └── pods-lab.yaml                # YAML unico: Namespace + 5 Pods de todos los conceptos
 ```
 
-## ⚠️ Antes de Comenzar
+---
+
+## Tabla de Laboratorios
+
+| Lab | Titulo | Duracion | Nivel | Archivos YAML |
+|-----|--------|----------|-------|---------------|
+| [Lab 01](./lab-01-evolucion/) | Evolucion: LXC → Docker → Kubernetes | 30 min | Basico | inline en README |
+| [Lab 02](./lab-02-namespace-sharing/) | Namespace Sharing (network, IPC, PID) | 45 min | Intermedio | inline en README |
+| [Lab 03](./lab-03-sidecar-real-world/) | Sidecar Real World (logging, proxy) | 60 min | Intermedio | inline en README |
+| [Lab 04](./lab-04-init-migration/) | Init Container Migration | 45 min | Intermedio | inline en README |
+| [Lab 05](./lab-05-compose-migration/) | Migracion de Docker Compose | 50 min | Intermedio | 3 archivos `.yaml` |
+| [Lab Resumen](./lab-resumen-pods/) | Repaso integral Pods | 15 min | Intermedio | `pods-lab.yaml` |
+
+**Tiempo total estimado:** 4-5 horas (sin el Lab Resumen que es para repaso rapido)
+
+---
+
+## Ruta de Aprendizaje Recomendada
+
+```
+Nivel Basico
+└── Lab 01: Evolucion (LXC → Docker → Kubernetes)
+    Comprende POR QUE existen los Pods y como evolucionaron los contenedores.
+
+Nivel Intermedio
+├── Lab 02: Namespace Sharing
+│   Experimenta con network, IPC y PID namespaces compartidos.
+├── Lab 03: Sidecar Real World
+│   Implementa patrones de logging, monitoring y proxy con sidecars.
+└── Lab 04: Init Container Migration
+    Convierte setup scripts en init containers con dependencias.
+
+Nivel Avanzado
+└── Lab 05: Docker Compose Migration
+    Migra una app multi-service completa (web + api + db) a Kubernetes.
+
+Repaso Pre-Examen
+└── Lab Resumen: Pods
+    Repasa todos los conceptos en 15 minutos con un solo YAML.
+```
+
+---
+
+## Prerequisitos del Modulo
 
 ```bash
-# Verificar Docker (para comparaciones)
+# Verificar cluster activo
+kubectl cluster-info
+kubectl get nodes
+
+# Verificar Docker (necesario para Labs 01-02)
 docker --version
 docker ps
 
-# Verificar Kubernetes
-kubectl cluster-info
-kubectl get pods
-
-# Herramientas útiles
-kubectl explain pod
-kubectl explain pod.spec.containers
+# Verificar espacio en disco para PVCs (Lab 05)
+kubectl get storageclass
 ```
 
-## 🧹 Limpieza
+---
+
+## Conceptos Evaluados en CKAD/CKA
+
+| Concepto | Labs | Relevancia examen |
+|----------|------|-------------------|
+| Pods multi-container | 01, 02, Resumen | CKAD - Alta |
+| Sidecar pattern (logging, proxy) | 03, Resumen | CKAD - Alta |
+| Init containers y dependencias | 04, Resumen | CKAD - Alta |
+| shareProcessNamespace | 02, Resumen | CKAD/CKA - Media |
+| emptyDir y volumen compartido | 03, Resumen | CKAD - Alta |
+| ConfigMap y Secret en Deployments | 05 | CKAD - Alta |
+| PersistentVolumeClaim | 05 | CKAD/CKA - Alta |
+| Migracion Docker Compose → K8s | 05 | Profesional |
+
+---
+
+## Limpieza Global
+
+Para limpiar todos los recursos de todos los labs:
 
 ```bash
-cd lab-XX-nombre
-./cleanup.sh
+# Labs 01-04: cada uno tiene su propio cleanup.sh
+./lab-01-evolucion/cleanup.sh
+./lab-02-namespace-sharing/cleanup.sh
+./lab-03-sidecar-real-world/cleanup.sh
+./lab-04-init-migration/cleanup.sh
+
+# Lab 05: recursos en namespace default
+./lab-05-compose-migration/cleanup.sh
+
+# Lab Resumen: elimina namespace lab-pods-test
+./lab-resumen-pods/cleanup.sh
 ```
-
-## 💡 Cuándo Usar Multi-Container Pods
-
-✅ **SÍ usar cuando:**
-- Containers altamente acoplados
-- Necesitan compartir recursos (volumen, network)
-- Tienen mismo ciclo de vida
-- Sidecar/adapter/ambassador patterns
-
-❌ **NO usar cuando:**
-- Servicios independientes
-- Escalado diferente
-- Ciclo de vida diferente
-- Mejor usar Deployments separados

@@ -1,23 +1,46 @@
-# 🚀 Lab 4: Init Container Migration Pattern
+# Laboratorio 04: Init Container Migration Pattern - De Docker a Kubernetes
 
-## 📋 Información del Laboratorio
+**Duracion estimada:** 70 minutos
+**Nivel:** Avanzado
+**Objetivo:** Migrar un setup complejo de Docker con orquestacion manual a Init Containers de Kubernetes, demostrando orquestacion automatica de dependencias, setup secuencial garantizado y simplificacion vs Docker tradicional.
 
-- **Duración estimada**: 70 minutos
-- **Nivel**: Avanzado
-- **Prerrequisitos**:
-  - Docker instalado
-  - kubectl configurado
-  - Cluster Kubernetes activo (minikube/kind)
-  - Conocimientos de Python/Flask y PostgreSQL
+---
 
-## 🎯 Objetivo
+## Tecnicas y Conceptos Utilizados
 
-Migrar un **setup complejo de Docker** (con múltiples contenedores de inicialización) a **Init Containers** de Kubernetes, demostrando:
-- Orquestación automática de dependencias
-- Setup secuencial garantizado
-- Simplificación vs Docker tradicional
+| Tecnica | Descripcion |
+|---------|-------------|
+| **Init Containers** | Contenedores especiales que se ejecutan secuencialmente ANTES de los contenedores principales. Cada uno debe completar exitosamente para que el siguiente inicie |
+| **Orquestacion declarativa** | El YAML describe la secuencia completa de setup. Kubernetes gestiona el orden y los reintentos automaticamente, sin scripts bash manuales |
+| **pg_isready** | Herramienta de PostgreSQL para verificar disponibilidad de la BD. Usada en el Init Container wait-for-db para esperar activamente en lugar de `sleep` hardcodeado |
+| **ConfigMaps como scripts** | Archivos de script y SQL almacenados como ConfigMaps y montados como volumenes. Permite versionado de codigo de setup junto al manifiesto |
+| **defaultMode: 0755** | Permisos de archivo aplicados al montar un ConfigMap como volumen. Necesario para que los scripts shell sean ejecutables dentro del contenedor |
+| **emptyDir para estado compartido** | Volumenes efimeros usados para compartir archivos entre init containers y el contenedor principal (app-config, setup-status) |
 
-## 🧪 Práctica
+---
+
+## Archivos del Laboratorio
+
+Este laboratorio utiliza archivos separados para cada componente:
+
+| Archivo | Ejercicio | Descripcion |
+|---------|-----------|-------------|
+| `docker-setup.sh` | 1 | Script Docker tradicional (7 pasos manuales) usado como punto de comparacion |
+| `app.py` | 2 | Aplicacion Flask con endpoints /, /data (PostgreSQL), /config (archivo preparado por init) |
+| `migrate.sql` | 3 | Migracion SQL idempotente ejecutada por el Init Container db-migration |
+| `download-config.sh` | 4 | Script de inicializacion que simula descarga de config y escribe /app/setup/complete |
+| `postgres-pod.yaml` | 5 | Pod PostgreSQL 13 + Service ClusterIP db-service |
+| `init-pod.yaml` | 6 | Pod con 3 Init Containers (wait-for-db, db-migration, config-setup) + app principal |
+
+**Scripts auxiliares:**
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `cleanup.sh` | Elimina pods app-with-init y db, service db-service, configmaps app-code/migration-scripts/setup-scripts |
+
+---
+
+## Practica
 
 ### Paso 1: Entender el Problema - Setup Docker Tradicional
 
@@ -30,175 +53,69 @@ echo "=============================================="
 
 #### Problema: Docker Setup Complejo (ANTES)
 
+Revisa el archivo `docker-setup.sh` del laboratorio:
+
 ```bash
-cat > docker-setup.sh << 'EOF'
-# docker-setup.sh - Docker Traditional Setup (Complex)
-echo "🐳 Docker Traditional Setup (Complex)"
+cat docker-setup.sh
+```
 
-# 1. Create network
-docker network create app-setup
+Copia el archivo al directorio de trabajo y dale permisos de ejecucion:
 
-# 2. Database setup
-docker run -d --name db --network app-setup \
-  -e POSTGRES_DB=myapp \
-  -e POSTGRES_USER=user \
-  -e POSTGRES_PASSWORD=pass \
-  postgres:13
-
-# 3. Wait for DB (manual orchestration)
-echo "⏳ Waiting for database..."
-sleep 10
-
-# 4. Run migrations (separate container)
-docker run --rm --network app-setup \
-  -e DATABASE_URL=postgres://user:pass@db:5432/myapp \
-  migrate/migrate:v4.15.1 \
-  -path /migrations -database postgres://user:pass@db:5432/myapp up
-
-# 5. Seed data (another container)
-docker run --rm --network app-setup \
-  -e DATABASE_URL=postgres://user:pass@db:5432/myapp \
-  my-seed-image:v1
-
-# 6. Download assets (yet another container)  
-docker run --rm -v $(pwd)/assets:/output \
-  busybox wget -O /output/app.js https://cdn.example.com/app.js
-
-# 7. Finally start main app
-docker run -d --name app --network app-setup \
-  -v $(pwd)/assets:/app/static \
-  -e DATABASE_URL=postgres://user:pass@db:5432/myapp \
-  my-app:v1
-
-echo "❌ Problems with this approach:"
-echo "├─ Manual orchestration"
-echo "├─ Complex dependency management"  
-echo "├─ Multiple network/volume setups"
-echo "└─ Hard to reproduce consistently"
-EOF
-
+```bash
+cp /ruta/al/lab-04-init-migration/docker-setup.sh .
 chmod +x docker-setup.sh
 ```
 
-**❌ Problemas**:
+**Problemas de este enfoque**:
 - 7 pasos manuales
 - Esperas hardcodeadas (`sleep 10`)
-- Difícil de reproducir
+- Dificil de reproducir
 - Sin manejo de errores
 
-### Paso 2: Crear Aplicación Flask
+### Paso 2: Revisar la Aplicacion Flask
+
+Revisa el archivo `app.py` del laboratorio:
 
 ```bash
-cat > app.py << 'EOF'
-from flask import Flask, jsonify
-import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-app = Flask(__name__)
-
-def get_db_connection():
-    return psycopg2.connect(
-        host=os.environ.get('DB_HOST', 'localhost'),
-        database=os.environ.get('DB_NAME', 'myapp'),
-        user=os.environ.get('DB_USER', 'user'),
-        password=os.environ.get('DB_PASSWORD', 'pass')
-    )
-
-@app.route('/')
-def home():
-    return jsonify({
-        'message': '🚀 App with Init Containers',
-        'status': 'running',
-        'setup_complete': os.path.exists('/app/setup/complete')
-    })
-
-@app.route('/data')
-def data():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute('SELECT * FROM users LIMIT 5')
-        users = cur.fetchall()
-        cur.close()
-        conn.close()
-        return jsonify({'users': users})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/config')
-def config():
-    config_file = '/app/config/app.json'
-    if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            import json
-            config = json.load(f)
-        return jsonify(config)
-    return jsonify({'error': 'Config not found'}), 404
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-EOF
+cat app.py
 ```
 
-### Paso 3: Crear Scripts de Inicialización
+Copia el archivo al directorio de trabajo:
+
+```bash
+cp /ruta/al/lab-04-init-migration/app.py .
+```
+
+### Paso 3: Preparar Scripts de Inicializacion
 
 ```bash
 mkdir -p setup-scripts
+```
 
-# Script SQL para migraciones
-cat > setup-scripts/migrate.sql << 'EOF'
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+Revisa y copia el script SQL de migraciones:
 
-INSERT INTO users (name, email) VALUES 
-('Alice Johnson', 'alice@example.com'),
-('Bob Smith', 'bob@example.com'),
-('Charlie Brown', 'charlie@example.com')
-ON CONFLICT (email) DO NOTHING;
-EOF
+```bash
+cat migrate.sql
+cp /ruta/al/lab-04-init-migration/migrate.sql setup-scripts/
+```
 
-# Script para descargar configuración
-cat > setup-scripts/download-config.sh << 'EOF'
-# download-config.sh - Script de inicialización
-echo "📥 Downloading configuration..."
-mkdir -p /app/config
+Revisa y copia el script de descarga de configuracion:
 
-# Simulate downloading config
-cat > /app/config/app.json << 'CONFIG'
-{
-  "app_name": "My Application",
-  "version": "1.0.0",
-  "features": {
-    "logging": true,
-    "metrics": true,
-    "debug": false
-  },
-  "database": {
-    "pool_size": 10,
-    "timeout": 30
-  }
-}
-CONFIG
-
-echo "✅ Configuration downloaded successfully"
-echo "complete" > /app/setup/complete
-EOF
-
+```bash
+cat download-config.sh
+cp /ruta/al/lab-04-init-migration/download-config.sh setup-scripts/
 chmod +x setup-scripts/download-config.sh
 ```
+
+> **Nota sobre download-config.sh**: Este script contiene un heredoc interno (`<< 'CONFIG'`) que genera el archivo `/app/config/app.json`. El script completo se almacena en un ConfigMap con `defaultMode: 0755` para que sea ejecutable dentro del contenedor.
 
 ### Paso 4: Crear ConfigMaps
 
 ```bash
-# ConfigMap para código de la aplicación
+# ConfigMap para codigo de la aplicacion
 kubectl create configmap app-code --from-file=app.py
 
-# ConfigMap para scripts de migración
+# ConfigMap para scripts de migracion
 kubectl create configmap migration-scripts --from-file=setup-scripts/migrate.sql
 
 # ConfigMap para scripts de setup
@@ -207,169 +124,37 @@ kubectl create configmap setup-scripts --from-file=setup-scripts/download-config
 
 ### Paso 5: Desplegar Base de Datos
 
+Revisa el archivo `postgres-pod.yaml` antes de aplicarlo:
+
 ```bash
-cat > postgres-pod.yaml << 'EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: db
-  labels:
-    app: database
-spec:
-  containers:
-  - name: postgres
-    image: postgres:13
-    ports:
-    - containerPort: 5432
-    env:
-    - name: POSTGRES_DB
-      value: myapp
-    - name: POSTGRES_USER
-      value: user
-    - name: POSTGRES_PASSWORD
-      value: pass
+cat postgres-pod.yaml
+```
 
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: db-service
-spec:
-  selector:
-    app: database
-  ports:
-  - port: 5432
-    targetPort: 5432
-EOF
-
+```bash
 kubectl apply -f postgres-pod.yaml
 kubectl wait --for=condition=Ready pod/db --timeout=60s
 ```
 
-### Paso 6: Crear Pod con Init Containers (SOLUCIÓN)
+### Paso 6: Revisar Pod con Init Containers (SOLUCION)
+
+Revisa el archivo `init-pod.yaml` antes de aplicarlo:
 
 ```bash
-cat > init-pod.yaml << 'EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-with-init
-  labels:
-    app: myapp
-    pattern: init-containers
-spec:
-  # Init containers run sequentially BEFORE main containers
-  initContainers:
-  
-  # Init 1: Wait for database to be ready
-  - name: wait-for-db
-    image: postgres:13
-    command: ['sh', '-c']
-    args:
-      - |
-        echo "⏳ Waiting for database to be ready..."
-        until pg_isready -h db-service -p 5432 -U user; do
-          echo "Database not ready, waiting..."
-          sleep 2
-        done
-        echo "✅ Database is ready!"
-    env:
-    - name: PGPASSWORD
-      value: "pass"
-      
-  # Init 2: Run database migrations
-  - name: db-migration
-    image: postgres:13
-    command: ['sh', '-c']
-    args:
-      - |
-        echo "🗄️ Running database migrations..."
-        psql -h db-service -U user -d myapp -f /migrations/migrate.sql
-        echo "✅ Migrations completed!"
-    env:
-    - name: PGPASSWORD
-      value: "pass"
-    volumeMounts:
-    - name: migration-scripts
-      mountPath: /migrations
-      
-  # Init 3: Download configuration
-  - name: config-setup
-    image: busybox
-    command: ['/setup/download-config.sh']
-    volumeMounts:
-    - name: setup-scripts
-      mountPath: /setup
-    - name: app-config
-      mountPath: /app/config
-    - name: setup-status
-      mountPath: /app/setup
-      
-  # Main application container (starts AFTER all init containers complete)
-  containers:
-  - name: app
-    image: python:3.9-slim
-    command: ['sh', '-c']
-    args:
-      - |
-        pip install flask psycopg2-binary
-        python /app/app.py
-    ports:
-    - containerPort: 5000
-    env:
-    - name: DB_HOST
-      value: "db-service"
-    - name: DB_NAME
-      value: "myapp"
-    - name: DB_USER
-      value: "user"
-    - name: DB_PASSWORD
-      value: "pass"
-    volumeMounts:
-    - name: app-code
-      mountPath: /app
-    - name: app-config
-      mountPath: /app/config
-    - name: setup-status
-      mountPath: /app/setup
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "200m"
-      limits:
-        memory: "512Mi"
-        cpu: "500m"
-        
-  volumes:
-  - name: app-code
-    configMap:
-      name: app-code
-  - name: migration-scripts
-    configMap:
-      name: migration-scripts
-  - name: setup-scripts
-    configMap:
-      name: setup-scripts
-      defaultMode: 0755
-  - name: app-config
-    emptyDir: {}
-  - name: setup-status
-    emptyDir: {}
-EOF
+cat init-pod.yaml
 ```
 
-**✅ Ventajas de Init Containers**:
-- **Secuencia automática**: wait-for-db → migrations → config
-- **Retry automático**: Si falla, Kubernetes reintenta
+**Ventajas de Init Containers**:
+- **Secuencia automatica**: wait-for-db -> migrations -> config
+- **Retry automatico**: Si falla, Kubernetes reintenta
 - **Declarativo**: Un solo YAML describe todo el setup
 
-### Paso 7: Desplegar Aplicación
+### Paso 7: Desplegar Aplicacion
 
 ```bash
 kubectl apply -f init-pod.yaml
 ```
 
-### Paso 8: Observar Secuencia de Inicialización
+### Paso 8: Observar Secuencia de Inicializacion
 
 ```bash
 echo ""
@@ -383,12 +168,12 @@ sleep 20
 kill $WATCH_PID 2>/dev/null
 ```
 
-**🔍 Estados que verás**:
+**Estados que veras**:
 1. `Init:0/3` - Esperando primer init container
 2. `Init:1/3` - wait-for-db completado
 3. `Init:2/3` - db-migration completado
 4. `Init:3/3` - config-setup completado
-5. `Running` - Aplicación principal ejecutándose
+5. `Running` - Aplicacion principal ejecutandose
 
 ### Paso 9: Verificar Logs de Init Containers
 
@@ -408,7 +193,7 @@ echo "--- Config Setup ---"
 kubectl logs app-with-init -c config-setup
 ```
 
-### Paso 10: Verificar Aplicación Principal
+### Paso 10: Verificar Aplicacion Principal
 
 ```bash
 echo ""
@@ -416,7 +201,7 @@ echo "--- Main Application ---"
 kubectl logs app-with-init -c app
 ```
 
-### Paso 11: Probar la Aplicación
+### Paso 11: Probar la Aplicacion
 
 ```bash
 kubectl wait --for=condition=Ready pod/app-with-init --timeout=120s
@@ -432,27 +217,27 @@ curl -s http://localhost:8080/config | jq
 kill %1 2>/dev/null
 ```
 
-**✅ Respuestas esperadas**:
+**Respuestas esperadas**:
 - `/`: `{"message": "🚀 App with Init Containers", "setup_complete": true}`
 - `/data`: Lista de usuarios de la BD
-- `/config`: Configuración descargada por init container
+- `/config`: Configuracion descargada por init container
 
-## 📊 Comparación Docker vs Init Containers
+## Comparacion Docker vs Init Containers
 
 ```
 ┌──────────────────────┬────────────────────┬──────────────────────┐
-│     Característica   │  Docker Setup      │  Init Containers     │
+│     Caracteristica   │  Docker Setup      │  Init Containers     │
 ├──────────────────────┼────────────────────┼──────────────────────┤
-│  Orquestación        │  ❌ Manual         │  ✅ Automática       │
+│  Orquestacion        │  ❌ Manual         │  ✅ Automatica       │
 │  Dependencias        │  ❌ Scripts bash   │  ✅ Declarativas     │
-│  Retry en failure    │  ❌ Manual         │  ✅ Automático       │
+│  Retry en failure    │  ❌ Manual         │  ✅ Automatico       │
 │  Reproducibilidad    │  ❌ Baja           │  ✅ Alta             │
-│  Configuración       │  ❌ Multi-archivo  │  ✅ Single YAML      │
+│  Configuracion       │  ❌ Multi-archivo  │  ✅ Single YAML      │
 │  Error handling      │  ❌ Manual         │  ✅ Built-in         │
 └──────────────────────┴────────────────────┴──────────────────────┘
 ```
 
-## 📐 Diagrama de Secuencia
+## Diagrama de Secuencia
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -481,7 +266,7 @@ kill %1 2>/dev/null
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## ✅ Beneficios de Init Containers
+## Beneficios de Init Containers
 
 ```
 ✅ INIT CONTAINER BENEFITS:
@@ -490,7 +275,7 @@ kill %1 2>/dev/null
 │   • No race conditions
 │
 ├─ 🛠️ Setup separation from main app
-│   • App código no contiene lógica de setup
+│   • App codigo no contiene logica de setup
 │   • Clean separation of concerns
 │
 ├─ 🎯 Single Pod = atomic deployment
@@ -503,14 +288,23 @@ kill %1 2>/dev/null
 │
 ├─ 🔁 Automatic retry on failure
 │   • Kubernetes reintenta init containers
-│   • Sin intervención manual
+│   • Sin intervencion manual
 │
 └─ 🧹 Clean resource management
-    • Init containers se eliminan después
-    • No consumen recursos después de completar
+    • Init containers se eliminan despues
+    • No consumen recursos despues de completar
 ```
 
-## 🧹 Limpieza
+## Limpieza
+
+Ejecuta el script de limpieza del laboratorio:
+
+```bash
+chmod +x cleanup.sh
+./cleanup.sh
+```
+
+O manualmente:
 
 ```bash
 # Detener port-forward
@@ -526,15 +320,15 @@ cd ~
 rm -rf ~/labs/modulo-04/init-migration
 ```
 
-## 🎓 Conceptos Clave Aprendidos
+## Conceptos Clave Aprendidos
 
 1. **Init Containers** ejecutan secuencialmente ANTES de la app principal
-2. **Orquestación declarativa** vs scripts bash imperativos
-3. **Retry automático** de Kubernetes para init containers
-4. **Separación de responsabilidades**: setup vs runtime
-5. **Single Pod deployment** simplifica gestión
+2. **Orquestacion declarativa** vs scripts bash imperativos
+3. **Retry automatico** de Kubernetes para init containers
+4. **Separacion de responsabilidades**: setup vs runtime
+5. **Single Pod deployment** simplifica gestion
 
-## 🚀 Casos de Uso Adicionales
+## Casos de Uso Adicionales
 
 ### 1. Wait for Multiple Services
 
@@ -577,11 +371,11 @@ initContainers:
     mountPath: /data
 ```
 
-## 📚 Referencias
+## Referencias
 
 - [Init Containers - Kubernetes Docs](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 - [PostgreSQL in Kubernetes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-initialization/)
 
-## ⏭️ Siguiente Paso
+## Siguiente Paso
 
-Continúa con **[Lab 5: Migración de Docker Compose](./lab-05-compose-migration.md)** para migrar una aplicación completa de docker-compose.yml a Kubernetes.
+Continua con **[Lab 5: Migracion de Docker Compose](../lab-05-compose-migration/README.md)** para migrar una aplicacion completa de docker-compose.yml a Kubernetes.
