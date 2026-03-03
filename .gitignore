@@ -3,6 +3,9 @@ Presentaciones/*.pdf
 Presentaciones/*.md
 Presentaciones/*.py
 
+# Node modules
+node_modules/
+
 # Archivos de respaldo
 *.backup
 
