@@ -1,0 +1,449 @@
+# ============================================================
+# logging-lab.yaml
+# Ejercicio Resumen: Logging en Kubernetes - Fundamentos
+# Uso: kubectl apply -f logging-lab.yaml
+# Duracion: ~60 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# conceptos principales de logging en Kubernetes:
+#   - Namespace dedicado lab-logging
+#   - ConfigMap con configuracion de niveles de log
+#   - Deployment "webapp" que genera access logs (nginx)
+#   - Deployment "api" que genera logs estructurados (JSON)
+#   - Pod "log-generator" con niveles INFO, WARN, ERROR
+#   - DaemonSet "log-collector" que simula Fluentd/Fluent Bit
+#   - Pod test-tools para verificacion y consulta de logs
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-logging
+#    Namespace aislado para todos los recursos del lab.
+#    Permite limpiar con un solo 'kubectl delete namespace'.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-logging
+  labels:
+    lab: logging-resumen
+    area: observabilidad
+
+---
+# =============================================================
+# 2) CONFIGMAP: log-config
+#    Centraliza la configuracion de niveles de log.
+#    En produccion, este ConfigMap se monta como archivo
+#    de configuracion o se usa para inyectar variables de entorno.
+#
+#    Conceptos clave:
+#    - ConfigMap separa configuracion del codigo fuente
+#    - Permite cambiar nivel de log sin reconstruir la imagen
+#    - LOG_LEVEL controla que mensajes aparecen en stdout
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: log-config
+  namespace: lab-logging
+  labels:
+    app: logging-demo
+    component: config
+data:
+  # Nivel de log global: DEBUG < INFO < WARN < ERROR < FATAL
+  LOG_LEVEL: "INFO"
+  # Formato de salida: text (legible) o json (estructurado)
+  LOG_FORMAT: "json"
+  # Cuantos mensajes generar por ciclo
+  LOG_INTERVAL_SECONDS: "5"
+  # Configuracion simulada de Fluentd/Fluent Bit
+  fluentd.conf: |
+    <source>
+      @type tail
+      path /var/log/containers/*.log
+      tag kubernetes.*
+      <parse>
+        @type json
+      </parse>
+    </source>
+    <match kubernetes.**>
+      @type stdout
+    </match>
+
+---
+# =============================================================
+# 3) DEPLOYMENT: webapp
+#    Nginx que genera access logs reales a stdout.
+#    Nginx escribe en /var/log/nginx/access.log y error.log,
+#    pero en contenedores se redirecciona a stdout/stderr
+#    usando symlinks para que Kubernetes pueda capturarlos.
+#
+#    Este es el patron CORRECTO de logging en contenedores:
+#    stdout/stderr → capturado por container runtime →
+#    archivo JSON en /var/log/containers/ → DaemonSet lo recopila
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: lab-logging
+  labels:
+    app: webapp
+    tier: frontend
+    component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+        component: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        # Nginx ya redirige access.log y error.log a stdout/stderr
+        # via symlinks en la imagen oficial. Aqui solo ajustamos
+        # el formato del access log para hacerlo mas informativo.
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Configurar formato de log personalizado
+          cat > /etc/nginx/conf.d/default.conf << 'EOF'
+          log_format main '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          '"$http_referer" "$http_user_agent" '
+                          'rt=$request_time';
+          server {
+              listen 80;
+              access_log /dev/stdout main;
+              error_log /dev/stderr warn;
+              location / {
+                  root /usr/share/nginx/html;
+                  index index.html;
+              }
+              location /health {
+                  return 200 "OK\n";
+              }
+          }
+          EOF
+          # Generar pagina de prueba con info del Pod
+          cat > /usr/share/nginx/html/index.html << HTMLEOF
+          <html><body>
+          <h1>WebApp - Lab Logging</h1>
+          <p>Pod: $(hostname)</p>
+          <p>Cada request genera una linea en access.log (stdout)</p>
+          </body></html>
+          HTMLEOF
+          nginx -g 'daemon off;'
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+
+---
+# =============================================================
+# 4) SERVICE: webapp
+#    Expone el webapp internamente para generar trafico
+#    y observar como aparecen las requests en los logs.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp
+  namespace: lab-logging
+  labels:
+    app: webapp
+spec:
+  selector:
+    app: webapp
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+
+---
+# =============================================================
+# 5) DEPLOYMENT: api
+#    Genera logs estructurados en formato JSON a stdout.
+#    El logging estructurado (JSON) es la mejor practica en
+#    produccion porque permite filtrar y buscar por campos
+#    especificos en herramientas como Elasticsearch o Log Analytics.
+#
+#    Ejemplo de log estructurado:
+#    {"timestamp":"2024-01-15T10:30:01Z","level":"INFO",
+#     "service":"api","request_id":"abc123","message":"OK"}
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: lab-logging
+  labels:
+    app: api
+    tier: backend
+    component: rest-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        tier: backend
+        component: rest-api
+    spec:
+      containers:
+      - name: api
+        image: busybox:1.36
+        # Genera logs JSON estructurados a stdout cada 8 segundos
+        # con variacion de niveles y campos de contexto
+        command:
+        - /bin/sh
+        - -c
+        - |
+          REQUEST_ID=0
+          while true; do
+            REQUEST_ID=$((REQUEST_ID + 1))
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            POD_NAME=${POD_NAME:-api-pod}
+
+            # Simular mezcla realista de logs: 70% INFO, 20% WARN, 10% ERROR
+            RAND=$((RANDOM % 10))
+
+            if [ $RAND -lt 7 ]; then
+              LEVEL="INFO"
+              MSG="Request procesada correctamente"
+              STATUS=200
+            elif [ $RAND -lt 9 ]; then
+              LEVEL="WARN"
+              MSG="Tiempo de respuesta alto detectado"
+              STATUS=200
+            else
+              LEVEL="ERROR"
+              MSG="Fallo al conectar con base de datos"
+              STATUS=500
+            fi
+
+            # Emitir log JSON a stdout (formato estructurado)
+            printf '{"timestamp":"%s","level":"%s","service":"api","pod":"%s","request_id":%d,"message":"%s","http_status":%d}\n' \
+              "$TIMESTAMP" "$LEVEL" "$POD_NAME" "$REQUEST_ID" "$MSG" "$STATUS"
+
+            # Los errores tambien van a stderr para distinguir flujos
+            if [ "$LEVEL" = "ERROR" ]; then
+              printf '[ERROR] %s - request_id=%d status=%d\n' "$MSG" "$REQUEST_ID" "$STATUS" >&2
+            fi
+
+            sleep 8
+          done
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+
+---
+# =============================================================
+# 6) POD: log-generator
+#    Genera logs con diferentes niveles de severidad a intervalos
+#    regulares. Util para practicar filtrado por nivel.
+#
+#    Patron de niveles (del menos al mas severo):
+#    DEBUG → INFO → WARN/WARNING → ERROR → FATAL/CRITICAL
+#
+#    Solo INFO, WARN y ERROR van a stdout en este ejemplo.
+#    DEBUG se omite (nivel de produccion = INFO+).
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: log-generator
+  namespace: lab-logging
+  labels:
+    app: log-generator
+    component: tools
+spec:
+  containers:
+  - name: generator
+    image: busybox:1.36
+    command:
+    - /bin/sh
+    - -c
+    - |
+      COUNTER=0
+      while true; do
+        COUNTER=$((COUNTER + 1))
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        # === INFO: eventos normales del sistema ===
+        echo "[INFO]  $TIMESTAMP - Ciclo $COUNTER: Sistema funcionando correctamente"
+        echo "[INFO]  $TIMESTAMP - Ciclo $COUNTER: Conexion a servicio verificada"
+
+        # === WARN: situaciones inusuales pero no criticas ===
+        if [ $((COUNTER % 3)) -eq 0 ]; then
+          echo "[WARN]  $TIMESTAMP - Ciclo $COUNTER: Uso de memoria supera 70% del limite"
+          echo "[WARN]  $TIMESTAMP - Ciclo $COUNTER: Reintentando conexion (intento 2 de 3)"
+        fi
+
+        # === ERROR: fallos que requieren atencion ===
+        if [ $((COUNTER % 7)) -eq 0 ]; then
+          echo "[ERROR] $TIMESTAMP - Ciclo $COUNTER: No se pudo escribir en disco: Permission denied"
+          echo "[ERROR] $TIMESTAMP - Ciclo $COUNTER: Timeout esperando respuesta de la API externa"
+        fi
+
+        # Separador visual entre ciclos
+        echo "---"
+
+        sleep 5
+      done
+    resources:
+      requests:
+        cpu: "5m"
+        memory: "8Mi"
+      limits:
+        cpu: "50m"
+        memory: "32Mi"
+  restartPolicy: Always
+
+---
+# =============================================================
+# 7) DAEMONSET: log-collector
+#    Simula un agente de recoleccion de logs como Fluentd o
+#    Fluent Bit. En produccion, un DaemonSet garantiza que
+#    CADA nodo del cluster tiene exactamente UN Pod del agente.
+#
+#    El agente real:
+#    1. Lee archivos de /var/log/containers/ en el nodo host
+#    2. Enriquece los logs con metadatos de Kubernetes (Pod, namespace)
+#    3. Filtra, transforma y envia al destino (Elasticsearch, Log Analytics)
+#
+#    Este DaemonSet de simulacion imprime su actividad a stdout
+#    para demostrar el ciclo de vida sin necesitar acceso real a logs.
+# =============================================================
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: log-collector
+  namespace: lab-logging
+  labels:
+    app: log-collector
+    component: daemonset
+    role: collector
+spec:
+  selector:
+    matchLabels:
+      app: log-collector
+  template:
+    metadata:
+      labels:
+        app: log-collector
+        component: daemonset
+        role: collector
+    spec:
+      containers:
+      - name: collector
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          NODE_NAME=${NODE_NAME:-unknown-node}
+          echo "[log-collector] Iniciando en nodo: $NODE_NAME"
+          echo "[log-collector] Monitoreando /var/log/containers/ ..."
+          echo "[log-collector] Destino: Azure Log Analytics / Elasticsearch"
+          echo "---"
+
+          CYCLE=0
+          while true; do
+            CYCLE=$((CYCLE + 1))
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            echo "[log-collector] $TIMESTAMP - Ciclo $CYCLE: Recopilando logs del nodo $NODE_NAME"
+            echo "[log-collector] $TIMESTAMP - Ciclo $CYCLE: Procesados ~$(( RANDOM % 500 + 100 )) eventos"
+            echo "[log-collector] $TIMESTAMP - Ciclo $CYCLE: Enviados a almacen central. Cola: 0"
+            sleep 15
+          done
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+
+---
+# =============================================================
+# 8) POD: test-tools
+#    Pod auxiliar con herramientas para verificar y
+#    explorar el entorno del lab. Incluye curl para
+#    generar trafico HTTP hacia webapp y producir access logs.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tools
+  namespace: lab-logging
+  labels:
+    app: test-tools
+    role: test
+spec:
+  containers:
+  - name: tools
+    image: curlimages/curl:latest
+    # Genera trafico continuo hacia webapp para producir access logs
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "Test tools listo. Generando trafico hacia webapp..."
+      CYCLE=0
+      while true; do
+        CYCLE=$((CYCLE + 1))
+        # Peticion normal
+        curl -s http://webapp/health > /dev/null && \
+          echo "[test-tools] Ciclo $CYCLE: GET /health → 200 OK"
+        # Peticion a pagina principal
+        curl -s http://webapp/ > /dev/null && \
+          echo "[test-tools] Ciclo $CYCLE: GET / → 200 OK"
+        # Peticion que genera 404 (para ver errores en logs)
+        curl -s http://webapp/no-existe > /dev/null && \
+          echo "[test-tools] Ciclo $CYCLE: GET /no-existe → 404 (aparece en error.log)"
+        sleep 20
+      done
+    resources:
+      requests:
+        cpu: "5m"
+        memory: "8Mi"
+      limits:
+        cpu: "50m"
+        memory: "32Mi"
+  restartPolicy: Always

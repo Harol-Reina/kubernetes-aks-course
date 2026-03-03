@@ -1,0 +1,606 @@
+# ============================================================
+# key-vault-lab.yaml
+# Ejercicio Resumen: Kubernetes Secrets + comparativa con ConfigMap
+# Uso: kubectl apply -f key-vault-lab.yaml
+# Duracion: ~60 minutos
+#
+# Descripcion:
+#   Este archivo despliega TODO lo necesario para practicar la gestion
+#   de Secrets en Kubernetes y comprender su diferencia con ConfigMap.
+#   Cubre los tres tipos de Secret mas usados (Opaque, docker-registry,
+#   tls), dos formas de consumir Secrets (volumen y env vars), y un
+#   Pod de comparacion que muestra ConfigMap vs Secret lado a lado.
+#
+# Recursos desplegados:
+#   1. Namespace            lab-key-vault
+#   2. ServiceAccount       app-service-account  (acceso restringido a Secrets)
+#   3. Secret Opaque        db-credentials       (usuario + password base de datos)
+#   4. Secret Opaque        api-credentials      (API key + token de servicio)
+#   5. Secret docker-reg    registry-credentials (pull de imagenes privadas)
+#   6. Secret tls           app-tls-cert         (certificado TLS autofirmado simulado)
+#   7. ConfigMap            app-config           (configuracion NO sensible)
+#   8. Pod                  pod-secret-volume    (monta Secrets como archivos)
+#   9. Pod                  pod-secret-env       (expone Secrets como variables de entorno)
+#  10. Pod                  pod-configmap-compare (comparacion ConfigMap vs Secret)
+#
+# Conceptos clave:
+#   - base64 es codificacion, NO cifrado
+#   - Los Secrets se pasan a Pods de dos formas: volume o env vars
+#   - Los volumes son mas seguros (sin registro en logs de proceso)
+#   - ConfigMap para config no sensible, Secret para datos sensibles
+#   - Azure Key Vault es la solucion enterprise para Secrets en AKS
+#
+# Namespace: lab-key-vault
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE - Aislamiento del ejercicio
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-key-vault
+  labels:
+    lab: key-vault
+    area: operacion-seguridad
+
+---
+# =============================================================
+# 2) SERVICEACCOUNT - Identidad de la aplicacion
+#
+#    En produccion, cada aplicacion tiene su propio ServiceAccount.
+#    Esto permite politicas RBAC granulares: solo esta aplicacion
+#    puede leer sus Secrets, no otros Pods del mismo namespace.
+#
+#    Un ServiceAccount es como una tarjeta de identidad corporativa:
+#    el Pod la usa para autenticarse ante el API server y demostrar
+#    que tiene permiso de acceder a ciertos Secrets.
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-service-account
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    tier: application
+    lab: key-vault
+  annotations:
+    # En AKS con Workload Identity, aqui iria la anotacion de la
+    # Managed Identity de Azure. Ejemplo:
+    # azure.workload.identity/client-id: "<client-id-de-managed-identity>"
+    description: "ServiceAccount para la aplicacion demo del lab de Key Vault"
+
+---
+# =============================================================
+# 3) SECRET TIPO OPAQUE - Credenciales de base de datos
+#
+#    Tipo Opaque: el tipo generico de Secret. "Opaque" significa
+#    que Kubernetes no interpreta los datos — son bytes arbitrarios.
+#    Todos los valores deben estar codificados en base64.
+#
+#    ATENCION: base64 NO es cifrado. Cualquier persona con acceso
+#    al Secret puede decodificarlo con: echo "valor" | base64 -d
+#
+#    Los valores en este ejemplo son:
+#      db-username: "admin"         (echo -n "admin" | base64)
+#      db-password: "S3cur3P@ss!"   (echo -n "S3cur3P@ss!" | base64)
+#      db-host:     "postgres.lab-key-vault.svc.cluster.local"
+#      db-port:     "5432"
+#      db-name:     "appdb"
+# =============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    tier: database
+    secret-type: database
+    lab: key-vault
+  annotations:
+    description: "Credenciales de acceso a la base de datos PostgreSQL"
+    # En produccion, documentar quien es el propietario del secreto
+    owner: "equipo-backend"
+    rotation-policy: "cada-90-dias"
+type: Opaque
+data:
+  # Valores en base64 (NO encriptados, solo codificados)
+  # Para generar: echo -n "valor" | base64
+  db-username: YWRtaW4=                                                # admin
+  db-password: UzNjdXIzUEBzcyE=                                        # S3cur3P@ss!
+  db-host: cG9zdGdyZXMubGFiLWtleS12YXVsdC5zdmMuY2x1c3Rlci5sb2NhbA==  # postgres.lab-key-vault.svc.cluster.local
+  db-port: NTQzMg==                                                     # 5432
+  db-name: YXBwZGI=                                                     # appdb
+
+---
+# =============================================================
+# 4) SECRET TIPO OPAQUE - Credenciales de API externa
+#
+#    Segundo ejemplo de Secret Opaque para demostrar multiples
+#    Secrets con propositos distintos. Un Pod puede montar varios
+#    Secrets al mismo tiempo desde diferentes volumenes o como
+#    diferentes grupos de variables de entorno.
+#
+#    Los valores son:
+#      api-key:           "abcd1234-api-key-example"
+#      api-token:         "bearer-token-xyz-example"
+#      webhook-secret:    "webhook-secret-value"
+# =============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-credentials
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    tier: external-api
+    secret-type: api
+    lab: key-vault
+  annotations:
+    description: "API key y token para servicio externo de pagos"
+    owner: "equipo-integraciones"
+    rotation-policy: "cada-30-dias"
+type: Opaque
+data:
+  # echo -n "abcd1234-api-key-example" | base64
+  api-key: YWJjZDEyMzQtYXBpLWtleS1leGFtcGxl
+  # echo -n "bearer-token-xyz-example" | base64
+  api-token: YmVhcmVyLXRva2VuLXh5ei1leGFtcGxl
+  # echo -n "webhook-secret-value" | base64
+  webhook-secret: d2ViaG9vay1zZWNyZXQtdmFsdWU=
+
+---
+# =============================================================
+# 5) SECRET TIPO DOCKER-REGISTRY - Credenciales para registro privado
+#
+#    Este tipo de Secret es especifico para autenticar kubectl
+#    (y kubelet) contra un registro de imagenes privado.
+#    Kubernetes lo entiende y puede usarlo en imagePullSecrets.
+#
+#    En AKS, si usas Azure Container Registry (ACR) con
+#    --attach-acr, Kubernetes maneja esto automaticamente
+#    mediante Managed Identity. No necesitas este Secret.
+#
+#    Para registros privados genericos (Harbor, Nexus, etc.),
+#    este Secret es necesario.
+#
+#    El valor .dockerconfigjson es el JSON de configuracion de
+#    Docker codificado en base64. Aqui usamos un valor de ejemplo.
+# =============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: registry-credentials
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    secret-type: registry
+    lab: key-vault
+  annotations:
+    description: "Credenciales para pull de imagenes desde registro privado"
+    registry: "registry.example.com"
+    # En produccion, crear con:
+    # kubectl create secret docker-registry registry-credentials \
+    #   --docker-server=registry.example.com \
+    #   --docker-username=usuario \
+    #   --docker-password=password \
+    #   --docker-email=email@company.com \
+    #   -n lab-key-vault
+type: kubernetes.io/dockerconfigjson
+data:
+  # Este valor es un .dockerconfigjson de ejemplo (base64 de JSON valido)
+  # En produccion, generado automaticamente por kubectl create secret docker-registry
+  # Decodificado equivale a:
+  # {"auths":{"registry.example.com":{"username":"usuario","password":"password","auth":"dXN1YXJpbzpwYXNzd29yZA=="}}}
+  .dockerconfigjson: eyJhdXRocyI6eyJyZWdpc3RyeS5leGFtcGxlLmNvbSI6eyJ1c2VybmFtZSI6InVzdWFyaW8iLCJwYXNzd29yZCI6InBhc3N3b3JkIiwiYXV0aCI6ImRYTjFZWEpwYnpwd1lYTnpkMjl5WkE9PSJ9fX0=
+
+---
+# =============================================================
+# 6) SECRET TIPO TLS - Certificado TLS autofirmado (simulado)
+#
+#    Este tipo almacena un certificado TLS + clave privada.
+#    Es el formato que usan Ingress controllers para HTTPS.
+#    Kubernetes valida que los campos tls.crt y tls.key existan.
+#
+#    En produccion, se crea con:
+#      kubectl create secret tls app-tls-cert \
+#        --cert=path/to/cert.crt \
+#        --key=path/to/cert.key
+#    O automaticamente con cert-manager (Let's Encrypt).
+#
+#    Los valores aqui son certificados de ejemplo (no funcionales).
+#    En un lab real, se generarian con:
+#      openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+#        -keyout tls.key -out tls.crt \
+#        -subj "/CN=app.example.com/O=Lab"
+# =============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-tls-cert
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    secret-type: tls
+    lab: key-vault
+  annotations:
+    description: "Certificado TLS para el Ingress de la aplicacion"
+    # En produccion con cert-manager, estas anotaciones son automaticas:
+    # cert-manager.io/issuer: "letsencrypt-prod"
+    # cert-manager.io/common-name: "app.example.com"
+    expires: "2027-03-01"
+    issuer: "self-signed-example"
+type: kubernetes.io/tls
+data:
+  # Certificado TLS de ejemplo (autofirmado, solo para el lab)
+  # En produccion: generado por cert-manager o Let's Encrypt
+  # Valor actual: certificado minimo valido en base64 (estructura real pero no funcional para HTTPS real)
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJrekNDQVRDZ0F3SUJBZ0lVZkdSNEp6QWdJbHFBbkFQUFQ3RVhBMkFSb1lnd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0RURUxNQWtHQTFVRUF3d0NZV0l3SGhjTk1qWXdNekF4TURBMU1EUXdXaGNOTWpjd016QXhNREExTURRd1dqQU5NUXd3Q2dZRFZRUUREQU5oWW1Jd1hEQU5CZ2txaGtpRzl3MEJBUVVGQUFPQ0FRY0FNSUlCQ2dLQ0FRRUEwMlhrMW5IcWd1SWxUNWcwRUxROVFSU0J2Sng1bGlhQW5JcUFWaWJrMTFUNlJ1eGdVMDhRWHZzVkJqdGhzCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0=
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRRFRaZVRXY2VxQzRpVlAKbURRUXREMUJGSUc4bkhtV0pvQ2Nob0JXSnVUWFZQcEc3R0JUVHhCZSt4VUdPMkd3PT0KLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLQ==
+
+---
+# =============================================================
+# 7) CONFIGMAP - Configuracion NO sensible de la aplicacion
+#
+#    ConfigMap almacena datos de configuracion en texto plano.
+#    NO es adecuado para datos sensibles (contrasenas, tokens, etc.)
+#    porque cualquiera con kubectl describe o kubectl get -o yaml
+#    puede ver los valores inmediatamente, sin decodificacion.
+#
+#    Usar ConfigMap para:
+#      - URLs de servicios (no credenciales)
+#      - Parametros de configuracion de la app
+#      - Variables de entorno no sensibles
+#      - Archivos de configuracion (nginx.conf, app.properties)
+#
+#    Usar Secret para:
+#      - Contrasenas y claves de API
+#      - Tokens de autenticacion
+#      - Certificados TLS
+#      - Cualquier dato que no deba ser visible en texto plano
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    tier: config
+    lab: key-vault
+data:
+  # Variables de entorno no sensibles
+  APP_ENV: "development"
+  LOG_LEVEL: "info"
+  MAX_CONNECTIONS: "100"
+  CACHE_TTL: "300"
+  FEATURE_FLAG_NEW_UI: "false"
+
+  # Archivo de configuracion completo (multilinea)
+  app.properties: |
+    # Configuracion de la aplicacion demo
+    # Estos valores NO son sensibles — estan en texto plano a proposito
+    app.name=demo-app
+    app.version=1.0.0
+    app.environment=development
+    server.port=8080
+    server.host=0.0.0.0
+
+    # URL del backend (no incluye credenciales)
+    database.url=jdbc:postgresql://postgres.lab-key-vault.svc.cluster.local:5432/appdb
+    # NOTA: Las credenciales (usuario/password) vienen de Secrets, no de aqui
+
+    # Parametros de rendimiento
+    cache.max-size=1000
+    cache.ttl-seconds=300
+
+    # Configuracion de logs
+    logging.level=INFO
+    logging.format=json
+
+---
+# =============================================================
+# 8) POD - Secrets montados como VOLUMENES (metodo recomendado)
+#
+#    Ventajas de montar como volumen vs variables de entorno:
+#      - Los archivos se pueden rotar sin reiniciar el Pod
+#        (Kubernetes actualiza los archivos automaticamente)
+#      - Los valores NO aparecen en la descripcion del proceso
+#        (ps aux, /proc/PID/environ) ni en logs del contenedor
+#      - Cada clave del Secret se convierte en un archivo separado
+#
+#    Estructura del volumen montado en /etc/secrets/db/:
+#      /etc/secrets/db/db-username  <- contiene "admin"
+#      /etc/secrets/db/db-password  <- contiene "S3cur3P@ss!"
+#      /etc/secrets/db/db-host      <- contiene "postgres.lab-key-vault..."
+#      /etc/secrets/db/db-port      <- contiene "5432"
+#      /etc/secrets/db/db-name      <- contiene "appdb"
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-secret-volume
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    demo: secret-volume
+    lab: key-vault
+spec:
+  serviceAccountName: app-service-account
+
+  containers:
+  - name: app
+    image: busybox:1.36
+    # El comando lee los archivos del Secret y los muestra en logs
+    # para demostrar que los valores son accesibles como archivos normales
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "=== Pod montando Secrets como volumen ==="
+      echo ""
+      echo "Archivos en /etc/secrets/db/:"
+      ls -la /etc/secrets/db/
+      echo ""
+      echo "Contenido de db-username:"
+      cat /etc/secrets/db/db-username
+      echo ""
+      echo "Contenido de db-host:"
+      cat /etc/secrets/db/db-host
+      echo ""
+      echo "NOTA: Los valores NO estan en base64 aqui."
+      echo "Kubernetes los decodifico automaticamente al montar el volumen."
+      echo ""
+      echo "Archivos en /etc/secrets/api/:"
+      ls -la /etc/secrets/api/
+      echo ""
+      echo "El Pod sigue ejecutandose para permitir kubectl exec..."
+      sleep 3600
+
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+
+    # Los Secrets se montan como directorios de solo lectura
+    # defaultMode: 0400 = solo lectura para el propietario (mas seguro que 0644)
+    volumeMounts:
+    - name: db-secret-volume
+      mountPath: /etc/secrets/db
+      readOnly: true                # Siempre readOnly para Secrets
+    - name: api-secret-volume
+      mountPath: /etc/secrets/api
+      readOnly: true
+    - name: tls-secret-volume
+      mountPath: /etc/secrets/tls
+      readOnly: true
+
+  volumes:
+  # Cada volumen apunta a un Secret distinto
+  - name: db-secret-volume
+    secret:
+      secretName: db-credentials
+      defaultMode: 0400     # Permisos del archivo: solo lectura para el propietario
+
+  - name: api-secret-volume
+    secret:
+      secretName: api-credentials
+      defaultMode: 0400
+      # Opcional: montar solo algunas claves del Secret
+      # items:
+      # - key: api-key
+      #   path: api-key   # nombre del archivo en el volumen
+
+  - name: tls-secret-volume
+    secret:
+      secretName: app-tls-cert
+      defaultMode: 0400
+
+  restartPolicy: Never
+
+---
+# =============================================================
+# 9) POD - Secrets expuestos como VARIABLES DE ENTORNO
+#
+#    Alternativa: inyectar Secrets como variables de entorno.
+#    Mas sencillo para aplicaciones que esperan configuracion
+#    a traves de env vars (12-factor app).
+#
+#    Desventajas respecto a volumenes:
+#      - Los valores NO se actualizan si el Secret cambia
+#        (el Pod debe reiniciarse para ver el nuevo valor)
+#      - Los valores pueden aparecer en /proc/PID/environ
+#        (visible con: cat /proc/1/environ | tr '\0' '\n')
+#      - Algunos frameworks de logging pueden loguear env vars
+#        accidentalmente
+#
+#    Metodos disponibles:
+#      1. valueFrom.secretKeyRef: una variable = una clave del Secret
+#      2. envFrom.secretRef: todas las claves del Secret como variables
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-secret-env
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    demo: secret-env
+    lab: key-vault
+spec:
+  serviceAccountName: app-service-account
+
+  containers:
+  - name: app
+    image: busybox:1.36
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "=== Pod usando Secrets como variables de entorno ==="
+      echo ""
+      echo "Variables inyectadas individualmente (valueFrom.secretKeyRef):"
+      echo "  DB_USERNAME = $DB_USERNAME"
+      echo "  DB_HOST     = $DB_HOST"
+      echo "  DB_PORT     = $DB_PORT"
+      echo "  DB_NAME     = $DB_NAME"
+      echo "  DB_PASSWORD = [OMITIDO EN LOG - nunca loguear passwords]"
+      echo ""
+      echo "Variables del grupo API (envFrom.secretRef):"
+      echo "  api-key     = $api-key"
+      echo "  api-token   = [OMITIDO EN LOG]"
+      echo ""
+      echo "NOTA: A diferencia de volumenes, si el Secret cambia,"
+      echo "este Pod debe reiniciarse para ver el nuevo valor."
+      echo ""
+      echo "El Pod sigue ejecutandose para permitir kubectl exec..."
+      sleep 3600
+
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+
+    env:
+    # Metodo 1: valueFrom.secretKeyRef
+    # Inyecta UNA clave especifica del Secret como variable de entorno
+    # El nombre de la variable puede ser distinto a la clave del Secret
+    - name: DB_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials    # Nombre del Secret
+          key: db-username        # Clave dentro del Secret
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: db-password
+    - name: DB_HOST
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: db-host
+    - name: DB_PORT
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: db-port
+    - name: DB_NAME
+      valueFrom:
+        secretKeyRef:
+          name: db-credentials
+          key: db-name
+
+    envFrom:
+    # Metodo 2: envFrom.secretRef
+    # Inyecta TODAS las claves del Secret como variables de entorno
+    # Cada clave se convierte en una variable con el mismo nombre
+    - secretRef:
+        name: api-credentials
+      # Opcional: agregar un prefijo a todas las variables
+      # prefix: "API_"    # resultaria en API_api-key, API_api-token, etc.
+
+  restartPolicy: Never
+
+---
+# =============================================================
+# 10) POD - Comparacion ConfigMap vs Secret
+#
+#     Este Pod monta tanto un ConfigMap como un Secret para
+#     demostrar visualmente la diferencia:
+#
+#     ConfigMap: visible en texto plano con kubectl describe
+#     Secret: visible en base64 con kubectl get -o yaml
+#             pero decodificado automaticamente en el volumen
+#
+#     Conclusion: ambos llegan al Pod de la misma forma, pero
+#     el control de acceso y la visibilidad son distintos.
+#     Un ConfigMap lo puede ver cualquiera que acceda al namespace.
+#     Un Secret requiere permiso especifico "get secrets" en RBAC.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-compare
+  namespace: lab-key-vault
+  labels:
+    app: demo-app
+    demo: configmap-vs-secret
+    lab: key-vault
+spec:
+  serviceAccountName: app-service-account
+
+  containers:
+  - name: app
+    image: busybox:1.36
+    command:
+    - /bin/sh
+    - -c
+    - |
+      echo "=== Comparacion: ConfigMap vs Secret ==="
+      echo ""
+      echo "--- CONFIGMAP (datos NO sensibles, texto plano) ---"
+      echo "Directorio /etc/config/:"
+      ls -la /etc/config/
+      echo ""
+      echo "Contenido de app.properties:"
+      cat /etc/config/app.properties
+      echo ""
+      echo "Variable de entorno APP_ENV (del ConfigMap): $APP_ENV"
+      echo "Variable de entorno LOG_LEVEL (del ConfigMap): $LOG_LEVEL"
+      echo ""
+      echo "--- SECRET (datos sensibles, base64 decodificado en el volumen) ---"
+      echo "Directorio /etc/secrets/:"
+      ls -la /etc/secrets/
+      echo ""
+      echo "Contenido de db-username (ya decodificado de base64):"
+      cat /etc/secrets/db-username
+      echo ""
+      echo "DIFERENCIA CLAVE:"
+      echo "  - ConfigMap: kubectl describe configmap app-config -> muestra valores en plano"
+      echo "  - Secret:    kubectl describe secret db-credentials -> NO muestra valores"
+      echo "  - Secret:    kubectl get secret db-credentials -o yaml -> muestra base64"
+      echo "  - Pero en el Pod: ambos llegan como archivos de texto normal"
+      echo ""
+      sleep 3600
+
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+
+    # Montar el ConfigMap como volumen
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+    - name: secret-volume
+      mountPath: /etc/secrets
+      readOnly: true
+
+    # Tambien inyectar como variables de entorno para comparar
+    envFrom:
+    - configMapRef:
+        name: app-config    # Todas las claves del ConfigMap como variables
+
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-config      # ConfigMap: texto plano visible para todos
+  - name: secret-volume
+    secret:
+      secretName: db-credentials   # Secret: requiere permiso RBAC especifico
+      defaultMode: 0400
+
+  restartPolicy: Never

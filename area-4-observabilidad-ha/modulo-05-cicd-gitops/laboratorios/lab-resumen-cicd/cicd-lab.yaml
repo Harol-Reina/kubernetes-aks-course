@@ -1,0 +1,386 @@
+# ============================================================
+# cicd-lab.yaml
+# Ejercicio Resumen: CI/CD y GitOps - Estrategias de Despliegue
+# Uso: kubectl apply -f cicd-lab.yaml
+# Duracion: ~60 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# conceptos principales de CI/CD y GitOps en Kubernetes:
+#   - Namespace dedicado lab-cicd
+#   - Deployment app-v1 (version anterior, imagen nginx:1.24)
+#   - Deployment app-v2 (version nueva, 0 replicas iniciales)
+#   - Service apuntando a app-v1 (blue-green switch)
+#   - ConfigMap con configuracion de pipeline simulada
+#   - Deployment app-canary (1 replica, canary deployment)
+#   - Pod blue-green-switch para practicar corte de trafico
+#   - ServiceAccount con Role limitado para CI/CD
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-cicd
+#    Namespace aislado para todos los recursos del lab resumen.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-cicd
+  labels:
+    lab: cicd-resumen
+    area: gitops
+
+---
+# =============================================================
+# 2) CONFIGMAP: pipeline-config
+#    Simula la configuracion de un pipeline CI/CD.
+#    En un entorno real estos valores vendrían del sistema de CI
+#    (GitHub Actions, Azure DevOps) como variables de entorno.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipeline-config
+  namespace: lab-cicd
+  labels:
+    app: pipeline-config
+    tier: config
+data:
+  # Configuracion del pipeline simulado
+  REGISTRY: "myregistry.azurecr.io"
+  APP_NAME: "webapp"
+  ENVIRONMENT: "staging"
+  ROLLOUT_STRATEGY: "blue-green"
+  CANARY_WEIGHT: "20"
+  # Politica de rollback
+  ROLLBACK_ENABLED: "true"
+  MAX_SURGE: "1"
+  MAX_UNAVAILABLE: "0"
+  # GitOps: repositorio fuente de verdad
+  GIT_REPO: "https://github.com/empresa/k8s-manifests"
+  GIT_BRANCH: "main"
+  SYNC_POLICY: "automated"
+
+---
+# =============================================================
+# 3) SERVICEACCOUNT: cicd-bot
+#    ServiceAccount dedicado para el pipeline de CI/CD.
+#    Un pipeline nunca debe usar credenciales de admin;
+#    debe tener permisos minimos (principio de minimo privilegio).
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cicd-bot
+  namespace: lab-cicd
+  labels:
+    app: cicd-bot
+    tier: iam
+  annotations:
+    # En AKS: enlazar con Azure Managed Identity para autenticacion sin secretos
+    description: "ServiceAccount para pipeline CI/CD - permisos minimos"
+
+---
+# =============================================================
+# 4) ROLE: cicd-deployer
+#    Permisos minimos para que el pipeline despliegue aplicaciones.
+#    Solo puede actualizar Deployments y leer Pods/Services.
+#    NO puede crear namespaces, secrets de cluster, etc.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cicd-deployer
+  namespace: lab-cicd
+  labels:
+    app: cicd-bot
+    tier: iam
+rules:
+  # Leer y actualizar Deployments (necesario para kubectl set image)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  # Leer Pods para verificar estado del rollout
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Leer y actualizar Services (para blue-green switch)
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  # Leer ConfigMaps (para configuracion del pipeline)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Ver historial de rollouts
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+
+---
+# =============================================================
+# 5) ROLEBINDING: enlaza cicd-bot con cicd-deployer
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cicd-bot-binding
+  namespace: lab-cicd
+  labels:
+    app: cicd-bot
+    tier: iam
+subjects:
+  - kind: ServiceAccount
+    name: cicd-bot
+    namespace: lab-cicd
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: cicd-deployer
+
+---
+# =============================================================
+# 6) DEPLOYMENT: app-v1 (version azul / version anterior)
+#    Representa la version estable actualmente en produccion.
+#    Imagen nginx:1.24 (version anterior) con 3 replicas.
+#    El Service apunta a esta version inicialmente.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-v1
+  namespace: lab-cicd
+  labels:
+    app: webapp
+    version: v1
+    slot: blue
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    description: "Version estable en produccion (slot azul)"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: v1
+        slot: blue
+    spec:
+      serviceAccountName: cicd-bot
+      containers:
+        - name: webapp
+          image: nginx:1.24
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: APP_VERSION
+              value: "v1"
+            - name: SLOT
+              value: "blue"
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: ENVIRONMENT
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+---
+# =============================================================
+# 7) DEPLOYMENT: app-v2 (version verde / version nueva)
+#    Representa la nueva version lista para despliegue.
+#    Imagen nginx:1.25 con 0 replicas iniciales.
+#    Se escala a 3 replicas durante el blue-green switch.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-v2
+  namespace: lab-cicd
+  labels:
+    app: webapp
+    version: v2
+    slot: green
+  annotations:
+    description: "Version nueva preparada (slot verde) - 0 replicas hasta el switch"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: webapp
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: v2
+        slot: green
+    spec:
+      serviceAccountName: cicd-bot
+      containers:
+        - name: webapp
+          image: nginx:1.25
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: APP_VERSION
+              value: "v2"
+            - name: SLOT
+              value: "green"
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-config
+                  key: ENVIRONMENT
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+---
+# =============================================================
+# 8) SERVICE: webapp-service
+#    Expone la aplicacion. El selector apunta a version: v1
+#    (slot azul). En el blue-green switch, se cambia el selector
+#    a version: v2 para redirigir todo el trafico al slot verde.
+#    Este es el mecanismo central del blue-green deployment.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  namespace: lab-cicd
+  labels:
+    app: webapp
+  annotations:
+    description: "Service principal - selector apunta a v1 inicialmente"
+spec:
+  selector:
+    app: webapp
+    version: v1        # <- CAMBIAR A v2 para el blue-green switch
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  type: ClusterIP
+
+---
+# =============================================================
+# 9) DEPLOYMENT: app-canary
+#    Canary deployment: 1 replica de la nueva version (v2)
+#    corriendo junto a 3 replicas de v1.
+#    Representa ~25% del trafico si el Service usa solo app: webapp
+#    sin el filtro de version (ver Paso 5 del lab).
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-canary
+  namespace: lab-cicd
+  labels:
+    app: webapp
+    version: canary
+    strategy: canary
+  annotations:
+    description: "Canary deployment: 1 replica recibe trafico real para validar v2"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
+      version: canary
+  template:
+    metadata:
+      labels:
+        app: webapp
+        version: canary
+        strategy: canary
+    spec:
+      containers:
+        - name: webapp
+          image: nginx:1.25
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: APP_VERSION
+              value: "canary"
+            - name: STRATEGY
+              value: "canary"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# =============================================================
+# 10) POD: blue-green-switch-demo
+#     Pod de herramientas para verificar el estado del
+#     blue-green deployment y hacer pruebas de conectividad
+#     al Service antes y despues del switch.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: blue-green-switch-demo
+  namespace: lab-cicd
+  labels:
+    app: test-tools
+    tier: verification
+spec:
+  containers:
+    - name: tools
+      image: busybox:1.36
+      command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "32Mi"
+        limits:
+          cpu: "100m"
+          memory: "64Mi"

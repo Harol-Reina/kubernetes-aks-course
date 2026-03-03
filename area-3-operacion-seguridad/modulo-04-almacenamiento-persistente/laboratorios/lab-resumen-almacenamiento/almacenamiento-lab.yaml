@@ -1,0 +1,505 @@
+# ============================================================
+# almacenamiento-lab.yaml
+# Ejercicio Resumen: PV + PVC + StorageClass + StatefulSet + Pods de prueba
+# Uso: kubectl apply -f almacenamiento-lab.yaml
+# Duracion: ~20 minutos de preparacion
+#
+# Este archivo despliega TODO lo necesario para practicar almacenamiento
+# persistente en Minikube: un PersistentVolume hostPath, un PVC que lo
+# solicita, un Pod escritor, un StatefulSet con volumeClaimTemplate, una
+# StorageClass local, un Pod verificador que lee los datos persistidos,
+# y un ConfigMap con informacion del entorno de storage.
+#
+# Requisitos:
+#   - Minikube en ejecucion (minikube start)
+#   - kubectl configurado apuntando a Minikube
+#
+# Importante: Los directorios hostPath deben existir en el nodo Minikube.
+# El Paso 0 del README.md crea esos directorios con minikube ssh.
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE - Aislamiento del ejercicio
+#    Todos los recursos del lab viven aqui. Al eliminar este
+#    namespace se eliminan tambien PVCs, Pods y StatefulSets.
+#    Nota: Los PersistentVolumes son recursos del cluster (no
+#    del namespace) y se eliminan por separado con cleanup.sh.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    modulo: "04-almacenamiento-persistente"
+
+---
+# =============================================================
+# 2) CONFIGMAP - Informacion del entorno de storage
+#    Contiene metadatos descriptivos del laboratorio y
+#    demuestra el uso de ConfigMap para parametrizar recursos.
+#    Se monta como archivo de texto en el Pod verificador.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storage-info
+  namespace: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    tipo: configuracion
+data:
+  # Informacion del entorno de storage usada por el Pod verificador
+  entorno.txt: |
+    LABORATORIO: Almacenamiento Persistente - Modulo 04
+    FECHA: 2026-03-03
+    NIVEL: Principiante
+    OBJETIVO: Demostrar la diferencia entre almacenamiento efimero y persistente
+
+    RECURSOS DESPLEGADOS:
+    - PersistentVolume: pv-datos (hostPath, 1Gi, RWO)
+    - PersistentVolumeClaim: pvc-datos (solicita pv-datos)
+    - Pod escritor: pod-escritor (monta pvc-datos, escribe archivos)
+    - StorageClass: storage-local (provisioner manual, Retain)
+    - StatefulSet: statefulset-db (2 replicas con volumeClaimTemplate)
+    - Pod verificador: pod-verificador (lee datos escritos por pod-escritor)
+
+    CONCEPTOS CLAVE:
+    - Un PV es el disco real (lo crea el admin del cluster)
+    - Un PVC es la solicitud de ese disco (lo crea el desarrollador)
+    - Cuando el estado es "Bound", el PVC esta enlazado al PV
+    - Los datos en el PV sobreviven a la eliminacion del Pod
+
+  storage-classes.txt: |
+    STORAGE CLASSES EN KUBERNETES:
+
+    standard (Minikube default)
+    - Provisioner: k8s.io/minikube-hostpath
+    - ReclaimPolicy: Delete
+    - VolumeBindingMode: Immediate
+
+    storage-local (este lab)
+    - Provisioner: kubernetes.io/no-provisioner
+    - ReclaimPolicy: Retain
+    - VolumeBindingMode: WaitForFirstConsumer
+
+    MODOS DE ACCESO:
+    - ReadWriteOnce (RWO): 1 nodo puede montar en lectura-escritura
+    - ReadOnlyMany  (ROX): N nodos pueden montar en solo lectura
+    - ReadWriteMany (RWX): N nodos pueden montar en lectura-escritura
+
+---
+# =============================================================
+# 3) STORAGECLASS - StorageClass con provisioner manual
+#
+#    Una StorageClass define el "tipo" de almacenamiento: el
+#    provisioner responsable de crear el volumen, la politica
+#    de reciclado (Retain = conservar datos) y el modo de
+#    enlace (WaitForFirstConsumer = esperar hasta que un Pod
+#    la solicite para decidir en que nodo crear el volumen).
+#
+#    "kubernetes.io/no-provisioner" significa que el admin
+#    debe crear los PersistentVolumes manualmente — no hay
+#    aprovisionamiento automatico. Esto es caracteristico de
+#    entornos on-premises o laboratorios con Minikube.
+# =============================================================
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storage-local
+  labels:
+    app: lab-almacenamiento
+    tipo: storage-class
+# Provisioner manual: el admin crea los PVs, no se crean solos
+provisioner: kubernetes.io/no-provisioner
+# Retain: al eliminar el PVC, el PV y sus datos NO se borran
+reclaimPolicy: Retain
+# WaitForFirstConsumer: no enlaza el PV hasta que un Pod lo solicite.
+# Esto permite que Kubernetes elija el nodo correcto donde el PV existe.
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# =============================================================
+# 4) PERSISTENTVOLUME - El "disco" real del cluster
+#
+#    Un PersistentVolume (PV) representa una pieza de
+#    almacenamiento fisico o de red que el administrador
+#    aprovisiona en el cluster. En produccion seria un
+#    Azure Disk, AWS EBS, NFS, etc. En Minikube usamos
+#    hostPath que apunta a un directorio del nodo.
+#
+#    El PV existe independientemente de los Pods y los PVCs.
+#    Es un recurso del cluster (no de un namespace).
+#
+#    Campo importante - accessModes:
+#    ReadWriteOnce = solo 1 nodo puede montar este volumen
+#    en modo lectura-escritura a la vez.
+# =============================================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-datos
+  labels:
+    app: lab-almacenamiento
+    tipo: persistent-volume
+    # La label "tipo-storage" es util para que los PVCs
+    # usen nodeAffinity o selector para elegir este PV
+    tipo-storage: local
+spec:
+  # Capacidad total del volumen: 1 gigabyte
+  capacity:
+    storage: 1Gi
+
+  # Modos de acceso que soporta este PV.
+  # ReadWriteOnce: solo 1 nodo puede montar en R/W a la vez.
+  # Equivale a un disco duro conectado por USB: solo puede
+  # estar en una computadora a la vez.
+  accessModes:
+    - ReadWriteOnce
+
+  # Politica de reciclado: que pasa con el PV cuando el PVC se elimina
+  # Retain:  el PV queda en estado "Released", los datos se conservan.
+  #          El admin debe limpiarlo manualmente antes de reutilizarlo.
+  # Delete:  el PV y su almacenamiento subyacente se eliminan automaticamente.
+  # Recycle: (obsoleto) borra los archivos con rm -rf y lo hace disponible.
+  persistentVolumeReclaimPolicy: Retain
+
+  # StorageClass que maneja este PV.
+  # Solo PVCs que soliciten "storage-local" podran enlazarse aqui.
+  storageClassName: storage-local
+
+  # hostPath: almacenamiento en un directorio del nodo Minikube.
+  # En produccion este campo seria azureDisk, nfs, csi, etc.
+  # IMPORTANTE: el directorio debe existir en el nodo antes de aplicar.
+  # El Paso 0 del README.md lo crea con: minikube ssh "mkdir -p /data/pv-datos"
+  hostPath:
+    path: /data/pv-datos
+    # DirectoryOrCreate: crea el directorio si no existe (mas tolerante)
+    type: DirectoryOrCreate
+
+---
+# =============================================================
+# 5) PERSISTENTVOLUMECLAIM - La "solicitud" de almacenamiento
+#
+#    Un PersistentVolumeClaim (PVC) es la forma en que un Pod
+#    pide almacenamiento. Es como rellenar un formulario de
+#    solicitud: indicas cuanto espacio necesitas y en que modo.
+#    Kubernetes busca automaticamente un PV compatible y los
+#    enlaza (estado "Bound").
+#
+#    La separacion PV/PVC es intencional:
+#    - El admin gestiona los PVs (donde esta el almacenamiento real)
+#    - El desarrollador gestiona los PVCs (cuanto necesita su app)
+#    - Ni el desarrollador ni la app conocen los detalles del disco fisico
+# =============================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-datos
+  namespace: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    tipo: persistent-volume-claim
+spec:
+  # storageClassName debe coincidir con el del PV para que se enlacen
+  storageClassName: storage-local
+
+  # accessModes: debe ser un subconjunto de lo que ofrece el PV
+  accessModes:
+    - ReadWriteOnce
+
+  # resources.requests.storage: cuanto espacio necesita este PVC.
+  # El PV debe tener capacidad >= a esta solicitud para enlazarse.
+  resources:
+    requests:
+      storage: 500Mi    # Pide 500MB de los 1GB disponibles en el PV
+
+---
+# =============================================================
+# 6) POD ESCRITOR - Pod que monta el PVC y escribe datos
+#
+#    Este Pod demuestra el concepto central del laboratorio:
+#    un Pod monta el PVC como un directorio y escribe datos
+#    en el. Cuando el Pod se elimina y se recrea, los datos
+#    escritos siguen estando en el volumen persistente porque
+#    viven en el PV (el disco fisico del nodo), no en el
+#    sistema de archivos efimero del contenedor.
+#
+#    El comando:
+#    1. Escribe un archivo de timestamp al iniciar
+#    2. Escribe el nombre e IP del Pod
+#    3. Escribe un archivo de log que actualiza cada 10s
+#    4. Mantiene el Pod corriendo indefinidamente (sleep inf)
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-escritor
+  namespace: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    rol: escritor
+    tier: storage-demo
+spec:
+  containers:
+    - name: escritor
+      image: busybox:1.36
+      # El comando principal: escribe datos y sigue ejecutando
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== Pod Escritor iniciado ===" > /datos/registro.txt
+          echo "Timestamp: $(date)" >> /datos/registro.txt
+          echo "Pod hostname: $(hostname)" >> /datos/registro.txt
+          echo "Pod IP: $POD_IP" >> /datos/registro.txt
+          echo "" >> /datos/registro.txt
+          echo "MENSAJE IMPORTANTE: Este archivo fue escrito por pod-escritor." >> /datos/registro.txt
+          echo "Si eliminas este Pod y creas uno nuevo, este archivo sigue aqui." >> /datos/registro.txt
+          echo "Eso demuestra que los datos persisten en el PV, no en el Pod." >> /datos/registro.txt
+          echo "" >> /datos/registro.txt
+          echo "=== Log de actividad ===" >> /datos/actividad.log
+          while true; do
+            echo "$(date): pod-escritor activo, escribiendo en PVC..." >> /datos/actividad.log
+            sleep 10
+          done
+      env:
+        # Downward API: inyecta la IP del Pod como variable de entorno
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+      # Montar el PVC en el directorio /datos dentro del contenedor
+      volumeMounts:
+        - name: volumen-datos
+          mountPath: /datos
+      resources:
+        requests:
+          memory: "32Mi"
+          cpu: "50m"
+        limits:
+          memory: "64Mi"
+          cpu: "100m"
+  # Definicion del volumen: asocia el nombre "volumen-datos" con el PVC
+  volumes:
+    - name: volumen-datos
+      persistentVolumeClaim:
+        # claimName: el nombre exacto del PVC en este namespace
+        claimName: pvc-datos
+
+---
+# =============================================================
+# 7) POD VERIFICADOR - Pod que lee los datos persistidos
+#
+#    Este Pod monta el MISMO PVC que pod-escritor pero en modo
+#    solo lectura (readOnly: true). Lee los archivos escritos
+#    por pod-escritor y los muestra en sus logs. Tambien monta
+#    el ConfigMap con informacion del entorno como un archivo.
+#
+#    La demostracion clave: si eliminas pod-escritor y luego
+#    describes pod-verificador, los datos siguen visibles porque
+#    el PVC (y el PV subyacente) los conserva independientemente
+#    del ciclo de vida de los Pods.
+#
+#    Nota: No puede haber dos Pods con ReadWriteOnce en el mismo
+#    volumen al mismo tiempo SOLO si estan en nodos distintos.
+#    En Minikube (1 nodo) si pueden coexistir. En clusters
+#    multi-nodo se necesitaria ReadWriteMany para compartir.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-verificador
+  namespace: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    rol: verificador
+    tier: storage-demo
+spec:
+  # initContainer: espera a que el Pod escritor haya escrito el archivo
+  # antes de que el contenedor principal intente leerlo
+  initContainers:
+    - name: esperar-datos
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Esperando a que pod-escritor escriba los datos..."
+          until [ -f /datos/registro.txt ]; do
+            echo "  archivo registro.txt aun no existe, esperando 5s..."
+            sleep 5
+          done
+          echo "Archivo encontrado. Continuando."
+      volumeMounts:
+        - name: volumen-datos
+          mountPath: /datos
+          readOnly: true
+  containers:
+    - name: verificador
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== Pod Verificador: leyendo datos del PVC ==="
+          echo ""
+          echo "--- Contenido de /datos/registro.txt ---"
+          cat /datos/registro.txt
+          echo ""
+          echo "--- Contenido de /config/entorno.txt ---"
+          cat /config/entorno.txt
+          echo ""
+          echo "--- Archivos en /datos/ ---"
+          ls -la /datos/
+          echo ""
+          echo "=== Verificacion completada. Pod en espera... ==="
+          sleep 3600
+      volumeMounts:
+        # Montar el PVC en modo solo lectura para verificar los datos
+        - name: volumen-datos
+          mountPath: /datos
+          readOnly: true
+        # Montar el ConfigMap como directorio con archivos de texto
+        - name: config-storage
+          mountPath: /config
+          readOnly: true
+      resources:
+        requests:
+          memory: "32Mi"
+          cpu: "50m"
+        limits:
+          memory: "64Mi"
+          cpu: "100m"
+  volumes:
+    - name: volumen-datos
+      persistentVolumeClaim:
+        claimName: pvc-datos
+    # ConfigMap montado como volumen: cada clave del ConfigMap
+    # se convierte en un archivo dentro del directorio /config
+    - name: config-storage
+      configMap:
+        name: storage-info
+
+---
+# =============================================================
+# 8) STATEFULSET - StatefulSet con volumeClaimTemplate
+#
+#    Un StatefulSet es como un Deployment pero con identidad
+#    estable para cada Pod. Cada replica recibe un nombre
+#    predecible (db-0, db-1) y su propio PVC independiente
+#    creado automaticamente por el volumeClaimTemplate.
+#
+#    Esto es esencial para bases de datos: db-0 es siempre
+#    el mismo nodo con los mismos datos. Si db-0 se reinicia,
+#    Kubernetes lo recrea en el mismo nodo con el mismo PVC.
+#
+#    volumeClaimTemplate: en lugar de un PVC compartido, el
+#    StatefulSet crea automaticamente 1 PVC por replica usando
+#    la StorageClass "standard" (la default de Minikube con
+#    aprovisionamiento automatico).
+#
+#    En este lab usamos storageClassName: standard para que
+#    Minikube pueda crear los PVCs automaticamente sin que
+#    tengamos que crear PVs manualmente.
+# =============================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: statefulset-db
+  namespace: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    tipo: statefulset
+spec:
+  serviceName: "db-headless"  # Service headless para DNS individual por Pod
+  replicas: 2                  # db-0 y db-1, cada uno con su propio PVC
+  selector:
+    matchLabels:
+      app: lab-almacenamiento
+      rol: base-de-datos
+  template:
+    metadata:
+      labels:
+        app: lab-almacenamiento
+        rol: base-de-datos
+        tier: datos
+    spec:
+      containers:
+        - name: db-simulada
+          image: busybox:1.36
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=== StatefulSet Pod iniciado ===" > /var/data/estado.txt
+              echo "Pod: $(hostname)" >> /var/data/estado.txt
+              echo "Fecha: $(date)" >> /var/data/estado.txt
+              echo "Este Pod tiene almacenamiento propio, independiente del resto." >> /var/data/estado.txt
+              echo "db-0 y db-1 tienen DIFERENTES PVCs. Sus datos no se mezclan." >> /var/data/estado.txt
+              sleep 3600
+          # Montar el volumen de datos propio de este Pod
+          # La ruta /var/data es donde una base de datos real guardaria sus datos
+          volumeMounts:
+            - name: datos-db
+              mountPath: /var/data
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+  # volumeClaimTemplate: plantilla para crear 1 PVC por replica.
+  # El StatefulSet crea automaticamente:
+  #   datos-db-statefulset-db-0  (para el Pod db-0)
+  #   datos-db-statefulset-db-1  (para el Pod db-1)
+  # Estos PVCs persisten aunque el StatefulSet se elimine (ReclaimPolicy: Retain)
+  volumeClaimTemplates:
+    - metadata:
+        name: datos-db
+        labels:
+          app: lab-almacenamiento
+          tipo: pvc-statefulset
+      spec:
+        # standard: StorageClass por defecto de Minikube con auto-provisioning
+        # Minikube crea el PV automaticamente sin necesidad de crearlo a mano
+        storageClassName: standard
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 256Mi    # 256MB por replica de base de datos
+
+---
+# =============================================================
+# 9) SERVICE HEADLESS - Para el StatefulSet
+#
+#    Un StatefulSet requiere un Service headless (clusterIP: None)
+#    para que cada Pod tenga una entrada DNS individual:
+#      db-0.db-headless.lab-almacenamiento.svc.cluster.local
+#      db-1.db-headless.lab-almacenamiento.svc.cluster.local
+#
+#    Esto es critico para bases de datos donde los nodos
+#    necesitan comunicarse entre si por nombre estable, no por IP.
+#    Sin este Service, el StatefulSet aun funciona pero sin DNS.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-headless
+  namespace: lab-almacenamiento
+  labels:
+    app: lab-almacenamiento
+    tipo: service-headless
+spec:
+  # clusterIP: None convierte este Service en "headless"
+  # DNS devuelve las IPs individuales de cada Pod, no una IP virtual
+  clusterIP: None
+  selector:
+    app: lab-almacenamiento
+    rol: base-de-datos
+  ports:
+    - name: db
+      port: 5432      # Puerto estandar PostgreSQL (solo referencial en este lab)
+      targetPort: 5432

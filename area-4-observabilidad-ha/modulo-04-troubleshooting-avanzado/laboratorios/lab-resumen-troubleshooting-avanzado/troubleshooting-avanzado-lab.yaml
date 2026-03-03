@@ -1,0 +1,343 @@
+# ============================================================
+# troubleshooting-avanzado-lab.yaml
+# Ejercicio Resumen: Troubleshooting Avanzado - Escenarios de Fallo
+# Uso: kubectl apply -f troubleshooting-avanzado-lab.yaml
+#
+# Descripcion:
+#   Despliega 7 escenarios de fallo reales con errores intencionales
+#   para practicar el framework de diagnostico Pod -> Container -> Node.
+#   Cada escenario representa una causa raiz distinta y ensenha el
+#   comando exacto para encontrarla.
+#
+# Escenarios incluidos:
+#   1. CrashLoopBackOff  - comando invalido en el contenedor
+#   2. OOMKilled         - consumo de memoria mayor al limite
+#   3. Pending           - resource requests imposibles (99 CPU)
+#   4. ImagePullBackOff  - imagen que no existe en el registry
+#   5. CreateContainerConfigError - ConfigMap/Secret inexistente
+#   6. Running 0/1       - readiness probe que siempre falla
+#   7. Pod de herramientas para debugging activo
+#
+# Duracion total del lab: 60 minutos
+# ============================================================
+
+# ============================================================
+# 1) NAMESPACE: lab-troubleshooting-avanzado
+#    Namespace aislado para todos los recursos del lab.
+# ============================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-troubleshooting-avanzado
+  labels:
+    lab: troubleshooting-avanzado
+    area: "4"
+    module: troubleshooting
+
+# ============================================================
+# 2) CONFIGMAP de referencia
+#    Datos de referencia para el laboratorio. Los escenarios
+#    que referencian ConfigMaps INEXISTENTES usan nombres
+#    distintos (config-inexistente, secret-inexistente).
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-referencia
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: lab-datos
+    purpose: reference
+data:
+  estados_pod: |
+    Pending           - sin nodo asignado aun
+    Running           - ejecutandose en un nodo
+    CrashLoopBackOff  - falla y reinicia en bucle
+    ImagePullBackOff  - no puede descargar la imagen
+    OOMKilled         - terminado por falta de memoria
+    CreateContainerConfigError - config referenciada no existe
+  framework_diagnostico: |
+    Paso 1: kubectl get pods  -> identificar estado anormal
+    Paso 2: kubectl describe  -> leer Events (causa raiz)
+    Paso 3: kubectl logs      -> mensajes de la aplicacion
+    Paso 4: kubectl exec      -> inspeccion desde dentro
+  comandos_clave: |
+    kubectl describe pod <nombre>
+    kubectl logs <nombre> --previous
+    kubectl get events --sort-by='.lastTimestamp'
+    kubectl exec -it <nombre> -- /bin/sh
+
+# ============================================================
+# SECCION A: FALLOS DE CICLO DE VIDA DEL CONTENEDOR
+# ============================================================
+
+# ============================================================
+# 3) POD: CrashLoopBackOff - Comando invalido
+#    Error: se pasa un argumento '--config-invalido' que nginx
+#    no reconoce. El contenedor arranca, falla inmediatamente,
+#    y Kubernetes lo reinicia en bucle creciente.
+#    Diagnostico: kubectl logs crashloop-demo --previous
+# ============================================================
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashloop-demo
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: crashloop-demo
+    scenario: crashloop
+    fallo: comando-invalido
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    command: ["nginx"]
+    args: ["-g", "daemon off;", "--config-invalido"]  # argumento que nginx no acepta
+    ports:
+    - name: http
+      containerPort: 80
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  restartPolicy: Always
+
+# ============================================================
+# 4) POD: OOMKilled - Consumo de memoria mayor al limite
+#    Error: el script de stress consume 200Mi pero el limite
+#    es 64Mi. El kernel mata el proceso con OOM Killer.
+#    El Pod muestra exit code 137 (SIGKILL por OOM).
+#    Diagnostico: kubectl describe pod oom-demo -> Last State
+# ============================================================
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: oom-demo
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: oom-demo
+    scenario: oom
+    fallo: memory-limit
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress:latest
+    # Intenta reservar 200Mi de RAM. El limite es 64Mi.
+    # El OOM Killer del kernel mata el proceso con exit code 137.
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "200M", "--vm-hang", "0"]
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi   # el proceso intentara usar 200M > 64M -> OOMKilled
+  restartPolicy: Always
+
+# ============================================================
+# 5) POD: Pending - Resource requests imposibles
+#    Error: solicita 99 CPU cores. Ningun nodo real tiene esa
+#    capacidad. El scheduler no puede asignar el Pod a ningun
+#    nodo -> queda en Pending indefinidamente.
+#    Diagnostico: kubectl describe pod pending-demo -> Events
+#    Buscar: "Insufficient cpu"
+# ============================================================
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pending-demo
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: pending-demo
+    scenario: pending
+    fallo: resources-imposibles
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    resources:
+      requests:
+        cpu: "99"       # 99 CPU cores: ningun nodo tiene esto
+        memory: "1Mi"
+      limits:
+        cpu: "99"
+        memory: "64Mi"
+
+# ============================================================
+# SECCION B: FALLOS DE IMAGEN Y CONFIGURACION
+# ============================================================
+
+# ============================================================
+# 6) DEPLOYMENT: ImagePullBackOff - Imagen inexistente
+#    Error: la imagen 'nginx:version-que-no-existe-99999' no
+#    existe en DockerHub. Kubernetes intenta descargarla,
+#    falla con "manifest unknown", y entra en backoff.
+#    Diagnostico: kubectl describe pod -> Events -> "Failed to pull image"
+# ============================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagen-incorrecta
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: imagen-incorrecta
+    scenario: imagepull
+    fallo: imagen-inexistente
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagen-incorrecta
+  template:
+    metadata:
+      labels:
+        app: imagen-incorrecta
+        scenario: imagepull
+    spec:
+      containers:
+      - name: webapp
+        image: nginx:version-que-no-existe-99999   # tag que no existe en DockerHub
+        ports:
+        - name: http
+          containerPort: 80
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+
+# ============================================================
+# 7) POD: CreateContainerConfigError - ConfigMap/Secret inexistente
+#    Error: referencia a ConfigMap 'config-inexistente' y
+#    Secret 'secret-inexistente' que no existen en el namespace.
+#    Kubernetes no puede crear el contenedor porque no puede
+#    montar los volumenes. Estado: CreateContainerConfigError.
+#    Diagnostico: kubectl describe pod config-error -> Events
+#    Buscar: "couldn't find key" o "not found"
+# ============================================================
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: config-error
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: config-error
+    scenario: config-error
+    fallo: referencia-inexistente
+spec:
+  containers:
+  - name: app
+    image: nginx:1.25-alpine
+    env:
+    - name: DB_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: config-inexistente    # este ConfigMap no existe
+          key: database_host
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: secret-inexistente    # este Secret no existe
+          key: password
+    ports:
+    - name: http
+      containerPort: 80
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+# ============================================================
+# SECCION C: FALLOS DE READINESS PROBE
+# ============================================================
+
+# ============================================================
+# 8) POD: Running 0/1 - Readiness probe que siempre falla
+#    Error: la readiness probe hace GET a /health en el puerto
+#    9090, pero nginx no escucha en ese puerto ni tiene esa
+#    ruta. El Pod queda en Running pero READY: 0/1.
+#    El contenedor NO se reinicia (diferencia clave vs liveness).
+#    Diagnostico: kubectl describe pod readiness-fail -> Readiness
+#    Buscar: "connection refused" o "404"
+# ============================================================
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-fail
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: readiness-fail
+    scenario: readiness
+    fallo: probe-puerto-incorrecto
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    ports:
+    - name: http
+      containerPort: 80
+    readinessProbe:
+      httpGet:
+        path: /health       # ruta inexistente en nginx
+        port: 9090          # puerto incorrecto: nginx usa 80
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 3
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+# ============================================================
+# SECCION D: HERRAMIENTAS DE DEBUGGING
+# ============================================================
+
+# ============================================================
+# 9) POD: test-tools - Pod de debugging activo
+#    Pod con herramientas de red y diagnostico para usar
+#    durante el laboratorio: curl, wget, nslookup, netstat.
+#    Permanece activo 1 hora (3600 seg) para todas las pruebas.
+#    Uso: kubectl exec -it test-tools -n lab-troubleshooting-avanzado -- /bin/sh
+# ============================================================
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tools
+  namespace: lab-troubleshooting-avanzado
+  labels:
+    app: test-tools
+    purpose: debugging
+spec:
+  containers:
+  - name: tools
+    image: busybox:1.36
+    command: ["sleep", "3600"]
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi
+  restartPolicy: Never

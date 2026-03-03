@@ -1,0 +1,394 @@
+# ============================================================
+# ha-lab.yaml
+# Ejercicio Resumen: Alta Disponibilidad en Kubernetes
+# Uso: kubectl apply -f ha-lab.yaml
+# Duracion: ~15 minutos (solo despliegue y exploracion inicial)
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# conceptos principales de Alta Disponibilidad en Kubernetes:
+#   - Namespace dedicado lab-ha
+#   - ConfigMap con configuracion de la aplicacion HA
+#   - Deployment con podAntiAffinity preferida (distribucion en nodos)
+#   - Deployment con topologySpreadConstraints (distribucion en zonas)
+#   - PodDisruptionBudget con minAvailable (minimo de Pods activos)
+#   - PodDisruptionBudget con maxUnavailable (maximo de Pods caidos)
+#   - Service con sessionAffinity (stickiness de sesion)
+#   - Pod que simula fallo para observar auto-recovery
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-ha
+#    Namespace aislado para todos los recursos del lab resumen.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-ha
+  labels:
+    lab: ha-resumen
+    modulo: "03-alta-disponibilidad"
+
+---
+# =============================================================
+# 2) CONFIGMAP: configuracion-ha
+#    Configuracion centralizada de la aplicacion HA.
+#    Demuestra como externalizar parametros de disponibilidad.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: configuracion-ha
+  namespace: lab-ha
+  labels:
+    app: webapp-ha
+    tier: config
+data:
+  # Tiempo maximo de respuesta aceptable (SLO)
+  MAX_RESPONSE_TIME_MS: "500"
+  # Porcentaje de disponibilidad objetivo (99.9% = 8.7h downtime/anio)
+  AVAILABILITY_TARGET: "99.9"
+  # Numero de replicas minimas para cumplir el SLO
+  MIN_REPLICAS: "3"
+  # Zona de disponibilidad preferida (para logs)
+  PREFERRED_ZONE: "multi-zona"
+  # Mensaje de estado de la app
+  APP_STATUS: "HA mode enabled"
+
+---
+# =============================================================
+# 3) DEPLOYMENT: webapp-anti-affinity
+#    Deployment con podAntiAffinity PREFERIDA (soft).
+#    Intenta distribuir las 3 replicas en nodos diferentes.
+#    Si no hay suficientes nodos, igual programa los Pods.
+#
+#    Anti-affinity preferida vs requerida:
+#    - preferredDuringSchedulingIgnoredDuringExecution = soft
+#      El scheduler INTENTA cumplirla pero no la exige.
+#      Los Pods se programan aunque no se pueda cumplir.
+#    - requiredDuringSchedulingIgnoredDuringExecution = hard
+#      El scheduler NO programa el Pod si no puede cumplirla.
+#      Util en produccion con muchos nodos; en Minikube falla.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-anti-affinity
+  namespace: lab-ha
+  labels:
+    app: webapp-ha
+    tier: frontend
+    strategy: anti-affinity
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp-ha
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp-ha
+        tier: frontend
+        strategy: anti-affinity
+    spec:
+      # Anti-affinity PREFERIDA: intenta separar Pods en nodos distintos
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100          # peso maximo: esta regla tiene la mayor prioridad
+            podAffinityTerm:
+              # Topologia: separar por hostname (= por nodo fisico)
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: webapp-ha
+                  tier: frontend
+      containers:
+      - name: webapp
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        envFrom:
+        - configMapRef:
+            name: configuracion-ha
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "300m"
+            memory: "128Mi"
+        # Readiness probe: el Pod solo recibe trafico cuando esta listo
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # Liveness probe: reinicia el Pod si deja de responder
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 20
+
+---
+# =============================================================
+# 4) DEPLOYMENT: webapp-topology-spread
+#    Deployment con topologySpreadConstraints.
+#    Distribuye Pods uniformemente entre zonas de disponibilidad.
+#
+#    topologySpreadConstraints es mas reciente y flexible que
+#    podAntiAffinity. Permite controlar el DESBALANCE maximo
+#    (maxSkew) entre diferentes dominios de topologia.
+#
+#    maxSkew: 1 significa que ninguna zona puede tener mas de
+#    1 Pod adicional respecto a la zona con menos Pods.
+#    Ejemplo con 3 Pods y 3 zonas: distribucion 1-1-1 (perfecto)
+#    Ejemplo con 4 Pods y 3 zonas: distribucion 2-1-1 (permitido)
+#    Ejemplo con 4 Pods y 3 zonas: 3-1-0 RECHAZADO (skew=3 > maxSkew=1)
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-topology-spread
+  namespace: lab-ha
+  labels:
+    app: webapp-spread
+    tier: backend
+    strategy: topology-spread
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp-spread
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: webapp-spread
+        tier: backend
+        strategy: topology-spread
+    spec:
+      topologySpreadConstraints:
+      # Restriccion 1: distribuir por zona de disponibilidad
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway   # soft: programa aunque no se cumpla
+        labelSelector:
+          matchLabels:
+            app: webapp-spread
+      # Restriccion 2: distribuir por nodo (complementaria a la de zona)
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway   # soft: util en Minikube (1 nodo)
+        labelSelector:
+          matchLabels:
+            app: webapp-spread
+      containers:
+      - name: webapp
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "300m"
+            memory: "128Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 20
+
+---
+# =============================================================
+# 5) PODDISRUPTIONBUDGET: pdb-min-available
+#    PDB usando minAvailable: garantiza que al menos 2 Pods
+#    del Deployment webapp-anti-affinity esten siempre disponibles.
+#
+#    Caso de uso: operaciones de mantenimiento planificado.
+#    Sin PDB: kubectl drain podria eliminar todos los Pods.
+#    Con PDB: kubectl drain respeta el minimo y espera.
+#
+#    minAvailable: 2 con 3 replicas significa que solo puede
+#    haber 1 Pod no disponible en cualquier momento (drain, etc.)
+# =============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-min-available
+  namespace: lab-ha
+  labels:
+    app: webapp-ha
+    tier: frontend
+spec:
+  # Al menos 2 Pods siempre disponibles durante disrupciones
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: webapp-ha
+      tier: frontend
+
+---
+# =============================================================
+# 6) PODDISRUPTIONBUDGET: pdb-max-unavailable
+#    PDB usando maxUnavailable: permite que como maximo 1 Pod
+#    del Deployment webapp-topology-spread este no disponible.
+#
+#    maxUnavailable es el enfoque inverso a minAvailable:
+#    en lugar de decir cuantos deben estar UP, dice cuantos
+#    pueden estar DOWN simultaneamente.
+#
+#    maxUnavailable: 1 con 3 replicas = minimo 2 siempre UP
+#    Es equivalente a minAvailable: 2 en este caso, pero la
+#    semántica es diferente cuando cambia el numero de replicas:
+#    - minAvailable: 2 siempre exige exactamente 2 UP
+#    - maxUnavailable: 1 con 10 replicas exige 9 UP (mas flexible)
+# =============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-max-unavailable
+  namespace: lab-ha
+  labels:
+    app: webapp-spread
+    tier: backend
+spec:
+  # Como maximo 1 Pod no disponible durante disrupciones
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: webapp-spread
+      tier: backend
+
+---
+# =============================================================
+# 7) SERVICE: webapp-ha-service
+#    Service con sessionAffinity ClientIP.
+#    Garantiza que un mismo cliente siempre sea dirigido
+#    al mismo Pod (stickiness de sesion).
+#
+#    sessionAffinity None (defecto): cada request puede ir
+#    a cualquier Pod. Util para apps sin estado.
+#
+#    sessionAffinity ClientIP: requests de la misma IP van
+#    siempre al mismo Pod durante la ventana de tiempo.
+#    Util para: carros de compra, sesiones de autenticacion,
+#    caches locales por usuario.
+#
+#    timeoutSeconds: 10800 = 3 horas de stickiness.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-ha-service
+  namespace: lab-ha
+  labels:
+    app: webapp-ha
+    tier: frontend
+spec:
+  selector:
+    app: webapp-ha
+    tier: frontend
+  ports:
+  - port: 80
+    targetPort: http
+    name: http
+    protocol: TCP
+  type: ClusterIP
+  # Stickiness de sesion por IP de cliente
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800   # 3 horas
+
+---
+# =============================================================
+# 8) SERVICE: webapp-spread-service
+#    Service sin sessionAffinity para webapp-topology-spread.
+#    Sin stickiness: distribuye trafico uniformemente (round-robin).
+#    Contraste deliberado con webapp-ha-service para comparar.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-spread-service
+  namespace: lab-ha
+  labels:
+    app: webapp-spread
+    tier: backend
+spec:
+  selector:
+    app: webapp-spread
+    tier: backend
+  ports:
+  - port: 80
+    targetPort: http
+    name: http
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None        # Sin stickiness: balance round-robin
+
+---
+# =============================================================
+# 9) POD: pod-fallo-simulado
+#    Pod que simula una aplicacion que falla periodicamente
+#    para demostrar el auto-recovery de Kubernetes.
+#
+#    El comando ejecuta un bucle que:
+#    - Espera 60 segundos (app "funcionando")
+#    - Sale con codigo 1 (simulando un crash)
+#    - Kubernetes detecta el fallo y reinicia el Pod
+#
+#    restartPolicy: Always (defecto) garantiza que Kubernetes
+#    reinicie el contenedor cuando falla.
+#    El contador RESTARTS en kubectl get pods sube con cada fallo.
+#
+#    Despues de varios reinicios, entra en CrashLoopBackOff:
+#    Kubernetes espera exponencialmente mas entre reinicios
+#    (10s, 20s, 40s, 80s, 160s, max 5min) para evitar consumir
+#    recursos con un proceso permanentemente roto.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-fallo-simulado
+  namespace: lab-ha
+  labels:
+    app: fallo-demo
+    tier: demo
+spec:
+  # restartPolicy: Always garantiza que Kubernetes reinicie el Pod
+  restartPolicy: Always
+  containers:
+  - name: app-inestable
+    image: busybox:1.36
+    # Simula: 60s funcionando -> crash -> Kubernetes reinicia
+    command:
+    - sh
+    - -c
+    - |
+      echo "Aplicacion iniciada. Funcionando durante 60 segundos..."
+      sleep 60
+      echo "ERROR: Fallo critico simulado (codigo de salida 1)"
+      exit 1
+    resources:
+      requests:
+        cpu: "10m"
+        memory: "16Mi"
+      limits:
+        cpu: "50m"
+        memory: "32Mi"

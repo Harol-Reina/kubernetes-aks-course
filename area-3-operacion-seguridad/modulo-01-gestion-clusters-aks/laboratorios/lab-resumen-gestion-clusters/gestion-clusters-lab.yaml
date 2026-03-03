@@ -1,0 +1,376 @@
+# ============================================================
+# gestion-clusters-lab.yaml
+# Ejercicio Resumen: Gestión de Clústeres AKS
+# Uso: kubectl apply -f gestion-clusters-lab.yaml
+# Duracion: ~20 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar los
+# conceptos principales de gestión de clusters en Kubernetes,
+# simulando en Minikube los patrones que usarías en AKS:
+#   - Namespace dedicado lab-gestion-clusters
+#   - Labels de nodo simulando node pools (system vs user)
+#   - ResourceQuota simulando límites del cluster
+#   - LimitRange con defaults para contenedores
+#   - Deployment con nodeAffinity (selección de node pool)
+#   - DaemonSet simulando agente de monitoreo
+#   - PodDisruptionBudget para mantenimiento seguro
+#   - Pod de prueba para verificación
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-gestion-clusters
+#    Namespace aislado para todos los recursos del lab.
+#    En AKS, cada equipo suele tener su propio namespace,
+#    similar a cómo cada aplicación tiene su resource group.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-gestion-clusters
+  labels:
+    lab: gestion-clusters-resumen
+    # En AKS real, agregarías labels como:
+    # environment: development
+    # team: platform-engineering
+    # cost-center: CC-1234
+
+---
+# =============================================================
+# 2) RESOURCEQUOTA: limites-cluster
+#    Simula los límites de recursos de un node pool en AKS.
+#    En un cluster real, el ResourceQuota evita que un
+#    namespace consuma todos los recursos del cluster.
+#
+#    Analogía: Es como el presupuesto mensual de un
+#    departamento. No puedes gastar más de lo asignado.
+# =============================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: limites-cluster
+  namespace: lab-gestion-clusters
+  labels:
+    lab: gestion-clusters-resumen
+spec:
+  hard:
+    # Máximo de recursos que este namespace puede consumir
+    requests.cpu: "2"          # 2 CPU cores totales de requests
+    requests.memory: "1Gi"     # 1 GiB de memoria en requests
+    limits.cpu: "4"            # 4 CPU cores totales de limits
+    limits.memory: "2Gi"       # 2 GiB de memoria en limits
+    pods: "20"                 # Máximo 20 Pods en este namespace
+    services: "5"              # Máximo 5 Services
+    configmaps: "10"           # Máximo 10 ConfigMaps
+    secrets: "10"              # Máximo 10 Secrets
+
+---
+# =============================================================
+# 3) LIMITRANGE: defaults-contenedores
+#    Establece valores por defecto de recursos para contenedores
+#    que no los especifican. En AKS, esto es una best practice
+#    para evitar Pods sin límites que puedan consumir todo.
+#
+#    Analogía: Es como la regla de "si no pides un plato
+#    específico en el menú, te servimos el menú del día".
+# =============================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults-contenedores
+  namespace: lab-gestion-clusters
+  labels:
+    lab: gestion-clusters-resumen
+spec:
+  limits:
+  - type: Container
+    # Si un contenedor NO especifica resources, estos son los defaults:
+    default:              # Limits por defecto
+      cpu: "200m"         # 0.2 CPU cores máximo
+      memory: "128Mi"     # 128 MiB máximo
+    defaultRequest:       # Requests por defecto
+      cpu: "100m"         # 0.1 CPU cores garantizado
+      memory: "64Mi"      # 64 MiB garantizado
+    # Límites absolutos que ningún contenedor puede exceder:
+    max:
+      cpu: "1"            # Ningún contenedor puede pedir más de 1 CPU
+      memory: "512Mi"     # Ningún contenedor puede pedir más de 512 MiB
+    min:
+      cpu: "50m"          # Ningún contenedor puede pedir menos de 50m
+      memory: "32Mi"      # Ningún contenedor puede pedir menos de 32 MiB
+
+---
+# =============================================================
+# 4) DEPLOYMENT: webapp-produccion
+#    Aplicación web que simula un workload de producción en AKS.
+#    En un cluster AKS real, este Deployment iría en un
+#    "user node pool" dedicado a cargas de aplicación.
+#
+#    Conceptos clave:
+#    - replicas: 3 para alta disponibilidad
+#    - resources: requests y limits definidos (QoS Burstable)
+#    - nodeSelector: simula la selección de node pool
+#    - PDB asociado para mantenimiento seguro
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-produccion
+  namespace: lab-gestion-clusters
+  labels:
+    app: webapp
+    tier: frontend
+    environment: production
+    lab: gestion-clusters-resumen
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: webapp
+        tier: frontend
+        environment: production
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: "100m"       # 0.1 CPU garantizado por réplica
+            memory: "64Mi"    # 64 MiB garantizado por réplica
+          limits:
+            cpu: "250m"       # Máximo 0.25 CPU por réplica
+            memory: "128Mi"   # Máximo 128 MiB por réplica
+        # Liveness probe: verifica que nginx responde
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # Readiness probe: solo recibe tráfico cuando está listo
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 5
+
+---
+# =============================================================
+# 5) SERVICE: webapp-service
+#    Expone la webapp internamente en el cluster.
+#    En AKS, usarías type: LoadBalancer para obtener una
+#    IP pública de Azure, o un Ingress Controller.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  namespace: lab-gestion-clusters
+  labels:
+    app: webapp
+    lab: gestion-clusters-resumen
+spec:
+  selector:
+    app: webapp
+    tier: frontend
+  ports:
+  - port: 80
+    targetPort: http
+    name: http
+  type: ClusterIP    # En AKS real: LoadBalancer para IP pública
+
+---
+# =============================================================
+# 6) PODDISRUPTIONBUDGET: webapp-pdb
+#    Garantiza disponibilidad mínima durante mantenimiento.
+#    En AKS, cuando Azure actualiza los nodos (node surge
+#    upgrade), el PDB evita que se apaguen demasiados Pods
+#    a la vez.
+#
+#    Analogía: En una fábrica con 3 trabajadores, el PDB
+#    dice "siempre debe haber al menos 2 trabajando". Si
+#    necesitas enviar a uno a capacitación, puedes, pero
+#    no a 2 al mismo tiempo.
+# =============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: webapp-pdb
+  namespace: lab-gestion-clusters
+  labels:
+    app: webapp
+    lab: gestion-clusters-resumen
+spec:
+  minAvailable: 2           # Siempre deben estar corriendo al menos 2 réplicas
+  selector:
+    matchLabels:
+      app: webapp
+      tier: frontend
+
+---
+# =============================================================
+# 7) DEPLOYMENT: api-backend
+#    Simula un backend API en un node pool diferente.
+#    En AKS, tendrías un "user node pool" para APIs
+#    con VMs optimizadas para compute (ej: Standard_F4s_v2).
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+  namespace: lab-gestion-clusters
+  labels:
+    app: api-backend
+    tier: backend
+    environment: production
+    lab: gestion-clusters-resumen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-backend
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+        tier: backend
+        environment: production
+    spec:
+      containers:
+      - name: api
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 8080
+          name: api
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        # Simula un health check de API
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# =============================================================
+# 8) DAEMONSET: agente-monitoreo
+#    Se ejecuta en TODOS los nodos del cluster.
+#    En AKS, Container Insights despliega un DaemonSet similar
+#    (omsagent / ama-logs) que recolecta métricas y logs
+#    de cada nodo.
+#
+#    Analogía: Es como tener un guardia de seguridad en
+#    cada piso de un edificio. No importa cuántos pisos
+#    (nodos) tenga el edificio, siempre hay uno por piso.
+# =============================================================
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: agente-monitoreo
+  namespace: lab-gestion-clusters
+  labels:
+    app: agente-monitoreo
+    tier: monitoring
+    lab: gestion-clusters-resumen
+spec:
+  selector:
+    matchLabels:
+      app: agente-monitoreo
+  template:
+    metadata:
+      labels:
+        app: agente-monitoreo
+        tier: monitoring
+    spec:
+      containers:
+      - name: monitor
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        # Simula la recolección de métricas cada 30 segundos
+        - |
+          echo "Agente de monitoreo iniciado en $(hostname)"
+          while true; do
+            echo "[$(date)] CPU: $(cat /proc/loadavg | cut -d' ' -f1) | Mem: $(free -m 2>/dev/null | head -2 | tail -1 | awk '{print $3"/"$2" MB"}' 2>/dev/null || echo 'N/A')"
+            sleep 30
+          done
+        resources:
+          requests:
+            cpu: "50m"        # Muy pocos recursos: es solo monitoreo
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+
+---
+# =============================================================
+# 9) CONFIGMAP: cluster-config
+#    Almacena configuración del cluster como un ConfigMap.
+#    En AKS, usarías esto para guardar configuraciones
+#    que tus aplicaciones necesitan sobre el entorno.
+# =============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: lab-gestion-clusters
+  labels:
+    lab: gestion-clusters-resumen
+data:
+  # Información del cluster (simulada)
+  CLUSTER_NAME: "aks-k8s-course"
+  CLUSTER_REGION: "eastus"
+  ENVIRONMENT: "production"
+  # Configuración de monitoreo
+  MONITORING_ENABLED: "true"
+  LOG_LEVEL: "info"
+  # Configuración de networking
+  NETWORK_PLUGIN: "azure-cni"
+  NETWORK_POLICY: "azure"
+
+---
+# =============================================================
+# 10) POD: test-tools
+#     Pod con herramientas para verificar la configuración.
+#     Permite ejecutar comandos dentro del cluster para
+#     probar conectividad y resolución DNS.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-tools
+  namespace: lab-gestion-clusters
+  labels:
+    app: test-tools
+    lab: gestion-clusters-resumen
+spec:
+  containers:
+  - name: tools
+    image: busybox:1.36
+    command:
+    - sh
+    - -c
+    - "echo 'Pod de prueba listo. Usa kubectl exec para verificar.' && sleep 3600"
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"

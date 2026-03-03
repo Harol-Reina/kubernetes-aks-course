@@ -1,0 +1,369 @@
+# ============================================================
+# rbac-lab.yaml
+# Ejercicio Resumen: RBAC y Control de Acceso en Kubernetes
+# Uso: kubectl apply -f rbac-lab.yaml
+# Duracion: ~20 minutos
+#
+# Este archivo despliega TODO lo necesario para practicar
+# RBAC (Role-Based Access Control) en Kubernetes:
+#   - Namespace dedicado lab-rbac
+#   - ServiceAccounts con diferentes niveles de acceso
+#   - Role con permisos limitados (solo lectura)
+#   - Role con permisos de despliegue
+#   - ClusterRole para lectura global
+#   - RoleBindings que conectan ServiceAccounts con Roles
+#   - ClusterRoleBinding para acceso cluster-wide
+#   - Aplicaciones de prueba para verificar permisos
+# ============================================================
+
+# =============================================================
+# 1) NAMESPACE: lab-rbac
+#    Namespace aislado donde practicaremos RBAC.
+#    En producción, cada equipo tiene su propio namespace
+#    con permisos específicos.
+# =============================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-rbac
+  labels:
+    lab: rbac-resumen
+
+---
+# =============================================================
+# 2) SERVICEACCOUNT: desarrollador
+#    Representa a un desarrollador que solo necesita VER
+#    los recursos de su namespace (Pods, Services, Deployments).
+#    NO puede crear, modificar ni eliminar nada.
+#
+#    Analogía: Es como un empleado con tarjeta de acceso
+#    que solo le permite ENTRAR a la oficina y VER las
+#    pantallas, pero no puede tocar ningún botón.
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: desarrollador
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+    role: viewer
+
+---
+# =============================================================
+# 3) SERVICEACCOUNT: deployer
+#    Representa a un pipeline CI/CD que necesita DESPLEGAR
+#    aplicaciones (crear/actualizar Deployments y Services)
+#    pero NO debe poder leer Secrets ni eliminar namespaces.
+#
+#    Analogía: Es como un repartidor que puede dejar
+#    paquetes (crear Deployments) pero no tiene llave
+#    de la caja fuerte (Secrets).
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployer
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+    role: deployer
+
+---
+# =============================================================
+# 4) SERVICEACCOUNT: auditor
+#    Representa a un auditor de seguridad que necesita
+#    VER recursos en TODOS los namespaces del cluster,
+#    pero no puede modificar nada.
+#
+#    Analogía: Es como un inspector de salud que puede
+#    entrar a TODAS las cocinas del edificio para
+#    revisar, pero no puede cocinar ni mover nada.
+# =============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: auditor
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+    role: auditor
+
+---
+# =============================================================
+# 5) ROLE: solo-lectura
+#    Define permisos para VER recursos en el namespace lab-rbac.
+#    Los verbos "get", "list" y "watch" permiten:
+#    - get: ver un recurso específico por nombre
+#    - list: listar todos los recursos de un tipo
+#    - watch: recibir actualizaciones en tiempo real
+#
+#    IMPORTANTE: Un Role solo aplica en UN namespace.
+#    Para permisos en todo el cluster, usa ClusterRole.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: solo-lectura
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+rules:
+  # Puede ver Pods (listar, ver detalles, observar cambios)
+  - apiGroups: [""]              # "" = core API group (Pods, Services, etc.)
+    resources: ["pods", "pods/log", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  # Puede ver Deployments, ReplicaSets
+  - apiGroups: ["apps"]          # "apps" API group (Deployments, StatefulSets, etc.)
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  # Puede ver ConfigMaps (pero NO Secrets)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+
+---
+# =============================================================
+# 6) ROLE: deployer-role
+#    Define permisos para DESPLEGAR aplicaciones.
+#    Puede crear y actualizar Deployments y Services,
+#    pero NO puede eliminar namespaces ni leer Secrets.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployer-role
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+rules:
+  # Permisos completos en Deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # Permisos completos en Services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # Solo lectura en Pods (para verificar despliegues)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  # Puede leer ConfigMaps (para configuración de apps)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "update"]
+  # NO tiene acceso a Secrets
+  # NO tiene verbo "delete" en ningún recurso
+
+---
+# =============================================================
+# 7) CLUSTERROLE: auditor-global
+#    Define permisos de LECTURA en TODO el cluster.
+#    Un ClusterRole aplica en todos los namespaces.
+#    Perfecto para auditores de seguridad.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: auditor-global
+  labels:
+    lab: rbac-resumen
+rules:
+  # Lectura de todos los recursos core
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "namespaces", "nodes", "events"]
+    verbs: ["get", "list", "watch"]
+  # Lectura de Deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  # Lectura de RBAC (para auditar permisos)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  # Lectura de Network Policies
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch"]
+  # NO puede leer Secrets (información sensible)
+  # NO puede crear, modificar ni eliminar nada
+
+---
+# =============================================================
+# 8) ROLEBINDING: desarrollador-lectura
+#    Conecta el ServiceAccount "desarrollador" con el
+#    Role "solo-lectura" en el namespace lab-rbac.
+#
+#    Analogía: La RoleBinding es como darle la llave
+#    al empleado. El Role define qué puertas abre la
+#    llave, y la RoleBinding dice quién tiene esa llave.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: desarrollador-lectura
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+subjects:
+  - kind: ServiceAccount
+    name: desarrollador          # Quién recibe los permisos
+    namespace: lab-rbac
+roleRef:
+  kind: Role
+  name: solo-lectura             # Qué permisos recibe
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# =============================================================
+# 9) ROLEBINDING: deployer-acceso
+#    Conecta el ServiceAccount "deployer" con el
+#    Role "deployer-role" en el namespace lab-rbac.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer-acceso
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: lab-rbac
+roleRef:
+  kind: Role
+  name: deployer-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# =============================================================
+# 10) CLUSTERROLEBINDING: auditor-acceso-global
+#     Conecta el ServiceAccount "auditor" con el
+#     ClusterRole "auditor-global" para acceso en
+#     TODOS los namespaces.
+# =============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: auditor-acceso-global
+  labels:
+    lab: rbac-resumen
+subjects:
+  - kind: ServiceAccount
+    name: auditor
+    namespace: lab-rbac
+roleRef:
+  kind: ClusterRole
+  name: auditor-global
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# =============================================================
+# 11) DEPLOYMENT: webapp-rbac
+#     Aplicación de prueba para verificar permisos.
+#     Los ServiceAccounts intentarán interactuar con
+#     este Deployment para probar sus permisos.
+# =============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-rbac
+  namespace: lab-rbac
+  labels:
+    app: webapp-rbac
+    lab: rbac-resumen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp-rbac
+  template:
+    metadata:
+      labels:
+        app: webapp-rbac
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"
+
+---
+# =============================================================
+# 12) SERVICE: webapp-rbac
+#     Service para la aplicación de prueba.
+# =============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-rbac
+  namespace: lab-rbac
+  labels:
+    app: webapp-rbac
+    lab: rbac-resumen
+spec:
+  selector:
+    app: webapp-rbac
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+# =============================================================
+# 13) SECRET: db-credentials (para probar restricciones)
+#     Secret de prueba. Los ServiceAccounts "desarrollador"
+#     y "deployer" NO deben poder ver este Secret.
+#     Solo el admin del cluster puede acceder.
+# =============================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: lab-rbac
+  labels:
+    lab: rbac-resumen
+type: Opaque
+stringData:
+  username: "admin"
+  password: "super-secreto-123"
+  connection-string: "postgresql://admin:pass@db:5432/myapp"
+
+---
+# =============================================================
+# 14) POD: test-rbac
+#     Pod de herramientas con kubectl para probar permisos
+#     desde dentro del cluster.
+# =============================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-rbac
+  namespace: lab-rbac
+  labels:
+    app: test-rbac
+    lab: rbac-resumen
+spec:
+  serviceAccountName: desarrollador    # Usa permisos de "desarrollador"
+  containers:
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+    - sh
+    - -c
+    - "echo 'Pod de prueba RBAC listo (SA: desarrollador)' && sleep 3600"
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "64Mi"
