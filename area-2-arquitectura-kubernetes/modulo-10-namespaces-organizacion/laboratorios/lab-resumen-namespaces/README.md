@@ -6,6 +6,44 @@ Un solo YAML despliega 3 namespaces con deployments, quotas, limits, RBAC y Netw
 
 ---
 
+## Conceptos Previos (para personas nuevas en Kubernetes)
+
+Si recien empiezas con Kubernetes, estos conceptos te ayudaran a entender el lab antes de ejecutar cualquier comando.
+
+**Que es un cluster**
+
+Un cluster es un grupo de computadoras (llamadas nodos) que trabajan juntas y que Kubernetes administra como si fueran una sola maquina. Todos los recursos que creas en Kubernetes (Pods, Services, Deployments, etc.) viven dentro de ese cluster.
+
+**Que son los recursos**
+
+Kubernetes llama "recursos" a todo lo que puedes crear y administrar: un Pod es un recurso, un Service es un recurso, un Deployment es un recurso. Piensalos como objetos que el cluster conoce y mantiene funcionando.
+
+**Que son los Namespaces**
+
+Un Namespace es como una carpeta dentro del cluster. Organiza los recursos para que no se mezclen entre si y evita conflictos de nombres. Puedes tener un Pod llamado `webapp` en el namespace `dev` y otro Pod tambien llamado `webapp` en el namespace `prod` sin ningun conflicto, porque cada uno vive en su propia carpeta.
+
+**La analogia del edificio de oficinas**
+
+Imagina el cluster como un edificio de oficinas:
+
+```
+Cluster Kubernetes  =  Edificio de oficinas
+Namespace dev       =  Piso 1 (equipo de desarrollo)
+Namespace staging   =  Piso 2 (equipo de QA)
+Namespace prod      =  Piso 3 (produccion, acceso restringido)
+```
+
+Cada piso tiene:
+- Sus propios recursos (escritorios, impresoras = Pods, Services)
+- Su propio presupuesto (ResourceQuota)
+- Sus propias reglas de gasto individual (LimitRange)
+- Su propio sistema de control de acceso (RBAC)
+- Sus propios guardias de seguridad en la puerta (NetworkPolicy)
+
+Este lab crea exactamente ese escenario con 3 namespaces y te permite ver como funciona cada mecanismo.
+
+---
+
 ## Que es un Namespace
 
 Un **Namespace** es una division logica dentro de un cluster Kubernetes. Permite aislar recursos, aplicar politicas y organizar cargas de trabajo sin necesitar multiples clusters.
@@ -196,6 +234,14 @@ exit
 
 ---
 
+## Que es ResourceQuota (concepto)
+
+Imagina que cada piso del edificio tiene un presupuesto mensual de electricidad y agua. Si el equipo de desarrollo gasta demasiado, los demas pisos quedan sin recursos. ResourceQuota es ese presupuesto: un limite que define cuanto CPU, cuanta memoria y cuantos Pods puede usar el namespace completo, en total, sumando todos sus contenedores.
+
+Sin ResourceQuota, un solo namespace podria consumir todos los recursos del cluster y dejar sin CPU o memoria a los demas.
+
+---
+
 ## Paso 4: ResourceQuota (10 min)
 
 ### 4.1: Ver quotas configuradas
@@ -253,6 +299,24 @@ kubectl run no-limit-3 --image=nginx -n lab-ns-staging
 # Todos funcionan — no hay ResourceQuota en staging
 kubectl get pods -n lab-ns-staging
 ```
+
+---
+
+**Que aprendimos en este paso:**
+- ResourceQuota es un limite agregado: aplica a la suma de todos los Pods del namespace
+- Si el total de CPU o memoria supera el limite, Kubernetes rechaza los nuevos Pods
+- Un namespace sin ResourceQuota puede consumir recursos sin restriccion (como staging en este lab)
+
+---
+
+## Que es LimitRange (concepto)
+
+Si ResourceQuota es el presupuesto del piso, LimitRange es la regla de cuanto puede gastar cada persona individual dentro de ese piso.
+
+ResourceQuota dice: "el piso entero no puede gastar mas de 2 CPU en total".
+LimitRange dice: "cada persona no puede pedir mas de 500m CPU, y si no pide nada, le asignamos 100m por defecto".
+
+LimitRange resuelve un problema practico: cuando alguien crea un Pod sin especificar cuantos recursos necesita, Kubernetes no sabe como contarlo contra la ResourceQuota. LimitRange define valores por defecto automaticos para que eso nunca sea un problema.
 
 ---
 
@@ -315,6 +379,18 @@ kubectl get pod no-limit-1 -n lab-ns-staging -o yaml | grep -A 4 resources:
 
 ---
 
+## Que es RBAC (concepto)
+
+RBAC (Role-Based Access Control) es como la tarjeta de acceso del edificio. Determina que puertas puede abrir cada persona.
+
+En Kubernetes, "personas" son ServiceAccounts (cuentas de servicio que usan las aplicaciones y los operadores). RBAC define:
+- Que acciones puede realizar una cuenta (leer, crear, borrar recursos)
+- En que namespace puede realizar esas acciones
+
+Un Role define los permisos dentro de un namespace. Un RoleBinding asigna ese Role a una cuenta especifica. La combinacion Role + RoleBinding hace que los permisos sean estrictamente locales: el dev-admin de este lab puede crear Pods en `lab-ns-dev` pero no puede ni siquiera ver los Pods de `lab-ns-prod`.
+
+---
+
 ## Paso 6: RBAC - Control de Acceso (8 min)
 
 ### 6.1: Verificar permisos del dev-admin
@@ -355,6 +431,25 @@ kubectl auth can-i get nodes \
 ```
 
 **Clave:** Role (no ClusterRole) + RoleBinding = permisos SOLO en un namespace.
+
+**Que aprendimos en este paso:**
+- RBAC controla quien puede hacer que, no quienes pueden hablar entre si (eso es NetworkPolicy)
+- Un Role define permisos dentro de un unico namespace
+- `kubectl auth can-i` es la forma rapida de verificar permisos sin tener que ejecutar el comando real
+
+---
+
+## Que es NetworkPolicy (concepto)
+
+Por defecto, cualquier Pod en cualquier namespace puede comunicarse con cualquier otro Pod del cluster. Es como si todas las personas del edificio pudieran entrar a cualquier piso sin restricciones.
+
+NetworkPolicy pone guardias de seguridad en la puerta de cada piso. Puedes definir reglas exactas: quien puede entrar, desde donde puede entrar y a traves de que puerta (puerto).
+
+El patron mas comun en produccion es:
+1. `deny-all`: bloquea todo el trafico entrante por defecto (el guarda bloquea a todos)
+2. `allow-same-namespace`: permite trafico entre Pods del mismo namespace (los companeros del piso pueden visitarse)
+
+Con ese patron, nadie desde fuera del namespace puede acceder a los Pods de produccion, pero los Pods dentro de produccion si pueden comunicarse entre si.
 
 ---
 
@@ -412,6 +507,12 @@ dev → staging:  PERMITIDO (sin NetworkPolicy)
 dev → prod:     BLOQUEADO (deny-all + allow-same-ns)
 prod → prod:    PERMITIDO (allow-same-namespace)
 ```
+
+**Que aprendimos en este paso:**
+- Los Namespaces NO aislan la red por si solos: sin NetworkPolicy todo el trafico esta permitido
+- El patron deny-all + allow-same-namespace es el estandar para aislar produccion
+- staging no tiene NetworkPolicy, por eso dev puede acceder a el libremente
+- NetworkPolicy actua sobre el trafico de red (paquetes TCP/UDP), no sobre permisos de Kubernetes API
 
 ---
 

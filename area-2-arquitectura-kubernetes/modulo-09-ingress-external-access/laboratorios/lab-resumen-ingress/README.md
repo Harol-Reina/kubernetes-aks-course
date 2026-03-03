@@ -6,6 +6,69 @@ Un solo YAML despliega 4 backends + 4 Services + 6 Ingress resources + 1 pod de 
 
 ---
 
+## Conceptos Previos (para personas nuevas en el tema)
+
+Antes de entrar en Kubernetes, conviene tener claros estos conceptos basicos de redes y web.
+
+### HTTP y HTTPS: como habla tu navegador con un servidor
+
+Cuando escribes `http://google.com` en tu navegador, este envia un mensaje al servidor de Google siguiendo el protocolo **HTTP** (HyperText Transfer Protocol). El servidor responde con el contenido de la pagina.
+
+**HTTPS** es la version segura de HTTP: los datos viajan cifrados para que nadie en el camino (tu proveedor de internet, una red publica) pueda leerlos. La `S` significa "Secure".
+
+```
+Sin HTTPS (HTTP):    navegador ──texto claro──→ servidor
+                              cualquiera puede leer los datos
+
+Con HTTPS:           navegador ──cifrado──────→ servidor
+                              los datos son ilegibles si se interceptan
+```
+
+### Que es un dominio o nombre de host
+
+Un **dominio** es un nombre legible para los humanos que apunta a una direccion IP. Por ejemplo, `google.com` es mas facil de recordar que `142.250.80.46`.
+
+Cuando tu navegador ve `http://google.com`, primero consulta a un servidor DNS (como una guia telefonica de internet) para traducir `google.com` a una IP, y luego envia la peticion a esa IP.
+
+En este lab usaremos dominios de prueba como `demo.lab`, `api.lab`, etc. Como no son dominios reales en internet, los configuramos manualmente en `/etc/hosts` (ver Paso 0.3).
+
+### Que es un path (ruta) en una URL
+
+Una URL como `http://tienda.com/productos/zapatos` tiene tres partes:
+
+```
+http://tienda.com  /productos/zapatos
+  |         |            |
+protocolo  dominio      path (ruta)
+```
+
+El **path** es todo lo que viene despues del dominio. Los servidores usan el path para saber que contenido devolver. Por ejemplo:
+- `/` → la pagina principal
+- `/api` → el servicio de API
+- `/imagenes/logo.png` → un archivo especifico
+
+### Ingress es como la recepcion de un edificio
+
+Imagina un edificio de oficinas con muchas empresas. La **recepcion** en la entrada recibe a todos los visitantes y, segun a quien buscan, los dirige al piso y oficina correctos.
+
+**Ingress en Kubernetes funciona igual:**
+- El edificio = el cluster de Kubernetes
+- La recepcion = el Ingress Controller (NGINX)
+- Las empresas = los Services (aplicaciones)
+- El visitante = una peticion HTTP de un navegador o cliente
+
+```
+Visitante llega al edificio:  "Busco a la empresa API"
+Recepcion consulta el directorio (reglas Ingress)
+Recepcion indica: "Piso 3, oficina api-svc"
+
+Peticion HTTP llega al cluster: GET http://demo.lab/api
+Ingress Controller consulta las reglas Ingress
+Ingress Controller envia al Service: api-svc:80
+```
+
+---
+
 ## Que es Ingress
 
 Un **Service** expone Pods dentro del cluster, pero no sabe de HTTP, hosts, ni paths. Un **Ingress** resuelve esto: es una capa HTTP/HTTPS que enruta trafico externo a Services internos basandose en reglas de host y path.
@@ -131,6 +194,9 @@ pod/ingress-nginx-controller-xxxxx condition met
 ```
 
 ### 0.3: Obtener IP de Minikube y configurar /etc/hosts
+
+**Que es /etc/hosts y para que sirve aqui:**
+El archivo `/etc/hosts` es una "guia telefonica local" que tu sistema operativo consulta ANTES de preguntar a un servidor DNS de internet. Cada linea dice: "este nombre de dominio → esta IP". En este lab, los dominios `demo.lab`, `api.lab`, etc. no existen en internet, asi que los registramos manualmente aqui apuntando a la IP de Minikube. Asi, cuando escribas `curl http://demo.lab/`, tu maquina sabe a que IP conectarse.
 
 ```bash
 MINIKUBE_IP=$(minikube ip)
@@ -263,6 +329,17 @@ curl -s -H "Host: api.lab" http://$(minikube ip)/
 
 ## Paso 4: Canary Deployment (12 min)
 
+**Que es un "canary deployment" y por que se llama asi:**
+En las minas de carbon del siglo XIX, los mineros llevaban canarios a la mina. Si habia gases toxicos, el canario moría primero (antes que los humanos) y eso avisaba a los mineros para evacuar. En software, un **canary deployment** usa la misma logica: antes de actualizar el sistema para TODOS los usuarios, se envia la nueva version solo a un porcentaje pequeno (por ejemplo, el 5% o el 20%) del trafico real. Si algo falla, solo afecta a ese pequeno grupo — el "canario" ha avisado del problema antes de que llegue a todos.
+
+```
+Sin canary:   version nueva → 100% usuarios → si falla, TODOS se ven afectados
+
+Con canary:   version nueva → 20% usuarios  → si falla, solo 20% afectados
+              version vieja → 80% usuarios  → el resto sigue sin problemas
+              (si va bien, se sube al 50%, luego 100%)
+```
+
 Enviar un porcentaje del trafico a una version nueva para validarla antes de un rollout completo.
 
 ### 4.1: Verificar distribucion inicial (20% canary)
@@ -331,9 +408,27 @@ kubectl patch ingress canary-new -n lab-ingress \
   -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"20"}}}'
 ```
 
+**Que aprendimos en este paso:**
+- Un canary deployment divide el trafico entre dos versiones sin cambiar los Pods ni los Services — solo se ajusta un numero en las anotaciones del Ingress.
+- El rollback es instantaneo: basta con poner `canary-weight: 0` y todo el trafico vuelve a la version estable.
+- Esta tecnica permite validar una nueva version con trafico real sin arriesgar a todos los usuarios a la vez.
+
 ---
 
 ## Paso 5: Rate Limiting (8 min)
+
+**Por que limitar el numero de peticiones:**
+Imagina que tienes un quiosco de cafe con un solo empleado. Si llegan 5 clientes por minuto, el empleado puede atenderlos bien. Pero si llegan 500 clientes en un minuto, el sistema colapsa y nadie es atendido.
+
+En software pasa lo mismo: si un servidor recibe demasiadas peticiones en poco tiempo (ya sea por un ataque malicioso, un bot, o simplemente demasiados usuarios), puede quedarse sin memoria, CPU o conexiones y caer. El **rate limiting** pone un limite: "maximo N peticiones por segundo por cliente". Las peticiones que superan ese limite son rechazadas con un error `503` en lugar de colapsar el servidor.
+
+```
+Sin rate limiting:   1000 req/seg → servidor se satura → TODOS los usuarios sufren
+
+Con rate limiting:   primeras 5 req/seg → pasan (HTTP 200)
+                     resto              → rechazadas (HTTP 503)
+                     servidor protegido → usuarios normales siguen funcionando
+```
 
 Proteger un endpoint limitando las peticiones por segundo.
 
@@ -378,6 +473,11 @@ echo ""
 ```
 
 **Salida esperada:** todos `200 200 200 200 ...`
+
+**Que aprendimos en este paso:**
+- El rate limiting se configura con anotaciones en el recurso Ingress: no hay que modificar el codigo de la aplicacion.
+- El Ingress Controller (NGINX) es quien cuenta las peticiones y rechaza las que superan el limite, antes de que lleguen al Pod.
+- Los clientes que superan el limite reciben un `503 Service Unavailable`, no un error de conexion — la aplicacion sigue funcionando para los demas.
 
 ---
 
@@ -456,6 +556,22 @@ exit
 
 ## Paso 8: TLS Termination - HTTPS (10 min)
 
+**Que es HTTPS y TLS, en palabras simples:**
+Cuando envias datos por HTTP, viajan en texto claro — como enviar una postal: cualquiera que la intercepte en el camino puede leerla. **HTTPS** (con TLS) es como meter esa postal en un sobre cerrado y sellado: el contenido queda cifrado y solo el destinatario puede leerlo.
+
+**TLS** (Transport Layer Security) es el mecanismo tecnico que hace ese "sellado". Usa un **certificado digital** (un documento electronico que prueba la identidad del servidor) para establecer la comunicacion cifrada. Cuando ves el candado en tu navegador, significa que TLS esta activo.
+
+En Kubernetes, la **TLS Termination** (o "terminacion de TLS") significa que el Ingress Controller se encarga de todo el cifrado/descifrado: recibe las peticiones HTTPS del cliente, las descifra, y las envia en HTTP plano al backend. Los Pods no necesitan saber nada de TLS — esa complejidad queda centralizada en un solo punto.
+
+```
+Cliente                Ingress Controller         Backend (Pod)
+   |                         |                         |
+   |──HTTPS (cifrado)────────>|                         |
+   |                         |──HTTP (plano)───────────>|
+   |                         |<──HTTP (plano)───────────|
+   |<──HTTPS (cifrado)────────|                         |
+```
+
 Agregar HTTPS con certificado autofirmado. Este paso es manual porque la generacion de certificados es un concepto importante.
 
 ### 8.1: Generar certificado autofirmado
@@ -525,6 +641,11 @@ curl -vk https://secure.lab/ 2>&1 | grep -E "subject:|issuer:|expire"
 ```
 
 **Clave:** El Ingress Controller descifra HTTPS y envia HTTP plano al backend. Los backends no necesitan saber de TLS — esa complejidad se centraliza en un solo punto.
+
+**Que aprendimos en este paso:**
+- Un certificado TLS se almacena como un Secret en Kubernetes: tiene dos partes, el certificado publico (`tls.crt`) y la clave privada (`tls.key`).
+- La anotacion `ssl-redirect: "true"` hace que el Ingress rechace HTTP y redirija automaticamente a HTTPS con un codigo `308 Permanent Redirect`.
+- La bandera `-k` en `curl` indica "ignorar errores de certificado". En produccion se usan certificados firmados por una autoridad confiable (Let's Encrypt, DigiCert), no autofirmados.
 
 ---
 

@@ -6,6 +6,21 @@ Resumen practico de las 4 areas clave de mantenimiento de clusters Kubernetes cu
 
 ---
 
+## Conceptos Previos
+
+Antes de empezar, es importante entender que Kubernetes es un sistema vivo: nodos fallan, versiones quedan obsoletas, certificados vencen, y la base de datos interna necesita respaldo. El mantenimiento de un cluster no es algo que se hace una vez; es una actividad continua y planificada.
+
+Piensa en un cluster Kubernetes como un edificio moderno con varios pisos:
+
+- **etcd** es el archivo central del edificio — guarda los planos de todo lo que existe
+- **Los nodos** son los pisos donde viven los inquilinos (Pods)
+- **Los certificados** son los carnets de identidad que usan los componentes para hablar entre si
+- **Las actualizaciones** son como renovar la estructura del edificio mientras los inquilinos siguen viviendo ahi
+
+Este laboratorio te guia a traves de las operaciones mas importantes de mantenimiento, explicando cada concepto desde cero.
+
+---
+
 ## Mapa Conceptual
 
 Las 4 areas de mantenimiento que cubre este modulo se relacionan en un ciclo operacional:
@@ -28,50 +43,158 @@ Las 4 areas de mantenimiento que cubre este modulo se relacionan en un ciclo ope
     Renovacion sin interrupcion
 ```
 
-### Area 1: etcd Backup/Restore
+---
 
-El datastore etcd almacena todo el estado del cluster. Un backup previo a cualquier operacion de mantenimiento es obligatorio en produccion.
+## Area 1: etcd Backup/Restore
 
-Comandos esenciales:
+### Que es etcd y por que hacerle backup
+
+**etcd** es la base de datos de Kubernetes. Almacena absolutamente todo el estado del cluster: que Pods existen, que Deployments hay, que Secrets y ConfigMaps se han creado, que nodos forman el cluster, y mucho mas.
+
+Si etcd se pierde o corrompe, el cluster entero queda inutilizable porque nadie sabe que estaba corriendo antes. Es como perder todos los planos de un edificio: sigues teniendo el edificio fisico, pero no sabes que hay en cada cuarto ni como reconectarlo.
+
+Hacer un backup de etcd antes de cualquier operacion de mantenimiento es equivalente a guardar una copia de seguridad de todos tus archivos importantes antes de actualizar tu sistema operativo. Si algo sale mal, puedes volver al estado anterior.
+
+**Terminos nuevos:**
+- **etcd**: base de datos clave-valor distribuida que Kubernetes usa como su "cerebro"
+- **snapshot**: foto instantanea del estado completo de etcd en un momento dado
+- **ETCDCTL_API=3**: version del protocolo de comunicacion con etcd (la version 3 es la actual)
+- **TLS**: protocolo de seguridad que cifra la comunicacion; etcd lo requiere para autenticarse
+
+### Comandos esenciales
 
 ```bash
 # Backup de etcd
+# Este comando conecta a etcd y guarda una copia de todo su contenido en un archivo .db
 ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-snapshot.db \
   --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
   --key=/etc/kubernetes/pki/etcd/server.key
+```
 
-# Verificar backup
+Salida esperada:
+
+```
+{"level":"info","ts":"...","caller":"snapshot/v3_snapshot.go:65","msg":"created temporary db file","path":"/backup/etcd-snapshot.db.part"}
+{"level":"info","ts":"...","caller":"snapshot/v3_snapshot.go:68","msg":"fetching snapshot"}
+{"level":"info","ts":"...","caller":"snapshot/v3_snapshot.go:79","msg":"fetched snapshot","endpoint":"https://127.0.0.1:2379"}
+Snapshot saved at /backup/etcd-snapshot.db
+```
+
+El mensaje `Snapshot saved at` confirma que el archivo de backup se creo correctamente.
+
+```bash
+# Verificar backup: confirma que el archivo es valido y no esta corrupto
 ETCDCTL_API=3 etcdctl snapshot status /backup/etcd-snapshot.db --write-out=table
+```
 
+Salida esperada:
+
+```
++----------+----------+------------+------------+
+|   HASH   | REVISION | TOTAL KEYS | TOTAL SIZE |
++----------+----------+------------+------------+
+| fc9bf99e |   100234 |       1234 |     4.2 MB |
++----------+----------+------------+------------+
+```
+
+La tabla muestra el hash de verificacion (para detectar corrupcion), el numero de revision (contador de cambios), el total de claves guardadas, y el tamano del archivo. Si el comando devuelve una tabla con datos, el backup es valido.
+
+```bash
 # Restore (ejecutar en nodo control plane, detener API server primero)
+# Este comando reconstruye etcd a partir del archivo de backup
 ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-snapshot.db \
   --data-dir=/var/lib/etcd-restored
 ```
 
-### Area 2: Cluster Upgrade
+**Nota importante:** Antes de hacer un restore, el API server de Kubernetes debe estar detenido. Luego se actualiza la configuracion de etcd para que apunte al nuevo directorio de datos (`/var/lib/etcd-restored`), y se reinicia.
 
-Proceso estandar con kubeadm para actualizar version menor (e.g., 1.28 -> 1.29):
+---
+
+## Area 2: Cluster Upgrade
+
+### Que significa actualizar Kubernetes y por que es delicado
+
+Actualizar Kubernetes es como actualizar el sistema operativo de un servidor de produccion que tiene clientes activos. No puedes simplemente apagarlo y encenderlo — necesitas hacerlo de forma ordenada para que las aplicaciones sigan funcionando durante el proceso.
+
+En un cluster con varios nodos, la estrategia es:
+1. Actualizar primero el **control plane** (el "cerebro" del cluster)
+2. Luego actualizar cada **nodo worker** uno por uno, moviendo sus cargas a otros nodos antes de actualizar
+
+**Terminos nuevos:**
+- **kubeadm**: herramienta oficial para instalar y actualizar clusters Kubernetes
+- **version menor**: en `v1.28.0` -> `v1.29.0`, el numero del medio es la version menor
+- **control plane**: los componentes centrales de Kubernetes (API server, etcd, scheduler, controller manager)
+- **kubelet**: agente que corre en cada nodo y ejecuta las instrucciones del control plane
+
+### Proceso estandar con kubeadm (v1.28 -> v1.29)
 
 ```bash
-# Control plane
+# En el nodo control plane:
+
+# Paso 1: Instalar la nueva version de kubeadm
 apt-get install -y kubeadm=1.29.0-1.1
+
+# Paso 2: Verificar que el upgrade es posible y ver los cambios
 kubeadm upgrade plan
+```
+
+Salida esperada (fragmento):
+
+```
+COMPONENT                 CURRENT   TARGET
+kube-apiserver            v1.28.0   v1.29.0
+kube-controller-manager   v1.28.0   v1.29.0
+kube-scheduler            v1.28.0   v1.29.0
+kube-proxy                v1.28.0   v1.29.0
+CoreDNS                   v1.10.1   v1.11.1
+etcd                      3.5.9     3.5.10
+
+You can now apply the upgrade by executing the following command:
+  kubeadm upgrade apply v1.29.0
+```
+
+El `upgrade plan` es solo de lectura — no cambia nada. Es como mirar el presupuesto antes de aprobar una obra.
+
+```bash
+# Paso 3: Aplicar el upgrade en el control plane
 kubeadm upgrade apply v1.29.0
+
+# Paso 4: Actualizar kubelet y kubectl en el nodo control plane
 apt-get install -y kubelet=1.29.0-1.1 kubectl=1.29.0-1.1
 systemctl restart kubelet
 
-# Worker nodes (repetir por cada nodo)
+# En cada nodo worker (repetir el proceso por cada uno):
 kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
-# [en el nodo]: apt-get install -y kubeadm=1.29.0-1.1 kubelet=1.29.0-1.1
-# [en el nodo]: kubeadm upgrade node && systemctl restart kubelet
+# [en el nodo worker]: apt-get install -y kubeadm=1.29.0-1.1 kubelet=1.29.0-1.1
+# [en el nodo worker]: kubeadm upgrade node && systemctl restart kubelet
 kubectl uncordon <node>
 ```
 
-### Area 3: Node Drain/Cordon
+La secuencia `drain -> upgrade -> uncordon` garantiza que los Pods se muevan a otros nodos antes de que el nodo sea actualizado, y luego vuelvan cuando el nodo este listo.
 
-Mecanismo de evacuacion controlada de workloads antes de mantenimiento de nodo.
+---
+
+## Area 3: Node Drain/Cordon
+
+### Que significan cordon, drain y uncordon
+
+Imagina que un nodo es un piso de un edificio donde viven varios inquilinos (Pods). Necesitas hacer remodelaciones en ese piso:
+
+- **Cordon** es colgar un letrero de "no se aceptan nuevos inquilinos" — los que ya viven ahi se quedan, pero no entran mas
+- **Drain** es evacuar el piso — se avisa a todos los inquilinos que deben mudarse a otro piso, y se cierra el acceso a nuevos inquilinos
+- **Uncordon** es quitar el letrero — el piso esta listo y vuelve a aceptar inquilinos
+
+Los **PodDisruptionBudgets (PDB)** son como contratos de alquiler que garantizan que siempre haya un minimo de inquilinos disponibles en el edificio, incluso durante la remodelacion. Si el drain viola esa garantia (por ejemplo, quedan menos Pods de los permitidos), Kubernetes espera en lugar de forzar la evacuacion.
+
+**Terminos nuevos:**
+- **scheduling**: el proceso de asignar Pods a nodos
+- **SchedulingDisabled**: estado de un nodo que no acepta nuevos Pods
+- **PodDisruptionBudget (PDB)**: politica que limita cuantos Pods de una aplicacion pueden estar no disponibles al mismo tiempo
+- **DaemonSet**: tipo de recurso que garantiza que un Pod corre en CADA nodo; no se puede evacuar con drain
+
+### Comandos esenciales
 
 ```bash
 # Cordon: marca nodo como no-schedulable (no mueve pods existentes)
@@ -84,23 +207,64 @@ kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
 kubectl uncordon <node-name>
 ```
 
-### Area 4: Certificate Management
+---
 
-Kubernetes genera certificados con validez de 1 anio por defecto.
+## Area 4: Certificate Management
+
+### Que son los certificados y por que vencen
+
+Los certificados TLS en Kubernetes son como los pasaportes de los componentes del cluster: prueban la identidad de quien se comunica con quien. El API server, el scheduler, el controller manager, y todos los demas componentes se verifican mutuamente usando estos certificados.
+
+Por seguridad, Kubernetes genera certificados con una validez de 1 ano por defecto. Cuando un certificado vence, el componente que lo usa pierde su "pasaporte" y deja de poder comunicarse, lo que puede dejar el cluster inutilizable.
+
+Renovar certificados antes de que venzan es una tarea de mantenimiento rutinaria, similar a renovar el pasaporte antes de un viaje internacional — siempre conviene hacerlo con anticipacion, no el dia que vence.
+
+**Terminos nuevos:**
+- **PKI (Public Key Infrastructure)**: sistema de certificados digitales que Kubernetes usa para autenticar componentes
+- **CA (Certificate Authority)**: autoridad certificadora, la entidad que firma y valida los certificados
+- **x509**: estandar de formato para certificados digitales
+- **kubeadm certs**: subcomando de kubeadm para gestionar el ciclo de vida de los certificados
+
+### Comandos esenciales
 
 ```bash
 # Verificar expiracion de certificados
 kubeadm certs check-expiration
+```
 
+Salida esperada:
+
+```
+CERTIFICATE                EXPIRES                  RESIDUAL TIME   CERTIFICATE AUTHORITY   EXTERNALLY MANAGED
+admin.conf                 Mar 01, 2027 12:00 UTC   364d            ca                      no
+apiserver                  Mar 01, 2027 12:00 UTC   364d            ca                      no
+apiserver-etcd-client      Mar 01, 2027 12:00 UTC   364d            etcd-ca                 no
+apiserver-kubelet-client   Mar 01, 2027 12:00 UTC   364d            ca                      no
+...
+```
+
+La columna `RESIDUAL TIME` muestra cuanto tiempo queda antes de que cada certificado venza. Si ves valores como `30d` o menos, es urgente renovar.
+
+```bash
 # Renovar todos los certificados del control plane
 kubeadm certs renew all
 
-# Renovar certificado especifico
+# Renovar certificado especifico (por ejemplo, solo el del API server)
 kubeadm certs renew apiserver
 
-# Ver detalles de un certificado
+# Ver detalles de un certificado en formato legible
 openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout | grep -A2 "Validity"
 ```
+
+Salida esperada del openssl:
+
+```
+        Validity
+            Not Before: Mar  1 12:00:00 2025 GMT
+            Not After : Mar  1 12:00:00 2026 GMT
+```
+
+Estas dos fechas muestran el periodo de validez del certificado. `Not After` es la fecha de vencimiento.
 
 ---
 
@@ -124,6 +288,8 @@ openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout | grep -A2 "Vali
 
 ### Paso 1: Desplegar recursos (1 min)
 
+Vamos a crear un namespace de prueba con varios Deployments, DaemonSets, y PodDisruptionBudgets para simular un cluster en produccion. Este conjunto de recursos representa una aplicacion web tipica con un servicio critico.
+
 ```bash
 kubectl apply -f maintenance-lab.yaml
 ```
@@ -142,9 +308,14 @@ configmap/test-data created
 secret/test-credentials created
 ```
 
+Cada linea confirma que un recurso fue creado exitosamente. El orden no importa porque Kubernetes gestiona las dependencias internamente.
+
+**¿Que acabamos de aprender?**
+Aplicar un archivo YAML con multiples documentos crea todos los recursos en una sola operacion. Kubernetes lee el archivo, valida cada recurso, y los crea de forma concurrente cuando es posible.
+
 ### Paso 2: Verificar distribucion de pods (2 min)
 
-Confirmar que los pods estan distribuidos y los PDB estan activos:
+Antes de cualquier operacion de mantenimiento, es fundamental saber donde estan corriendo los Pods. Un drain mal planificado puede dejar aplicaciones sin replicas disponibles.
 
 ```bash
 kubectl get pods -n lab-maintenance-test -o wide
@@ -165,6 +336,8 @@ web-app-xxx-ccc                    1/1     Running   0          30s   node1
 web-app-xxx-ddd                    1/1     Running   0          30s   node2
 ```
 
+La columna `NODE` muestra en que nodo fisico esta cada Pod. Idealmente, los Pods de un mismo Deployment deben estar distribuidos en multiples nodos para sobrevivir el drain de cualquiera de ellos.
+
 Verificar los PodDisruptionBudgets:
 
 ```bash
@@ -179,9 +352,17 @@ critical-service-pdb   N/A             1                 1                     4
 web-app-pdb            2               N/A               2                     45s
 ```
 
+Interpretando esta salida:
+- `web-app-pdb` con `MIN AVAILABLE: 2` significa que al menos 2 Pods de `web-app` deben estar disponibles en todo momento. El drain solo puede proceder si despues de evacuar un Pod quedan 2 o mas.
+- `critical-service-pdb` con `MAX UNAVAILABLE: 1` significa que como maximo 1 Pod puede estar no disponible al mismo tiempo.
+- `ALLOWED DISRUPTIONS` muestra cuantos Pods pueden ser evacuados ahora mismo sin violar el PDB.
+
+**¿Que acabamos de aprender?**
+Los PodDisruptionBudgets son contratos de disponibilidad. Antes de drenar un nodo, Kubernetes consulta estos contratos y rechaza la evacuacion si violaria alguno. Esto protege la disponibilidad de las aplicaciones durante el mantenimiento.
+
 ### Paso 3: Practicar cordon (2 min)
 
-Seleccionar un nodo worker para simular mantenimiento. En un cluster de un solo nodo (Minikube), usar el nodo disponible con precaucion:
+El cordon es el primer paso cuando preparas un nodo para mantenimiento. Es una operacion no destructiva: no mueve ningun Pod existente, solo impide que nuevos Pods sean programados en ese nodo.
 
 ```bash
 # Ver nodos disponibles
@@ -210,6 +391,10 @@ NAME        STATUS                     ROLES           AGE   VERSION
 <node>      Ready,SchedulingDisabled   <none>          5d    v1.29.0
 ```
 
+El estado `Ready,SchedulingDisabled` significa dos cosas al mismo tiempo:
+- `Ready`: el nodo esta sano y sus Pods siguen corriendo normalmente
+- `SchedulingDisabled`: el scheduler de Kubernetes ignorara este nodo al asignar nuevos Pods
+
 Confirmar que los pods existentes no fueron movidos (solo se impide scheduling de nuevos):
 
 ```bash
@@ -218,9 +403,12 @@ kubectl get pods -n lab-maintenance-test -o wide
 
 Los pods existentes siguen en el nodo cordoned. Solo nuevos pods no se programaran en el.
 
+**¿Que acabamos de aprender?**
+El cordon es reversible y seguro. Se usa cuando quieres "congelar" un nodo: dejar de agregarle trabajo sin interrumpir lo que ya tiene. Es el primer paso antes de un drain, pero tambien puede usarse solo si solo quieres prevenir nuevo scheduling temporalmente.
+
 ### Paso 4: Practicar drain (3 min)
 
-El drain evacua los pods del nodo respetando los PodDisruptionBudgets:
+El drain es la operacion de evacuacion completa. Kubernetes mueve todos los Pods evacuables a otros nodos, respetando los PodDisruptionBudgets. Los Pods del DaemonSet (`node-agent`) son la excepcion: estan disenados para correr en cada nodo y no se pueden mover, por eso se usa el flag `--ignore-daemonsets`.
 
 ```bash
 kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
@@ -238,17 +426,27 @@ pod/critical-service-xxx-aaa evicted
 node/<node-name> drained
 ```
 
-Nota: El flag `--ignore-daemonsets` es necesario porque los DaemonSets (node-agent) no pueden ser evacuados - estan disenados para correr en todos los nodos.
+Interpretando esta salida linea por linea:
+- `already cordoned`: el nodo ya estaba en modo SchedulingDisabled desde el paso anterior
+- `Warning: ignoring DaemonSet-managed Pods`: el Pod `node-agent` fue ignorado intencionalmente porque pertenece a un DaemonSet
+- `evicting pod ...`: Kubernetes envio una solicitud de evacuacion a cada Pod
+- `pod/... evicted`: el Pod respondio y se termino correctamente
+- `node/... drained`: todos los Pods evacuables fueron removidos exitosamente
+
+El flag `--delete-emptydir-data` autoriza a Kubernetes a eliminar datos temporales almacenados en volúmenes de tipo `emptyDir`. Sin este flag, el drain falla si algun Pod usa ese tipo de volumen.
+
+**¿Que acabamos de aprender?**
+El drain es una operacion coordinada: Kubernetes no mata los Pods abruptamente, sino que les envia una senal de terminacion y espera a que terminen correctamente (respetando `terminationGracePeriodSeconds`). Los DaemonSets son inmunes al drain porque su proposito es ejecutarse en todos los nodos del cluster.
 
 ### Paso 5: Verificar PDB respetado (2 min)
 
-Verificar que los PDB garantizaron disponibilidad minima durante el drain:
+Despues del drain, verificar que los PDB garantizaron la disponibilidad minima durante la evacuacion:
 
 ```bash
 kubectl get pods -n lab-maintenance-test -o wide
 ```
 
-Los pods evacuados deben haberse reprogramado en otros nodos disponibles. Si el cluster tiene un solo nodo (Minikube), los pods quedaran en estado Pending hasta el uncordon.
+Los pods evacuados deben haberse reprogramado en otros nodos disponibles. Si el cluster tiene un solo nodo (Minikube), los pods quedaran en estado `Pending` hasta el uncordon. El estado `Pending` significa que Kubernetes quiere ejecutar el Pod pero no encuentra ningun nodo disponible que acepte scheduling.
 
 Verificar estado de los PDB:
 
@@ -271,9 +469,14 @@ Status:
 Events:         <none>
 ```
 
+El campo `Current: 4` muestra cuantos Pods del selector `app=web-app` estan disponibles en este momento. `Desired: 2` es el minimo requerido por el PDB. Como `Current >= Desired`, el PDB esta satisfecho y permite mas disrupciones.
+
+**¿Que acabamos de aprender?**
+El PDB es un mecanismo de seguridad para el drain: si evacuar un Pod violaria el minimo, Kubernetes pausa la evacuacion y espera a que el Pod sea reprogramado en otro nodo. Esto garantiza que la aplicacion nunca caiga por debajo del umbral de disponibilidad definido.
+
 ### Paso 6: Uncordon y verificar (2 min)
 
-Restaurar el nodo para que acepte nuevos pods:
+Despues de completar el mantenimiento en el nodo (en un escenario real, esto seria la actualizacion de paquetes o el reinicio), se restaura el nodo para que vuelva a aceptar Pods:
 
 ```bash
 kubectl uncordon <node-name>
@@ -298,15 +501,22 @@ NAME        STATUS   ROLES           AGE   VERSION
 <node>      Ready    <none>          5d    v1.29.0
 ```
 
-Los pods que estaban en Pending comenzaran a reprogramarse:
+El estado vuelve a ser simplemente `Ready`, sin `SchedulingDisabled`. Esto significa que el scheduler ya puede asignar nuevos Pods a este nodo.
+
+Los pods que estaban en `Pending` comenzaran a reprogramarse automaticamente en cuestion de segundos:
 
 ```bash
 kubectl get pods -n lab-maintenance-test -w
 ```
 
+El flag `-w` (watch) muestra los cambios de estado en tiempo real. Veras como los Pods pasan de `Pending` a `ContainerCreating` y luego a `Running`.
+
+**¿Que acabamos de aprender?**
+El ciclo completo `cordon -> drain -> mantenimiento -> uncordon` es la forma estandar y segura de hacer mantenimiento en nodos de produccion. Ninguna aplicacion deberia interrumpirse si los PDB estan bien configurados.
+
 ### Paso 7: Verificar datos de prueba (2 min)
 
-Simular verificacion post-restore: confirmar que ConfigMap y Secret persisten correctamente.
+Esta verificacion simula lo que harias despues de un restore de etcd: confirmar que los recursos que existian antes del backup siguen existiendo despues del restore. Si el ConfigMap y el Secret estan presentes, significa que el backup capturo el estado correctamente.
 
 ```bash
 # Verificar ConfigMap
@@ -333,8 +543,10 @@ metadata:
 kubectl get secret test-credentials -n lab-maintenance-test -o yaml
 ```
 
+Los Secrets se almacenan en base64 en la API de Kubernetes. Base64 no es cifrado — es solo codificacion para que valores binarios puedan almacenarse como texto. El cifrado real ocurre en etcd si `EncryptionConfiguration` esta habilitado.
+
 ```bash
-# Decodificar credencial
+# Decodificar credencial para leer el valor original
 kubectl get secret test-credentials -n lab-maintenance-test \
   -o jsonpath='{.data.username}' | base64 -d
 ```
@@ -345,7 +557,12 @@ Salida esperada:
 admin
 ```
 
+El valor `admin` es el que se guardo originalmente. El comando extrae el campo `username` del Secret (que esta en base64) y lo pasa al comando `base64 -d` para decodificarlo.
+
 En un escenario real de restore de etcd, la presencia de estos recursos confirma que el backup fue exitoso y el restore funciono correctamente.
+
+**¿Que acabamos de aprender?**
+Despues de un restore de etcd, la verificacion mas importante es confirmar que los recursos criticos (Secrets, ConfigMaps, Deployments) existen y tienen los valores correctos. Esta verificacion manual es el equivalente a abrir tus archivos despues de restaurar una copia de seguridad para confirmar que no estan corruptos.
 
 ### Paso 8: Limpieza (1 min)
 
