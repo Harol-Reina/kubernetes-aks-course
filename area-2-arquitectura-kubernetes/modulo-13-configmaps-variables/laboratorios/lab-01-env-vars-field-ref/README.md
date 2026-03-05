@@ -79,25 +79,29 @@ spec:
   containers:
   - name: app
     image: busybox
-    command: ["sh", "-c", "env | grep POD_ && sleep 3600"]
+    command: ["sh", "-c", "echo '---labels---'; cat /etc/podinfo/labels; sleep 3600"]
     env:
     - name: POD_NAME
       valueFrom:
         fieldRef:
           fieldPath: metadata.name
-    
     - name: POD_NAMESPACE
       valueFrom:
         fieldRef:
           fieldPath: metadata.namespace
-    
     - name: POD_IP
       valueFrom:
         fieldRef:
           fieldPath: status.podIP
-    
-    - name: POD_LABELS
-      valueFrom:
+    volumeMounts:
+    - name: podinfo
+      mountPath: /etc/podinfo
+      readOnly: true
+  volumes:
+  - name: podinfo
+    downwardAPI:
+      items:
+      - path: labels
         fieldRef:
           fieldPath: metadata.labels
 EOF
