@@ -1,7 +1,8 @@
-# Presentaciones - ignorar PDFs y Markdown
+# Presentaciones - ignorar PDFs, Markdown y generadores
 Presentaciones/*.pdf
 Presentaciones/*.md
 Presentaciones/*.py
+Presentaciones/**/guiones/
 
 # Node modules
 node_modules/
