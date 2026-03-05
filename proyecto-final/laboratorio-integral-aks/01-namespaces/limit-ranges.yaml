@@ -1,0 +1,105 @@
+# Ejercicio 3: LimitRanges - Defaults y restricciones por contenedor
+# Uso: kubectl apply -f limit-ranges.yaml
+#
+# Descripcion:
+#   LimitRange establece valores DEFAULT de requests/limits para contenedores
+#   que no los especifican, y tambien define minimos y maximos permitidos.
+#
+#   Sin LimitRange + con ResourceQuota = los Pods SIN limits son RECHAZADOS.
+#   Con LimitRange = los Pods sin limits reciben los defaults automaticamente.
+#
+#   Esto es critico en entornos multi-equipo: garantiza que ningun
+#   contenedor pueda pedir mas de lo razonable, y que todos tengan
+#   al menos un minimo asignado.
+#
+# Conceptos clave:
+#   - default: limits asignados si el Pod no los especifica
+#   - defaultRequest: requests asignados si el Pod no los especifica
+#   - max/min: techo y piso por contenedor individual
+#   - LimitRange es POR CONTENEDOR, ResourceQuota es POR NAMESPACE
+#
+# Namespace: uno por cada namespace del proyecto
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limitrange-tienda-web
+  namespace: tienda-web
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "200m"
+        memory: "128Mi"
+      defaultRequest:
+        cpu: "50m"
+        memory: "64Mi"
+      max:
+        cpu: "500m"
+        memory: "512Mi"
+      min:
+        cpu: "10m"
+        memory: "16Mi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limitrange-tienda-api
+  namespace: tienda-api
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "300m"
+        memory: "256Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      max:
+        cpu: "1"
+        memory: "1Gi"
+      min:
+        cpu: "10m"
+        memory: "16Mi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limitrange-tienda-db
+  namespace: tienda-db
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "250m"
+        memory: "256Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      max:
+        cpu: "500m"
+        memory: "512Mi"
+      min:
+        cpu: "50m"
+        memory: "64Mi"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limitrange-stress-test
+  namespace: stress-test
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "500m"
+        memory: "256Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "64Mi"
+      max:
+        cpu: "2"
+        memory: "1536Mi"
+      min:
+        cpu: "10m"
+        memory: "16Mi"

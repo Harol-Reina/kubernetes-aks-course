@@ -1,0 +1,56 @@
+# Ejercicio 1: Creacion de Namespaces - Aislamiento logico del cluster
+# Uso: kubectl apply -f namespaces.yaml
+#
+# Descripcion:
+#   Crea 5 namespaces que simulan un entorno real de microservicios:
+#   - tienda-web: Frontend (nginx)
+#   - tienda-api: Backend (API gateway + workers)
+#   - tienda-db: Base de datos (Redis)
+#   - stress-test: Pods de carga para forzar el autoscaler
+#   - monitoring: Prometheus + Grafana (se crea via Helm)
+#
+#   Cada namespace lleva labels de 'tier' y 'env' para facilitar
+#   la aplicacion de NetworkPolicies, ResourceQuotas y filtrado.
+#
+# Conceptos clave:
+#   - Namespaces como aislamiento logico
+#   - Labels para clasificar namespaces
+#   - Separacion por capa (web, api, db, ops)
+#
+# Namespace: N/A (son recursos cluster-scoped)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tienda-web
+  labels:
+    proyecto: laboratorio-integral
+    tier: frontend
+    env: laboratorio
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tienda-api
+  labels:
+    proyecto: laboratorio-integral
+    tier: backend
+    env: laboratorio
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tienda-db
+  labels:
+    proyecto: laboratorio-integral
+    tier: database
+    env: laboratorio
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stress-test
+  labels:
+    proyecto: laboratorio-integral
+    tier: testing
+    env: laboratorio

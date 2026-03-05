@@ -1,0 +1,161 @@
+# Ejercicio 9: ConfigMap del Frontend - Configuracion nginx + pagina HTML
+# Uso: kubectl apply -f frontend-configmap.yaml
+#
+# Descripcion:
+#   Contiene dos configuraciones:
+#   1. nginx.conf: Configuracion del servidor web con proxy reverso
+#      hacia el API Gateway (cross-namespace)
+#   2. index.html: Pagina HTML que muestra el estado de los servicios
+#      y permite verificar visualmente que todo funciona
+#
+#   La pagina HTML incluye JavaScript que hace peticiones al API Gateway
+#   para verificar la comunicacion entre namespaces en tiempo real.
+#
+# Conceptos clave:
+#   - ConfigMap puede contener multiples archivos (keys)
+#   - proxy_pass usa DNS cross-namespace para llegar al API Gateway
+#   - El frontend NO accede directamente a la base de datos (separacion de capas)
+#
+# Namespace: tienda-web
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: tienda-web
+  labels:
+    app: frontend
+    tier: frontend
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        # Pagina principal (HTML desde ConfigMap)
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+
+        # Health check
+        location /health {
+            access_log off;
+            return 200 '{"status":"ok","service":"frontend"}';
+            add_header Content-Type application/json;
+        }
+
+        # Proxy al API Gateway en otro namespace
+        # Demuestra comunicacion cross-namespace via DNS interno
+        location /api/ {
+            proxy_pass http://api-gateway.tienda-api.svc.cluster.local:8080/api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_connect_timeout 5s;
+            proxy_read_timeout 10s;
+        }
+    }
+
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Laboratorio Integral AKS</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+            .header { text-align: center; padding: 30px 0; }
+            .header h1 { font-size: 2em; color: #38bdf8; }
+            .header p { color: #94a3b8; margin-top: 8px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; max-width: 1000px; margin: 20px auto; }
+            .card { background: #1e293b; border-radius: 8px; padding: 20px; border-left: 4px solid #38bdf8; }
+            .card h3 { color: #38bdf8; margin-bottom: 8px; }
+            .card pre { background: #0f172a; padding: 10px; border-radius: 4px; font-size: 12px; overflow-x: auto; margin-top: 10px; color: #a5f3fc; }
+            .status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+            .status-ok { background: #065f46; color: #34d399; }
+            .status-err { background: #7f1d1d; color: #fca5a5; }
+            .status-wait { background: #78350f; color: #fbbf24; }
+            button { background: #0ea5e9; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin: 4px; }
+            button:hover { background: #0284c7; }
+            .controls { text-align: center; margin: 20px 0; }
+            #log { background: #1e293b; padding: 16px; border-radius: 8px; max-width: 1000px; margin: 20px auto; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Laboratorio Integral AKS</h1>
+            <p>Verificacion de servicios multi-namespace en Kubernetes</p>
+        </div>
+
+        <div class="controls">
+            <button onclick="checkAll()">Verificar Todos los Servicios</button>
+            <button onclick="clearLog()">Limpiar Log</button>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Frontend (tienda-web)</h3>
+                <p>Namespace: tienda-web</p>
+                <p>Estado: <span id="st-frontend" class="status status-wait">esperando...</span></p>
+                <pre id="res-frontend">Sin datos</pre>
+            </div>
+            <div class="card">
+                <h3>API Gateway (tienda-api)</h3>
+                <p>Namespace: tienda-api</p>
+                <p>Estado: <span id="st-api" class="status status-wait">esperando...</span></p>
+                <pre id="res-api">Sin datos</pre>
+            </div>
+            <div class="card">
+                <h3>API Info</h3>
+                <p>Endpoint: /api/info</p>
+                <p>Estado: <span id="st-info" class="status status-wait">esperando...</span></p>
+                <pre id="res-info">Sin datos</pre>
+            </div>
+            <div class="card">
+                <h3>API Echo</h3>
+                <p>Endpoint: /api/echo</p>
+                <p>Estado: <span id="st-echo" class="status status-wait">esperando...</span></p>
+                <pre id="res-echo">Sin datos</pre>
+            </div>
+        </div>
+
+        <div id="log"></div>
+
+        <script>
+            function log(msg) {
+                const el = document.getElementById('log');
+                const ts = new Date().toLocaleTimeString();
+                el.innerHTML = `[${ts}] ${msg}\n` + el.innerHTML;
+            }
+            function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+            async function checkEndpoint(url, stId, resId) {
+                const st = document.getElementById(stId);
+                const res = document.getElementById(resId);
+                st.className = 'status status-wait'; st.textContent = 'verificando...';
+                try {
+                    const r = await fetch(url, {timeout: 5000});
+                    const data = await r.text();
+                    st.className = 'status status-ok'; st.textContent = 'OK';
+                    res.textContent = data.substring(0, 300);
+                    log(`OK: ${url}`);
+                } catch(e) {
+                    st.className = 'status status-err'; st.textContent = 'ERROR';
+                    res.textContent = e.message;
+                    log(`ERROR: ${url} - ${e.message}`);
+                }
+            }
+
+            function checkAll() {
+                log('--- Iniciando verificacion de servicios ---');
+                checkEndpoint('/health', 'st-frontend', 'res-frontend');
+                checkEndpoint('/api/info', 'st-api', 'res-api');
+                checkEndpoint('/api/info', 'st-info', 'res-info');
+                checkEndpoint('/api/echo', 'st-echo', 'res-echo');
+            }
+        </script>
+    </body>
+    </html>

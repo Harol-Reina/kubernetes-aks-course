@@ -1,0 +1,110 @@
+# Valores personalizados para kube-prometheus-stack en nodos de 8GB
+# Uso: helm install prometheus prometheus-community/kube-prometheus-stack \
+#        --namespace monitoring --create-namespace -f prometheus-values.yaml
+#
+# Descripcion:
+#   Ajusta los recursos del stack de monitoreo para funcionar en nodos
+#   Standard_D4alds_v6 (4 vCPU, 8GB RAM). Los valores por defecto del
+#   chart consumen demasiada memoria para este tipo de nodos.
+#
+#   Componentes instalados:
+#   - Prometheus: recolecta metricas cada 30 segundos
+#   - Grafana: dashboards de visualizacion (acceso via port-forward)
+#   - AlertManager: gestiona alertas (configuracion basica)
+#   - Node Exporter: metricas de los nodos (CPU, RAM, disco)
+#   - Kube State Metrics: metricas de objetos Kubernetes
+#
+# Retencion de datos: 3 dias (suficiente para el laboratorio)
+
+# ===== PROMETHEUS =====
+prometheus:
+  prometheusSpec:
+    # Retencion corta para ahorrar disco
+    retention: 3d
+    retentionSize: "2GB"
+
+    # Recursos ajustados para nodos de 8GB
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+
+    # Intervalo de scraping (cada 30s es un buen balance)
+    scrapeInterval: "30s"
+    evaluationInterval: "30s"
+
+    # Sin almacenamiento persistente (es un lab, no produccion)
+    storageSpec: {}
+
+    # Seleccionar ServiceMonitors de todos los namespaces
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+# ===== GRAFANA =====
+grafana:
+  # Password de acceso a Grafana
+  adminPassword: "LabAKS2024!"
+
+  # Recursos reducidos
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "300m"
+      memory: "256Mi"
+
+  # No usar PVC (datos efimeros para el lab)
+  persistence:
+    enabled: false
+
+  # Dashboards por defecto (Kubernetes, Nodes, Pods)
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: "browser"
+
+# ===== ALERTMANAGER =====
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "100m"
+        memory: "128Mi"
+    storage: {}
+
+# ===== NODE EXPORTER =====
+# DaemonSet: 1 pod por nodo, recolecta metricas del SO
+nodeExporter:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "64Mi"
+
+# ===== KUBE STATE METRICS =====
+# Metricas de objetos K8s (deployments, pods, services, quotas)
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+# ===== PROMETHEUS OPERATOR =====
+prometheusOperator:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"

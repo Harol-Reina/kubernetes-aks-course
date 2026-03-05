@@ -1,0 +1,142 @@
+# Ejercicio 10: Frontend - Nginx sirviendo la UI + proxy al API
+# Uso: kubectl apply -f frontend-deployment.yaml
+#
+# Descripcion:
+#   Despliega el frontend web en el namespace tienda-web.
+#   - 2 replicas para alta disponibilidad
+#   - Nginx sirve la pagina HTML del ConfigMap
+#   - Proxy reverso a /api/* redirige al API Gateway en tienda-api
+#   - Service LoadBalancer para acceso desde el navegador
+#   - Liveness y readiness probes
+#
+#   Arquitectura de comunicacion:
+#   Usuario --> LoadBalancer --> nginx-frontend (tienda-web)
+#                                  |
+#                                  +--> /api/* --> api-gateway (tienda-api)
+#                                                    |
+#                                                    +--> redis (tienda-db)
+#
+# Conceptos clave:
+#   - initContainers: copia el HTML del ConfigMap al directorio de nginx
+#   - volumeMounts multiples: config nginx + contenido HTML
+#   - Service LoadBalancer: Azure provisiona un Azure Load Balancer
+#   - Las 2 replicas se distribuyen en nodos diferentes (si hay mas de 1)
+#
+# Namespace: tienda-web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: tienda-web
+  labels:
+    app: frontend
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: frontend
+    spec:
+      # initContainer copia el HTML del ConfigMap al volumen compartido
+      initContainers:
+        - name: copy-html
+          image: busybox:1.36
+          command: ['sh', '-c', 'cp /html-config/index.html /usr/share/nginx/html/index.html']
+          volumeMounts:
+            - name: html-content
+              mountPath: /usr/share/nginx/html
+            - name: frontend-config-volume
+              mountPath: /html-config
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            - name: html-content
+              mountPath: /usr/share/nginx/html
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+      volumes:
+        # Configuracion nginx (server block con proxy_pass)
+        - name: nginx-config
+          configMap:
+            name: frontend-config
+            items:
+              - key: default.conf
+                path: default.conf
+        # HTML del ConfigMap (montado por initContainer)
+        - name: frontend-config-volume
+          configMap:
+            name: frontend-config
+            items:
+              - key: index.html
+                path: index.html
+        # Volumen compartido entre initContainer y container principal
+        - name: html-content
+          emptyDir: {}
+---
+# Service LoadBalancer: Azure asigna IP publica.
+# Este es el punto de entrada principal del laboratorio.
+# Ejecuta: kubectl get svc frontend-external -n tienda-web
+# Espera ~2 min hasta que EXTERNAL-IP cambie de <pending> a una IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-external
+  namespace: tienda-web
+  labels:
+    app: frontend
+    tier: frontend
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: tienda-web
+  labels:
+    app: frontend
+    tier: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http

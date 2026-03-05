@@ -1,0 +1,70 @@
+# Ejercicio 13: HPA - Horizontal Pod Autoscaler para el API Gateway
+# Uso: kubectl apply -f hpa-api.yaml
+#
+# Descripcion:
+#   Configura el autoscaling horizontal para el API Gateway.
+#   Cuando el uso promedio de CPU de los pods del api-gateway supera
+#   el 50%, Kubernetes crea mas replicas (hasta 6). Cuando baja,
+#   las elimina (minimo 2).
+#
+#   El HPA necesita metrics-server para funcionar. En AKS viene
+#   instalado por defecto. Verifica con:
+#     kubectl top pods -n tienda-api
+#
+#   Para probar el HPA:
+#   1. Aplicar este YAML
+#   2. Generar carga con: kubectl run load-test --rm -it --image=busybox \
+#        -- sh -c "while true; do wget -q -O- http://api-gateway.tienda-api:8080/api/info; done"
+#   3. Observar: kubectl get hpa -n tienda-api -w
+#   4. Ver como las replicas suben de 2 a 3, 4, etc.
+#
+# Conceptos clave:
+#   - HPA ajusta replicas basandose en metricas (CPU, memoria, custom)
+#   - Requiere que los Pods tengan requests definidos (para calcular %)
+#   - Cooldown: espera antes de escalar para evitar oscilaciones
+#   - metrics-server debe estar corriendo en el cluster
+#
+# Namespace: tienda-api
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-api-gateway
+  namespace: tienda-api
+  labels:
+    app: api-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    # Escalar cuando el uso promedio de CPU supere el 50%
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+    # Tambien escalar si la memoria promedio supera el 70%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60

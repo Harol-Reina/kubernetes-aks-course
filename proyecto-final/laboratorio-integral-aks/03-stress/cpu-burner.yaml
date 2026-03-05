@@ -1,0 +1,59 @@
+# Ejercicio 11: CPU Burner - Generador de carga de CPU
+# Uso: kubectl apply -f cpu-burner.yaml
+#
+# Descripcion:
+#   Despliega un Pod que consume CPU de forma intensiva usando
+#   el comando 'stress'. Esto provoca:
+#   1. El Pod consume su limit de CPU (se throttlea)
+#   2. Si hay mas replicas, el nodo se satura
+#   3. El cluster autoscaler detecta pods Pending y agrega nodos
+#   4. Los dashboards de Grafana muestran el consumo en tiempo real
+#
+#   Empezamos con 1 replica. Luego escalaremos manualmente para
+#   forzar el autoscaling del cluster.
+#
+#   IMPORTANTE: Este Pod existe solo para demostrar el comportamiento.
+#   En produccion NUNCA desplegarias algo asi intencionalmente.
+#
+# Conceptos clave:
+#   - CPU stress: el contenedor intenta usar mas CPU de la permitida
+#   - CPU throttling: el kernel limita el CPU al valor de limits.cpu
+#   - Cluster Autoscaler: agrega nodos cuando hay pods Pending
+#   - kubectl top pods: muestra consumo real vs limits
+#
+# Namespace: stress-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-burner
+  namespace: stress-test
+  labels:
+    app: cpu-burner
+    category: stress-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cpu-burner
+  template:
+    metadata:
+      labels:
+        app: cpu-burner
+        category: stress-test
+    spec:
+      containers:
+        - name: stress
+          image: polinux/stress
+          # stress --cpu 2: lanza 2 workers de CPU
+          # Cada worker intenta usar 100% de un core
+          # El limit de 1 CPU lo contiene (throttling)
+          command: ["stress"]
+          args: ["--cpu", "2", "--timeout", "7200s"]
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "64Mi"
+            limits:
+              cpu: "1"
+              memory: "128Mi"

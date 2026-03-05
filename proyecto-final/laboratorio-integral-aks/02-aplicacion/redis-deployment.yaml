@@ -1,0 +1,102 @@
+# Ejercicio 5: Redis - Capa de base de datos / cache
+# Uso: kubectl apply -f redis-deployment.yaml
+#
+# Descripcion:
+#   Despliega Redis como cache/base de datos en el namespace tienda-db.
+#   Incluye:
+#   - Deployment con 1 replica
+#   - Service ClusterIP para acceso interno
+#   - Liveness probe (verifica que Redis responde a PING)
+#   - Readiness probe (verifica que acepta conexiones)
+#   - Resource requests/limits explícitos
+#   - Password via Secret (referencia a redis-secret)
+#
+#   Otros servicios acceden a Redis via DNS cross-namespace:
+#     redis.tienda-db.svc.cluster.local:6379
+#
+# Conceptos clave:
+#   - ClusterIP: solo accesible dentro del cluster
+#   - Probes: Kubernetes reinicia el Pod si falla liveness
+#   - secretKeyRef: inyecta el Secret como variable de entorno
+#   - DNS cross-namespace: <service>.<namespace>.svc.cluster.local
+#
+# Namespace: tienda-db
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: tienda-db
+  labels:
+    app: redis
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: database
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+              name: redis
+          command: ["redis-server"]
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: redis-password
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -a
+                - $(REDIS_PASSWORD)
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: tienda-db
+  labels:
+    app: redis
+    tier: database
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis

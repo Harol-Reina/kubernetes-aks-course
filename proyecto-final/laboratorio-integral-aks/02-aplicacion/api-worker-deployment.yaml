@@ -1,0 +1,66 @@
+# Ejercicio 8: Worker Service - Proceso backend que consume CPU
+# Uso: kubectl apply -f api-worker-deployment.yaml
+#
+# Descripcion:
+#   Simula un microservicio backend que realiza trabajo intensivo de CPU.
+#   Usa busybox para generar carga moderada de CPU de forma continua
+#   (calcula hashes SHA256 en bucle). Esto sirve para:
+#   - Ver consumo real de CPU en los dashboards de Grafana
+#   - Demostrar como los limits de CPU throttlean el contenedor
+#   - Alimentar datos al HPA para autoscaling
+#
+#   El worker NO expone un Service porque es un proceso background.
+#   En un entorno real seria un consumer de colas, un procesador
+#   de imagenes, un job de ETL, etc.
+#
+# Conceptos clave:
+#   - CPU throttling: si el Pod supera su limit de CPU, se ralentiza
+#     (NO se mata, a diferencia de la memoria)
+#   - Sin Service: no todo Deployment necesita un Service
+#   - requests vs limits: el scheduler usa requests para ubicar el Pod,
+#     limits define el techo de consumo
+#
+# Namespace: tienda-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-worker
+  namespace: tienda-api
+  labels:
+    app: api-worker
+    tier: backend
+    category: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-worker
+  template:
+    metadata:
+      labels:
+        app: api-worker
+        tier: backend
+        category: worker
+    spec:
+      containers:
+        - name: worker
+          image: busybox:1.36
+          # Genera carga moderada de CPU calculando hashes SHA256
+          # El sleep 0.1 evita que sature completamente el CPU
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Worker iniciado en $(hostname)"
+              while true; do
+                echo "trabajando..." | sha256sum > /dev/null
+                sleep 0.1
+              done
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "32Mi"
+            limits:
+              cpu: "300m"
+              memory: "64Mi"

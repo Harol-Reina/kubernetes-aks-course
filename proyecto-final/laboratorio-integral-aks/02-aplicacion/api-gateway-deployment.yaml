@@ -1,0 +1,115 @@
+# Ejercicio 7: API Gateway - Nginx como reverse proxy
+# Uso: kubectl apply -f api-gateway-deployment.yaml
+#
+# Descripcion:
+#   Despliega nginx configurado como API Gateway en tienda-api.
+#   - 2 replicas para alta disponibilidad
+#   - Configuracion via ConfigMap (api-configmap.yaml)
+#   - Liveness y readiness probes via HTTP
+#   - Resource requests/limits definidos
+#   - Service ClusterIP + Service LoadBalancer para acceso externo
+#
+#   El API Gateway es el punto de entrada para las peticiones HTTP.
+#   En un entorno real, haria proxy a microservicios backend.
+#   Aqui demuestra comunicacion entre namespaces y balanceo de carga.
+#
+# Conceptos clave:
+#   - Deployment con replicas para HA
+#   - ConfigMap montado como volumen
+#   - Probes HTTP (no exec) - mas eficientes
+#   - Service LoadBalancer expone al exterior en Azure
+#
+# Namespace: tienda-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: tienda-api
+  labels:
+    app: api-gateway
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        tier: backend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "300m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: api-gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: tienda-api
+  labels:
+    app: api-gateway
+    tier: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+---
+# Service LoadBalancer: expone el API Gateway al exterior.
+# Azure asigna una IP publica automaticamente.
+# Usa 'kubectl get svc -n tienda-api' para ver la EXTERNAL-IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-external
+  namespace: tienda-api
+  labels:
+    app: api-gateway
+    tier: backend
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-gateway
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http

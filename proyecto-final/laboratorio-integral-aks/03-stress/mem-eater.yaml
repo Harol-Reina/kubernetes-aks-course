@@ -1,0 +1,62 @@
+# Ejercicio 12: Memory Eater - Generador de consumo de memoria
+# Uso: kubectl apply -f mem-eater.yaml
+#
+# Descripcion:
+#   Despliega un Pod que consume memoria de forma progresiva.
+#   Usa 'stress --vm' que reserva y libera bloques de memoria.
+#
+#   El Pod tiene un limit de 256Mi. El stress tool intentara usar
+#   200Mi, lo cual esta dentro del limite. Si cambias --vm-bytes
+#   a 300Mi, excedera el limit y Kubernetes lo matara con OOMKilled.
+#
+#   Flujo para demostrar OOMKilled:
+#   1. Desplegar tal cual (200Mi, dentro del limit) -> funciona
+#   2. Editar el YAML y cambiar --vm-bytes a 400M -> OOMKilled
+#   3. kubectl describe pod -> ver evento OOMKilled
+#   4. kubectl get pods -> ver STATUS: OOMKilled y RESTARTS incrementando
+#
+# Conceptos clave:
+#   - OOMKilled: el kernel mata el proceso si excede el limit de memoria
+#   - A diferencia de CPU, exceder memoria es FATAL (el Pod se reinicia)
+#   - QoS Class Burstable: tiene requests != limits
+#   - CrashLoopBackOff: si el Pod falla repetidamente, K8s espera mas
+#     tiempo entre cada reinicio (10s, 20s, 40s... hasta 5 min)
+#
+# Namespace: stress-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mem-eater
+  namespace: stress-test
+  labels:
+    app: mem-eater
+    category: stress-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mem-eater
+  template:
+    metadata:
+      labels:
+        app: mem-eater
+        category: stress-test
+    spec:
+      containers:
+        - name: stress
+          image: polinux/stress
+          # --vm 1: 1 worker de memoria
+          # --vm-bytes 200M: intenta usar 200MB (dentro del limit de 256Mi)
+          # --vm-hang 60: mantiene la memoria 60 segundos antes de liberar
+          #
+          # EJERCICIO: cambia 200M por 400M para provocar OOMKilled
+          command: ["stress"]
+          args: ["--vm", "1", "--vm-bytes", "200M", "--vm-hang", "60", "--timeout", "7200s"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
